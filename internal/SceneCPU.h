@@ -89,6 +89,7 @@ class Scene : public SceneCommon {
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;
     struct {
         int res = -1;
+        float medium_lum = 0.0f;
         SmallVector<aligned_vector<float, 16>, 16> mips;
     } env_map_qtree_;
 

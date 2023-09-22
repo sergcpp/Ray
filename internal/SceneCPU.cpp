@@ -1186,6 +1186,8 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
         cur_res /= 2;
     }
 
+    env_map_qtree_.medium_lum = total_lum / float(cur_res * cur_res);
+
     while (cur_res > 1) {
         env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
         const auto *prev_mip =
@@ -1275,6 +1277,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     for (const light_t &l : lights_) {
         Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
         float area = 1.0f, omega_n = 0.0f, omega_e = 0.0f;
+        float lum = l.col[0] + l.col[1] + l.col[2];
 
         switch (l.type) {
         case LIGHT_TYPE_SPHERE: {
@@ -1375,6 +1378,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_ENV: {
+            lum = (lum / 3.0f) * env_map_qtree_.medium_lum;
             bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
             bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
             omega_n = PI; // normals in all directions
@@ -1384,7 +1388,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
         primitives.push_back({0, 0, 0, bbox_min, bbox_max});
 
-        const float flux = (l.col[0] + l.col[1] + l.col[2]) * area;
+        const float flux = lum * area;
         additional_data.push_back({axis, flux, omega_n, omega_e});
     }
 
