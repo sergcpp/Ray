@@ -5160,8 +5160,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
     }
     factor = 1.0f / factor;
 #else
-    const simd_ivec<S> light_index = min(simd_ivec<S>{ri * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
+    simd_ivec<S> light_index = min(simd_ivec<S>{ri * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
     ri = ri * float(sc.li_indices.size()) - simd_fvec<S>(light_index);
+    light_index = gather(reinterpret_cast<const int *>(sc.li_indices.data()), light_index);
     const simd_fvec<S> factor = float(sc.li_indices.size());
 #endif
 
@@ -5181,11 +5182,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             ray_queue[num++] = diff_li;
         }
 
-#if USE_HIERARCHICAL_NEE
-        const light_t &l = sc.lights[first_li];
-#else
         const light_t &l = sc.lights[sc.li_indices[first_li]];
-#endif
 
         UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) = l.col[i]; })
         where(ray_queue[index], ls.cast_shadow) = l.cast_shadow ? -1 : 0;
@@ -5553,6 +5550,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
         while (!st.empty()) {
             light_stack_entry_t cur = st.pop();
+            assert(cur.factor > 0.0f);
 
             if (cur.dist > inter_t[ri]) {
                 continue;
@@ -5570,10 +5568,11 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     simd_fvec<SS> total_importance_v = 0.0f;
                     UNROLLED_FOR_S(i, 8 / SS, { total_importance_v += importance[i]; })
                     const float total_importance = hsum(total_importance_v);
+                    assert(total_importance > 0.0f);
 
                     alignas(32) float factors[8];
                     UNROLLED_FOR_S(i, 8 / SS, {
-                        importance[i] = safe_div_pos(importance[i], total_importance);
+                        importance[i] /= total_importance;
                         importance[i].store_to(&factors[i * SS], simd_mem_aligned);
                     })
 
@@ -5643,7 +5642,10 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     continue;
                 }
                 // Portal lights affect only missed rays
-                const simd_ivec<S> ray_mask = r.mask & ~(simd_ivec<S>{l.sky_portal ? -1 : 0} & inout_inter.mask);
+                // TODO: actually process multiple rays
+                simd_ivec<S> ray_mask = 0;
+                ray_mask.set(ri, -1);
+                ray_mask &= ~(simd_ivec<S>{l.sky_portal ? -1 : 0} & inout_inter.mask);
                 if (ray_mask.all_zeros()) {
                     continue;
                 }
@@ -6087,14 +6089,14 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
                                   const hit_data_t<S> &inter, const environment_t &env, Span<const light_t> lights,
                                   const uint32_t lights_count, const Cpu::TexStorageRGBA &tex_storage,
                                   const simd_fvec<S> rand[2], simd_fvec<S> light_col[3]) {
-    simd_ivec<S> ray_queue[S];
-    ray_queue[0] = mask;
-
 #if USE_HIERARCHICAL_NEE
     const simd_fvec<S> pdf_factor = safe_div_pos(1.0f, inter.u);
 #else
     const float pdf_factor = float(lights_count);
 #endif
+
+    simd_ivec<S> ray_queue[S];
+    ray_queue[0] = mask;
 
     int index = 0, num = 1;
     while (index != num) {

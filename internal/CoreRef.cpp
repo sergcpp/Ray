@@ -38,7 +38,7 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const tri_a
                                hit_data_t &inter) {
     const float det = dot(rd, tri.n_plane);
     const float dett = tri.n_plane[3] - dot(ro, tri.n_plane);
-    if (sign_of(dett) != sign_of(det * inter.t - dett)) {
+    if (det == 0.0f || sign_of(dett) != sign_of(det * inter.t - dett)) {
         return;
     }
 
