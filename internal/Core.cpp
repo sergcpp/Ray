@@ -355,9 +355,9 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
     return num_out_nodes;
 }
 
-uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
-                                 uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
-                                 std::vector<bvh_node_t> &out_nodes) {
+uint32_t Ray::EmitLBVH_r(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
+                         uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
+                         std::vector<bvh_node_t> &out_nodes) {
     if (bit_index == -1 || prim_count < 8) {
         Ref::simd_fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
 
@@ -382,8 +382,8 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
         const uint32_t mask = (1u << bit_index);
 
         if ((morton_codes[prim_index] & mask) == (morton_codes[prim_index + prim_count - 1] & mask)) {
-            return EmitLBVH_Recursive(prims, indices, morton_codes, prim_index, prim_count, index_offset, bit_index - 1,
-                                      out_nodes);
+            return EmitLBVH_r(prims, indices, morton_codes, prim_index, prim_count, index_offset, bit_index - 1,
+                              out_nodes);
         }
 
         uint32_t search_start = prim_index, search_end = search_start + prim_count - 1;
@@ -401,10 +401,10 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
         const auto node_index = uint32_t(out_nodes.size());
         out_nodes.emplace_back();
 
-        uint32_t child0 = EmitLBVH_Recursive(prims, indices, morton_codes, prim_index, split_offset, index_offset,
-                                             bit_index - 1, out_nodes);
-        uint32_t child1 = EmitLBVH_Recursive(prims, indices, morton_codes, prim_index + split_offset,
-                                             prim_count - split_offset, index_offset, bit_index - 1, out_nodes);
+        uint32_t child0 =
+            EmitLBVH_r(prims, indices, morton_codes, prim_index, split_offset, index_offset, bit_index - 1, out_nodes);
+        uint32_t child1 = EmitLBVH_r(prims, indices, morton_codes, prim_index + split_offset, prim_count - split_offset,
+                                     index_offset, bit_index - 1, out_nodes);
 
         uint32_t space_axis = bit_index % 3;
         if (out_nodes[child0].bbox_min[space_axis] > out_nodes[child1].bbox_min[space_axis]) {
@@ -424,9 +424,8 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
     }
 }
 
-uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
-                                    uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
-                                    std::vector<bvh_node_t> &out_nodes) {
+uint32_t Ray::EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index,
+                       uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes) {
     struct proc_item_t {
         int bit_index;
         uint32_t prim_index, prim_count;
@@ -654,8 +653,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     // Build bottom-level hierarchy from each treelet using LBVH
     const int start_bit = 29 - 12;
     for (treelet_t &tr : treelets) {
-        tr.node_index = EmitLBVH_NonRecursive(prims.data(), indices, &morton_codes[0], tr.index, tr.count,
-                                              indices_start, start_bit, bottom_nodes);
+        tr.node_index = EmitLBVH(prims.data(), indices, &morton_codes[0], tr.index, tr.count, indices_start, start_bit,
+                                 bottom_nodes);
     }
 
     aligned_vector<prim_t> top_prims;

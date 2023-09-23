@@ -327,13 +327,11 @@ uint32_t PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, eV
                         aligned_vector<mtri_accel_t> &out_tris2);
 
 // Recursively builds linear bvh for a set of primitives
-uint32_t EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
-                            uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
-                            std::vector<bvh_node_t> &out_nodes);
+uint32_t EmitLBVH_r(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index,
+                    uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes);
 // Iteratively builds linear bvh for a set of primitives
-uint32_t EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
-                               uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
-                               std::vector<bvh_node_t> &out_nodes);
+uint32_t EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index,
+                  uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes);
 
 // Builds SAH-based BVH for a set of primitives, slow
 uint32_t PreprocessPrims_SAH(Span<const prim_t> prims, const float *positions, size_t stride, const bvh_settings_t &s,
@@ -444,7 +442,7 @@ struct environment_t {
     int qtree_levels;
     bool multiple_importance;
     uint32_t light_index;
-    uint32_t env_map_res; // 16-bit
+    uint32_t env_map_res;  // 16-bit
     uint32_t back_map_res; // 16-bit
 };
 
