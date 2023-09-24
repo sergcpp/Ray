@@ -5182,7 +5182,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             ray_queue[num++] = diff_li;
         }
 
-        const light_t &l = sc.lights[sc.li_indices[first_li]];
+        const light_t &l = sc.lights[first_li];
 
         UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) = l.col[i]; })
         where(ray_queue[index], ls.cast_shadow) = l.cast_shadow ? -1 : 0;
