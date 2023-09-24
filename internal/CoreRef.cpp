@@ -3654,7 +3654,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
         while (!st.empty()) {
             light_stack_entry_t cur = st.pop();
 
-            if (cur.dist > inout_inter.t) {
+            if (cur.dist > inout_inter.t || cur.factor == 0.0f) {
                 continue;
             }
 

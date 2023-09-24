@@ -5550,9 +5550,8 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
         while (!st.empty()) {
             light_stack_entry_t cur = st.pop();
-            assert(cur.factor > 0.0f);
 
-            if (cur.dist > inter_t[ri]) {
+            if (cur.dist > inter_t[ri] || cur.factor == 0.0f) {
                 continue;
             }
 
