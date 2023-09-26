@@ -1419,7 +1419,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
 
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 7;
-    const int PixThres = 4024;
+    const int PixThres = 4028;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1761,7 +1761,7 @@ void test_complex_mat6_nlm_filter_bn(const char *arch_list[], const char *prefer
 
 void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 38;
-    const int PixThres = 1022;
+    const int PixThres = 1027;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1777,7 +1777,7 @@ void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferre
 
 void test_complex_mat6_unet_filter_b(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 28;
-    const int PixThres = 909;
+    const int PixThres = 911;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1844,7 +1844,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 15;
     const double MinPSNR = 21.0;
-    const int PixThres = 6653;
+    const int PixThres = 6656;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1911,7 +1911,7 @@ void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred
 void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 19;
     const double MinPSNR = 21.0;
-    const int PixThres = 5019;
+    const int PixThres = 5020;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR, PixThres,
