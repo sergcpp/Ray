@@ -418,11 +418,11 @@ void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_cha
 
 // https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
 force_inline simd_fvec4 vectorcall reversible_tonemap(const simd_fvec4 c) {
-    return c / (fmax(c.get<0>(), fmax(c.get<1>(), c.get<2>())) + 1.0f);
+    return c / (fmaxf(c.get<0>(), fmaxf(c.get<1>(), c.get<2>())) + 1.0f);
 }
 
 force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c) {
-    return c / (1.0f - fmax(c.get<0>(), fmax(c.get<1>(), c.get<2>())));
+    return c / (1.0f - fmaxf(c.get<0>(), fmaxf(c.get<1>(), c.get<2>())));
 }
 
 struct tonemap_params_t {

@@ -2037,6 +2037,8 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             omega_n = PI; // normals in all directions
             omega_e = PI / 2.0f;
         } break;
+        default:
+            continue;
         }
 
         primitives.push_back({0, 0, 0, bbox_min, bbox_max});
@@ -2132,11 +2134,11 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             memcpy(temp_lnodes[parent].axis, value_ptr(axis1), 3 * sizeof(float));
 
             temp_lnodes[parent].omega_n =
-                fmin(0.5f * (temp_lnodes[parent].omega_n +
-                             fmax(temp_lnodes[parent].omega_n, angle_between + temp_lnodes[n].omega_n)),
-                     PI);
+                fminf(0.5f * (temp_lnodes[parent].omega_n +
+                              fmaxf(temp_lnodes[parent].omega_n, angle_between + temp_lnodes[n].omega_n)),
+                      PI);
         }
-        temp_lnodes[parent].omega_e = fmax(temp_lnodes[parent].omega_e, temp_lnodes[n].omega_e);
+        temp_lnodes[parent].omega_e = fmaxf(temp_lnodes[parent].omega_e, temp_lnodes[n].omega_e);
         if ((temp_lnodes[parent].left_child & LEFT_CHILD_BITS) == n) {
             to_process.push_back(parent);
         }

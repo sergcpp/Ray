@@ -15,7 +15,7 @@
 namespace Ray {
 namespace Cpu {
 Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
-    float max_component = fmax(fmax(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
+    float max_component = fmaxf(fmaxf(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
     if (max_component < 1e-32) {
         return Ref::simd_fvec4{0.0f};
     }
@@ -1173,7 +1173,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
 
                         auto &qvec =
                             reinterpret_cast<Ref::simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
-                        qvec.set(index, fmax(qvec[index], cur_lum));
+                        qvec.set(index, fmaxf(qvec[index], cur_lum));
                     }
                 }
             }
@@ -1384,6 +1384,8 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             omega_n = PI; // normals in all directions
             omega_e = PI / 2.0f;
         } break;
+        default:
+            continue;
         }
 
         primitives.push_back({0, 0, 0, bbox_min, bbox_max});
@@ -1480,11 +1482,11 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             memcpy(light_nodes_[parent].axis, value_ptr(axis1), 3 * sizeof(float));
 
             light_nodes_[parent].omega_n =
-                fmin(0.5f * (light_nodes_[parent].omega_n +
-                             fmax(light_nodes_[parent].omega_n, angle_between + light_nodes_[n].omega_n)),
+                fminf(0.5f * (light_nodes_[parent].omega_n +
+                             fmaxf(light_nodes_[parent].omega_n, angle_between + light_nodes_[n].omega_n)),
                      PI);
         }
-        light_nodes_[parent].omega_e = fmax(light_nodes_[parent].omega_e, light_nodes_[n].omega_e);
+        light_nodes_[parent].omega_e = fmaxf(light_nodes_[parent].omega_e, light_nodes_[n].omega_e);
         if ((light_nodes_[parent].left_child & LEFT_CHILD_BITS) == n) {
             to_process.push_back(parent);
         }

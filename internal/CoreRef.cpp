@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cfloat>
-#include <limits>
 #include <tuple>
 
 #include "TextureStorageCPU.h"
@@ -122,7 +121,7 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_
         where(is_active_lane, _v) = detv * rdet;
     }
 
-    const float min_t = fmin(_t.get<0>(), fmin(_t.get<1>(), fmin(_t.get<2>(), _t.get<3>())));
+    const float min_t = fminf(_t.get<0>(), fminf(_t.get<1>(), fminf(_t.get<2>(), _t.get<3>())));
     _mask &= simd_cast(_t == min_t);
 
     const long mask = _mask.movemask();
@@ -624,7 +623,7 @@ force_inline float fast_log2(float val) {
 
 force_inline float safe_sqrt(float val) {
 #if USE_SAFE_MATH
-    return sqrtf(fmax(val, 0.0f));
+    return sqrtf(fmaxf(val, 0.0f));
 #else
     return sqrtf(val);
 #endif
@@ -632,7 +631,7 @@ force_inline float safe_sqrt(float val) {
 
 force_inline float safe_div_pos(const float a, const float b) {
 #if USE_SAFE_MATH
-    return a / fmax(b, FLT_EPS);
+    return a / fmaxf(b, FLT_EPS);
 #else
     return (a / b)
 #endif
@@ -640,7 +639,7 @@ force_inline float safe_div_pos(const float a, const float b) {
 
 force_inline float safe_div_neg(const float a, const float b) {
 #if USE_SAFE_MATH
-    return a / fmin(b, -FLT_EPS);
+    return a / fminf(b, -FLT_EPS);
 #else
     return (a / b)
 #endif
@@ -676,7 +675,7 @@ float get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_
     const simd_fvec2 _diagonal = _duv_dx + _duv_dy;
 
     // Find minimal dimention of parallelogram
-    const float min_length2 = fmin(fmin(_duv_dx.length2(), _duv_dy.length2()), _diagonal.length2());
+    const float min_length2 = fminf(fminf(_duv_dx.length2(), _duv_dy.length2()), _diagonal.length2());
     // Find lod
     float lod = fast_log2(min_length2);
     // Substruct 1 from lod to always have 4 texels for interpolation
@@ -733,7 +732,7 @@ force_inline float schlick_weight(const float u) {
 
 float fresnel_dielectric_cos(float cosi, float eta) {
     // compute fresnel reflectance without explicitly computing the refracted direction
-    float c = fabs(cosi);
+    float c = fabsf(cosi);
     float g = eta * eta - 1 + c * c;
     float result;
 
@@ -780,26 +779,26 @@ simd_fvec4 offset_ray(const simd_fvec4 &p, const simd_fvec4 &n) {
         int_as_float(float_as_int(p.get<1>()) + ((p.get<1>() < 0.0f) ? -of_i.get<1>() : of_i.get<1>())),
         int_as_float(float_as_int(p.get<2>()) + ((p.get<2>() < 0.0f) ? -of_i.get<2>() : of_i.get<2>())), 0.0f);
 
-    return simd_fvec4{fabs(p.get<0>()) < Origin ? (p.get<0>() + FloatScale * n.get<0>()) : p_i.get<0>(),
-                      fabs(p.get<1>()) < Origin ? (p.get<1>() + FloatScale * n.get<1>()) : p_i.get<1>(),
-                      fabs(p.get<2>()) < Origin ? (p.get<2>() + FloatScale * n.get<2>()) : p_i.get<2>(), 0.0f};
+    return simd_fvec4{fabsf(p.get<0>()) < Origin ? (p.get<0>() + FloatScale * n.get<0>()) : p_i.get<0>(),
+                      fabsf(p.get<1>()) < Origin ? (p.get<1>() + FloatScale * n.get<1>()) : p_i.get<1>(),
+                      fabsf(p.get<2>()) < Origin ? (p.get<2>() + FloatScale * n.get<2>()) : p_i.get<2>(), 0.0f};
 }
 
 simd_fvec3 sample_GTR1(const float rgh, const float r1, const float r2) {
-    const float a = fmax(0.001f, rgh);
+    const float a = fmaxf(0.001f, rgh);
     const float a2 = sqr(a);
 
     const float phi = r1 * (2.0f * PI);
 
-    const float cosTheta = sqrtf(fmax(0.0f, 1.0f - powf(a2, 1.0f - r2)) / (1.0f - a2));
-    const float sinTheta = sqrtf(fmax(0.0f, 1.0f - (cosTheta * cosTheta)));
+    const float cosTheta = sqrtf(fmaxf(0.0f, 1.0f - powf(a2, 1.0f - r2)) / (1.0f - a2));
+    const float sinTheta = sqrtf(fmaxf(0.0f, 1.0f - (cosTheta * cosTheta)));
     const float sinPhi = sinf(phi), cosPhi = cosf(phi);
 
     return simd_fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
 }
 
 simd_fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
-    const float a = fmax(0.001f, rgh);
+    const float a = fmaxf(0.001f, rgh);
 
     const float phi = r1 * (2.0f * PI);
 
@@ -825,7 +824,7 @@ simd_fvec4 SampleVNDF_Hemisphere_CrossSect(const simd_fvec4 &Vh, float U1, float
     const float s = 0.5f * (1.0f + Vh.get<2>());
     t2 = (1.0f - s) * sqrtf(1.0f - t1 * t1) + s * t2;
     // reprojection onto hemisphere
-    const simd_fvec4 Nh = t1 * T1 + t2 * T2 + sqrtf(fmax(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
+    const simd_fvec4 Nh = t1 * T1 + t2 * T2 + sqrtf(fmaxf(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
     // normalization will be done later
     return Nh;
 }
@@ -854,7 +853,7 @@ simd_fvec4 SampleGGX_VNDF(const simd_fvec4 &Ve, float alpha_x, float alpha_y, fl
     const simd_fvec4 Nh = SampleVNDF_Hemisphere_SphCap(Vh, U1, U2);
     // transforming the normal back to the ellipsoid configuration
     const simd_fvec4 Ne =
-        normalize(simd_fvec4(alpha_x * Nh.get<0>(), alpha_y * Nh.get<1>(), fmax(0.0f, Nh.get<2>()), 0.0f));
+        normalize(simd_fvec4(alpha_x * Nh.get<0>(), alpha_y * Nh.get<1>(), fmaxf(0.0f, Nh.get<2>()), 0.0f));
     return Ne;
 }
 
@@ -902,7 +901,7 @@ float D_GGX(const simd_fvec4 &H, const float alpha_x, const float alpha_y) {
 
 void create_tbn_matrix(const simd_fvec4 &N, simd_fvec4 out_TBN[3]) {
     simd_fvec4 U;
-    if (fabs(N.get<1>()) < 0.999f) {
+    if (fabsf(N.get<1>()) < 0.999f) {
         U = {0.0f, 1.0f, 0.0f, 0.0f};
     } else {
         U = {1.0f, 0.0f, 0.0f, 0.0f};
@@ -943,7 +942,7 @@ void create_tbn_matrix(const simd_fvec4 &N, simd_fvec4 &T, simd_fvec4 out_TBN[3]
 
 void create_tbn(const simd_fvec4 &N, simd_fvec4 &out_T, simd_fvec4 &out_B) {
     simd_fvec4 U;
-    if (fabs(N.get<1>()) < 0.999f) {
+    if (fabsf(N.get<1>()) < 0.999f) {
         U = {0.0f, 1.0f, 0.0f, 0.0f};
     } else {
         U = {1.0f, 0.0f, 0.0f, 0.0f};
@@ -961,7 +960,7 @@ simd_fvec4 MapToCone(float r1, float r2, simd_fvec4 N, float radius) {
 
     float theta, r;
 
-    if (fabs(offset.get<0>()) > fabs(offset.get<1>())) {
+    if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
         r = offset.get<0>();
         theta = 0.25f * PI * (offset.get<1>() / offset.get<0>());
     } else {
@@ -1021,14 +1020,14 @@ simd_fvec3 mul(const simd_fvec3 in_mat[3], const simd_fvec3 &in_vec) {
     return out_vec;
 }
 
-force_inline float safe_sqrtf(float f) { return sqrtf(fmax(f, 0.0f)); }
+force_inline float safe_sqrtf(float f) { return sqrtf(fmaxf(f, 0.0f)); }
 
 // Taken from Cycles
 simd_fvec4 ensure_valid_reflection(const simd_fvec4 &Ng, const simd_fvec4 &I, const simd_fvec4 &N) {
     const simd_fvec4 R = 2 * dot(N, I) * N - I;
 
     // Reflection rays may always be at least as shallow as the incoming ray.
-    const float threshold = fmin(0.9f * dot(Ng, I), 0.01f);
+    const float threshold = fminf(0.9f * dot(Ng, I), 0.01f);
     if (dot(Ng, R) >= threshold) {
         return N;
     }
@@ -1191,10 +1190,10 @@ float peek_ior_stack(const float stack[4], bool skip_first, const float default_
 float approx_atan2(const float y, const float x) { // max error is 0.000004f
     float t0, t1, t3, t4;
 
-    t3 = fabs(x);
-    t1 = fabs(y);
-    t0 = fmax(t3, t1);
-    t1 = fmin(t3, t1);
+    t3 = fabsf(x);
+    t1 = fabsf(y);
+    t0 = fmaxf(t3, t1);
+    t1 = fminf(t3, t1);
     t3 = 1.0f / t0;
     t3 = t1 * t3;
 
@@ -1207,7 +1206,7 @@ float approx_atan2(const float y, const float x) { // max error is 0.000004f
     t0 = t0 * t4 + 0.999995630f;
     t3 = t0 * t3;
 
-    t3 = (fabs(y) > fabs(x)) ? 1.570796327f - t3 : t3;
+    t3 = (fabsf(y) > fabsf(x)) ? 1.570796327f - t3 : t3;
     t3 = (x < 0) ? 3.141592654f - t3 : t3;
     t3 = (y < 0) ? -t3 : t3;
 
@@ -1258,7 +1257,7 @@ force_inline simd_fvec4 approx_cos(simd_fvec4 x) {
 
 force_inline float approx_acos(float x) { // max error is 0.000068f
     float negate = float(x < 0);
-    x = fabs(x);
+    x = fabsf(x);
     float ret = -0.0187293f;
     ret = ret * x;
     ret = ret + 0.0742610f;
@@ -1304,8 +1303,8 @@ float calc_lnode_importance(const light_bvh_node_t &n, const simd_fvec4 &P) {
         simd_fvec4 axis = simd_fvec4{n.axis};
         axis.set<3>(0.0f);
 
-        const float omega = approx_acos(fmin(dot(axis, v / v_len), 1.0f)) - 0.00007f;
-        const float omega_ = fmax(0.0f, omega - n.omega_n - omega_u);
+        const float omega = approx_acos(fminf(dot(axis, v / v_len), 1.0f)) - 0.00007f;
+        const float omega_ = fmaxf(0.0f, omega - n.omega_n - omega_u);
         mul = omega_ < n.omega_e ? approx_cos(omega_) + 0.057f : 0.0f;
     }
 
@@ -1442,7 +1441,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
                 offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
                 if (offset.get<0>() != 0.0f && offset.get<1>() != 0.0f) {
                     float theta, r;
-                    if (fabs(offset.get<0>()) > fabs(offset.get<1>())) {
+                    if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
                         r = offset.get<0>();
                         theta = 0.25f * PI * (offset.get<1>() / offset.get<0>());
                     } else {
@@ -2003,7 +2002,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
                                               const mesh_t *meshes, const transform_t *transforms,
                                               const mtri_accel_t *mtris, const tri_mat_data_t *materials,
                                               const uint32_t *tri_indices, hit_data_t &inter) {
-    const int ray_vismask = (1u << ray_type);
+    const uint32_t ray_vismask = (1u << ray_type);
 
     float inv_d[3];
     safe_invert(rd, inv_d);
@@ -2070,7 +2069,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
                                               const tri_accel_t *tris, const tri_mat_data_t *materials,
                                               const uint32_t *tri_indices, hit_data_t &inter) {
     const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
-    const int ray_vismask = (1u << ray_type);
+    const uint32_t ray_vismask = (1u << ray_type);
 
     int child_order[8];
     UNROLLED_FOR(i, 8, { child_order[i] = i ^ ray_dir_oct; })
@@ -2463,12 +2462,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_OrenDiffuse_BSDF(const simd_fvec4 &V, co
 
     ////
 
-    const float nl = fmax(dot(N, L), 0.0f);
-    const float nv = fmax(dot(N, V), 0.0f);
+    const float nl = fmaxf(dot(N, L), 0.0f);
+    const float nv = fmaxf(dot(N, V), 0.0f);
     float t = dot(L, V) - nl * nv;
 
     if (t > 0.0f) {
-        t /= fmax(nl, nv) + FLT_MIN;
+        t /= fmaxf(nl, nv) + FLT_MIN;
     }
     const float is = nl * (a + b * t);
 
@@ -2561,12 +2560,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_
         (fresnel_dielectric_cos(dot(view_dir_ts, sampled_normal_ts), spec_ior) - spec_F0) / (1.0f - spec_F0);
     simd_fvec4 F = mix(spec_col, simd_fvec4(1.0f), FH);
 
-    const float denom = 4.0f * fabs(view_dir_ts.get<2>() * reflected_dir_ts.get<2>());
+    const float denom = 4.0f * fabsf(view_dir_ts.get<2>() * reflected_dir_ts.get<2>());
     F *= (denom != 0.0f) ? (D * G / denom) : 0.0f;
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    float pdf = D * G1(view_dir_ts, alpha_x, alpha_y) * fmax(dot(view_dir_ts, sampled_normal_ts), 0.0f) /
-                fabs(view_dir_ts.get<2>());
+    float pdf = D * G1(view_dir_ts, alpha_x, alpha_y) * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) /
+                fabsf(view_dir_ts.get<2>());
     const float div = 4.0f * dot(view_dir_ts, sampled_normal_ts);
     if (div != 0.0f) {
         pdf /= div;
@@ -2575,7 +2574,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_
     const float pdf = D * sampled_normal_ts.get<2>() / (4.0f * dot(view_dir_ts, sampled_normal_ts));
 #endif
 
-    F *= fmax(reflected_dir_ts.get<2>(), 0.0f);
+    F *= fmaxf(reflected_dir_ts.get<2>(), 0.0f);
     F.set<3>(pdf);
 
     return F;
@@ -2633,16 +2632,16 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &vie
     const float G1i = G1(view_dir_ts, roughness2, roughness2);
 
     const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
-    const float jacobian = denom != 0.0f ? fmax(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
+    const float jacobian = denom != 0.0f ? fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
 
-    float F = D * G1i * G1o * fmax(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
+    float F = D * G1i * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
               (/*-refr_dir_ts.get<2>() */ view_dir_ts.get<2>());
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    float pdf = D * G1o * fmax(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian / view_dir_ts.get<2>();
+    float pdf = D * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian / view_dir_ts.get<2>();
 #else
-    // const float pdf = D * fmax(sampled_normal_ts.get<2>(), 0.0f) * jacobian;
-    const float pdf = D * sampled_normal_ts.get<2>() * fmax(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / denom;
+    // const float pdf = D * fmaxf(sampled_normal_ts.get<2>(), 0.0f) * jacobian;
+    const float pdf = D * sampled_normal_ts.get<2>() * fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / denom;
 #endif
 
     simd_fvec4 ret = F * refr_col;
@@ -2708,12 +2707,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec
                      (1.0f - clearcoat_F0);
     float F = mix(0.04f, 1.0f, FH);
 
-    const float denom = 4.0f * fabs(view_dir_ts.get<2>()) * fabs(reflected_dir_ts.get<2>());
+    const float denom = 4.0f * fabsf(view_dir_ts.get<2>()) * fabsf(reflected_dir_ts.get<2>());
     F *= (denom != 0.0f) ? D * G / denom : 0.0f;
 
 #if USE_VNDF_GGX_SAMPLING == 1
     float pdf = D * G1(view_dir_ts, clearcoat_alpha, clearcoat_alpha) *
-                fmax(dot(view_dir_ts, sampled_normal_ts), 0.0f) / fabs(view_dir_ts.get<2>());
+                fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) / fabsf(view_dir_ts.get<2>());
     const float div = 4.0f * dot(view_dir_ts, sampled_normal_ts);
     if (div != 0.0f) {
         pdf /= div;
@@ -2722,7 +2721,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec
     float pdf = D * sampled_normal_ts.get<2>() / (4.0f * dot(view_dir_ts, sampled_normal_ts));
 #endif
 
-    F *= fmax(reflected_dir_ts.get<2>(), 0.0f);
+    F *= fmaxf(reflected_dir_ts.get<2>(), 0.0f);
     return simd_fvec4{F, F, F, pdf};
 }
 
@@ -2990,11 +2989,11 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const Cpu::TexStorageBase *cons
     simd_fvec2 step;
 
     if (l1 <= l2) {
-        lod = fast_log2(fmin(_duv_dx.get<0>(), _duv_dx.get<1>()));
+        lod = fast_log2(fminf(_duv_dx.get<0>(), _duv_dx.get<1>()));
         k = l1 / l2;
         step = duv_dy;
     } else {
-        lod = fast_log2(fmin(_duv_dy.get<0>(), _duv_dy.get<1>()));
+        lod = fast_log2(fminf(_duv_dy.get<0>(), _duv_dy.get<1>()));
         k = l2 / l1;
         step = duv_dx;
     }
@@ -3172,9 +3171,9 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             const bool can_terminate_path = false;
 #endif
 
-            const float lum = fmax(r.c[0], fmax(r.c[1], r.c[2]));
+            const float lum = fmaxf(r.c[0], fmaxf(r.c[1], r.c[2]));
             const float p = fract(random_seq[RAND_DIM_TERMINATE] + rand_offset[0]);
-            const float q = can_terminate_path ? fmax(0.05f, 1.0f - lum) : 0.0f;
+            const float q = can_terminate_path ? fmaxf(0.05f, 1.0f - lum) : 0.0f;
             if (p < q || lum == 0.0f || (r.depth >> 24) + 1 >= max_transp_depth) {
                 // terminate ray
                 r.c[0] = r.c[1] = r.c[2] = 0.0f;
@@ -3370,7 +3369,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         center_to_surface /= dist_to_center;
 
         // sample hemisphere
-        const float r = sqrtf(fmax(0.0f, 1.0f - r1 * r1));
+        const float r = sqrtf(fmaxf(0.0f, 1.0f - r1 * r1));
         const float phi = 2.0f * PI * r2;
         auto sampled_dir = simd_fvec4{r * cosf(phi), r * sinf(phi), r1, 0.0f};
 
@@ -3388,7 +3387,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         ls.L /= ls_dist;
         ls.area = l.sph.area;
 
-        const float cos_theta = fabs(dot(ls.L, light_forward));
+        const float cos_theta = fabsf(dot(ls.L, light_forward));
         if (cos_theta > 0.0f) {
             ls.pdf = (ls_dist * ls_dist) / (0.5f * ls.area * cos_theta);
         }
@@ -3474,7 +3473,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         simd_fvec2 offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
         if (offset.get<0>() != 0.0f && offset.get<1>() != 0.0f) {
             float theta, r;
-            if (fabs(offset.get<0>()) > fabs(offset.get<1>())) {
+            if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
                 r = offset.get<0>();
                 theta = 0.25f * PI * (offset.get<1>() / offset.get<0>());
             } else {
@@ -3538,7 +3537,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         ls.L /= ls_dist;
         ls.area = l.line.area;
 
-        const float cos_theta = 1.0f - fabs(dot(ls.L, light_dir));
+        const float cos_theta = 1.0f - fabsf(dot(ls.L, light_dir));
         if (cos_theta != 0.0f) {
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
@@ -3575,7 +3574,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         float cos_theta = -dot(ls.L, light_forward);
         ls.lp = offset_ray(lp, cos_theta >= 0.0f ? light_forward : -light_forward);
         if (l.doublesided) {
-            cos_theta = fabs(cos_theta);
+            cos_theta = fabsf(cos_theta);
         }
 
         if (cos_theta > 0.0f) {
@@ -3799,7 +3798,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
                     const float plane_dist = dot(light_forward, light_pos);
                     const float cos_theta = dot(rd, light_forward);
-                    const float t = (plane_dist - dot(light_forward, ro)) / fmin(cos_theta, -FLT_EPS);
+                    const float t = (plane_dist - dot(light_forward, ro)) / fminf(cos_theta, -FLT_EPS);
 
                     if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                         light_u /= dot(light_u, light_u);
@@ -3861,9 +3860,9 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
                     float t0, t1;
                     if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
-                        const float t = fmin(t0, t1);
+                        const float t = fminf(t0, t1);
                         const simd_fvec4 p = _ro + t * _rd;
-                        if (fabs(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
+                        if (fabsf(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
                             inout_inter.mask = -1;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t;
@@ -3995,7 +3994,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
                     const float plane_dist = dot(light_forward, light_pos);
                     const float cos_theta = dot(rd, light_forward);
-                    const float t = (plane_dist - dot(light_forward, ro)) / fmin(cos_theta, -FLT_EPS);
+                    const float t = (plane_dist - dot(light_forward, ro)) / fminf(cos_theta, -FLT_EPS);
 
                     if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                         light_u /= dot(light_u, light_u);
@@ -4057,9 +4056,9 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
                     float t0, t1;
                     if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
-                        const float t = fmin(t0, t1);
+                        const float t = fminf(t0, t1);
                         const simd_fvec4 p = _ro + t * _rd;
-                        if (fabs(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
+                        if (fabsf(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
                             inout_inter.mask = -1;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t;
@@ -4078,7 +4077,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
 float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights,
                                     Span<const light_wbvh_node_t> nodes) {
-    const float rdist = fabs(ray.dist);
+    const float rdist = fabsf(ray.dist);
 
     const simd_fvec4 ro = make_fvec3(ray.o);
     const simd_fvec4 rd = make_fvec3(ray.d);
@@ -4175,7 +4174,7 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t>
 
                 const float plane_dist = dot(light_forward, light_pos);
                 const float cos_theta = dot(rd, light_forward);
-                const float t = (plane_dist - dot(light_forward, ro)) / fmin(cos_theta, -FLT_EPS);
+                const float t = (plane_dist - dot(light_forward, ro)) / fminf(cos_theta, -FLT_EPS);
 
                 if (cos_theta < 0.0f && t > HIT_EPS && t < rdist) {
                     light_u /= dot(light_u, light_u);
@@ -4477,7 +4476,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
         const simd_fvec4 light_dir = make_fvec3(l.line.v);
         const float light_area = l.line.area;
 
-        const float cos_theta = 1.0f - fabs(dot(I, light_dir));
+        const float cos_theta = 1.0f - fabsf(dot(I, light_dir));
 
         const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
@@ -4937,14 +4936,14 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     surf.B = safe_normalize(surf.B);
     surf.T = safe_normalize(surf.T);
 
-    const float ta = fabs((v2.t[0] - v1.t[0]) * (v3.t[1] - v1.t[1]) - (v3.t[0] - v1.t[0]) * (v2.t[1] - v1.t[1]));
+    const float ta = fabsf((v2.t[0] - v1.t[0]) * (v3.t[1] - v1.t[1]) - (v3.t[0] - v1.t[0]) * (v2.t[1] - v1.t[1]));
 
     const float cone_width = ray.cone_width + ray.cone_spread * inter.t;
 
     float lambda = 0.5f * fast_log2(ta / pa);
     lambda += fast_log2(cone_width);
     // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
-    // lambda -= fast_log2(fabs(dot(I, plane_N)));
+    // lambda -= fast_log2(fabsf(dot(I, plane_N)));
 
     const float ext_ior = peek_ior_stack(ray.ior, is_backfacing);
 
@@ -5148,7 +5147,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
             light_forward /= light_forward_len;
             const float tri_area = 0.5f * light_forward_len;
 
-            const float cos_theta = fabs(dot(I, light_forward)); // abs for doublesided light
+            const float cos_theta = fabsf(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0f) {
                 const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
                 const float bsdf_pdf = ray.pdf;
@@ -5236,11 +5235,11 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     const bool can_terminate_path = false;
 #endif
 
-    const float lum = fmax(new_ray.c[0], fmax(new_ray.c[1], new_ray.c[2]));
+    const float lum = fmaxf(new_ray.c[0], fmaxf(new_ray.c[1], new_ray.c[2]));
     const float p = fract(random_seq[RAND_DIM_TERMINATE] + sample_off[0]);
-    const float q = can_terminate_path ? fmax(0.05f, 1.0f - lum) : 0.0f;
+    const float q = can_terminate_path ? fmaxf(0.05f, 1.0f - lum) : 0.0f;
     if (p >= q && lum > 0.0f && new_ray.pdf > 0.0f) {
-        new_ray.pdf = fmin(new_ray.pdf, 1e6f);
+        new_ray.pdf = fminf(new_ray.pdf, 1e6f);
         new_ray.c[0] /= (1.0f - q);
         new_ray.c[1] /= (1.0f - q);
         new_ray.c[2] /= (1.0f - q);
@@ -5248,7 +5247,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     }
 
 #if USE_NEE
-    const float sh_lum = fmax(sh_r.c[0], fmax(sh_r.c[1], sh_r.c[2]));
+    const float sh_lum = fmaxf(sh_r.c[0], fmaxf(sh_r.c[1], sh_r.c[2]));
     if (sh_lum > 0.0f) {
         // actual ray direction accouning for bias from both ends
         const simd_fvec4 to_light = ls.lp - simd_fvec4{sh_r.o[0], sh_r.o[1], sh_r.o[2], 0.0f};
@@ -5381,7 +5380,7 @@ void JointNLMFilter(const color_rgba_t *restrict input, const rect_t &rect, cons
                     const float patch_distance = 0.25f * PatchDistanceNormFactor *
                                                  (color_distance.get<0>() + color_distance.get<1>() +
                                                   color_distance.get<2>() + color_distance.get<3>());
-                    float weight = expf(-fmax(0.0f, patch_distance));
+                    float weight = expf(-fmaxf(0.0f, patch_distance));
 
                     if (FEATURE0 || FEATURE1) {
                         simd_fvec4 feature_distance = {};
@@ -5401,9 +5400,9 @@ void JointNLMFilter(const color_rgba_t *restrict input, const rect_t &rect, cons
                         const float feature_patch_distance =
                             0.25f * (feature_distance.get<0>() + feature_distance.get<1>() + feature_distance.get<2>() +
                                      feature_distance.get<3>());
-                        const float feature_weight = expf(-fmax(0.0f, fmin(10000.0f, feature_patch_distance)));
+                        const float feature_weight = expf(-fmaxf(0.0f, fminf(10000.0f, feature_patch_distance)));
 
-                        weight = fmin(weight, feature_weight);
+                        weight = fminf(weight, feature_weight);
                     }
 
                     sum_output += simd_fvec4{input[jy * input_stride + jx].v, simd_mem_aligned} * weight;

@@ -693,7 +693,7 @@ template <int S> force_inline simd_fvec<S> safe_div_pos(const float a, const sim
 
 template <int S> force_inline simd_fvec<S> safe_div_pos(const simd_fvec<S> &a, const float b) {
 #if USE_SAFE_MATH
-    return a / fmax(b, FLT_EPS);
+    return a / fmaxf(b, FLT_EPS);
 #else
     return a / b;
 #endif
@@ -701,7 +701,7 @@ template <int S> force_inline simd_fvec<S> safe_div_pos(const simd_fvec<S> &a, c
 
 force_inline float safe_div_pos(const float a, const float b) {
 #if USE_SAFE_MATH
-    return a / fmax(b, FLT_EPS);
+    return a / fmaxf(b, FLT_EPS);
 #else
     return a / b;
 #endif
@@ -2118,7 +2118,7 @@ template <int S> force_inline simd_fvec<S> schlick_weight(const simd_fvec<S> &u)
 
 force_inline float fresnel_dielectric_cos(float cosi, float eta) {
     // compute fresnel reflectance without explicitly computing the refracted direction
-    float c = fabs(cosi);
+    float c = fabsf(cosi);
     float g = eta * eta - 1 + c * c;
     float result;
 
@@ -4081,8 +4081,8 @@ void Ray::NS::Evaluate_GGXRefraction_BSDF(const simd_fvec<S> view_dir_ts[3], con
 #if USE_VNDF_GGX_SAMPLING == 1
     simd_fvec<S> pdf = safe_div(D * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian, view_dir_ts[2]);
 #else
-    // const float pdf = D * fmax(sampled_normal_ts[2], 0.0f) * jacobian;
-    const float pdf = safe_div(D * sampled_normal_ts[2] * fmax(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom);
+    // const float pdf = D * fmaxf(sampled_normal_ts[2], 0.0f) * jacobian;
+    const float pdf = safe_div(D * sampled_normal_ts[2] * fmaxf(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom);
 #endif
 
     const simd_fvec<S> is_valid = (refr_dir_ts[2] < 0.0f) & (view_dir_ts[2] > 0.0f);

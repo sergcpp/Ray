@@ -165,7 +165,7 @@ void Ray::CanonicalToDir(const float p[2], const float y_rotation, float out_d[3
 }
 
 void Ray::DirToCanonical(const float d[3], const float y_rotation, float out_p[2]) {
-    const float cos_theta = fmin(fmax(d[1], -1.0f), 1.0f);
+    const float cos_theta = fminf(fmaxf(d[1], -1.0f), 1.0f);
 
     float phi = -atan2f(d[2], d[0]) + y_rotation;
     if (phi < 0) {
@@ -416,8 +416,8 @@ uint32_t Ray::EmitLBVH_r(const prim_t *prims, const uint32_t *indices, const uin
         par_node.right_child = (space_axis << 30) + child1;
 
         for (int i = 0; i < 3; i++) {
-            par_node.bbox_min[i] = fmin(out_nodes[child0].bbox_min[i], out_nodes[child1].bbox_min[i]);
-            par_node.bbox_max[i] = fmax(out_nodes[child0].bbox_max[i], out_nodes[child1].bbox_max[i]);
+            par_node.bbox_min[i] = fminf(out_nodes[child0].bbox_min[i], out_nodes[child1].bbox_min[i]);
+            par_node.bbox_max[i] = fmaxf(out_nodes[child0].bbox_max[i], out_nodes[child1].bbox_max[i]);
         }
 
         return node_index;
@@ -497,9 +497,9 @@ uint32_t Ray::EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint3
 
                 for (int i = 0; i < 3; i++) {
                     node.bbox_min[i] =
-                        fmin(out_nodes[node.left_child].bbox_min[i], out_nodes[node.right_child].bbox_min[i]);
+                        fminf(out_nodes[node.left_child].bbox_min[i], out_nodes[node.right_child].bbox_min[i]);
                     node.bbox_max[i] =
-                        fmax(out_nodes[node.left_child].bbox_max[i], out_nodes[node.right_child].bbox_max[i]);
+                        fmaxf(out_nodes[node.left_child].bbox_max[i], out_nodes[node.right_child].bbox_max[i]);
                 }
 
                 const uint32_t space_axis = (cur.bit_index % 3);
@@ -1083,7 +1083,7 @@ void Ray::ConstructCamera(const eCamType type, const ePixelFilter filter, const 
         auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
 
         if (u.length2() < FLT_EPS) {
-            if (fabs(f[1]) >= 0.999f) {
+            if (fabsf(f[1]) >= 0.999f) {
                 u = {1.0f, 0.0f, 0.0f};
             } else {
                 u = {0.0f, 1.0f, 0.0f};
@@ -1102,7 +1102,7 @@ void Ray::ConstructCamera(const eCamType type, const ePixelFilter filter, const 
         cam->exposure = exposure;
         cam->gamma = gamma;
         cam->sensor_height = sensor_height;
-        cam->focus_distance = fmax(focus_distance, 0.0f);
+        cam->focus_distance = fmaxf(focus_distance, 0.0f);
         cam->focal_length = 0.5f * sensor_height / tanf(0.5f * fov * PI / 180.0f);
         cam->fstop = fstop;
         cam->lens_rotation = lens_rotation;

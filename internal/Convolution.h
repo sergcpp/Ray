@@ -178,12 +178,12 @@ void Convolution3x3_Direct_ProcessRows(int y, const float *__restrict data, cons
             for (int k = 0; k < RowsPortion; ++k) {
                 float final_val = biases[i] + hsum(val[k]);
                 if (Activation == eActivation::ReLU) {
-                    final_val = fmax(0.0f, final_val);
+                    final_val = fmaxf(0.0f, final_val);
                 }
 
                 if (PostOp == ePostOp::Downscale) {
                     float &out = output[OutPxPitch * (((y + k) / 2) * output_stride + (x / 2)) + i];
-                    out = fmax(out, final_val);
+                    out = fmaxf(out, final_val);
                 } else {
                     output[OutPxPitch * ((y + k) * output_stride + x) + i] = transfer::output<PostOp>(final_val);
                 }
@@ -302,7 +302,7 @@ void ConvolutionConcat3x3_Direct_ProcessRows(int y, const float *__restrict data
             for (int k = 0; k < RowsPortion; ++k) {
                 float final_val = biases[i] + hsum(val[k]);
                 if (Activation == eActivation::ReLU) {
-                    final_val = fmax(0.0f, final_val);
+                    final_val = fmaxf(0.0f, final_val);
                 }
                 output[OutChannels * ((y + k) * output_stride + x) + i] = final_val;
             }
@@ -415,12 +415,12 @@ void Convolution3x3_GEMM(const float data1[], const float data2[], const float d
                 }
 
                 if (Activation == eActivation::ReLU) {
-                    final_val = fmax(0.0f, final_val);
+                    final_val = fmaxf(0.0f, final_val);
                 }
 
                 if (PostOp == ePostOp::Downscale) {
                     float &out = output[OutChannels * ((y / 2) * ((w + 1) / 2) + (x / 2)) + i];
-                    out = fmax(out, final_val);
+                    out = fmaxf(out, final_val);
                 } else {
                     output[OutChannels * (y * output_stride + x) + i] = final_val;
                 }
@@ -567,7 +567,7 @@ void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__res
                     float final_val = biases[i];
                     final_val += hsum(val[0]);
                     if (Activation == eActivation::ReLU) {
-                        final_val = fmax(0.0f, final_val);
+                        final_val = fmaxf(0.0f, final_val);
                     }
 
                     output[OutChannels * (y * w + x) + i] = final_val;
@@ -622,7 +622,7 @@ void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__res
                     float final_val = biases[i];
                     final_val += hsum(val[0]);
                     if (Activation == eActivation::ReLU) {
-                        final_val = fmax(0.0f, final_val);
+                        final_val = fmaxf(0.0f, final_val);
                     }
 
                     output[OutChannels * (y * w + x) + i] = final_val;
@@ -637,7 +637,7 @@ void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__res
                         val += weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j] * input2[j];
                     }
                     if (Activation == eActivation::ReLU) {
-                        val = fmax(0.0f, val);
+                        val = fmaxf(0.0f, val);
                     }
 
                     output[OutChannels * (y * w + x) + i] = val;
