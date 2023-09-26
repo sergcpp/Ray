@@ -100,7 +100,7 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T))};
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * i), temp_stage_buf, 0, uint32_t(sizeof(T)), cmd_buf);
@@ -118,7 +118,7 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T) * count)};
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * offset), temp_stage_buf, 0, uint32_t(sizeof(T) * count), cmd_buf);
@@ -136,7 +136,7 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T))};
 
         uint8_t *ptr = temp_stage_buf.Map();
         memcpy(ptr, &v, sizeof(T));
@@ -154,7 +154,7 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T) * count)};
 
         uint8_t *ptr = temp_stage_buf.Map();
         memcpy(ptr, p, sizeof(T) * count);
