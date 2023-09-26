@@ -124,8 +124,8 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
     for (int i = 0; i < vertex_count; ++i) {
         for (int j = 0; j < 3; ++j) {
             const double pos = vertices1[i][j];
-            extends.min.set(j, fmin(extends.min[j], castflt_down(pos)));
-            extends.max.set(j, fmax(extends.max[j], castflt_up(pos)));
+            extends.min.set(j, fminf(extends.min[j], castflt_down(pos)));
+            extends.max.set(j, fmaxf(extends.max[j], castflt_up(pos)));
         }
     }
 
@@ -262,16 +262,16 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                 auto &list = axis_lists[axis];
 
                 if (modified_prim_bounds.empty()) {
-                    std::sort(list.begin(), list.end(),
-                              [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) -> bool {
-                                  return primitives[prim_indices[p1]].bbox_max[axis] <
-                                         primitives[prim_indices[p2]].bbox_max[axis];
-                              });
+                    std::stable_sort(list.begin(), list.end(),
+                                     [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) -> bool {
+                                         return primitives[prim_indices[p1]].bbox_max[axis] <
+                                                primitives[prim_indices[p2]].bbox_max[axis];
+                                     });
                 } else {
-                    std::sort(list.begin(), list.end(),
-                              [axis, &modified_prim_bounds](uint32_t p1, uint32_t p2) -> bool {
-                                  return modified_prim_bounds[p1].max[axis] < modified_prim_bounds[p2].max[axis];
-                              });
+                    std::stable_sort(list.begin(), list.end(),
+                                     [axis, &modified_prim_bounds](uint32_t p1, uint32_t p2) -> bool {
+                                         return modified_prim_bounds[p1].max[axis] < modified_prim_bounds[p2].max[axis];
+                                     });
                 }
 
                 bbox_t cur_right_bounds;
