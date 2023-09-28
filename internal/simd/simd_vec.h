@@ -156,6 +156,7 @@ template <typename T, int S> class simd_vec {
     T comp_[S];
 
     friend class simd_vec<int, S>;
+    friend class simd_vec<unsigned, S>;
     friend class simd_vec<float, S>;
 
   public:
@@ -727,6 +728,12 @@ template <typename T, int S> class simd_vec {
         return ret;
     }
 
+    friend force_inline simd_vec<T, S> srli(const simd_vec<T, S> &v1, int v2) {
+        simd_vec<T, S> ret;
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = unsigned(v1.comp_[i]) >> v2; })
+        return ret;
+    }
+
     friend force_inline T dot(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         T ret = {0};
         UNROLLED_FOR_S(i, S, { ret += v1.comp_[i] * v2.comp_[i]; })
@@ -983,6 +990,13 @@ using simd_ivec3 = simd_ivec<3>;
 using simd_ivec4 = simd_ivec<4>;
 using simd_ivec8 = simd_ivec<8>;
 using simd_ivec16 = simd_ivec<16>;
+
+template <int S> using simd_uvec = simd_vec<unsigned, S>;
+using simd_uvec2 = simd_uvec<2>;
+using simd_uvec3 = simd_uvec<3>;
+using simd_uvec4 = simd_uvec<4>;
+using simd_uvec8 = simd_uvec<8>;
+using simd_uvec16 = simd_uvec<16>;
 
 template <int S> using simd_dvec = simd_vec<double, S>;
 using simd_dvec2 = simd_dvec<2>;

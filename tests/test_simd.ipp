@@ -367,6 +367,175 @@ using namespace Ray::NS;
 }
 
 {
+    printf("Test simd_uvec4  (%s) | ", simd_uvec4::is_native() ? "hard" : "soft");
+
+    simd_uvec4 v1, v2 = {42}, v3 = {1, 2, 3, 4};
+
+    require(v2[0] == 42);
+    require(v2[1] == 42);
+    require(v2[2] == 42);
+    require(v2[3] == 42);
+
+    require(v3[0] == 1);
+    require(v3[1] == 2);
+    require(v3[2] == 3);
+    require(v3[3] == 4);
+
+    require(v2.get<0>() == 42);
+    require(v2.get<1>() == 42);
+    require(v2.get<2>() == 42);
+    require(v2.get<3>() == 42);
+
+    require(v3.get<0>() == 1);
+    require(v3.get<1>() == 2);
+    require(v3.get<2>() == 3);
+    require(v3.get<3>() == 4);
+
+    simd_uvec4 v4(v2), v5 = v3;
+
+    require(v4[0] == 42);
+    require(v4[1] == 42);
+    require(v4[2] == 42);
+    require(v4[3] == 42);
+
+    require(v5[0] == 1);
+    require(v5[1] == 2);
+    require(v5[2] == 3);
+    require(v5[3] == 4);
+
+    v1 = v5;
+
+    require(v1[0] == 1);
+    require(v1[1] == 2);
+    require(v1[2] == 3);
+    require(v1[3] == 4);
+
+    unsigned unaligned_array[] = {0, 2, 30, 14};
+    alignas(alignof(simd_uvec4)) unsigned aligned_array[] = {0, 2, 30, 14};
+
+    auto v7 = simd_uvec4{&unaligned_array[0]}, v8 = simd_uvec4{&aligned_array[0], simd_mem_aligned};
+
+    require(v7[0] == 0);
+    require(v7[1] == 2);
+    require(v7[2] == 30);
+    require(v7[3] == 14);
+
+    require(v8[0] == 0);
+    require(v8[1] == 2);
+    require(v8[2] == 30);
+    require(v8[3] == 14);
+
+    v5.store_to(&unaligned_array[0]);
+    v1.store_to(&aligned_array[0], simd_mem_aligned);
+
+    require(unaligned_array[0] == 1);
+    require(unaligned_array[1] == 2);
+    require(unaligned_array[2] == 3);
+    require(unaligned_array[3] == 4);
+
+    require(aligned_array[0] == 1);
+    require(aligned_array[1] == 2);
+    require(aligned_array[2] == 3);
+    require(aligned_array[3] == 4);
+
+    v1 = {1, 2, 3, 4};
+    v2 = {4, 5, 6, 7};
+
+    v3 = v1 + v2;
+    v4 = v1 - v2;
+    v5 = v1 * v2;
+    auto v6 = v1 / v2;
+
+    require(v3[0] == 5);
+    require(v3[1] == 7);
+    require(v3[2] == 9);
+    require(v3[3] == 11);
+
+    require(v4[0] == -3);
+    require(v4[1] == -3);
+    require(v4[2] == -3);
+    require(v4[3] == -3);
+
+    require(v5[0] == 4);
+    require(v5[1] == 10);
+    require(v5[2] == 18);
+    require(v5[3] == 28);
+
+    require(v6[0] == 0);
+    require(v6[1] == 0);
+    require(v6[2] == 0);
+    require(v6[3] == 0);
+
+    require(!v3.all_zeros());
+    require(v6.all_zeros());
+
+    static const unsigned gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0};
+
+    const simd_ivec4 v9i = {-1, 2, 6, 13};
+    const simd_uvec4 v9 = gather(gather_source + 2, v9i);
+    const simd_uvec4 v9_masked = gather(simd_uvec4{69}, gather_source + 2, simd_ivec4{-1, 0, -1, 0}, v9i);
+
+    require(v9[0] == 42);
+    require(v9[1] == 12);
+    require(v9[2] == 11);
+    require(v9[3] == 23);
+
+    require(v9_masked[0] == 42);
+    require(v9_masked[1] == 69);
+    require(v9_masked[2] == 11);
+    require(v9_masked[3] == 69);
+
+    simd_uvec4 v9_ = {3, 6, 7, 6};
+    require(hsum(v9_) == 22);
+
+    unsigned scatter_destination[18] = {};
+    scatter(scatter_destination + 2, v9i, v9);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
+
+    const simd_ivec4 scatter_mask = {-1, 0, 0, -1};
+
+    unsigned masked_scatter_destination[] = {1, 0xffffffff, 2, 3, 0xffffffff, 4, 5,          6, 0xffffffff,
+                                             7, 8,          9, 1, 2,          3, 0xffffffff, 4, 0};
+    static const unsigned masked_scatter_expected[] = {1, 42, 2, 3, 0xffffffff, 4, 5,  6, 0xffffffff,
+                                                       7, 8,  9, 1, 2,          3, 23, 4, 0};
+
+    scatter(masked_scatter_destination + 2, scatter_mask, v9i, v9);
+
+    require(memcmp(masked_scatter_destination, masked_scatter_expected, sizeof(masked_scatter_destination)) == 0);
+
+    const simd_uvec4 v11 = {0xffffffff, 0, 0xffffffff, 0};
+    simd_uvec4 v12 = {0, 0xffffffff, 0, 0};
+
+    v12 |= v11;
+
+    require(v12[0] == 0xffffffff);
+    require(v12[1] == 0xffffffff);
+    require(v12[2] == 0xffffffff);
+    require(v12[3] == 0);
+
+    const simd_uvec4 v13 = {0xffffffff, 0, 0xffffffff, 0};
+    simd_uvec4 v14 = {0, 0xffffffff, 0, 0};
+
+    v14 &= v13;
+
+    require(v14[0] == 0);
+    require(v14[1] == 0);
+    require(v14[2] == 0);
+    require(v14[3] == 0);
+
+    const simd_uvec4 v17 = {3, 1, 4, 1};
+    const simd_uvec4 v18 = inclusive_scan(v17);
+
+    require(v18[0] == 3);
+    require(v18[1] == 4);
+    require(v18[2] == 8);
+    require(v18[3] == 9);
+
+    printf("OK\n");
+}
+
+{
     printf("Test simd_fvec8  (%s) | ", simd_fvec8::is_native() ? "hard" : "soft");
 
     simd_fvec8 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
@@ -814,6 +983,210 @@ using namespace Ray::NS;
 
     const simd_ivec8 v17 = {3, 1, 4, 1, 3, 1, 4, 1};
     const simd_ivec8 v18 = inclusive_scan(v17);
+
+    require(v18[0] == 3);
+    require(v18[1] == 4);
+    require(v18[2] == 8);
+    require(v18[3] == 9);
+    require(v18[4] == 12);
+    require(v18[5] == 13);
+    require(v18[6] == 17);
+    require(v18[7] == 18);
+
+    printf("OK\n");
+}
+
+{
+    printf("Test simd_uvec8  (%s) | ", simd_uvec8::is_native() ? "hard" : "soft");
+
+    simd_uvec8 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8};
+
+    require(v2[0] == 42);
+    require(v2[1] == 42);
+    require(v2[2] == 42);
+    require(v2[3] == 42);
+    require(v2[4] == 42);
+    require(v2[5] == 42);
+    require(v2[6] == 42);
+    require(v2[7] == 42);
+
+    require(v3[0] == 1);
+    require(v3[1] == 2);
+    require(v3[2] == 3);
+    require(v3[3] == 4);
+    require(v3[4] == 5);
+    require(v3[5] == 6);
+    require(v3[6] == 7);
+    require(v3[7] == 8);
+
+    require(v2.get<0>() == 42);
+    require(v2.get<1>() == 42);
+    require(v2.get<2>() == 42);
+    require(v2.get<3>() == 42);
+    require(v2.get<4>() == 42);
+    require(v2.get<5>() == 42);
+    require(v2.get<6>() == 42);
+    require(v2.get<7>() == 42);
+
+    require(v3.get<0>() == 1);
+    require(v3.get<1>() == 2);
+    require(v3.get<2>() == 3);
+    require(v3.get<3>() == 4);
+    require(v3.get<4>() == 5);
+    require(v3.get<5>() == 6);
+    require(v3.get<6>() == 7);
+    require(v3.get<7>() == 8);
+
+    simd_uvec8 v4(v2), v5 = v3;
+
+    require(v4[0] == 42);
+    require(v4[1] == 42);
+    require(v4[2] == 42);
+    require(v4[3] == 42);
+    require(v4[4] == 42);
+    require(v4[5] == 42);
+    require(v4[6] == 42);
+    require(v4[7] == 42);
+
+    require(v5[0] == 1);
+    require(v5[1] == 2);
+    require(v5[2] == 3);
+    require(v5[3] == 4);
+    require(v5[4] == 5);
+    require(v5[5] == 6);
+    require(v5[6] == 7);
+    require(v5[7] == 8);
+
+    v1 = v5;
+
+    require(v1[0] == 1);
+    require(v1[1] == 2);
+    require(v1[2] == 3);
+    require(v1[3] == 4);
+    require(v1[4] == 5);
+    require(v1[5] == 6);
+    require(v1[6] == 7);
+    require(v1[7] == 8);
+
+    v1 = {1, 2, 3, 4, 5, 4, 3, 2};
+    v2 = {4, 5, 6, 7, 8, 10, 12, 1};
+
+    v3 = v1 + v2;
+    v4 = v1 - v2;
+    v5 = v1 * v2;
+    auto v6 = v1 / v2;
+
+    require(v3[0] == 5);
+    require(v3[1] == 7);
+    require(v3[2] == 9);
+    require(v3[3] == 11);
+    require(v3[4] == 13);
+    require(v3[5] == 14);
+    require(v3[6] == 15);
+    require(v3[7] == 3);
+
+    require(v4[0] == -3);
+    require(v4[1] == -3);
+    require(v4[2] == -3);
+    require(v4[3] == -3);
+    require(v4[4] == -3);
+    require(v4[5] == -6);
+    require(v4[6] == -9);
+    require(v4[7] == 1);
+
+    require(v5[0] == 4);
+    require(v5[1] == 10);
+    require(v5[2] == 18);
+    require(v5[3] == 28);
+    require(v5[4] == 40);
+    require(v5[5] == 40);
+    require(v5[6] == 36);
+    require(v5[7] == 2);
+
+    require(v6[0] == 0);
+    require(v6[1] == 0);
+    require(v6[2] == 0);
+    require(v6[3] == 0);
+    require(v6[4] == 0);
+    require(v6[5] == 0);
+    require(v6[6] == 0);
+    require(v6[7] == 2);
+
+    static const unsigned gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                             0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0};
+
+    const simd_ivec8 v9i = {-1, 2, 6, 13, 17, 20, 24, 31};
+    const simd_uvec8 v9 = gather(gather_source + 2, v9i);
+    const simd_uvec8 v9_masked = gather(simd_uvec8{69}, gather_source + 2, simd_ivec8{-1, 0, -1, 0, -1, 0, -1, 0}, v9i);
+
+    require(v9[0] == 42);
+    require(v9[1] == 12);
+    require(v9[2] == 11);
+    require(v9[3] == 23);
+    require(v9[4] == 42);
+    require(v9[5] == 12);
+    require(v9[6] == 11);
+    require(v9[7] == 23);
+
+    require(v9_masked[0] == 42);
+    require(v9_masked[1] == 69);
+    require(v9_masked[2] == 11);
+    require(v9_masked[3] == 69);
+    require(v9_masked[4] == 42);
+    require(v9_masked[5] == 69);
+    require(v9_masked[6] == 11);
+    require(v9_masked[7] == 69);
+
+    simd_uvec8 v9_ = {3, 6, 7, 6, 2, 12, 18, 0};
+    require(hsum(v9_) == 54);
+
+    unsigned scatter_destination[36] = {};
+    scatter(scatter_destination + 2, v9i, v9);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
+
+    const simd_ivec8 scatter_mask = {-1, 0, 0, -1, -1, 0, 0, -1};
+
+    unsigned masked_scatter_destination[] = {
+        1, 0xffffffff, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 0xffffffff, 4, 0,
+        1, 0xffffffff, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 0xffffffff, 4, 0};
+    static const int masked_scatter_expected[] = {1, 42, 2, 3, -1, 4, 5, 6, -1, 7, 8, 9, 1, 2, 3, 23, 4, 0,
+                                                  1, 42, 2, 3, -1, 4, 5, 6, -1, 7, 8, 9, 1, 2, 3, 23, 4, 0};
+
+    scatter(masked_scatter_destination + 2, scatter_mask, v9i, v9);
+
+    require(memcmp(masked_scatter_destination, masked_scatter_expected, sizeof(masked_scatter_destination)) == 0);
+
+    const simd_uvec8 v11 = {0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
+    simd_uvec8 v12 = {0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0};
+
+    v12 |= v11;
+
+    require(v12[0] == -1);
+    require(v12[1] == -1);
+    require(v12[2] == -1);
+    require(v12[3] == 0);
+    require(v12[4] == -1);
+    require(v12[5] == -1);
+    require(v12[6] == -1);
+    require(v12[7] == 0);
+
+    const simd_uvec8 v13 = {0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
+    simd_uvec8 v14 = {0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0};
+
+    v14 &= v13;
+
+    require(v14[0] == 0);
+    require(v14[1] == 0);
+    require(v14[2] == 0);
+    require(v14[3] == 0);
+    require(v14[4] == 0);
+    require(v14[5] == 0);
+    require(v14[6] == 0);
+    require(v14[7] == 0);
+
+    const simd_uvec8 v17 = {3, 1, 4, 1, 3, 1, 4, 1};
+    const simd_uvec8 v18 = inclusive_scan(v17);
 
     require(v18[0] == 3);
     require(v18[1] == 4);
@@ -1565,6 +1938,348 @@ using namespace Ray::NS;
 
     const simd_ivec16 v17 = {3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1};
     const simd_ivec16 v18 = inclusive_scan(v17);
+
+    require(v18[0] == 3);
+    require(v18[1] == 4);
+    require(v18[2] == 8);
+    require(v18[3] == 9);
+    require(v18[4] == 12);
+    require(v18[5] == 13);
+    require(v18[6] == 17);
+    require(v18[7] == 18);
+    require(v18[8] == 21);
+    require(v18[9] == 22);
+    require(v18[10] == 26);
+    require(v18[11] == 27);
+    require(v18[12] == 30);
+    require(v18[13] == 31);
+    require(v18[14] == 35);
+    require(v18[15] == 36);
+
+    printf("OK\n");
+}
+
+{
+    printf("Test simd_uvec16 (%s) | ", simd_uvec16::is_native() ? "hard" : "soft");
+
+    simd_uvec16 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+
+    require(v2[0] == 42);
+    require(v2[1] == 42);
+    require(v2[2] == 42);
+    require(v2[3] == 42);
+    require(v2[4] == 42);
+    require(v2[5] == 42);
+    require(v2[6] == 42);
+    require(v2[7] == 42);
+    require(v2[8] == 42);
+    require(v2[9] == 42);
+    require(v2[10] == 42);
+    require(v2[11] == 42);
+    require(v2[12] == 42);
+    require(v2[13] == 42);
+    require(v2[14] == 42);
+    require(v2[15] == 42);
+
+    require(v3[0] == 1);
+    require(v3[1] == 2);
+    require(v3[2] == 3);
+    require(v3[3] == 4);
+    require(v3[4] == 5);
+    require(v3[5] == 6);
+    require(v3[6] == 7);
+    require(v3[7] == 8);
+    require(v3[8] == 9);
+    require(v3[9] == 10);
+    require(v3[10] == 11);
+    require(v3[11] == 12);
+    require(v3[12] == 13);
+    require(v3[13] == 14);
+    require(v3[14] == 15);
+    require(v3[15] == 16);
+
+    require(v2.get<0>() == 42);
+    require(v2.get<1>() == 42);
+    require(v2.get<2>() == 42);
+    require(v2.get<3>() == 42);
+    require(v2.get<4>() == 42);
+    require(v2.get<5>() == 42);
+    require(v2.get<6>() == 42);
+    require(v2.get<7>() == 42);
+    require(v2.get<8>() == 42);
+    require(v2.get<9>() == 42);
+    require(v2.get<10>() == 42);
+    require(v2.get<11>() == 42);
+    require(v2.get<12>() == 42);
+    require(v2.get<13>() == 42);
+    require(v2.get<14>() == 42);
+    require(v2.get<15>() == 42);
+
+    require(v3.get<0>() == 1);
+    require(v3.get<1>() == 2);
+    require(v3.get<2>() == 3);
+    require(v3.get<3>() == 4);
+    require(v3.get<4>() == 5);
+    require(v3.get<5>() == 6);
+    require(v3.get<6>() == 7);
+    require(v3.get<7>() == 8);
+    require(v3.get<8>() == 9);
+    require(v3.get<9>() == 10);
+    require(v3.get<10>() == 11);
+    require(v3.get<11>() == 12);
+    require(v3.get<12>() == 13);
+    require(v3.get<13>() == 14);
+    require(v3.get<14>() == 15);
+    require(v3.get<15>() == 16);
+
+    simd_uvec16 v4(v2), v5 = v3;
+
+    require(v4[0] == 42);
+    require(v4[1] == 42);
+    require(v4[2] == 42);
+    require(v4[3] == 42);
+    require(v4[4] == 42);
+    require(v4[5] == 42);
+    require(v4[6] == 42);
+    require(v4[7] == 42);
+    require(v4[8] == 42);
+    require(v4[9] == 42);
+    require(v4[10] == 42);
+    require(v4[11] == 42);
+    require(v4[12] == 42);
+    require(v4[13] == 42);
+    require(v4[14] == 42);
+    require(v4[15] == 42);
+
+    require(v5[0] == 1);
+    require(v5[1] == 2);
+    require(v5[2] == 3);
+    require(v5[3] == 4);
+    require(v5[4] == 5);
+    require(v5[5] == 6);
+    require(v5[6] == 7);
+    require(v5[7] == 8);
+    require(v5[8] == 9);
+    require(v5[9] == 10);
+    require(v5[10] == 11);
+    require(v5[11] == 12);
+    require(v5[12] == 13);
+    require(v5[13] == 14);
+    require(v5[14] == 15);
+    require(v5[15] == 16);
+
+    v1 = v5;
+
+    require(v1[0] == 1);
+    require(v1[1] == 2);
+    require(v1[2] == 3);
+    require(v1[3] == 4);
+    require(v1[4] == 5);
+    require(v1[5] == 6);
+    require(v1[6] == 7);
+    require(v1[7] == 8);
+    require(v1[8] == 9);
+    require(v1[9] == 10);
+    require(v1[10] == 11);
+    require(v1[11] == 12);
+    require(v1[12] == 13);
+    require(v1[13] == 14);
+    require(v1[14] == 15);
+    require(v1[15] == 16);
+
+    v1 = {1, 2, 3, 4, 5, 4, 3, 2, 1, 2, 3, 4, 5, 4, 3, 2};
+    v2 = {4, 5, 6, 7, 8, 10, 12, 1, 4, 5, 6, 7, 8, 10, 12, 1};
+
+    v3 = v1 + v2;
+    v4 = v1 - v2;
+    v5 = v1 * v2;
+    auto v6 = v1 / v2;
+
+    require(v3[0] == 5);
+    require(v3[1] == 7);
+    require(v3[2] == 9);
+    require(v3[3] == 11);
+    require(v3[4] == 13);
+    require(v3[5] == 14);
+    require(v3[6] == 15);
+    require(v3[7] == 3);
+    require(v3[8] == 5);
+    require(v3[9] == 7);
+    require(v3[10] == 9);
+    require(v3[11] == 11);
+    require(v3[12] == 13);
+    require(v3[13] == 14);
+    require(v3[14] == 15);
+    require(v3[15] == 3);
+
+    require(v4[0] == -3);
+    require(v4[1] == -3);
+    require(v4[2] == -3);
+    require(v4[3] == -3);
+    require(v4[4] == -3);
+    require(v4[5] == -6);
+    require(v4[6] == -9);
+    require(v4[7] == 1);
+    require(v4[8] == -3);
+    require(v4[9] == -3);
+    require(v4[10] == -3);
+    require(v4[11] == -3);
+    require(v4[12] == -3);
+    require(v4[13] == -6);
+    require(v4[14] == -9);
+    require(v4[15] == 1);
+
+    require(v5[0] == 4);
+    require(v5[1] == 10);
+    require(v5[2] == 18);
+    require(v5[3] == 28);
+    require(v5[4] == 40);
+    require(v5[5] == 40);
+    require(v5[6] == 36);
+    require(v5[7] == 2);
+    require(v5[8] == 4);
+    require(v5[9] == 10);
+    require(v5[10] == 18);
+    require(v5[11] == 28);
+    require(v5[12] == 40);
+    require(v5[13] == 40);
+    require(v5[14] == 36);
+    require(v5[15] == 2);
+
+    require(v6[0] == 0);
+    require(v6[1] == 0);
+    require(v6[2] == 0);
+    require(v6[3] == 0);
+    require(v6[4] == 0);
+    require(v6[5] == 0);
+    require(v6[6] == 0);
+    require(v6[7] == 2);
+    require(v6[8] == 0);
+    require(v6[9] == 0);
+    require(v6[10] == 0);
+    require(v6[11] == 0);
+    require(v6[12] == 0);
+    require(v6[13] == 0);
+    require(v6[14] == 0);
+    require(v6[15] == 2);
+
+    static const unsigned gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                             0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                             0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                             0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0};
+
+    const simd_ivec16 v9i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
+    const simd_uvec16 v9 = gather(gather_source + 2, v9i);
+    const simd_uvec16 v9_masked = gather(simd_uvec16{69}, gather_source + 2,
+                                         simd_ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v9i);
+
+    require(v9[0] == 42);
+    require(v9[1] == 12);
+    require(v9[2] == 11);
+    require(v9[3] == 23);
+    require(v9[4] == 42);
+    require(v9[5] == 12);
+    require(v9[6] == 11);
+    require(v9[7] == 23);
+    require(v9[8] == 42);
+    require(v9[9] == 12);
+    require(v9[10] == 11);
+    require(v9[11] == 23);
+    require(v9[12] == 42);
+    require(v9[13] == 12);
+    require(v9[14] == 11);
+    require(v9[15] == 23);
+
+    require(v9_masked[0] == 42);
+    require(v9_masked[1] == 69);
+    require(v9_masked[2] == 11);
+    require(v9_masked[3] == 69);
+    require(v9_masked[4] == 42);
+    require(v9_masked[5] == 69);
+    require(v9_masked[6] == 11);
+    require(v9_masked[7] == 69);
+    require(v9_masked[8] == 42);
+    require(v9_masked[9] == 69);
+    require(v9_masked[10] == 11);
+    require(v9_masked[11] == 69);
+    require(v9_masked[12] == 42);
+    require(v9_masked[13] == 69);
+    require(v9_masked[14] == 11);
+    require(v9_masked[15] == 69);
+
+    simd_fvec16 v9_ = {3, 6, 7, 6, 2, 12, 18, 0, 3, 6, 7, 6, 2, 12, 18, 0};
+    require(hsum(v9_) == 108);
+
+    unsigned scatter_destination[72] = {};
+    scatter(scatter_destination + 2, v9i, v9);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
+
+    const simd_ivec16 scatter_mask = {-1, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, -1};
+
+    unsigned masked_scatter_destination[] = {
+        1, 0xffffffff, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 0xffffffff, 4, 0,
+        1, 0xffffffff, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 0xffffffff, 4, 0,
+        1, 0xffffffff, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 0xffffffff, 4, 0,
+        1, 0xffffffff, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 0xffffffff, 4, 0};
+    static const unsigned masked_scatter_expected[] = {
+        1, 42, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 23, 4, 0,
+        1, 42, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 23, 4, 0,
+        1, 42, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 23, 4, 0,
+        1, 42, 2, 3, 0xffffffff, 4, 5, 6, 0xffffffff, 7, 8, 9, 1, 2, 3, 23, 4, 0};
+
+    scatter(masked_scatter_destination + 2, scatter_mask, v9i, v9);
+
+    require(memcmp(masked_scatter_destination, masked_scatter_expected, sizeof(masked_scatter_destination)) == 0);
+
+    const simd_uvec16 v11 = {0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0,
+                             0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
+    simd_uvec16 v12 = {0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0};
+
+    v12 |= v11;
+
+    require(v12[0] == 0xffffffff);
+    require(v12[1] == 0xffffffff);
+    require(v12[2] == 0xffffffff);
+    require(v12[3] == 0);
+    require(v12[4] == 0xffffffff);
+    require(v12[5] == 0xffffffff);
+    require(v12[6] == 0xffffffff);
+    require(v12[7] == 0);
+    require(v12[8] == 0xffffffff);
+    require(v12[9] == 0xffffffff);
+    require(v12[10] == 0xffffffff);
+    require(v12[11] == 0);
+    require(v12[12] == 0xffffffff);
+    require(v12[13] == 0xffffffff);
+    require(v12[14] == 0xffffffff);
+    require(v12[15] == 0);
+
+    const simd_uvec16 v13 = {0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0,
+                             0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
+    simd_uvec16 v14 = {0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0};
+
+    v14 &= v13;
+
+    require(v14[0] == 0);
+    require(v14[1] == 0);
+    require(v14[2] == 0);
+    require(v14[3] == 0);
+    require(v14[4] == 0);
+    require(v14[5] == 0);
+    require(v14[6] == 0);
+    require(v14[7] == 0);
+    require(v14[8] == 0);
+    require(v14[9] == 0);
+    require(v14[10] == 0);
+    require(v14[11] == 0);
+    require(v14[12] == 0);
+    require(v14[13] == 0);
+    require(v14[14] == 0);
+    require(v14[15] == 0);
+
+    const simd_uvec16 v17 = {3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1};
+    const simd_uvec16 v18 = inclusive_scan(v17);
 
     require(v18[0] == 3);
     require(v18[1] == 4);

@@ -32,11 +32,13 @@ template <int imm> force_inline int32x4_t slli(int32x4_t a) {
 }
 
 template <> class simd_vec<int, 4>;
+template <> class simd_vec<unsigned, 4>;
 
 template <> class simd_vec<float, 4> {
     float32x4_t vec_;
 
     friend class simd_vec<int, 4>;
+    friend class simd_vec<unsigned, 4>;
 
   public:
     force_inline simd_vec() = default;
@@ -206,6 +208,7 @@ template <> class simd_vec<float, 4> {
     }
 
     force_inline operator simd_vec<int, 4>() const;
+    force_inline operator simd_vec<unsigned, 4>() const;
 
     force_inline simd_vec<float, 4> sqrt() const {
         // This is not precise enough :(
@@ -481,6 +484,7 @@ template <> class simd_vec<int, 4> {
     int32x4_t vec_;
 
     friend class simd_vec<float, 4>;
+    friend class simd_vec<unsigned, 4>;
 
   public:
     force_inline simd_vec() = default;
@@ -694,6 +698,8 @@ template <> class simd_vec<int, 4> {
         ret.vec_ = vcvtq_f32_s32(vec_);
         return ret;
     }
+
+    force_inline operator simd_vec<unsigned, 4>() const;
 
     force_inline int hsum() const {
         alignas(16) int comp[4];
@@ -1009,9 +1015,562 @@ template <> class simd_vec<int, 4> {
     static bool is_native() { return true; }
 };
 
+template <> class simd_vec<unsigned, 4> {
+    uint32x4_t vec_;
+
+    friend class simd_vec<float, 4>;
+    friend class simd_vec<int, 4>;
+
+  public:
+    force_inline simd_vec() = default;
+    force_inline simd_vec(const unsigned f) { vec_ = vdupq_n_u32(f); }
+    force_inline simd_vec(const unsigned i1, const unsigned i2, const unsigned i3, const unsigned i4) {
+        alignas(16) const unsigned init[4] = {i1, i2, i3, i4};
+        vec_ = vld1q_u32(init);
+    }
+    force_inline simd_vec(const unsigned *f) { vec_ = vld1q_u32(f); }
+    force_inline simd_vec(const unsigned *f, simd_mem_aligned_tag) {
+        const unsigned *_f = (const unsigned *)__builtin_assume_aligned(f, 16);
+        vec_ = vld1q_u32(_f);
+    }
+
+    force_inline unsigned operator[](const int i) const {
+#if defined(_MSC_VER) && !defined(__clang__)
+        return vec_.n128_u32[i];
+#else
+        alignas(16) unsigned temp[4];
+        vst1q_u32(temp, vec_);
+        return temp[i];
+#endif
+    }
+
+    force_inline unsigned operator[](const long i) const { return operator[](int(i)); }
+
+    template <int i> force_inline unsigned get() const { return vgetq_lane_u32(vec_, i & 3); }
+    template <int i> force_inline void set(const unsigned f) { vec_ = vsetq_lane_u32(f, vec_, i & 3); }
+    force_inline void set(const int i, const unsigned v) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        vec_.n128_u32[i] = v;
+#else
+        alignas(16) unsigned temp[4];
+        vst1q_u32(temp, vec_);
+        temp[i] = v;
+        vec_ = vld1q_u32(temp);
+#endif
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator+=(const simd_vec<unsigned, 4> rhs) {
+        vec_ = vaddq_u32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator+=(unsigned rhs) {
+        vec_ = vaddq_u32(vec_, vdupq_n_u32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator-=(const simd_vec<unsigned, 4> rhs) {
+        vec_ = vsubq_u32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator-=(unsigned rhs) {
+        vec_ = vsubq_u32(vec_, vdupq_n_u32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator*=(const simd_vec<unsigned, 4> rhs) {
+        vec_ = vmulq_u32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator*=(unsigned rhs) {
+        vec_ = vmulq_u32(vec_, vdupq_n_u32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator/=(const simd_vec<unsigned, 4> rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { vec_.n128_u32[i] /= rhs.vec_.n128_u32[i]; })
+#else
+        alignas(16) unsigned comp[4], rhs_comp[4];
+        vst1q_u32(comp, vec_);
+        vst1q_u32(rhs_comp, rhs.vec_);
+        UNROLLED_FOR(i, 4, { comp[i] = comp[i] / rhs_comp[i]; })
+        vec_ = vld1q_u32(comp);
+#endif
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator/=(const unsigned rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { vec_.n128_u32[i] /= rhs; })
+#else
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, vec_);
+        UNROLLED_FOR(i, 4, { comp[i] = comp[i] / rhs; })
+        vec_ = vld1q_u32(comp);
+#endif
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator|=(const simd_vec<unsigned, 4> rhs) {
+        vec_ = vorrq_u32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator|=(const unsigned rhs) {
+        vec_ = vorrq_u32(vec_, vdupq_n_u32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator^=(const simd_vec<unsigned, 4> rhs) {
+        vec_ = veorq_u32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator^=(unsigned rhs) {
+        vec_ = veorq_u32(vec_, vdupq_n_u32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> operator==(const unsigned rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vceqq_u32(vec_, vdupq_n_u32(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator==(const simd_vec<unsigned, 4> rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vceqq_u32(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator!=(const unsigned rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vmvnq_u32(vceqq_u32(vec_, vdupq_n_u32(rhs)));
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator!=(const simd_vec<unsigned, 4> rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vmvnq_u32(vceqq_u32(vec_, rhs.vec_));
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator<(const simd_vec<unsigned, 4> rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcltq_u32(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator<=(const simd_vec<unsigned, 4> rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcleq_u32(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator>(const simd_vec<unsigned, 4> rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcgtq_u32(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator>=(const simd_vec<unsigned, 4> rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcgeq_u32(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> vectorcall operator&=(const simd_vec<unsigned, 4> rhs) {
+        vec_ = vandq_u32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<unsigned, 4> operator~() const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vmvnq_u32(vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> operator<(const unsigned rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcltq_u32(vec_, vdupq_n_u32(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> operator<=(const unsigned rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcleq_u32(vec_, vdupq_n_u32(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> operator>(const unsigned rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcgtq_u32(vec_, vdupq_n_u32(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> operator>=(const unsigned rhs) const {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vcgeq_u32(vec_, vdupq_n_u32(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<unsigned, 4> &vectorcall operator&=(const unsigned rhs) {
+        vec_ = vandq_u32(vec_, vdupq_n_u32(rhs));
+        return *this;
+    }
+
+    force_inline operator simd_vec<float, 4>() const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = vcvtq_f32_u32(vec_);
+        return ret;
+    }
+
+    force_inline operator simd_vec<int, 4>() const {
+        simd_vec<int, 4> ret;
+        ret.vec_ = vreinterpretq_s32_u32(vec_);
+        return ret;
+    }
+
+    force_inline unsigned hsum() const {
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, vec_);
+        return comp[0] + comp[1] + comp[2] + comp[3];
+    }
+
+    force_inline void store_to(unsigned *f) const { vst1q_u32(f, vec_); }
+    force_inline void store_to(unsigned *f, simd_mem_aligned_tag) const {
+        unsigned *_f = (unsigned *)__builtin_assume_aligned(f, 16);
+        vst1q_u32(_f, vec_);
+    }
+
+    force_inline void vectorcall blend_to(const simd_vec<unsigned, 4> mask, const simd_vec<unsigned, 4> v1) {
+        validate_mask(mask);
+        uint32x4_t temp1 = vandq_u32(v1.vec_, mask.vec_);
+        uint32x4_t temp2 = vbicq_u32(vec_, mask.vec_);
+        vec_ = vorrq_u32(temp1, temp2);
+    }
+
+    force_inline void vectorcall blend_inv_to(const simd_vec<unsigned, 4> mask, const simd_vec<unsigned, 4> v1) {
+        validate_mask(mask);
+        uint32x4_t temp1 = vandq_u32(vec_, mask.vec_);
+        uint32x4_t temp2 = vbicq_u32(v1.vec_, mask.vec_);
+        vec_ = vorrq_u32(temp1, temp2);
+    }
+
+    force_inline int movemask() const {
+        // Taken from sse2neon
+        uint32x4_t input = vreinterpretq_u32_s32(vec_);
+        // Shift out everything but the sign bits with a 32-bit unsigned shift right.
+        uint64x2_t high_bits = vreinterpretq_u64_u32(vshrq_n_u32(input, 31));
+        // Merge the two pairs together with a 64-bit unsigned shift right + add.
+        uint8x16_t paired = vreinterpretq_u8_u64(vsraq_n_u64(high_bits, high_bits, 31));
+        // Extract the result.
+        return vgetq_lane_u8(paired, 0) | (vgetq_lane_u8(paired, 8) << 2);
+    }
+
+    force_inline bool all_zeros() const {
+        int32_t res = 0;
+#if defined(__aarch64__) || defined(_M_ARM64)
+        res |= vaddvq_s32(vec_);
+#else
+        alignas(16) int comp[4];
+        vst1q_s32(comp, vec_);
+        UNROLLED_FOR(i, 4, { res |= comp[i] != 0; })
+#endif
+        return res == 0;
+    }
+
+    force_inline bool vectorcall all_zeros(const simd_vec<unsigned, 4> mask) const {
+        int32_t res = 0;
+#if defined(__aarch64__) || defined(_M_ARM64)
+        res |= vaddvq_u32(vandq_u32(vec_, mask.vec_));
+#else
+        alignas(16) unsigned comp[4], mask_comp[4];
+        vst1q_u32(comp, vec_);
+        vst1q_u32(mask_comp, mask.vec_);
+        UNROLLED_FOR(i, 4, { res |= (comp[i] & mask_comp[i]) != 0; })
+#endif
+        return res == 0;
+    }
+
+    force_inline bool not_all_zeros() const { return !all_zeros(); }
+
+    force_inline static simd_vec<unsigned, 4> vectorcall min(const simd_vec<unsigned, 4> v1,
+                                                             const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> temp;
+        temp.vec_ = vminq_u32(v1.vec_, v2.vec_);
+        return temp;
+    }
+
+    force_inline static simd_vec<unsigned, 4> vectorcall max(const simd_vec<unsigned, 4> v1,
+                                                             const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> temp;
+        temp.vec_ = vmaxq_u32(v1.vec_, v2.vec_);
+        return temp;
+    }
+
+    force_inline static simd_vec<unsigned, 4> vectorcall and_not(const simd_vec<unsigned, 4> v1,
+                                                                 const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> temp;
+        temp.vec_ = vbicq_u32(v2.vec_, v1.vec_);
+        return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator&(const simd_vec<unsigned, 4> v1,
+                                                                   const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> temp;
+        temp.vec_ = vandq_u32(v1.vec_, v2.vec_);
+        return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator|(const simd_vec<unsigned, 4> v1,
+                                                                   const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> temp;
+        temp.vec_ = vorrq_u32(v1.vec_, v2.vec_);
+        return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator^(const simd_vec<unsigned, 4> v1,
+                                                                   const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> temp;
+        temp.vec_ = veorq_u32(v1.vec_, v2.vec_);
+        return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator+(const simd_vec<unsigned, 4> v1,
+                                                                   const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vaddq_u32(v1.vec_, v2.vec_);
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator-(const simd_vec<unsigned, 4> v1,
+                                                                   const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vsubq_u32(v1.vec_, v2.vec_);
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator*(const simd_vec<unsigned, 4> v1,
+                                                                   const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] * v2.vec_.n128_u32[i]; })
+#else
+        alignas(16) unsigned comp1[4], comp2[4];
+        vst1q_u32(comp1, v1.vec_);
+        vst1q_u32(comp2, v2.vec_);
+        UNROLLED_FOR(i, 4, { comp1[i] = comp1[i] * comp2[i]; })
+        ret.vec_ = vld1q_u32(comp1);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator/(const simd_vec<unsigned, 4> v1,
+                                                                   const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] / v2.vec_.n128_u32[i]; })
+#else
+        alignas(16) unsigned comp1[4], comp2[4];
+        vst1q_u32(comp1, v1.vec_);
+        vst1q_u32(comp2, v2.vec_);
+        UNROLLED_FOR(i, 4, { comp1[i] = comp1[i] / comp2[i]; })
+        ret.vec_ = vld1q_u32(comp1);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator+(const simd_vec<unsigned, 4> v1, const unsigned v2) {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vaddq_u32(v1.vec_, vdupq_n_u32(v2));
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator-(const simd_vec<unsigned, 4> v1, const unsigned v2) {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vsubq_u32(v1.vec_, vdupq_n_u32(v2));
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator*(const simd_vec<unsigned, 4> v1, const unsigned v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] * v2; })
+#else
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, v1.vec_);
+        UNROLLED_FOR(i, 4, { comp[i] *= v2; })
+        ret.vec_ = vld1q_u32(comp);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator/(const simd_vec<unsigned, 4> v1, const unsigned v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] / v2; })
+#else
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, v1.vec_);
+        UNROLLED_FOR(i, 4, { comp[i] /= v2; })
+        ret.vec_ = vld1q_u32(comp);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator+(const unsigned v1, const simd_vec<unsigned, 4> v2) {
+        return operator+(v2, v1);
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator-(const unsigned v1, const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+        ret.vec_ = vsubq_u32(vdupq_n_u32(v1), v2.vec_);
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator*(const unsigned v1, const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1 * v2.vec_.n128_u32[i]; })
+#else
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, v2.vec_);
+        UNROLLED_FOR(i, 4, { comp[i] *= v1; })
+        ret.vec_ = vld1q_u32(comp);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator/(const unsigned v1, const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1 / v2.vec_.n128_u32[i]; })
+#else
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, v2.vec_);
+        UNROLLED_FOR(i, 4, { comp[i] = v1 / comp[i]; })
+        ret.vec_ = vld1q_u32(comp);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator>>(const simd_vec<unsigned, 4> v1,
+                                                                    const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] >> v2.vec_.n128_u32[i]; })
+#else
+        alignas(16) unsigned comp1[4], comp2[4];
+        vst1q_u32(comp1, v1.vec_);
+        vst1q_u32(comp2, v2.vec_);
+        UNROLLED_FOR(i, 4, { comp1[i] = comp1[i] >> comp2[i]; })
+        ret.vec_ = vld1q_u32(comp1);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator>>(const simd_vec<unsigned, 4> v1, const unsigned v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] >> v2; })
+#else
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, v1.vec_);
+        UNROLLED_FOR(i, 4, { comp[i] = comp[i] >> v2; })
+        ret.vec_ = vld1q_u32(comp);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator<<(const simd_vec<unsigned, 4> v1,
+                                                                    const simd_vec<unsigned, 4> v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] << v2.vec_.n128_u32[i]; })
+#else
+        alignas(16) unsigned comp1[4], comp2[4];
+        vst1q_u32(comp1, v1.vec_);
+        vst1q_u32(comp2, v2.vec_);
+        UNROLLED_FOR(i, 4, { comp1[i] = comp1[i] << comp2[i]; })
+        ret.vec_ = vld1q_u32(comp1);
+#endif
+        return ret;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall operator<<(const simd_vec<unsigned, 4> v1, const unsigned v2) {
+        simd_vec<unsigned, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 4, { ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] << v2; })
+#else
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, v1.vec_);
+        UNROLLED_FOR(i, 4, { comp[i] = comp[i] << v2; })
+        ret.vec_ = vld1q_u32(comp);
+#endif
+        return ret;
+    }
+
+    friend force_inline bool vectorcall is_equal(const simd_vec<unsigned, 4> v1, const simd_vec<unsigned, 4> v2) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        bool res = true;
+        UNROLLED_FOR(i, 4, { res &= (v1.vec_.n128_u32[i] == v2.vec_.n128_u32[i]); })
+        return res;
+#else
+        alignas(16) unsigned comp1[4], comp2[4];
+        vst1q_u32(comp1, v1.vec_);
+        vst1q_u32(comp2, v2.vec_);
+
+        bool res = true;
+        UNROLLED_FOR(i, 4, { res &= (comp1[i] == comp2[i]); })
+        return res;
+#endif
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall inclusive_scan(simd_vec<unsigned, 4> v1) {
+        v1.vec_ = vaddq_s32(v1.vec_, slli<4>(v1.vec_));
+        v1.vec_ = vaddq_s32(v1.vec_, slli<8>(v1.vec_));
+        return v1;
+    }
+
+#ifndef NDEBUG
+    friend void vectorcall __assert_valid_mask(const simd_vec<unsigned, 4> mask) {
+        UNROLLED_FOR(i, 4, {
+            const int val = mask.get<i>();
+            assert(val == 0 || val == 0xffffffff);
+        })
+    }
+#endif
+
+    friend force_inline const unsigned *value_ptr(const simd_vec<unsigned, 4> &v1) {
+        return reinterpret_cast<const unsigned *>(&v1.vec_);
+    }
+    friend force_inline unsigned *value_ptr(simd_vec<unsigned, 4> &v1) {
+        return reinterpret_cast<unsigned *>(&v1.vec_);
+    }
+
+    static int size() { return 4; }
+    static bool is_native() { return true; }
+};
+
 force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
     simd_vec<int, 4> ret;
     ret.vec_ = vcvtq_s32_f32(vec_);
+    return ret;
+}
+
+force_inline simd_vec<float, 4>::operator simd_vec<unsigned, 4>() const {
+    simd_vec<unsigned, 4> ret;
+    ret.vec_ = vcvtq_u32_f32(vec_);
+    return ret;
+}
+
+force_inline simd_vec<int, 4>::operator simd_vec<unsigned, 4>() const {
+    simd_vec<unsigned, 4> ret;
+    ret.vec_ = vreinterpretq_u32_s32(vec_);
     return ret;
 }
 
