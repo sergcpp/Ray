@@ -211,6 +211,11 @@ template <typename T, int S> class simd_vec {
         return *this;
     }
 
+    force_inline simd_vec<T, S> &operator^=(const simd_vec<T, S> &rhs) {
+        UNROLLED_FOR_S(i, S, { comp_[i] ^= rhs.comp_[i]; })
+        return *this;
+    }
+
     force_inline simd_vec<T, S> &operator+=(T rhs) {
         UNROLLED_FOR_S(i, S, { comp_[i] += rhs; })
         return *this;
@@ -228,6 +233,11 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> &operator/=(T rhs) {
         UNROLLED_FOR_S(i, S, { comp_[i] /= rhs; })
+        return *this;
+    }
+
+    force_inline simd_vec<T, S> &operator^=(T rhs) {
+        UNROLLED_FOR_S(i, S, { comp_[i] ^= rhs; })
         return *this;
     }
 

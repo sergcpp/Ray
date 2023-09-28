@@ -428,6 +428,23 @@ template <> class simd_vec<int, 8> {
 
     force_inline simd_vec<int, 8> &vectorcall operator|=(const int rhs) { return operator|=(simd_vec<int, 8>{rhs}); }
 
+        force_inline simd_vec<int, 8> &vectorcall operator^=(const simd_vec<int, 8> rhs) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        vec_ = _mm256_xor_si256(vec_, rhs.vec_);
+#elif defined(_MSC_VER) && !defined(__clang__)
+        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] ^= rhs.vec_.m256i_i32[i]; })
+#else
+        alignas(32) int comp1[8], comp2[8];
+        _mm256_store_si256((__m256i *)comp1, vec_);
+        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
+        UNROLLED_FOR(i, 8, { comp1[i] ^= comp2[i]; })
+        vec_ = _mm256_load_si256((const __m256i *)comp1);
+#endif
+        return *this;
+    }
+
+    force_inline simd_vec<int, 8> &vectorcall operator^=(const int rhs) { return operator^=(simd_vec<int, 8>{rhs}); }
+
     force_inline simd_vec<int, 8> vectorcall operator-() const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)

@@ -357,6 +357,16 @@ template <> class simd_vec<int, 16> {
         return *this;
     }
 
+    force_inline simd_vec<int, 16> &vectorcall operator^=(const simd_vec<int, 16> rhs) {
+        vec_ = _mm512_xor_epi32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<int, 16> &vectorcall operator^=(const int rhs) {
+        vec_ = _mm512_xor_epi32(vec_, _mm512_set1_epi32(rhs));
+        return *this;
+    }
+
     force_inline simd_vec<int, 16> operator-() const {
         simd_vec<int, 16> temp;
         temp.vec_ = _mm512_sub_epi32(_mm512_setzero_si512(), vec_);

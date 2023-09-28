@@ -585,6 +585,16 @@ template <> class simd_vec<int, 4> {
         return *this;
     }
 
+    force_inline simd_vec<int, 4> &vectorcall operator^=(const simd_vec<int, 4> rhs) {
+        vec_ = veorq_s32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<int, 4> &vectorcall operator^=(int rhs) {
+        vec_ = veorq_s32(vec_, vdupq_n_s32(rhs));
+        return *this;
+    }
+
     force_inline simd_vec<int, 4> operator-() const {
         simd_vec<int, 4> temp;
         temp.vec_ = vsubq_s32(vdupq_n_s32(0), vec_);
