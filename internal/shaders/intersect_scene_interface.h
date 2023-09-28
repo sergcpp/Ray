@@ -11,8 +11,8 @@ struct Params {
     float clip_dist;
     int min_transp_depth;
     int max_transp_depth;
-    int hi;
-    int _pad0;
+    UINT_TYPE rand_seed;
+    int iteration;
     int _pad1;
     int _pad2;
     VEC4_TYPE cam_fwd;

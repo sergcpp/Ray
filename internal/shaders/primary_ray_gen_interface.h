@@ -12,7 +12,7 @@ struct Params {
     VEC4_TYPE cam_side;     // w is focus distance
     VEC4_TYPE cam_up;       // w is sensor height
     UVEC2_TYPE img_size;
-    int hi;
+    UINT_TYPE rand_seed;
     float spread_angle;
     //
     float cam_fstop;
@@ -29,7 +29,7 @@ struct Params {
 const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
-const int HALTON_SEQ_BUF_SLOT = 2;
+const int RANDOM_SEQ_BUF_SLOT = 2;
 const int FILTER_TABLE_BUF_SLOT = 3;
 const int REQUIRED_SAMPLES_IMG_SLOT = 4;
 

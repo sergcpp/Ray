@@ -11,7 +11,8 @@ struct Params {
     UINT_TYPE lights_node_index;
     int blocker_lights_count;
     float clamp_val;
-    int hi;
+    UINT_TYPE rand_seed;
+    int iteration;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

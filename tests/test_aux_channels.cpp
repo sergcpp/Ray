@@ -59,7 +59,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     s.h = test_img_h;
     s.preferred_device = preferred_device;
 
-    const int SampleCount = 16;
+    const int SampleCount = 14;
     const double BaseColor_MinPSNR = 28.44, Normals_MinPSNR = 38.34, Depth_MinPSNR = 43.3;
 
     for (const char **arch = arch_list; *arch; ++arch) {

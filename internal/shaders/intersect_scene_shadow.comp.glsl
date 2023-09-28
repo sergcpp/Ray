@@ -74,7 +74,7 @@ layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer LightWNodes {
 };
 
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
-    float g_random_seq[];
+    uint g_random_seq[];
 };
 
 #if HWRT
@@ -82,6 +82,17 @@ layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
 #endif
 
 layout(binding = INOUT_IMG_SLOT, rgba32f) uniform image2D g_inout_img;
+
+vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
+    const uint i_seed = hash_combine(seed, dim),
+               x_seed = hash_combine(seed, 2 * dim + 0),
+               y_seed = hash_combine(seed, 2 * dim + 1);
+
+    const uint shuffled_dim = uint(nested_uniform_scramble_base2(dim, seed) & (RAND_DIMS_COUNT - 1));
+    const uint shuffled_i = uint(nested_uniform_scramble_base2(_sample, i_seed) & (RAND_SAMPLES_COUNT - 1));
+    return vec2(scramble_unorm(x_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
+                scramble_unorm(y_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1]));
+}
 
 #define FETCH_TRI(j) g_tris[j]
 #include "traverse_bvh.glsl"
@@ -188,8 +199,10 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
     vec3 rc = vec3(r.c[0], r.c[1], r.c[2]);
     int depth = (r.depth >> 24);
 
-    const vec2 rand_offset = vec2(construct_float(hash(r.xy)), construct_float(hash(hash(r.xy))));
-    int rand_index = g_params.hi + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
+    const uint px_hash = hash(r.xy);
+    const uint rand_hash = hash_combine(px_hash, g_params.rand_seed);
+
+    uint rand_dim = RAND_DIM_BASE_COUNT + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
 
     float dist = r.dist > 0.0 ? r.dist : MAX_DIST;
 #if !HWRT
@@ -232,11 +245,9 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         g_stack[gl_LocalInvocationIndex][1] = floatBitsToUint(1.0);
         int stack_size = 1;
 
+        const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
+
         vec3 throughput = vec3(0.0);
-
-        const vec2 tex_rand = vec2(fract(g_random_seq[rand_index + RAND_DIM_TEX_U] + rand_offset[0]),
-                                   fract(g_random_seq[rand_index + RAND_DIM_TEX_V] + rand_offset[1]));
-
         while (stack_size-- != 0) {
             material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
             float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
@@ -269,7 +280,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         dist -= t;
 
         ++depth;
-        rand_index += RAND_DIM_BOUNCE_COUNT;
+        rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 
     return rc;
@@ -323,11 +334,9 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             g_stack[gl_LocalInvocationIndex][1] = floatBitsToUint(1.0);
             int stack_size = 1;
 
+            const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
+
             vec3 throughput = vec3(0.0);
-
-            const vec2 tex_rand = vec2(fract(g_random_seq[rand_index + RAND_DIM_TEX_U] + rand_offset[0]),
-                                   fract(g_random_seq[rand_index + RAND_DIM_TEX_V] + rand_offset[1]));
-
             while (stack_size-- != 0) {
                 material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
                 float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
@@ -361,7 +370,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         dist -= t;
 
         ++depth;
-        rand_index += RAND_DIM_BOUNCE_COUNT;
+        rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 
     return rc;
@@ -475,8 +484,8 @@ void main() {
         rc *= IntersectAreaLightsShadow(sh_ray);
     }
     if (lum(rc) > 0.0) {
-        const int x = (sh_ray.xy >> 16) & 0xffff;
-        const int y = (sh_ray.xy & 0xffff);
+        const int x = int((sh_ray.xy >> 16) & 0xffff);
+        const int y = int(sh_ray.xy & 0xffff);
 
         vec4 col = imageLoad(g_inout_img, ivec2(x, y));
         col.xyz += min(rc, vec3(g_params.clamp_val));

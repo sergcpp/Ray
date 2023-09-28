@@ -58,7 +58,7 @@ layout(std430, binding = VTX_INDICES_BUF_SLOT) readonly buffer VtxIndices {
 };
 
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
-    float g_random_seq[];
+    uint g_random_seq[];
 };
 
 layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer WNodes {
@@ -87,6 +87,17 @@ layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
 #if OUTPUT_DEPTH_NORMALS
     layout(binding = OUT_DEPTH_NORMALS_IMG_SLOT, rgba32f) uniform image2D g_out_depth_normals_img;
 #endif
+
+vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
+    const uint i_seed = hash_combine(seed, dim),
+               x_seed = hash_combine(seed, 2 * dim + 0),
+               y_seed = hash_combine(seed, 2 * dim + 1);
+
+    const uint shuffled_dim = uint(nested_uniform_scramble_base2(dim, seed) & (RAND_DIMS_COUNT - 1));
+    const uint shuffled_i = uint(nested_uniform_scramble_base2(_sample, i_seed) & (RAND_SAMPLES_COUNT - 1));
+    return vec2(scramble_unorm(x_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
+                scramble_unorm(y_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1]));
+}
 
 float power_heuristic(float a, float b) {
     float t = a * a;
@@ -763,8 +774,9 @@ vec3 MapToCone(float r1, float r2, vec3 N, float radius) {
     return N + uv[0] * LT + uv[1] * LB;
 }
 
-void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, inout light_sample_t ls) {
-    float u1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_PICK] + sample_off[0]);
+void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_light, const vec2 rand_light_uv,
+                       const vec2 rand_tex_uv, inout light_sample_t ls) {
+    float u1 = rand_pick_light;
 
 #if USE_HIERARCHICAL_NEE
     float factor = 1.0;
@@ -820,13 +832,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
     ls.cast_shadow = (l.type_and_param0.x & (1 << 4)) != 0;
     ls.from_env = false;
 
-    const vec2 tex_rand = vec2(fract(g_random_seq[hi + RAND_DIM_TEX_U] + sample_off[0]),
-                               fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
-
     const uint l_type = (l.type_and_param0.x & 0x7);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
-        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
         vec3 center_to_surface = P - l.SPH_POS;
         float dist_to_center = length(center_to_surface);
@@ -872,8 +880,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         ls.pdf = 1.0;
         ls.dist_mul = MAX_DIST;
         [[dont_flatten]] if (l.DIR_ANGLE != 0.0) {
-            const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-            const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+            const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
             const float radius = tan(l.DIR_ANGLE);
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
@@ -892,8 +899,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const vec3 light_u = l.RECT_U;
         const vec3 light_v = l.RECT_V;
 
-        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5;
-        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5;
+        const float r1 = rand_light_uv.x - 0.5, r2 = rand_light_uv.y - 0.5;
+
         const vec3 lp = light_pos + light_u * r1 + light_v * r2;
         const vec3 light_forward = normalize(cross(light_u, light_v));
 
@@ -917,9 +924,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, tex_rand);
+                env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, rand_tex_uv);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, rand_tex_uv);
 #endif
             }
             ls.col *= env_col;
@@ -930,10 +937,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const vec3 light_u = l.DISK_U;
         const vec3 light_v = l.DISK_V;
 
-        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
-
-        vec2 offset = 2.0 * vec2(r1, r2) - vec2(1.0);
+        vec2 offset = 2.0 * rand_light_uv - vec2(1.0);
         if (offset[0] != 0.0 && offset[1] != 0.0) {
             float theta, r;
             if (abs(offset[0]) > abs(offset[1])) {
@@ -971,9 +975,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, tex_rand);
+                env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, rand_tex_uv);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, rand_tex_uv);
 #endif
             }
             ls.col *= env_col;
@@ -983,8 +987,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const vec3 light_pos = l.LINE_POS;
         const vec3 light_dir = l.LINE_V;
 
-        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
         const vec3 center_to_surface = P - light_pos;
 
@@ -1026,8 +1029,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
                    uv2 = vec2(v2.t[0], v2.t[1]),
                    uv3 = vec2(v3.t[0], v3.t[1]);
 
-        const float r1 = sqrt(fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]));
-        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
+        r1 = sqrt(r1);
 
         const vec2 luvs = uv1 * (1.0 - r1) + r1 * (uv2 * (1.0 - r2) + uv3 * r2);
         const vec3 lp = p1 * (1.0 - r1) + r1 * (p2 * (1.0 - r2) + p3 * r2);
@@ -1050,12 +1053,11 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 
             const uint tex_index = floatBitsToUint(l.TRI_TEX_INDEX);
             if (tex_index != 0xffffffff) {
-                ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, tex_rand, true /* YCoCg */, true /* SRGB */).xyz;
+                ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, rand_tex_uv, true /* YCoCg */, true /* SRGB */).xyz;
             }
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
-        const float rx = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float ry = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float rx = rand_light_uv.x, ry = rand_light_uv.y;
 
         vec4 dir_and_pdf;
         if (g_params.env_qtree_levels > 0) {
@@ -1079,9 +1081,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            ls.col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, tex_rand);
+            ls.col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, rand_tex_uv);
 #else
-            ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
+            ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, rand_tex_uv);
 #endif
         }
 
@@ -1736,11 +1738,12 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     // NOTE: transparency depth is not accounted here
     const int total_depth = diff_depth + spec_depth + refr_depth;
 
-    const int hi = g_params.hi + (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
+    const uint px_hash = hash(ray.xy);
+    const uint rand_hash = hash_combine(px_hash, g_params.rand_seed);
 
-    const vec2 sample_off = vec2(construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy))));
-    const vec2 tex_rand = vec2(fract(g_random_seq[hi + RAND_DIM_TEX_U] + sample_off[0]),
-                               fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
+    const uint rand_dim = RAND_DIM_BASE_COUNT + (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
+
+    const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
 
     [[dont_flatten]] if (inter.mask == 0) {
 #if USE_HIERARCHICAL_NEE
@@ -1832,7 +1835,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
     vec3 col = vec3(0.0);
 
-    float mix_rand = fract(g_random_seq[hi + RAND_DIM_BSDF_PICK] + sample_off[0]);
+    const vec2 mix_term_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, g_params.iteration - 1);
+
+    float mix_rand = mix_term_rand.x;
     float mix_weight = 1.0;
 
     // resolve mix material
@@ -1907,7 +1912,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     ls.area = ls.pdf = 0.0;
     ls.dist_mul = 1.0;
     if (/*pi.should_add_direct_light() &&*/ g_params.li_count != 0 && mat.type != EmissiveNode) {
-        SampleLightSource(surf.P, surf.T, surf.B, surf.N, hi, sample_off, ls);
+        const float rand_pick_light = get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT_PICK, rand_hash, g_params.iteration - 1).x;
+        const vec2 rand_light_uv = get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT, rand_hash, g_params.iteration - 1);
+
+        SampleLightSource(surf.P, surf.T, surf.B, surf.N, rand_pick_light, rand_light_uv, tex_rand, ls);
     }
     const float N_dot_L = dot(surf.N, ls.L);
 #endif
@@ -1934,8 +1942,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], surf.uvs, int(roughness_lod), tex_rand, false /* YCoCg */, true /* SRGB */).r;
     }
 
-    const float rand_u = fract(g_random_seq[hi + RAND_DIM_BSDF_U] + sample_off[0]);
-    const float rand_v = fract(g_random_seq[hi + RAND_DIM_BSDF_V] + sample_off[1]);
+    const vec2 rand_bsdf_uv = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF, rand_hash, g_params.iteration - 1);
+    float rand_u = rand_bsdf_uv.x, rand_v = rand_bsdf_uv.y;
 
     ray_data_t new_ray;
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0;
@@ -2103,7 +2111,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 #endif
 
     const float lum = max(new_ray.c[0], max(new_ray.c[1], new_ray.c[2]));
-    const float p = fract(g_random_seq[hi + RAND_DIM_TERMINATE] + sample_off[0]);
+    const float p = mix_term_rand.y;
     const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
     [[dont_flatten]] if (p >= q && lum > 0.0 && new_ray.pdf > 0.0) {
         new_ray.pdf = min(new_ray.pdf, 1e6f);
@@ -2154,8 +2162,8 @@ void main() {
         return;
     }
 
-    const int x = (g_rays[index].xy >> 16) & 0xffff;
-    const int y = (g_rays[index].xy & 0xffff);
+    const int x = int((g_rays[index].xy >> 16) & 0xffff);
+    const int y = int(g_rays[index].xy & 0xffff);
 #endif
 
     hit_data_t inter = g_hits[index];

@@ -151,5 +151,4 @@ bool Ray::MatchDeviceNames(const char *name, const char *pattern) {
 }
 
 // Workaround for a strange clang behavior
-template class std::vector<uint16_t>;
 template class std::vector<float, Ray::aligned_allocator<float, 64>>;

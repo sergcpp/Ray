@@ -208,14 +208,6 @@ struct material_t {
 };
 static_assert(sizeof(material_t) == 76, "!");
 
-const int LIGHT_TYPE_SPHERE = 0;
-const int LIGHT_TYPE_DIR = 1;
-const int LIGHT_TYPE_LINE = 2;
-const int LIGHT_TYPE_RECT = 3;
-const int LIGHT_TYPE_DISK = 4;
-const int LIGHT_TYPE_TRI = 5;
-const int LIGHT_TYPE_ENV = 6;
-
 struct light_t {
     uint32_t type : 3;
     uint32_t doublesided : 1;
@@ -372,34 +364,14 @@ void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], cons
 
 void InverseMatrix(const float mat[16], float out_mat[16]);
 
-// Arrays of prime numbers, used to generate halton sequence for sampling
-const int PrimesCount = 292;
-extern const int g_primes[];
+#include "shaders/constants.h"
 
-const int HALTON_COUNT = PrimesCount;
-const int HALTON_SEQ_LEN = 256;
+extern const int __pmj02_sample_count;
+extern const int __pmj02_dims_count;
+extern const uint32_t __pmj02_samples[];
 
-const int RAND_DIM_FILTER_U = 0;
-const int RAND_DIM_FILTER_V = 1;
-const int RAND_DIM_LENS_U = 2;
-const int RAND_DIM_LENS_V = 3;
-const int RAND_DIM_BASE_COUNT = 4; // independent from bounce count
-
-const int RAND_DIM_BSDF_PICK = 0;
-const int RAND_DIM_BSDF_U = 1;
-const int RAND_DIM_BSDF_V = 2;
-const int RAND_DIM_LIGHT_PICK = 3;
-const int RAND_DIM_LIGHT_U = 4;
-const int RAND_DIM_LIGHT_V = 5;
-const int RAND_DIM_TERMINATE = 6;
-const int RAND_DIM_TEX_U = 7;
-const int RAND_DIM_TEX_V = 8;
-const int RAND_DIM_BOUNCE_COUNT = 9; // separate for each bounce
-
-// Sampling stages must be independent from each other (otherwise it may lead to artifacts), so different halton
-// sequences at each ray bounce must be used. This leads to limited number of bounces. Can be easily fixed by generating
-// huge primes table above
-static_assert(RAND_DIM_BASE_COUNT + MAX_BOUNCES * RAND_DIM_BOUNCE_COUNT <= HALTON_COUNT, "!");
+const int RAND_SAMPLES_COUNT = __pmj02_sample_count;
+const int RAND_DIMS_COUNT = __pmj02_dims_count;
 
 struct vertex_t {
     float p[3], n[3], b[3], t[2];

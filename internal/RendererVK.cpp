@@ -5,7 +5,6 @@
 
 #include "CDFUtils.h"
 #include "Core.h"
-#include "Halton.h"
 #include "SceneVK.h"
 #include "UNetFilter.h"
 
@@ -170,12 +169,15 @@ namespace Vk {
 #include "RendererGPU_kernels.h"
 #undef NS
 
-Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1) {
+Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
     ctx_ = std::make_unique<Context>();
     const bool res = ctx_->Init(log, s.preferred_device);
     if (!res) {
         throw std::runtime_error("Error initializing vulkan context!");
     }
+
+    assert(Types::RAND_SAMPLES_COUNT == Ray::RAND_SAMPLES_COUNT);
+    assert(Types::RAND_DIMS_COUNT == Ray::RAND_DIMS_COUNT);
 
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
     use_bindless_ = s.use_bindless && ctx_->max_sampled_images() >= 16384u;
@@ -440,18 +442,30 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         throw std::runtime_error("Error initializing pipeline!");
     }
 
-    halton_seq_buf_ =
-        Buffer{"Halton Seq", ctx_.get(), eBufType::Storage, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN};
+    random_seq_buf_ = Buffer{"Random Seq", ctx_.get(), eBufType::Storage,
+                             uint32_t(RAND_DIMS_COUNT * 2 * RAND_SAMPLES_COUNT * sizeof(uint32_t))};
     counters_buf_ = Buffer{"Counters", ctx_.get(), eBufType::Storage, sizeof(uint32_t) * 32};
     indir_args_buf_ = Buffer{"Indir Args", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
 
-    { // zero out counters
+    { // zero out counters, upload random sequence
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         const uint32_t zeros[32] = {};
         counters_buf_.UpdateImmediate(0, 32 * sizeof(uint32_t), zeros, cmd_buf);
 
+        Buffer temp_upload_buf{"Temp upload buf", ctx_.get(), eBufType::Upload, random_seq_buf_.size()};
+        { // update stage buffer
+            uint8_t *mapped_ptr = temp_upload_buf.Map();
+            memcpy(mapped_ptr, __pmj02_samples, RAND_DIMS_COUNT * 2 * RAND_SAMPLES_COUNT * sizeof(uint32_t));
+            temp_upload_buf.Unmap();
+        }
+
+        CopyBufferToBuffer(temp_upload_buf, 0, random_seq_buf_, 0,
+                           RAND_DIMS_COUNT * 2 * RAND_SAMPLES_COUNT * sizeof(uint32_t), cmd_buf);
+
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+        temp_upload_buf.FreeImmediate();
     }
 
     { // create tonemap LUT texture
@@ -466,8 +480,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     }
 
     Renderer::Resize(s.w, s.h);
-
-    permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
 }
 
 Ray::eRendererType Ray::Vk::Renderer::type() const { return eRendererType::Vulkan; }
@@ -497,10 +509,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
     }
 
-    region.iteration++;
-    if (!region.halton_seq || region.iteration % HALTON_SEQ_LEN == 0) {
-        UpdateHaltonSequence(region.iteration, region.halton_seq);
-    }
+    ++region.iteration;
 
     const Ray::camera_t &cam = s->cams_[s->current_cam()._index];
 
@@ -591,25 +600,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         filter_table_width_ = cam.filter_width;
 
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
-    }
-
-    if (loaded_halton_ == -1 || (region.iteration / HALTON_SEQ_LEN) != (loaded_halton_ / HALTON_SEQ_LEN)) {
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-
-        Buffer temp_upload_buf{"Temp halton upload", ctx_.get(), eBufType::Upload, halton_seq_buf_.size()};
-        { // update stage buffer
-            uint8_t *mapped_ptr = temp_upload_buf.Map();
-            memcpy(mapped_ptr, &region.halton_seq[0], sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN);
-            temp_upload_buf.Unmap();
-        }
-
-        CopyBufferToBuffer(temp_upload_buf, 0, halton_seq_buf_, 0, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN,
-                           cmd_buf);
-
-        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
-
-        temp_upload_buf.FreeImmediate();
-        loaded_halton_ = region.iteration;
     }
 
     if (loaded_view_transform_ != cam.view_transform) {
@@ -727,8 +717,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     //////////////////////////////////////////////////////////////////////////////////
 
-    const int hi = (region.iteration % HALTON_SEQ_LEN) * HALTON_COUNT;
-
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
 
@@ -796,11 +784,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         nullptr, 0, nullptr);
 
     const rect_t rect = region.rect();
+    const uint32_t rand_seed = Ref::hash((region.iteration - 1) / RAND_SAMPLES_COUNT);
 
     { // generate primary rays
         DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
         timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_GeneratePrimaryRays(cmd_buf, cam, hi, rect, halton_seq_buf_, filter_table_, region.iteration,
+        kernel_GeneratePrimaryRays(cmd_buf, cam, rand_seed, rect, random_seq_buf_, filter_table_, region.iteration,
                                    required_samples_buf_, counters_buf_, prim_rays_buf_);
         timestamps_[ctx_->backend_frame].primary_ray_gen[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
@@ -822,13 +811,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
         if (use_rt_pipeline) {
-            kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
-                                         hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.fwd,
+            kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, random_seq_buf_,
+                                         rand_seed, region.iteration, macro_tree_root, cam.fwd,
                                          cam.clip_end - cam.clip_start, s->tex_atlases_, s->bindless_tex_data_,
                                          prim_rays_buf_, prim_hits_buf_);
         } else {
             kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
-                                  halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.fwd,
+                                  random_seq_buf_, rand_seed, region.iteration, macro_tree_root, cam.fwd,
                                   cam.clip_end - cam.clip_start, s->tex_atlases_, s->bindless_tex_data_, prim_rays_buf_,
                                   prim_hits_buf_);
         }
@@ -842,7 +831,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_, prim_rays_buf_,
-                                sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, s->tex_atlases_,
+                                sc_data, random_seq_buf_, rand_seed, region.iteration, rect, s->tex_atlases_,
                                 s->bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_, counters_buf_,
                                 temp_base_color, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -857,7 +846,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
-                                    halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
+                                    random_seq_buf_, rand_seed, region.iteration, macro_tree_root,
                                     cam.pass_settings.clamp_direct, s->tex_atlases_, s->bindless_tex_data_,
                                     shadow_rays_buf_, temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -891,12 +880,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         { // trace secondary rays
             DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
             if (use_rt_pipeline) {
-                kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
-                                             hi + RAND_DIM_BASE_COUNT, macro_tree_root, nullptr, -1.0f, s->tex_atlases_,
-                                             s->bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
+                kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, random_seq_buf_,
+                                             rand_seed, region.iteration, macro_tree_root, nullptr, -1.0f,
+                                             s->tex_atlases_, s->bindless_tex_data_, secondary_rays_buf_,
+                                             prim_hits_buf_);
             } else {
                 kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
-                                      halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, nullptr, -1.0f,
+                                      random_seq_buf_, rand_seed, region.iteration, macro_tree_root, nullptr, -1.0f,
                                       s->tex_atlases_, s->bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
             }
         }
@@ -914,8 +904,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, clamp_val, s->env_, indir_args_buf_, 0,
-                                      prim_hits_buf_, secondary_rays_buf_, sc_data, halton_seq_buf_,
-                                      hi + RAND_DIM_BASE_COUNT, s->tex_atlases_, s->bindless_tex_data_, temp_buf0_,
+                                      prim_hits_buf_, secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed,
+                                      region.iteration, s->tex_atlases_, s->bindless_tex_data_, temp_buf0_,
                                       prim_rays_buf_, shadow_rays_buf_, counters_buf_);
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
         }
@@ -929,7 +919,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
-                                        halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
+                                        random_seq_buf_, rand_seed, region.iteration, macro_tree_root,
                                         cam.pass_settings.clamp_indirect, s->tex_atlases_, s->bindless_tex_data_,
                                         shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
@@ -1764,11 +1754,11 @@ bool Ray::Vk::Renderer::InitUNetPipelines() {
 }
 
 void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings,
-                                              const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
-                                              const rect_t &rect, const uint32_t node_index, const float cam_fwd[3],
-                                              const float clip_dist, Span<const TextureAtlas> tex_atlases,
-                                              const BindlessTexData &bindless_tex, const Buffer &rays,
-                                              const Buffer &out_hits) {
+                                              const scene_data_t &sc_data, const Buffer &rand_seq,
+                                              const uint32_t rand_seed, const int iteration, const rect_t &rect,
+                                              const uint32_t node_index, const float cam_fwd[3], const float clip_dist,
+                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -1778,7 +1768,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         {eBindTarget::SBufRO, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBufRO, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
@@ -1814,7 +1804,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
     uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
-    uniform_params.hi = hi;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
     if (cam_fwd) {
         memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
     }
@@ -1828,10 +1819,10 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
 }
 
 void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                     const scene_data_t &sc_data, const Buffer &random_seq,
-                                                     const int hi, const rect_t &rect, const uint32_t node_index,
-                                                     const float cam_fwd[3], const float clip_dist,
-                                                     Span<const TextureAtlas> tex_atlases,
+                                                     const scene_data_t &sc_data, const Buffer &rand_seq,
+                                                     const uint32_t rand_seed, const int iteration, const rect_t &rect,
+                                                     const uint32_t node_index, const float cam_fwd[3],
+                                                     const float clip_dist, Span<const TextureAtlas> tex_atlases,
                                                      const BindlessTexData &bindless_tex, const Buffer &rays,
                                                      const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
@@ -1843,7 +1834,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
         {eBindTarget::SBufRO, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBufRO, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
         {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
@@ -1862,7 +1853,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
     uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
-    uniform_params.hi = hi;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
     if (cam_fwd) {
         memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
     }
@@ -1876,8 +1868,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
 void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args,
                                               const int indir_args_index, const Buffer &counters,
                                               const pass_settings_t &settings, const scene_data_t &sc_data,
-                                              const Buffer &random_seq, const int hi, uint32_t node_index,
-                                              const float cam_fwd[3], const float clip_dist,
+                                              const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
+                                              uint32_t node_index, const float cam_fwd[3], const float clip_dist,
                                               Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                               const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -1891,7 +1883,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         {eBindTarget::SBufRO, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBufRO, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
         {eBindTarget::SBufRO, IntersectScene::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
@@ -1925,7 +1917,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
     uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
-    uniform_params.hi = hi;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
     if (cam_fwd) {
         memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
     }
@@ -1935,13 +1928,11 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const Buffer &indir_args,
-                                                     const int indir_args_index, const pass_settings_t &settings,
-                                                     const scene_data_t &sc_data, const Buffer &random_seq,
-                                                     const int hi, const uint32_t node_index, const float cam_fwd[3],
-                                                     const float clip_dist, Span<const TextureAtlas> tex_atlases,
-                                                     const BindlessTexData &bindless_tex, const Buffer &rays,
-                                                     const Buffer &out_hits) {
+void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(
+    CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_index, const pass_settings_t &settings,
+    const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
+    const uint32_t node_index, const float cam_fwd[3], const float clip_dist, Span<const TextureAtlas> tex_atlases,
+    const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
@@ -1952,7 +1943,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
         {eBindTarget::SBufRO, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBufRO, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
         {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
@@ -1967,7 +1958,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
     uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
-    uniform_params.hi = hi;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
     if (cam_fwd) {
         memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
     }
@@ -1980,13 +1972,14 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
 void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env, const Buffer &indir_args,
     const int indir_args_index, const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-    const Buffer &random_seq, const int hi, const rect_t &rect, Span<const TextureAtlas> tex_atlases,
-    const BindlessTexData &bindless_tex, const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
-    const Buffer &inout_counters, const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
+    const Buffer &rand_seq, const uint32_t rand_seed, const int iteration, const rect_t &rect,
+    Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Texture2D &out_img,
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters, const Texture2D &out_base_color,
+    const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
-                                              {&random_seq, eResState::ShaderResource},
+                                              {&rand_seq, eResState::ShaderResource},
                                               {&out_img, eResState::UnorderedAccess},
                                               {&out_rays, eResState::UnorderedAccess},
                                               {&out_sh_rays, eResState::UnorderedAccess},
@@ -2006,7 +1999,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                                          {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-                                         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, random_seq},
+                                         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
                                          {eBindTarget::SBufRO, Shade::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
                                          {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
@@ -2026,7 +2019,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.rect[1] = rect.y;
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
-    uniform_params.hi = hi;
+    uniform_params.iteration = iteration;
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
@@ -2036,7 +2029,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.max_total_depth = settings.max_total_depth;
     uniform_params.min_total_depth = settings.min_total_depth;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
+
+    uniform_params.rand_seed = rand_seed;
 
     memcpy(&uniform_params.env_col[0], env.env_col, 3 * sizeof(float));
     memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
@@ -2078,17 +2072,15 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                             &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                  float clamp_val, const environment_t &env, const Buffer &indir_args,
-                                                  const int indir_args_index, const Buffer &hits, const Buffer &rays,
-                                                  const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
-                                                  Span<const TextureAtlas> tex_atlases,
-                                                  const BindlessTexData &bindless_tex, const Texture2D &out_img,
-                                                  const Buffer &out_rays, const Buffer &out_sh_rays,
-                                                  const Buffer &inout_counters) {
+void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
+    CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_val, const environment_t &env,
+    const Buffer &indir_args, const int indir_args_index, const Buffer &hits, const Buffer &rays,
+    const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
+    Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Texture2D &out_img,
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
         {&indir_args, eResState::IndirectArgument}, {&hits, eResState::ShaderResource},
-        {&rays, eResState::ShaderResource},         {&random_seq, eResState::ShaderResource},
+        {&rays, eResState::ShaderResource},         {&rand_seq, eResState::ShaderResource},
         {&out_img, eResState::UnorderedAccess},     {&out_rays, eResState::UnorderedAccess},
         {&out_sh_rays, eResState::UnorderedAccess}, {&inout_counters, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -2104,7 +2096,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
                                          {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-                                         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, random_seq},
+                                         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
                                          {eBindTarget::SBufRO, Shade::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
                                          {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
@@ -2113,7 +2105,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
                                          {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
 
     Shade::Params uniform_params = {};
-    uniform_params.hi = hi;
+    uniform_params.iteration = iteration;
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
@@ -2123,7 +2115,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.max_total_depth = settings.max_total_depth;
     uniform_params.min_total_depth = settings.min_total_depth;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
+
+    uniform_params.rand_seed = rand_seed;
 
     memcpy(&uniform_params.env_col[0], env.env_col, 3 * sizeof(float));
     memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
@@ -2155,13 +2148,11 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                    const Buffer &indir_args, const int indir_args_index,
-                                                    const Buffer &counters, const scene_data_t &sc_data,
-                                                    const Buffer &random_seq, const int hi, const uint32_t node_index,
-                                                    const float clamp_val, Span<const TextureAtlas> tex_atlases,
-                                                    const BindlessTexData &bindless_tex, const Buffer &sh_rays,
-                                                    const Texture2D &out_img) {
+void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
+    CommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args, const int indir_args_index,
+    const Buffer &counters, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
+    const int iteration, const uint32_t node_index, const float clamp_val, Span<const TextureAtlas> tex_atlases,
+    const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&sh_rays, eResState::ShaderResource},
@@ -2184,7 +2175,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
         {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
-        {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 
     if (use_hwrt_) {
@@ -2209,7 +2200,8 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
     uniform_params.lights_node_index = 0; // tree root
     uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
     uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : FLT_MAX;
-    uniform_params.hi = hi;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
 
     DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,

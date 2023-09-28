@@ -14,6 +14,8 @@
 --eliminate-local-single-store ^
 --eliminate-dead-code-aggressive ^
 --eliminate-dead-code-aggressive ^
+--eliminate-dead-const ^
+--unify-const ^
 --ccp ^
 --eliminate-dead-code-aggressive ^
 --loop-unroll ^

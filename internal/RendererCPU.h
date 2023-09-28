@@ -9,7 +9,6 @@
 #include "../RendererBase.h"
 #include "CDFUtils.h"
 #include "CoreRef.h"
-#include "Halton.h"
 #include "SceneCPU.h"
 #include "UNetFilter.h"
 
@@ -32,43 +31,47 @@ class SIMDPolicy {
     static force_inline eRendererType type() { return eRendererType::Reference; }
 
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h,
-                                                 const float random_seq[], const float filter_table[],
-                                                 const int iteration, const uint16_t required_samples[],
+                                                 const uint32_t rand_seq[], const uint32_t rand_seed,
+                                                 const float filter_table[], const int iteration,
+                                                 const uint16_t required_samples[],
                                                  aligned_vector<Ref::ray_data_t> &out_rays,
                                                  aligned_vector<Ref::hit_data_t> &out_inters) {
-        Ref::GeneratePrimaryRays(cam, r, w, h, random_seq, filter_table, iteration, required_samples, out_rays,
+        Ref::GeneratePrimaryRays(cam, r, w, h, rand_seq, rand_seed, filter_table, iteration, required_samples, out_rays,
                                  out_inters);
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
                                                       const transform_t &tr, const uint32_t *vtx_indices,
                                                       const vertex_t *vertices, const rect_t &r, int w, int h,
-                                                      const float *random_seq, aligned_vector<ray_data_t> &out_rays,
+                                                      const uint32_t rand_seq[], aligned_vector<ray_data_t> &out_rays,
                                                       aligned_vector<hit_data_t> &out_inters) {
         Ref::SampleMeshInTextureSpace(iteration, obj_index, uv_layer, mesh, tr, vtx_indices, vertices, r, w, h,
-                                      random_seq, out_rays, out_inters);
+                                      rand_seq, out_rays, out_inters);
     }
 
     static force_inline void IntersectScene(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth,
-                                            const float *random_seq, const scene_data_t &sc, uint32_t root_index,
+                                            const uint32_t rand_seq[], const uint32_t random_seed, const int iteration,
+                                            const scene_data_t &sc, uint32_t root_index,
                                             const Cpu::TexStorageBase *const textures[], Span<hit_data_t> out_inter) {
-        Ref::IntersectScene(rays, min_transp_depth, max_transp_depth, random_seq, sc, root_index, textures, out_inter);
+        Ref::IntersectScene(rays, min_transp_depth, max_transp_depth, rand_seq, random_seed, iteration, sc, root_index,
+                            textures, out_inter);
     }
 
     static force_inline void TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth,
                                        const scene_data_t &sc, uint32_t node_index, bool trace_lights,
-                                       const Cpu::TexStorageBase *const textures[], const float random_seq[],
-                                       Span<hit_data_t> out_inter) {
-        Ref::TraceRays(rays, min_transp_depth, max_transp_depth, sc, node_index, trace_lights, textures, random_seq,
-                       out_inter);
+                                       const Cpu::TexStorageBase *const textures[], const uint32_t rand_seq[],
+                                       const uint32_t random_seed, const int iteration, Span<hit_data_t> out_inter) {
+        Ref::TraceRays(rays, min_transp_depth, max_transp_depth, sc, node_index, trace_lights, textures, rand_seq,
+                       random_seed, iteration, out_inter);
     }
 
-    static force_inline void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val,
-                                             const scene_data_t &sc, uint32_t node_index, const float random_seq[],
+    static force_inline void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float clamp_val,
+                                             const scene_data_t &sc, uint32_t node_index, const uint32_t rand_seq[],
+                                             const uint32_t random_seed, const int iteration,
                                              const Cpu::TexStorageBase *const textures[], int img_w,
                                              color_rgba_t *out_color) {
-        Ref::TraceShadowRays(rays, max_transp_depth, _clamp_val, sc, node_index, random_seq, textures, img_w,
-                             out_color);
+        Ref::TraceShadowRays(rays, max_transp_depth, clamp_val, sc, node_index, rand_seq, random_seed, iteration,
+                             textures, img_w, out_color);
     }
 
     static force_inline int SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3],
@@ -78,25 +81,28 @@ class SIMDPolicy {
     }
 
     static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters,
-                                          Span<const ray_data_t> rays, const float *random_seq, const scene_data_t &sc,
-                                          uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                                          ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
-                                          shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                                          float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
+                                          Span<const ray_data_t> rays, const uint32_t rand_seq[], const uint32_t rand_seed,
+                                          const int iteration, const scene_data_t &sc, uint32_t node_index,
+                                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
+                                          int *out_shadow_rays_count, int img_w, float mix_factor,
+                                          color_rgba_t *out_color, color_rgba_t *out_base_color,
                                           color_rgba_t *out_depth_normal) {
-        Ref::ShadePrimary(ps, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
-                          out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w, mix_factor,
-                          out_color, out_base_color, out_depth_normal);
+        Ref::ShadePrimary(ps, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
+                          out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
+                          mix_factor, out_color, out_base_color, out_depth_normal);
     }
 
     static force_inline void ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t> inters,
-                                            Span<const ray_data_t> rays, const float *random_seq,
-                                            const scene_data_t &sc, uint32_t node_index,
-                                            const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                                            int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                            int *out_shadow_rays_count, int img_w, color_rgba_t *out_color) {
-        Ref::ShadeSecondary(ps, clamp_val, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
-                            out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w, out_color);
+                                            Span<const ray_data_t> rays, const uint32_t rand_seq[],
+                                            const uint32_t rand_seed, const int iteration, const scene_data_t &sc,
+                                            uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                                            ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
+                                            shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                                            color_rgba_t *out_color) {
+        Ref::ShadeSecondary(ps, clamp_val, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
+                            out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
+                            out_color);
     }
 
     template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels,
@@ -169,9 +175,6 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     Ref::tonemap_params_t tonemap_params_;
     float variance_threshold_ = 0.0f;
-
-    std::vector<uint16_t> permutations_;
-    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
     aligned_vector<float, 64> unet_weights_[3];
     unet_weight_offsets_t unet_offsets_[3];
@@ -299,8 +302,6 @@ template <typename SIMDPolicy> PassData<SIMDPolicy> &get_per_thread_pass_data() 
 template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
     : log_(log), use_tex_compression_(s.use_tex_compression) {
-    permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
-
     log->Info("===========================================");
     log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
     log->Info("===========================================");
@@ -387,10 +388,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
     const rect_t &rect = region.rect();
 
-    region.iteration++;
-    if (!region.halton_seq || region.iteration % HALTON_SEQ_LEN == 0) {
-        UpdateHaltonSequence(region.iteration, region.halton_seq);
-    }
+    ++region.iteration;
 
     { // Check filter table
         // TODO: Skip locking here
@@ -431,25 +429,26 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     const auto time_start = high_resolution_clock::now();
     time_point<high_resolution_clock> time_after_ray_gen;
 
-    const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+    const uint32_t *rand_seq = __pmj02_samples;
+    const uint32_t rand_seed = Ref::hash((region.iteration - 1) / RAND_SAMPLES_COUNT);
 
     if (cam.type != eCamType::Geo) {
-        SIMDPolicy::GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], filter_table_.data(),
-                                        region.iteration, required_samples_.data(), p.primary_rays, p.intersections);
+        SIMDPolicy::GeneratePrimaryRays(cam, rect, w_, h_, rand_seq, rand_seed, filter_table_.data(), region.iteration,
+                                        required_samples_.data(), p.primary_rays, p.intersections);
 
         time_after_ray_gen = high_resolution_clock::now();
 
         if (macro_tree_root != 0xffffffff) {
             SIMDPolicy::TraceRays(p.primary_rays, cam.pass_settings.min_transp_depth,
                                   cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, false, s->tex_storages_,
-                                  &region.halton_seq[hi + RAND_DIM_BASE_COUNT], p.intersections);
+                                  rand_seq, rand_seed, region.iteration, p.intersections);
         }
     } else {
         const mesh_instance_t &mi = sc_data.mesh_instances[cam.mi_index];
         SIMDPolicy::SampleMeshInTextureSpace(region.iteration, int(cam.mi_index), int(cam.uv_index),
                                              sc_data.meshes[mi.mesh_index], sc_data.transforms[mi.tr_index],
-                                             sc_data.vtx_indices, sc_data.vertices, rect, w_, h_,
-                                             &region.halton_seq[hi], p.primary_rays, p.intersections);
+                                             sc_data.vtx_indices, sc_data.vertices, rect, w_, h_, rand_seq,
+                                             p.primary_rays, p.intersections);
 
         time_after_ray_gen = high_resolution_clock::now();
     }
@@ -464,16 +463,16 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
-    SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays,
-                             &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root, s->tex_storages_,
-                             &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count, w_,
-                             mix_factor, temp_buf_.data(), base_color_buf_.data(), depth_normals_buf_.data());
+    SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays, rand_seq, rand_seed, region.iteration,
+                             sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+                             &p.shadow_rays[0], &shadow_rays_count, w_, mix_factor, temp_buf_.data(),
+                             base_color_buf_.data(), depth_normals_buf_.data());
 
     const auto time_after_prim_shade = high_resolution_clock::now();
 
     SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                 cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data,
-                                macro_tree_root, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], s->tex_storages_, w_,
+                                macro_tree_root, rand_seq, rand_seed, region.iteration, s->tex_storages_, w_,
                                 temp_buf_.data());
 
     const auto time_after_prim_shadow = high_resolution_clock::now();
@@ -521,7 +520,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
         SIMDPolicy::TraceRays(Span<typename SIMDPolicy::RayDataType>{p.secondary_rays.data(), secondary_rays_count},
                               cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth, sc_data,
-                              macro_tree_root, true, s->tex_storages_, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
+                              macro_tree_root, true, s->tex_storages_, rand_seq, rand_seed, region.iteration,
                               p.intersections);
 
         const auto time_secondary_shade_start = high_resolution_clock::now();
@@ -534,15 +533,15 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
         SIMDPolicy::ShadeSecondary(
             cam.pass_settings, clamp_val, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
-            Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count},
-            &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root, s->tex_storages_,
-            &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data());
+            Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq, rand_seed,
+            region.iteration, sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+            &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data());
 
         const auto time_secondary_shadow_start = high_resolution_clock::now();
 
         SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                     cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_indirect, sc_data,
-                                    macro_tree_root, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], s->tex_storages_, w_,
+                                    macro_tree_root, rand_seq, rand_seed, region.iteration, s->tex_storages_, w_,
                                     temp_buf_.data());
 
         const auto time_secondary_shadow_end = high_resolution_clock::now();
@@ -1058,22 +1057,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateFilterTable(ePixelFilter filter, floa
     filter_table_ =
         Ray::CDFInverted(FILTER_TABLE_SIZE, 0.0f, filter_width * 0.5f,
                          std::bind(filter_func, std::placeholders::_1, filter_width), true /* make_symmetric */);
-}
-
-template <typename SIMDPolicy>
-void Ray::Cpu::Renderer<SIMDPolicy>::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
-    if (!seq) {
-        seq = std::make_unique<float[]>(HALTON_COUNT * HALTON_SEQ_LEN);
-    }
-
-    for (int i = 0; i < HALTON_SEQ_LEN; ++i) {
-        uint32_t prime_sum = 0;
-        for (int j = 0; j < HALTON_COUNT; ++j) {
-            seq[i * HALTON_COUNT + j] =
-                Ray::ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
-            prime_sum += g_primes[j];
-        }
-    }
 }
 
 template <typename SIMDPolicy>

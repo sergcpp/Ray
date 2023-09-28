@@ -1357,6 +1357,53 @@ void calc_lnode_importance(const light_wbvh_node_t &n, const simd_fvec4 &P, floa
     }
 }
 
+force_inline uint32_t hash_combine(uint32_t seed, uint32_t v) { return seed ^ (v + (seed << 6) + (seed >> 2)); }
+
+force_inline uint32_t reverse_bits(uint32_t x) {
+    x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
+    x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2));
+    x = (((x & 0xf0f0f0f0) >> 4) | ((x & 0x0f0f0f0f) << 4));
+    x = (((x & 0xff00ff00) >> 8) | ((x & 0x00ff00ff) << 8));
+    return ((x >> 16) | (x << 16));
+}
+
+force_inline uint32_t laine_karras_permutation(uint32_t x, const uint32_t seed) {
+    x += seed;
+    x ^= x * 0x6c50b47cu;
+    x ^= x * 0xb82f1e52u;
+    x ^= x * 0xc7afe638u;
+    x ^= x * 0x8d22f6e6u;
+    return x;
+}
+
+uint32_t nested_uniform_scramble_base2(uint32_t x, const uint32_t seed) {
+    x = reverse_bits(x);
+    x = laine_karras_permutation(x, seed);
+    x = reverse_bits(x);
+    return x;
+}
+
+force_inline float scramble_flt(const uint32_t seed, const float val) {
+    uint32_t u = uint32_t(val * 16777216.0f) << 8;
+    u = nested_uniform_scramble_base2(u, seed);
+    return float(u >> 8) / 16777216.0f;
+}
+
+force_inline float scramble_unorm(const uint32_t seed, uint32_t val) {
+    val = nested_uniform_scramble_base2(val, seed);
+    return float(val >> 8) / 16777216.0f;
+}
+
+simd_fvec2 get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const int sample, const uint32_t rand_seq[]) {
+    const uint32_t shuffled_dim = nested_uniform_scramble_base2(dim, seed) & (RAND_DIMS_COUNT - 1);
+    const uint32_t shuffled_i =
+        nested_uniform_scramble_base2(sample, hash_combine(seed, dim)) & (RAND_SAMPLES_COUNT - 1);
+    return simd_fvec2{scramble_unorm(hash_combine(seed, 2 * dim + 0),
+                                     rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
+                      scramble_unorm(hash_combine(seed, 2 * dim + 1),
+                                     rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1])};
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -1368,9 +1415,9 @@ Ray::Ref::hit_data_t::hit_data_t() {
 }
 
 void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
-                                   const float random_seq[], const float filter_table[], const int iteration,
-                                   const uint16_t required_samples[], aligned_vector<ray_data_t> &out_rays,
-                                   aligned_vector<hit_data_t> &out_inters) {
+                                   const uint32_t rand_seq[], const uint32_t rand_seed, const float filter_table[],
+                                   const int iteration, const uint16_t required_samples[],
+                                   aligned_vector<ray_data_t> &out_rays, aligned_vector<hit_data_t> &out_inters) {
     const simd_fvec4 cam_origin = make_fvec3(cam.origin), fwd = make_fvec3(cam.fwd), side = make_fvec3(cam.side),
                      up = make_fvec3(cam.up);
     const float focus_distance = cam.focus_distance;
@@ -1413,16 +1460,13 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
                 continue;
             }
 
-            auto fx = float(x);
-            auto fy = float(y);
+            auto fx = float(x), fy = float(y);
 
-            const int index = y * w + x;
-            const int hash_val = hash(index);
+            const uint32_t px_hash = hash((x << 16) | y);
+            const uint32_t rand_hash = hash_combine(px_hash, rand_seed);
 
-            const float sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
-
-            float rx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
-            float ry = fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
+            const simd_fvec2 filter_rand = get_scrambled_2d_rand(RAND_DIM_FILTER, rand_hash, iteration - 1, rand_seq);
+            float rx = filter_rand.get<0>(), ry = filter_rand.get<1>();
 
             if (cam.filter != ePixelFilter::Box) {
                 rx = lookup_filter_table(rx);
@@ -1435,10 +1479,9 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
             simd_fvec2 offset = 0.0f;
 
             if (cam.fstop > 0.0f) {
-                const float r1 = fract(random_seq[RAND_DIM_LENS_U] + sample_off[0]);
-                const float r2 = fract(random_seq[RAND_DIM_LENS_V] + sample_off[1]);
+                const simd_fvec2 lens_rand = get_scrambled_2d_rand(RAND_DIM_LENS, rand_hash, iteration - 1, rand_seq);
 
-                offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
+                offset = 2.0f * lens_rand - simd_fvec2{1.0f, 1.0f};
                 if (offset.get<0>() != 0.0f && offset.get<1>() != 0.0f) {
                     float theta, r;
                     if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
@@ -1498,7 +1541,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
 void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index, const int uv_layer,
                                         const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices,
                                         const vertex_t *vertices, const rect_t &r, const int width, const int height,
-                                        const float *random_seq, aligned_vector<ray_data_t> &out_rays,
+                                        const uint32_t rand_seq[], aligned_vector<ray_data_t> &out_rays,
                                         aligned_vector<hit_data_t> &out_inters) {
     out_rays.resize(size_t(r.w) * r.h);
     out_inters.resize(out_rays.size());
@@ -1567,9 +1610,9 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                     continue;
                 }
 
-                const float _x = float(x) + fract(random_seq[RAND_DIM_FILTER_U] + construct_float(hash(out_ray.xy)));
+                const float _x = float(x); // + fract(rand_seq[RAND_DIM_FILTER_U] + construct_float(hash(out_ray.xy)));
                 const float _y =
-                    float(y) + fract(random_seq[RAND_DIM_FILTER_V] + construct_float(hash(hash(out_ray.xy))));
+                    float(y); // + fract(rand_seq[RAND_DIM_FILTER_V] + construct_float(hash(hash(out_ray.xy))));
 
                 float u = d01.get<0>() * (_y - t0.get<1>()) - d01.get<1>() * (_x - t0.get<0>()),
                       v = d12.get<0>() * (_y - t1.get<1>()) - d12.get<1>() * (_x - t1.get<0>()),
@@ -2564,8 +2607,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_
     F *= (denom != 0.0f) ? (D * G / denom) : 0.0f;
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    float pdf = D * G1(view_dir_ts, alpha_x, alpha_y) * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) /
-                fabsf(view_dir_ts.get<2>());
+    float pdf = safe_div_pos(D * G1(view_dir_ts, alpha_x, alpha_y) * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f),
+                             fabsf(view_dir_ts.get<2>()));
     const float div = 4.0f * dot(view_dir_ts, sampled_normal_ts);
     if (div != 0.0f) {
         pdf /= div;
@@ -3082,7 +3125,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &sto
 }
 
 void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth, const int max_transp_depth,
-                              const float *_random_seq, const scene_data_t &sc, const uint32_t root_index,
+                              const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
+                              const scene_data_t &sc, const uint32_t root_index,
                               const Cpu::TexStorageBase *const textures[], Span<hit_data_t> out_inter) {
     for (int i = 0; i < rays.size(); ++i) {
         ray_data_t &r = rays[i];
@@ -3091,9 +3135,10 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
         const simd_fvec4 rd = make_fvec3(r.d);
         simd_fvec4 ro = make_fvec3(r.o);
 
-        const float rand_offset[2] = {construct_float(hash(r.xy)), construct_float(hash(hash(r.xy)))};
-        const float *random_seq = _random_seq + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
+        const uint32_t px_hash = hash(r.xy);
+        const uint32_t rand_hash = hash_combine(px_hash, rand_seed);
 
+        uint32_t rand_dim = RAND_DIM_BASE_COUNT + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
         while (true) {
             const float t_val = inter.t;
 
@@ -3132,10 +3177,12 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             const float w = 1.0f - inter.u - inter.v;
             const simd_fvec2 uvs = simd_fvec2(v1.t) * w + simd_fvec2(v2.t) * inter.u + simd_fvec2(v3.t) * inter.v;
 
-            float trans_r = fract(random_seq[RAND_DIM_BSDF_PICK] + rand_offset[0]);
+            const simd_fvec2 mix_term_rand =
+                get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, iteration - 1, rand_seq);
+            const simd_fvec2 tex_rand =
+                get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
 
-            const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + rand_offset[0]),
-                                                   fract(random_seq[RAND_DIM_TEX_V] + rand_offset[1])};
+            float trans_r = mix_term_rand.get<0>();
 
             // resolve mix material
             while (mat->type == eShadingNode::Mix) {
@@ -3172,7 +3219,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 #endif
 
             const float lum = fmaxf(r.c[0], fmaxf(r.c[1], r.c[2]));
-            const float p = fract(random_seq[RAND_DIM_TERMINATE] + rand_offset[0]);
+            const float p = mix_term_rand.get<1>();
             const float q = can_terminate_path ? fmaxf(0.05f, 1.0f - lum) : 0.0f;
             if (p < q || lum == 0.0f || (r.depth >> 24) + 1 >= max_transp_depth) {
                 // terminate ray
@@ -3192,7 +3239,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             inter.t = t_val - inter.t;
 
             r.depth += 0x01000000;
-            random_seq += RAND_DIM_BOUNCE_COUNT;
+            rand_dim += RAND_DIM_BOUNCE_COUNT;
         }
 
         inter.t += length(make_fvec3(r.o) - ro);
@@ -3200,15 +3247,18 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int max_transp_depth, const scene_data_t &sc,
-                                              const uint32_t root_index, const float *_random_seq,
+                                              const uint32_t root_index, const uint32_t rand_seq[],
+                                              const uint32_t rand_seed, const int iteration,
                                               const Cpu::TexStorageBase *const textures[]) {
     const simd_fvec4 rd = make_fvec3(r.d);
     simd_fvec4 ro = make_fvec3(r.o);
     simd_fvec4 rc = make_fvec3(r.c);
     int depth = (r.depth >> 24);
 
-    const float rand_offset[2] = {construct_float(hash(r.xy)), construct_float(hash(hash(r.xy)))};
-    const float *random_seq = _random_seq + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
+    const uint32_t px_hash = hash(r.xy);
+    const uint32_t rand_hash = hash_combine(px_hash, rand_seed);
+
+    uint32_t rand_dim = RAND_DIM_BASE_COUNT + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
 
     float dist = r.dist > 0.0f ? r.dist : MAX_DIST;
     while (dist > HIT_BIAS) {
@@ -3247,8 +3297,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         const float w = 1.0f - inter.u - inter.v;
         const simd_fvec2 sh_uvs = simd_fvec2(v1.t) * w + simd_fvec2(v2.t) * inter.u + simd_fvec2(v3.t) * inter.v;
 
-        const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + rand_offset[0]),
-                                               fract(random_seq[RAND_DIM_TEX_V] + rand_offset[1])};
+        const simd_fvec2 tex_rand =
+            get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
 
         struct {
             uint32_t index;
@@ -3296,7 +3346,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         dist -= t;
 
         ++depth;
-        random_seq += RAND_DIM_BOUNCE_COUNT;
+        rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 
     return rc;
@@ -3304,8 +3354,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
 
 void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
                                  const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
-                                 const float random_seq[], const float sample_off[2], light_sample_t &ls) {
-    float u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
+                                 const float rand_pick_light, const simd_fvec2 rand_light_uv,
+                                 const simd_fvec2 rand_tex_uv, light_sample_t &ls) {
+    float u1 = rand_pick_light;
 
 #if USE_HIERARCHICAL_NEE
     float factor = 1.0f;
@@ -3360,8 +3411,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
     ls.from_env = 0;
 
     if (l.type == LIGHT_TYPE_SPHERE) {
-        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
         simd_fvec4 center_to_surface = P - make_fvec3(l.sph.pos);
         float dist_to_center = length(center_to_surface);
@@ -3410,8 +3460,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         ls.area = 0.0f;
         ls.pdf = 1.0f;
         if (l.dir.angle != 0.0f) {
-            const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
-            const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
+            const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
             const float radius = tanf(l.dir.angle);
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
@@ -3431,8 +3480,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 light_u = make_fvec3(l.rect.u);
         const simd_fvec4 light_v = make_fvec3(l.rect.v);
 
-        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5f;
-        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5f;
+        const float r1 = rand_light_uv.get<0>() - 0.5f, r2 = rand_light_uv.get<1>() - 0.5f;
+
         const simd_fvec4 lp = light_pos + light_u * r1 + light_v * r2;
         const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
@@ -3454,10 +3503,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = make_fvec3(sc.env.env_col);
             if (sc.env.env_map != 0xffffffff) {
-                const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
-                                                       fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
                 env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map,
-                                              ls.L, sc.env.env_map_rotation, tex_rand);
+                                              ls.L, sc.env.env_map_rotation, rand_tex_uv);
             }
             ls.col *= env_col;
             ls.from_env = 1;
@@ -3467,8 +3514,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 light_u = make_fvec3(l.disk.u);
         const simd_fvec4 light_v = make_fvec3(l.disk.v);
 
-        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
         simd_fvec2 offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
         if (offset.get<0>() != 0.0f && offset.get<1>() != 0.0f) {
@@ -3506,10 +3552,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = make_fvec3(sc.env.env_col);
             if (sc.env.env_map != 0xffffffff) {
-                const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
-                                                       fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
                 env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map,
-                                              ls.L, sc.env.env_map_rotation, tex_rand);
+                                              ls.L, sc.env.env_map_rotation, rand_tex_uv);
             }
             ls.col *= env_col;
             ls.from_env = 1;
@@ -3518,8 +3562,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 light_pos = make_fvec3(l.line.pos);
         const simd_fvec4 light_dir = make_fvec3(l.line.v);
 
-        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
         const simd_fvec4 center_to_surface = P - light_pos;
 
@@ -3558,8 +3601,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
                          p3 = TransformPoint(simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f), ltr.xform);
         const simd_fvec2 uv1 = simd_fvec2(v1.t), uv2 = simd_fvec2(v2.t), uv3 = simd_fvec2(v3.t);
 
-        const float r1 = sqrtf(fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]));
-        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = sqrtf(rand_light_uv.get<0>()), r2 = rand_light_uv.get<1>();
 
         const simd_fvec2 luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
         const simd_fvec4 lp = p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2);
@@ -3580,9 +3622,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (cos_theta > 0.0f) {
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
             if (l.tri.tex_index != 0xffffffff) {
-                const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
-                                                       fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
-                simd_fvec4 tex_color = SampleBilinear(textures, l.tri.tex_index, luvs, 0 /* lod */, tex_rand);
+                simd_fvec4 tex_color = SampleBilinear(textures, l.tri.tex_index, luvs, 0 /* lod */, rand_tex_uv);
                 if (l.tri.tex_index & TEX_YCOCG_BIT) {
                     tex_color = YCoCg_to_RGB(tex_color);
                 }
@@ -3593,8 +3633,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             }
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
-        const float rx = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float ry = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float rx = rand_light_uv.get<0>(), ry = rand_light_uv.get<1>();
 
         simd_fvec4 dir_and_pdf;
         if (sc.env.qtree_levels) {
@@ -3617,10 +3656,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         ls.col *= {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
 
         if (sc.env.env_map != 0xffffffff) {
-            const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
-                                                   fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
             ls.col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                         sc.env.env_map_rotation, tex_rand);
+                                         sc.env.env_map_rotation, rand_tex_uv);
         }
 
         ls.area = 1.0f;
@@ -4317,15 +4354,18 @@ float Ray::Ref::EvalTriLightFactor(const simd_fvec4 &P, const simd_fvec4 &ro, ui
 
 void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
                          uint32_t node_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
-                         const float random_seq[], Span<hit_data_t> out_inter) {
-    IntersectScene(rays, min_transp_depth, max_transp_depth, random_seq, sc, node_index, textures, out_inter);
+                         const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
+                         Span<hit_data_t> out_inter) {
+    IntersectScene(rays, min_transp_depth, max_transp_depth, rand_seq, rand_seed, iteration, sc, node_index, textures,
+                   out_inter);
     if (trace_lights && !sc.visible_lights.empty()) {
         IntersectAreaLights(rays, sc.lights, sc.light_wnodes, out_inter);
     }
 }
 
 void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val,
-                               const scene_data_t &sc, uint32_t node_index, const float random_seq[],
+                               const scene_data_t &sc, uint32_t node_index, const uint32_t rand_seq[],
+                               const uint32_t rand_seed, const int iteration,
                                const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
     simd_fvec4 clamp_val = simd_fvec4{FLT_MAX};
     if (_clamp_val) {
@@ -4340,7 +4380,8 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
         const int x = (sh_r.xy >> 16) & 0x0000ffff;
         const int y = sh_r.xy & 0x0000ffff;
 
-        simd_fvec4 rc = IntersectScene(sh_r, max_transp_depth, sc, node_index, random_seq, textures);
+        simd_fvec4 rc =
+            IntersectScene(sh_r, max_transp_depth, sc, node_index, rand_seq, rand_seed, iteration, textures);
         if (!sc.blocker_lights.empty()) {
             rc *= IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
         }
@@ -4853,7 +4894,8 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 }
 
 Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
-                                         const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
+                                         const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
+                                         const scene_data_t &sc, const uint32_t node_index,
                                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                                          int *out_shadow_rays_count, color_rgba_t *out_base_color,
@@ -4861,13 +4903,12 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     const simd_fvec4 I = make_fvec3(ray.d);
     const simd_fvec4 ro = make_fvec3(ray.o);
 
-    // offset sequence
-    random_seq += total_depth(ray) * RAND_DIM_BOUNCE_COUNT;
     // used to randomize random sequence among pixels
-    const float sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
+    const uint32_t px_hash = hash(ray.xy);
+    const uint32_t rand_hash = hash_combine(px_hash, rand_seed);
+    const uint32_t rand_dim = RAND_DIM_BASE_COUNT + total_depth(ray) * RAND_DIM_BOUNCE_COUNT;
 
-    const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
-                                           fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
+    const simd_fvec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
 
     if (!inter.mask) {
 #if USE_HIERARCHICAL_NEE
@@ -4955,7 +4996,10 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     // NOTE: transparency depth is not accounted here
     const int total_depth = diff_depth + spec_depth + refr_depth;
 
-    float mix_rand = fract(random_seq[RAND_DIM_BSDF_PICK] + sample_off[0]);
+    const simd_fvec2 mix_term_rand =
+        get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, iteration - 1, rand_seq);
+
+    float mix_rand = mix_term_rand.get<0>();
     float mix_weight = 1.0f;
 
     // resolve mix material
@@ -5029,7 +5073,12 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 #if USE_NEE
     light_sample_t ls;
     if (!sc.light_wnodes.empty() && mat->type != eShadingNode::Emissive) {
-        SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, random_seq, sample_off, ls);
+        const float rand_pick_light =
+            get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT_PICK, rand_hash, iteration - 1, rand_seq).get<0>();
+        const simd_fvec2 rand_light_uv =
+            get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT, rand_hash, iteration - 1, rand_seq);
+
+        SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, rand_pick_light, rand_light_uv, tex_rand, ls);
     }
     const float N_dot_L = dot(surf.N, ls.L);
 #endif
@@ -5076,8 +5125,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         roughness *= roughness_color.get<0>();
     }
 
-    const float rand_u = fract(random_seq[RAND_DIM_BSDF_U] + sample_off[0]);
-    const float rand_v = fract(random_seq[RAND_DIM_BSDF_V] + sample_off[1]);
+    const simd_fvec2 rand_bsdf = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF, rand_hash, iteration - 1, rand_seq);
+    const float rand_u = rand_bsdf.get<0>(), rand_v = rand_bsdf.get<1>();
 
     ray_data_t &new_ray = out_secondary_rays[*out_secondary_rays_count];
     memcpy(new_ray.ior, ray.ior, 4 * sizeof(float));
@@ -5236,7 +5285,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 #endif
 
     const float lum = fmaxf(new_ray.c[0], fmaxf(new_ray.c[1], new_ray.c[2]));
-    const float p = fract(random_seq[RAND_DIM_TERMINATE] + sample_off[0]);
+    const float p = mix_term_rand.get<1>();
     const float q = can_terminate_path ? fmaxf(0.05f, 1.0f - lum) : 0.0f;
     if (p >= q && lum > 0.0f && new_ray.pdf > 0.0f) {
         new_ray.pdf = fminf(new_ray.pdf, 1e6f);
@@ -5266,11 +5315,11 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 }
 
 void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
-                            const float *random_seq, const scene_data_t &sc, uint32_t node_index,
-                            const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                            int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
-                            int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                            color_rgba_t *out_depth_normal) {
+                            const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
+                            const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                            ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
+                            shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w, float mix_factor,
+                            color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
     auto clamp_direct = simd_fvec4{FLT_MAX};
     if (ps.clamp_direct != 0.0f) {
         clamp_direct.set<0>(ps.clamp_direct);
@@ -5287,7 +5336,7 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
 
         color_rgba_t base_color = {}, depth_normal = {};
         const color_rgba_t col =
-            ShadeSurface(ps, inter, r, random_seq, sc, node_index, textures, out_secondary_rays,
+            ShadeSurface(ps, inter, r, rand_seq, rand_seed, iteration, sc, node_index, textures, out_secondary_rays,
                          out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, &base_color, &depth_normal);
 
         const Ref::simd_fvec4 vcol = min(Ref::simd_fvec4{col.v}, clamp_direct);
@@ -5306,8 +5355,8 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
 }
 
 void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t> inters,
-                              Span<const ray_data_t> rays, const float *random_seq, const scene_data_t &sc,
-                              uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                              Span<const ray_data_t> rays, const uint32_t rand_seq[], uint32_t rand_seed, int iteration,
+                              const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
                               ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                               shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                               color_rgba_t *out_color) {
@@ -5326,7 +5375,7 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<c
         const int y = r.xy & 0x0000ffff;
 
         color_rgba_t col =
-            ShadeSurface(ps, inter, r, random_seq, sc, node_index, textures, out_secondary_rays,
+            ShadeSurface(ps, inter, r, rand_seq, rand_seed, iteration, sc, node_index, textures, out_secondary_rays,
                          out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, nullptr, nullptr);
         col.v[3] = 0.0f;
 

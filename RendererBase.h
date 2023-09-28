@@ -60,7 +60,6 @@ class RegionContext {
 
   public:
     int iteration = 0;                   ///< Number of rendered samples per pixel
-    std::unique_ptr<float[]> halton_seq; ///< Sequence of random 2D points
 
     explicit RegionContext(const rect_t &rect) : rect_(rect) {}
 
@@ -69,7 +68,6 @@ class RegionContext {
     /// Clear region context (used to start again)
     void Clear() {
         iteration = 0;
-        halton_seq = nullptr;
     }
 };
 

@@ -5,22 +5,10 @@
 
 INTERFACE_START(Types)
 
-const int RAND_DIM_FILTER_U = 0;
-const int RAND_DIM_FILTER_V = 1;
-const int RAND_DIM_LENS_U = 2;
-const int RAND_DIM_LENS_V = 3;
-const int RAND_DIM_BASE_COUNT = 4; // independent from bounce count
+#include "constants.h"
 
-const int RAND_DIM_BSDF_PICK = 0;
-const int RAND_DIM_BSDF_U = 1;
-const int RAND_DIM_BSDF_V = 2;
-const int RAND_DIM_LIGHT_PICK = 3;
-const int RAND_DIM_LIGHT_U = 4;
-const int RAND_DIM_LIGHT_V = 5;
-const int RAND_DIM_TERMINATE = 6;
-const int RAND_DIM_TEX_U = 7;
-const int RAND_DIM_TEX_V = 8;
-const int RAND_DIM_BOUNCE_COUNT = 9; // separate for each bounce
+const int RAND_SAMPLES_COUNT = 4096;
+const int RAND_DIMS_COUNT = 32;
 
 const int MAX_STACK_SIZE = 48;
 
@@ -64,14 +52,6 @@ const int MATERIAL_INDEX_BITS = 16383; // 0b0011111111111111
 #ifndef PI
 #define PI 3.141592653589793238463f
 #endif
-
-const int LIGHT_TYPE_SPHERE = 0;
-const int LIGHT_TYPE_DIR = 1;
-const int LIGHT_TYPE_LINE = 2;
-const int LIGHT_TYPE_RECT = 3;
-const int LIGHT_TYPE_DISK = 4;
-const int LIGHT_TYPE_TRI = 5;
-const int LIGHT_TYPE_ENV = 6;
 
 const int DiffuseNode = 0;
 const int GlossyNode = 1;
@@ -123,7 +103,7 @@ struct ray_data_t {
 	float c[3];
     float ior[4];
 	float cone_width, cone_spread;
-	int xy;
+	UINT_TYPE xy;
 	int depth;
 };
 
@@ -137,7 +117,7 @@ struct shadow_ray_t {
     // throughput color of ray
     float c[3];
     // 16-bit pixel coordinates of ray ((x << 16) | y)
-    int xy;
+    UINT_TYPE xy;
 };
 
 struct tri_accel_t {

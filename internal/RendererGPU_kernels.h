@@ -18,18 +18,18 @@
 #include "shaders/sort_scan_interface.h"
 #include "shaders/sort_scatter_interface.h"
 
-void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, const int hi,
-                                                   const rect_t &rect, const Buffer &random_seq,
+void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, const uint32_t rand_seed,
+                                                   const rect_t &rect, const Buffer &rand_seq,
                                                    const Buffer &filter_table, const int iteration,
                                                    const Texture2D &req_samples_img, const Buffer &inout_counters,
                                                    const Buffer &out_rays) {
-    const TransitionInfo res_transitions[] = {{&random_seq, eResState::ShaderResource},
+    const TransitionInfo res_transitions[] = {{&rand_seq, eResState::ShaderResource},
                                               {&req_samples_img, eResState::ShaderResource},
                                               {&inout_counters, eResState::UnorderedAccess},
                                               {&out_rays, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBufRO, PrimaryRayGen::HALTON_SEQ_BUF_SLOT, random_seq},
+    const Binding bindings[] = {{eBindTarget::SBufRO, PrimaryRayGen::RANDOM_SEQ_BUF_SLOT, rand_seq},
                                 {eBindTarget::SBufRO, PrimaryRayGen::FILTER_TABLE_BUF_SLOT, filter_table},
                                 {eBindTarget::Tex2D, PrimaryRayGen::REQUIRED_SAMPLES_IMG_SLOT, req_samples_img},
                                 {eBindTarget::SBufRW, PrimaryRayGen::INOUT_COUNTERS_BUF_SLOT, inout_counters},
@@ -46,7 +46,7 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
     uniform_params.rect[3] = rect.h;
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
-    uniform_params.hi = hi;
+    uniform_params.rand_seed = rand_seed;
 
     const float temp = std::tan(0.5f * cam.fov * PI / 180.0f);
     uniform_params.spread_angle = std::atan(2.0f * temp / float(h_));
@@ -82,12 +82,11 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
                                               {&inout_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {
-        {eBindTarget::SBufRO, IntersectAreaLights::RAYS_BUF_SLOT, rays},
-        {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights},
-        {eBindTarget::SBufRO, IntersectAreaLights::WNODES_BUF_SLOT, sc_data.light_wnodes},
-        {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
-        {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
+    const Binding bindings[] = {{eBindTarget::SBufRO, IntersectAreaLights::RAYS_BUF_SLOT, rays},
+                                {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights},
+                                {eBindTarget::SBufRO, IntersectAreaLights::WNODES_BUF_SLOT, sc_data.light_wnodes},
+                                {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
 
     IntersectAreaLights::Params uniform_params = {};
     uniform_params.img_size[0] = w_;

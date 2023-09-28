@@ -67,8 +67,6 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/Fixed.h
                           internal/FreelistAlloc.h
                           internal/FreelistAlloc.cpp
-                          internal/Halton.h
-                          internal/Halton.cpp
                           internal/HashMap32.h
                           internal/RastState.h
                           internal/RendererCPU.h
@@ -98,7 +96,6 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/VectorGPU.h
                           internal/UNetFilter.h
                           internal/UNetFilter.cpp
-                          internal/UniformIntDistribution.h
                           internal/TextureUtilsNEON.cpp
                           internal/TextureUtilsSSE2.cpp)
 

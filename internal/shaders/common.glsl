@@ -14,12 +14,14 @@
 #define USE_PATH_TERMINATION 1
 // #define FORCE_TEXTURE_LOD 0
 
-int hash(const int x) {
-    uint ret = uint(x);
-    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
-    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
-    ret = (ret >> 16) ^ ret;
-    return int(ret);
+uint hash(uint x) {
+    // finalizer from murmurhash3
+    x ^= x >> 16;
+    x *= 0x85ebca6bu;
+    x ^= x >> 13;
+    x *= 0xc2b2ae35u;
+    x ^= x >> 16;
+    return x;
 }
 
 float construct_float(uint m) {
@@ -31,6 +33,29 @@ float construct_float(uint m) {
 
     const float  f = uintBitsToFloat(m);   // Range [1:2]
     return f - 1.0;                        // Range [0:1]
+}
+
+uint hash_combine(uint seed, uint v) { return seed ^ (v + (seed << 6) + (seed >> 2)); }
+
+uint laine_karras_permutation(uint x, uint seed) {
+    x += seed;
+    x ^= x * 0x6c50b47cu;
+    x ^= x * 0xb82f1e52u;
+    x ^= x * 0xc7afe638u;
+    x ^= x * 0x8d22f6e6u;
+    return x;
+}
+
+uint nested_uniform_scramble_base2(uint x, uint seed) {
+    x = bitfieldReverse(x);
+    x = laine_karras_permutation(x, seed);
+    x = bitfieldReverse(x);
+    return x;
+}
+
+float scramble_unorm(const uint seed, uint val) {
+    val = nested_uniform_scramble_base2(val, seed);
+    return float(val >> 8) / 16777216.0;
 }
 
 float lum(const vec3 color) {

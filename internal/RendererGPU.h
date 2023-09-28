@@ -92,10 +92,6 @@ class Renderer : public RendererBase {
     Buffer filter_table_;
     void UpdateFilterTable(CommandBuffer cmd_buf, ePixelFilter filter, float filter_width);
 
-    std::vector<uint16_t> permutations_;
-    int loaded_halton_;
-    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
-
     // TODO: Optimize these!
     Texture2D temp_buf0_, dual_buf_[2], final_buf_, raw_final_buf_, raw_filtered_buf_;
     Texture2D temp_buf1_, base_color_buf_;
@@ -107,7 +103,7 @@ class Renderer : public RendererBase {
     Texture3D tonemap_lut_;
     eViewTransform loaded_view_transform_ = eViewTransform::Standard;
 
-    Buffer halton_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2],
+    Buffer random_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2],
         count_table_buf_, reduce_table_buf_;
     Buffer counters_buf_, indir_args_buf_;
 
@@ -147,49 +143,52 @@ class Renderer : public RendererBase {
 
     stats_t stats_ = {0};
 
-    void kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
-                                    const Buffer &random_seq, const Buffer &filter_table, int iteration,
+    void kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, uint32_t rand_seed, const rect_t &rect,
+                                    const Buffer &rand_seq, const Buffer &filter_table, int iteration,
                                     const Texture2D &req_samples_img, const Buffer &inout_counters,
                                     const Buffer &out_rays);
     void kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
-                               const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index,
-                               const float cam_fwd[3], float clip_dist, Span<const TextureAtlas> tex_atlases,
-                               const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
+                               const Buffer &rand_seq, uint32_t rand_seed, int iteration, const rect_t &rect,
+                               uint32_t node_index, const float cam_fwd[3], float clip_dist,
+                               Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                               const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &settings,
-                                      const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
-                                      uint32_t node_index, const float cam_fwd[3], float clip_dist,
-                                      Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                      const Buffer &rays, const Buffer &out_hits);
+                                      const scene_data_t &sc_data, const Buffer &rand_seq, uint32_t rand_seed,
+                                      int iteration, const rect_t &rect, uint32_t node_index, const float cam_fwd[3],
+                                      float clip_dist, Span<const TextureAtlas> tex_atlases,
+                                      const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                const Buffer &counters, const pass_settings_t &settings, const scene_data_t &sc_data,
-                               const Buffer &random_seq, int hi, uint32_t node_index, const float cam_fwd[3],
-                               float clip_dist, Span<const TextureAtlas> tex_atlases,
+                               const Buffer &rand_seq, uint32_t rand_seed, int iteration, uint32_t node_index,
+                               const float cam_fwd[3], float clip_dist, Span<const TextureAtlas> tex_atlases,
                                const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                       const pass_settings_t &settings, const scene_data_t &sc_data,
-                                      const Buffer &random_seq, int hi, uint32_t node_index, const float cam_fwd[3],
-                                      float clip_dist, Span<const TextureAtlas> tex_atlases,
+                                      const Buffer &rand_seq, uint32_t rand_seed, int iteration, uint32_t node_index,
+                                      const float cam_fwd[3], float clip_dist, Span<const TextureAtlas> tex_atlases,
                                       const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
                                      int indir_args_index, const Buffer &counters, const scene_data_t &sc_data,
-                                     const Buffer &random_seq, int hi, uint32_t node_index, float clamp_val,
-                                     Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                     const Buffer &sh_rays, const Texture2D &out_img);
+                                     const Buffer &rand_seq, uint32_t rand_seed, int iteration, uint32_t node_index,
+                                     float clamp_val, Span<const TextureAtlas> tex_atlases,
+                                     const BindlessTexData &bindless_tex, const Buffer &sh_rays,
+                                     const Texture2D &out_img);
     void kernel_IntersectAreaLights(CommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                  const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays,
-                                 const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
-                                 Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                 const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
-                                 const Buffer &inout_counters, const Texture2D &out_base_color,
-                                 const Texture2D &out_depth_normals);
+                                 const scene_data_t &sc_data, const Buffer &rand_seq, uint32_t rand_seed, int iteration,
+                                 const rect_t &rect, Span<const TextureAtlas> tex_atlases,
+                                 const BindlessTexData &bindless_tex, const Texture2D &out_img, const Buffer &out_rays,
+                                 const Buffer &out_sh_rays, const Buffer &inout_counters,
+                                 const Texture2D &out_base_color, const Texture2D &out_depth_normals);
     void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_val,
                                    const environment_t &env, const Buffer &indir_args, int indir_args_index,
                                    const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                   const Buffer &random_seq, int hi, Span<const TextureAtlas> tex_atlases,
-                                   const BindlessTexData &bindless_tex, const Texture2D &out_img,
-                                   const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters);
+                                   const Buffer &rand_seq, uint32_t rand_seed, int iteration,
+                                   Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                   const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+                                   const Buffer &inout_counters);
     void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(CommandBuffer cmd_buf, float main_mix_factor, float aux_mix_factor, const rect_t &rect,
                                int iteration, const Texture2D &temp_img, const Texture2D &temp_base_color,
@@ -450,21 +449,6 @@ inline void Ray::NS::Renderer::UpdateFilterTable(CommandBuffer cmd_buf, const eP
     filter_table_ = Buffer{"Filter Table", ctx_.get(), eBufType::Storage, FILTER_TABLE_SIZE * sizeof(float)};
 
     CopyBufferToBuffer(stage_buf, 0, filter_table_, 0, FILTER_TABLE_SIZE * sizeof(float), cmd_buf);
-}
-
-inline void Ray::NS::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
-    if (!seq) {
-        seq = std::make_unique<float[]>(HALTON_COUNT * HALTON_SEQ_LEN);
-    }
-
-    for (int i = 0; i < HALTON_SEQ_LEN; ++i) {
-        uint32_t prime_sum = 0;
-        for (int j = 0; j < HALTON_COUNT; ++j) {
-            seq[i * HALTON_COUNT + j] =
-                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
-            prime_sum += g_primes[j];
-        }
-    }
 }
 
 inline void Ray::NS::Renderer::InitUNetFilter(const bool alias_memory, unet_filter_properties_t &out_props) {

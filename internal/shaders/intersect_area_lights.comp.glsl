@@ -70,8 +70,8 @@ void main() {
         return;
     }
 
-    const int x = (g_rays[index].xy >> 16) & 0xffff;
-    const int y = (g_rays[index].xy & 0xffff);
+    const int x = int((g_rays[index].xy >> 16) & 0xffff);
+    const int y = int(g_rays[index].xy & 0xffff);
 #endif
 
     ray_data_t ray = g_rays[index];

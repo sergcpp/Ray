@@ -97,7 +97,7 @@ stages:
     - cp tests/test_data/errors.txt ./
   artifacts:
     when: always
-    name: "$env:CI_JOB_NAME"
+    name: "$CI_JOB_NAME"
     paths:
       - material_*.tga
       - errors.txt
@@ -117,7 +117,7 @@ stages:
     - cp tests/test_data/errors.txt ./
   artifacts:
     when: always
-    name: "$env:CI_JOB_NAME"
+    name: "$CI_JOB_NAME"
     paths:
       - material_*.tga
       - errors.txt
@@ -137,7 +137,7 @@ stages:
     - cp tests/test_data/errors.txt ./
   artifacts:
     when: always
-    name: "$env:CI_JOB_NAME"
+    name: "$CI_JOB_NAME"
     paths:
       - material_*.tga
       - errors.txt
@@ -157,7 +157,7 @@ stages:
     - cp tests/test_data/errors.txt ./
   artifacts:
     when: always
-    name: "$env:CI_JOB_NAME"
+    name: "$CI_JOB_NAME"
     paths:
       - material_*.tga
       - errors.txt

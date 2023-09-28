@@ -71,12 +71,23 @@ layout(std430, binding = VTX_INDICES_BUF_SLOT) readonly buffer VtxIndices {
 };
 
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
-    float g_random_seq[];
+    uint g_random_seq[];
 };
 
 layout(std430, binding = OUT_HITS_BUF_SLOT) writeonly buffer Hits {
     hit_data_t g_out_hits[];
 };
+
+vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
+    const uint i_seed = hash_combine(seed, dim),
+               x_seed = hash_combine(seed, 2 * dim + 0),
+               y_seed = hash_combine(seed, 2 * dim + 1);
+
+    const uint shuffled_dim = uint(nested_uniform_scramble_base2(dim, seed) & (RAND_DIMS_COUNT - 1));
+    const uint shuffled_i = uint(nested_uniform_scramble_base2(_sample, i_seed) & (RAND_SAMPLES_COUNT - 1));
+    return vec2(scramble_unorm(x_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
+                scramble_unorm(y_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1]));
+}
 
 #if !HWRT
 #define FETCH_TRI(j) g_tris[j]
@@ -173,8 +184,8 @@ void main() {
         return;
     }
 
-    const int x = (g_rays[index].xy >> 16) & 0xffff;
-    const int y = (g_rays[index].xy & 0xffff);
+    const int x = int((g_rays[index].xy >> 16) & 0xffff);
+    const int y = int(g_rays[index].xy & 0xffff);
 #endif // !INDIRECT
 
     vec3 ro = vec3(g_rays[index].o[0], g_rays[index].o[1], g_rays[index].o[2]);
@@ -191,10 +202,10 @@ void main() {
         inter.t = MAX_DIST;
     }
 
-    const vec2 rand_offset = vec2(construct_float(hash(g_rays[index].xy)),
-                                  construct_float(hash(hash(g_rays[index].xy))));
-    int rand_index = g_params.hi + total_depth(g_rays[index]) * RAND_DIM_BOUNCE_COUNT;
+    const uint px_hash = hash(g_rays[index].xy);
+    const uint rand_hash = hash_combine(px_hash, g_params.rand_seed);
 
+    uint rand_dim = RAND_DIM_BASE_COUNT + total_depth(g_rays[index]) * RAND_DIM_BOUNCE_COUNT;
     while (true) {
         const float t_val = inter.t;
 #if !HWRT
@@ -261,10 +272,10 @@ void main() {
         const float w = 1.0 - inter.u - inter.v;
         const vec2 uvs = vec2(v1.t[0], v1.t[1]) * w + vec2(v2.t[0], v2.t[1]) * inter.u + vec2(v3.t[0], v3.t[1]) * inter.v;
 
-        float trans_r = fract(g_random_seq[rand_index + RAND_DIM_BSDF_PICK] + rand_offset[0]);
+        const vec2 trans_term_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, g_params.iteration - 1);
+        const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
 
-        const vec2 tex_rand = vec2(fract(g_random_seq[rand_index + RAND_DIM_TEX_U] + rand_offset[0]),
-                                   fract(g_random_seq[rand_index + RAND_DIM_TEX_V] + rand_offset[1]));
+        float trans_r = trans_term_rand.x;
 
         // resolve mix material
         while (mat.type == MixNode) {
@@ -293,7 +304,7 @@ void main() {
 #endif
 
         const float lum = max(g_rays[index].c[0], max(g_rays[index].c[1], g_rays[index].c[2]));
-        const float p = fract(g_random_seq[rand_index + RAND_DIM_TERMINATE] + rand_offset[0]);
+        const float p = trans_term_rand.y;
         const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
         if (p < q || lum == 0.0 || (g_rays[index].depth >> 24) + 1 >= g_params.max_transp_depth) {
             // terminate ray
@@ -313,7 +324,7 @@ void main() {
         inter.t = t_val - inter.t;
 
         g_rays[index].depth += 0x01000000;
-        rand_index += RAND_DIM_BOUNCE_COUNT;
+        rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 
     inter.t += distance(vec3(g_rays[index].o[0], g_rays[index].o[1], g_rays[index].o[2]), ro);

@@ -9,18 +9,22 @@ struct Params {
     UVEC4_TYPE rect;
     VEC4_TYPE env_col;
     VEC4_TYPE back_col;
-    int hi;
+    //
+    int iteration;
     int li_count;
     int max_diff_depth;
     int max_spec_depth;
+    //
     int max_refr_depth;
     int max_transp_depth;
     int max_total_depth;
     int min_total_depth;
-    int min_transp_depth;
+    //
+    UINT_TYPE rand_seed;
     int env_qtree_levels;
     float env_rotation;
     float back_rotation;
+    //
     int env_light_index;
     float clamp_val;
     UINT_TYPE env_map_res;
