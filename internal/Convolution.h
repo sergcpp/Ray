@@ -318,6 +318,7 @@ template <int S, int InChannels1, int InChannels2, int InChannels3, int PxPitch,
 void Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w,
                          int in_h, int w, int h, int stride, const float weights[], const float biases[],
                          float output[], int output_stride) {
+    static_assert(S == 4 || S == 8 || S == 16, "!");
     if (!output_stride) {
         if (PostOp == ePostOp::Downscale) {
             output_stride = (w + 1) / 2;

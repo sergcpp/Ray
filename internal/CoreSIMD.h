@@ -1102,7 +1102,7 @@ force_inline long bbox_test_oct(const float inv_d[3], const float inv_d_o[3], co
 
     static const int LanesCount = (8 / S);
 
-    ITERATE_R(LanesCount, {
+    UNROLLED_FOR_R(i, LanesCount, {
         low = fmsub(inv_d[0], simd_fvec<S>{&bbox_min[0][S * i], simd_mem_aligned}, inv_d_o[0]);
         high = fmsub(inv_d[0], simd_fvec<S>{&bbox_max[0][S * i], simd_mem_aligned}, inv_d_o[0]);
         tmin = min(low, high);
@@ -1169,7 +1169,7 @@ force_inline long bbox_test_oct(const float p[3], const float bbox_min[3][8], co
 
     static const int LanesCount = (8 / S);
 
-    ITERATE_R(LanesCount, {
+    UNROLLED_FOR_R(i, LanesCount, {
         const simd_fvec<S> fmask = (simd_fvec<S>{&bbox_min[0][S * i], simd_mem_aligned} <= p[0]) &
                                    (simd_fvec<S>{&bbox_max[0][S * i], simd_mem_aligned} >= p[0]) &
                                    (simd_fvec<S>{&bbox_min[1][S * i], simd_mem_aligned} <= p[1]) &

@@ -5567,10 +5567,6 @@ template void Ray::Ref::Convolution3x3_GEMM<3, 3, 3, 4, 32, Ray::ePreOp::HDRTran
                                             Ray::ePreOp::PositiveNormalize, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
     int stride, const float weights[], const float biases[], float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_GEMM<64, 3, 3, 0, 4, 64, Ray::ePreOp::Upscale, Ray::ePreOp::HDRTransfer,
-                                            Ray::ePreOp::None, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
-    int stride, const float weights[], const float biases[], float output[], int output_stride);
 
 template <int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1, Ray::ePostOp PostOp,
           Ray::eActivation Activation>

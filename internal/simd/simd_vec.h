@@ -56,26 +56,29 @@
 #define UNROLLED_FOR(INDEX, COUNT, CODE) UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE)
 
 // Needed for cases when count is not a literal constant (e.g. template parameter)
-#define UNROLLED_FOR_S(INDEX, COUNT, CODE)                  \
-    switch(COUNT) {                                         \
-        case  0: UNROLLED_FOR_0(INDEX, COUNT, CODE); break; \
-        case  1: UNROLLED_FOR_1(INDEX, COUNT, CODE); break; \
-        case  2: UNROLLED_FOR_2(INDEX, COUNT, CODE); break; \
-        case  3: UNROLLED_FOR_3(INDEX, COUNT, CODE); break; \
-        case  4: UNROLLED_FOR_4(INDEX, COUNT, CODE); break; \
-        case  5: UNROLLED_FOR_5(INDEX, COUNT, CODE); break; \
-        case  6: UNROLLED_FOR_6(INDEX, COUNT, CODE); break; \
-        case  7: UNROLLED_FOR_7(INDEX, COUNT, CODE); break; \
-        case  8: UNROLLED_FOR_8(INDEX, COUNT, CODE); break; \
-        case  9: UNROLLED_FOR_9(INDEX, COUNT, CODE); break; \
-        case 10: UNROLLED_FOR_10(INDEX, COUNT, CODE); break;\
-        case 11: UNROLLED_FOR_11(INDEX, COUNT, CODE); break;\
-        case 12: UNROLLED_FOR_12(INDEX, COUNT, CODE); break;\
-        case 13: UNROLLED_FOR_13(INDEX, COUNT, CODE); break;\
-        case 14: UNROLLED_FOR_14(INDEX, COUNT, CODE); break;\
-        case 15: UNROLLED_FOR_15(INDEX, COUNT, CODE); break;\
-        case 16: UNROLLED_FOR_16(INDEX, COUNT, CODE); break;\
-        default:                                      break;\
+#define UNROLLED_FOR_S(INDEX, COUNT, CODE)                      \
+    static_assert(COUNT == 1 || COUNT == 2 || COUNT == 3 ||     \
+                  COUNT == 4 || COUNT == 7 || COUNT == 8 ||     \
+                  COUNT == 15 || COUNT == 16, "!");             \
+    switch(COUNT) {                                             \
+        /*case  0: UNROLLED_FOR_0(INDEX, COUNT, CODE); break;*/ \
+        case  1: UNROLLED_FOR_1(INDEX, COUNT, CODE); break;     \
+        case  2: UNROLLED_FOR_2(INDEX, COUNT, CODE); break;     \
+        case  3: UNROLLED_FOR_3(INDEX, COUNT, CODE); break;     \
+        case  4: UNROLLED_FOR_4(INDEX, COUNT, CODE); break;     \
+        /*case  5: UNROLLED_FOR_5(INDEX, COUNT, CODE); break;*/ \
+        /*case  6: UNROLLED_FOR_6(INDEX, COUNT, CODE); break;*/ \
+        case  7: UNROLLED_FOR_7(INDEX, COUNT, CODE); break;     \
+        case  8: UNROLLED_FOR_8(INDEX, COUNT, CODE); break;     \
+        /*case  9: UNROLLED_FOR_9(INDEX, COUNT, CODE); break;*/ \
+        /*case 10: UNROLLED_FOR_10(INDEX, COUNT, CODE); break;*/\
+        /*case 11: UNROLLED_FOR_11(INDEX, COUNT, CODE); break;*/\
+        /*case 12: UNROLLED_FOR_12(INDEX, COUNT, CODE); break;*/\
+        /*case 13: UNROLLED_FOR_13(INDEX, COUNT, CODE); break;*/\
+        /*case 14: UNROLLED_FOR_14(INDEX, COUNT, CODE); break;*/\
+        case 15: UNROLLED_FOR_15(INDEX, COUNT, CODE); break;    \
+        case 16: UNROLLED_FOR_16(INDEX, COUNT, CODE); break;    \
+        default:                                      break;    \
     }
 
 #define UNROLLED_FOR_R(INDEX, COUNT, CODE)              \
@@ -96,49 +99,6 @@
         case  3: { const int INDEX =  2 % COUNT; CODE } \
         case  2: { const int INDEX =  1 % COUNT; CODE } \
         case  1: { const int INDEX =  0 % COUNT; CODE } \
-    }
-
-#define ITERATE_R(n, exp)               \
-    if ((n) == 16) {                    \
-        { const int i = 15 % n; exp }   \
-        { const int i = 14 % n; exp }   \
-        { const int i = 13 % n; exp }   \
-        { const int i = 12 % n; exp }   \
-        { const int i = 11 % n; exp }   \
-        { const int i = 10 % n; exp }   \
-        { const int i = 9 % n; exp }    \
-        { const int i = 8 % n; exp }    \
-        { const int i = 7 % n; exp }    \
-        { const int i = 6 % n; exp }    \
-        { const int i = 5 % n; exp }    \
-        { const int i = 4 % n; exp }    \
-        { const int i = 3 % n; exp }    \
-        { const int i = 2 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 0 % n; exp }    \
-    } else if ((n) == 8) {              \
-        { const int i = 7 % n; exp }    \
-        { const int i = 6 % n; exp }    \
-        { const int i = 5 % n; exp }    \
-        { const int i = 4 % n; exp }    \
-        { const int i = 3 % n; exp }    \
-        { const int i = 2 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 0 % n; exp }    \
-    } else if ((n) == 4) {              \
-        { const int i = 3 % n; exp }    \
-        { const int i = 2 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 0 % n; exp }    \
-    } else if ((n) == 3) {              \
-        { const int i = 2 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 0 % n; exp }    \
-    } else if ((n) == 2) {              \
-        { const int i = 1 % n; exp }    \
-        { const int i = 0 % n; exp }    \
-    } else if ((n) == 1) {              \
-        { const int i = 0; exp }        \
     }
 // clang-format on
 
