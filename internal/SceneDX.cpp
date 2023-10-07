@@ -70,8 +70,16 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
 
+    bindless_tex_data_.tex_sizes = Buffer{"Texture sizes", ctx_, eBufType::Storage,
+                                          uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
+    Buffer tex_sizes_stage = Buffer{"Texture sizes Stage", ctx_, eBufType::Upload,
+                                    uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
+
+    uint32_t *p_tex_sizes = reinterpret_cast<uint32_t *>(tex_sizes_stage.Map());
+    memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
+
     for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        Texture2D &tex = bindless_textures_[it.index()];
+        const Texture2D &tex = bindless_textures_[it.index()];
 
         { // copy srv
             D3D12_CPU_DESCRIPTOR_HANDLE src_handle = tex.handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
@@ -82,13 +90,19 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
+
+        p_tex_sizes[it.index()] = (uint32_t(tex.params.w) << 16) | tex.params.h;
     }
+
+    tex_sizes_stage.Unmap();
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_gpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
     bindless_tex_data_.srv_descr_table.type = eDescrType::CBV_SRV_UAV;
     bindless_tex_data_.srv_descr_table.cpu_heap = srv_descr_heap;
     bindless_tex_data_.srv_descr_table.cpu_ptr = srv_gpu_handle.ptr;
     bindless_tex_data_.srv_descr_table.count = int(bindless_textures_.capacity());
+
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     { // Transition resources
         std::vector<TransitionInfo> img_transitions;
@@ -98,10 +112,16 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
             img_transitions.emplace_back(&tex, eResState::ShaderResource);
         }
 
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
+
+    CopyBufferToBuffer(tex_sizes_stage, 0, bindless_tex_data_.tex_sizes, 0, bindless_tex_data_.tex_sizes.size(),
+                       cmd_buf);
+
+    TransitionInfo trans(&bindless_tex_data_.tex_sizes, eResState::ShaderResource);
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, {&trans, 1});
+
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
 void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {

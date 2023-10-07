@@ -1679,6 +1679,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
 
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
 
@@ -1750,6 +1751,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
 
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
 
@@ -1879,6 +1881,7 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
@@ -1951,6 +1954,7 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
 
         // assert(tex_descr_set);
@@ -2002,6 +2006,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
 
         // assert(tex_descr_set);

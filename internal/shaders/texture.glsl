@@ -16,15 +16,23 @@ vec3 rgbe_to_rgb(vec4 rgbe) {
 #if BINDLESS
 
 layout(binding = TEXTURES_SAMPLER_SLOT) uniform sampler g_sampler;
+layout(binding = TEXTURES_SIZE_SLOT) readonly buffer TexSizes {
+    uint g_tex_sizes[];
+};
 layout(set = 1, binding = 0) uniform texture2D g_textures[];
 
-ivec2 texSize(const uint index) {
-    return textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], 0);
+ivec2 texSize(uint index) {
+    // NOTE: Disabled due to artifacts on AMD cards
+    // return textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], 0);
+
+    const uint packed_size = g_tex_sizes[index & 0x00ffffff];
+    return ivec2(int(packed_size >> 16), int(packed_size & 0xffff));
 }
 
-vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 rand, const bool maybe_YCoCg, const bool maybe_SRGB) {
+vec4 SampleBilinear(const uint index, const vec2 uvs, int lod, const vec2 rand, const bool maybe_YCoCg, const bool maybe_SRGB) {
 #if USE_STOCH_TEXTURE_FILTERING
-    ivec2 size = textureSize(sampler2D(g_textures[nonuniformEXT(index & 0x00ffffff)], g_sampler), lod);
+    //const ivec2 size = textureSize(sampler2D(g_textures[nonuniformEXT(index & 0x00ffffff)], g_sampler), lod);
+    const ivec2 size = max(texSize(index & 0x00ffffff) >> lod, ivec2(1, 1));
     vec4 res = textureLod(sampler2D(g_textures[nonuniformEXT(index & 0x00ffffff)], g_sampler), uvs + (rand - 0.5) / vec2(size), float(lod));
 #else // USE_STOCH_TEXTURE_FILTERING
     vec4 res = textureLod(sampler2D(g_textures[nonuniformEXT(index & 0x00ffffff)], g_sampler), uvs, float(lod));

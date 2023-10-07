@@ -17,6 +17,7 @@ struct BindlessTexData {
     VkDescriptorSetLayout descr_layout = {}, rt_descr_layout = {};
     VkDescriptorSet descr_set = {}, rt_descr_set = {};
     Sampler shared_sampler;
+    Buffer tex_sizes;
 
     explicit BindlessTexData(Context *ctx) : descr_pool(ctx) {}
 };

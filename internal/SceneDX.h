@@ -16,6 +16,7 @@ struct BindlessTexData {
     DescrPool<BumpAlloc> srv_descr_pool;
     DescrTable srv_descr_table;
     Sampler shared_sampler;
+    Buffer tex_sizes;
 
     explicit BindlessTexData(Context *ctx) : srv_descr_pool(ctx, eDescrType::CBV_SRV_UAV) {}
 };
