@@ -12,6 +12,7 @@
 #define USE_NEE 1
 #define USE_HIERARCHICAL_NEE 1
 #define USE_PATH_TERMINATION 1
+#define USE_SPHERICAL_AREA_LIGHT_SAMPLING 1
 // #define FORCE_TEXTURE_LOD 0
 
 uint hash(uint x) {
@@ -128,6 +129,85 @@ float get_texture_lod(const ivec2 res, const float lambda) {
 
 vec3 TransformNormal(vec3 n, mat4 inv_xform) {
     return (transpose(inv_xform) * vec4(n, 0.0)).xyz;
+}
+
+//
+// asinf/acosf implemantation. Taken from apple libm source code
+//
+
+// Return arcsine(x) given that .57 < x
+float asin_tail(const float x) {
+    return (PI / 2) - ((x + 2.71745038) * x + 14.0375338) * (0.00440413551 * ((x - 8.31223679) * x + 25.3978882)) *
+                          sqrt(1 - x);
+}
+
+// Taken from apple libm source code
+float portable_asinf(float x) {
+    const bool negate = (x < 0.0);
+    if (abs(x) > 0.57) {
+        const float ret = asin_tail(abs(x));
+        return negate ? -ret : ret;
+    } else {
+        const float x2 = x * x;
+        return float(x + (0.0517513789 * ((x2 + 1.83372748) * x2 + 1.56678128)) * x *
+                             (x2 * ((x2 - 1.48268414) * x2 + 2.05554748)));
+    }
+}
+
+float acos_positive_tail(const float x) {
+    return (((x + 2.71850395) * x + 14.7303705)) * (0.00393401226 * ((x - 8.60734272) * x + 27.0927486)) *
+           sqrt(1 - x);
+}
+
+float acos_negative_tail(const float x) {
+    return PI - (((x - 2.71850395) * x + 14.7303705)) * (0.00393401226 * ((x + 8.60734272) * x + 27.0927486)) *
+                    sqrt(1 + x);
+}
+
+float portable_acosf(float x) {
+    if (x < -0.62) {
+        return acos_negative_tail(x);
+    } else if (x <= 0.62) {
+        const float x2 = x * x;
+        return (PI / 2) - x -
+               (0.0700945929 * x * ((x2 + 1.57144082) * x2 + 1.25210774)) *
+                   (x2 * ((x2 - 1.53757966) * x2 + 1.89929986));
+    } else {
+        return acos_positive_tail(x);
+    }
+}
+
+// Equivalent to acosf(dot(a, b)), but more numerically stable
+// Taken from PBRT source code
+float angle_between(const vec3 v1, const vec3 v2) {
+    if (dot(v1, v2) < 0) {
+        return PI - 2 * portable_asinf(length(v1 + v2) / 2);
+    } else {
+        return 2 * portable_asinf(length(v2 - v1) / 2);
+    }
+}
+
+// Gram-Schmidt method
+vec3 orthogonalize(const vec3 a, const vec3 b) {
+    // we assume that a is normalized
+    return normalize(b - dot(a, b) * a);
+}
+
+vec3 slerp(const vec3 start, const vec3 end, const float percent) {
+    // Dot product - the cosine of the angle between 2 vectors.
+    float cos_theta = dot(start, end);
+    // Clamp it to be in the range of Acos()
+    // This may be unnecessary, but floating point
+    // precision can be a fickle mistress.
+    cos_theta = clamp(cos_theta, -1.0, 1.0);
+    // Acos(dot) returns the angle between start and end,
+    // And multiplying that by percent returns the angle between
+    // start and the final result.
+    const float theta = portable_acosf(cos_theta) * percent;
+    vec3 relative_vec = normalize(end - start * cos_theta);
+    // Orthonormal basis
+    // The final result.
+    return start * cos(theta) + relative_vec * sin(theta);
 }
 
 int total_depth(const ray_data_t r) {

@@ -44,14 +44,16 @@ const int MATERIAL_INDEX_BITS = 16383; // 0b0011111111111111
 #endif
 
 #ifndef HIT_BIAS
-#define HIT_BIAS 0.00001f
+#define HIT_BIAS 0.00001
 #endif
 #ifndef FLT_MIN
-#define FLT_MIN 1.175494351e-38f
+#define FLT_MIN 1.175494351e-38
 #endif
 #ifndef PI
-#define PI 3.141592653589793238463f
+#define PI 3.141592653589793238463
 #endif
+
+#define SPHERICAL_AREA_THRESHOLD 0.00005 // non-zero minimal spherical area to sample using spherical method (avoids precision issues)
 
 const int DiffuseNode = 0;
 const int GlossyNode = 1;

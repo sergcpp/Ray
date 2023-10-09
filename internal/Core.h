@@ -72,6 +72,9 @@ const float HIT_BIAS = 0.00001f;
 const float HIT_EPS = 0.000001f;
 const float FLT_EPS = 0.0000001f;
 
+const float SphericalAreaThreshold =
+    0.00005f; // non-zero minimal spherical area to sample using spherical method (avoids precision issues)
+
 const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+30F; // 3.402823466e+38F

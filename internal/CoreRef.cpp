@@ -18,6 +18,7 @@
 #define VECTORIZE_TRI_INTERSECTION 1
 // #define FORCE_TEXTURE_LOD 0
 #define USE_STOCH_TEXTURE_FILTERING 1
+#define USE_SPHERICAL_AREA_LIGHT_SAMPLING 1
 #define USE_SAFE_MATH 1
 
 namespace Ray {
@@ -626,6 +627,14 @@ force_inline float safe_sqrt(float val) {
     return sqrtf(fmaxf(val, 0.0f));
 #else
     return sqrtf(val);
+#endif
+}
+
+force_inline float safe_div(const float a, const float b) {
+#if USE_SAFE_MATH
+    return b != 0.0f ? (a / b) : FLT_MAX;
+#else
+    return (a / b)
 #endif
 }
 
@@ -1402,6 +1411,139 @@ simd_fvec2 get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const 
                                      rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
                       scramble_unorm(hash_combine(seed, 2 * dim + 1),
                                      rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1])};
+}
+
+// Gram-Schmidt method
+force_inline simd_fvec4 orthogonalize(const simd_fvec4 &a, const simd_fvec4 &b) {
+    // we assume that a is normalized
+    return normalize(b - dot(a, b) * a);
+}
+
+force_inline simd_fvec4 slerp(const simd_fvec4 &start, const simd_fvec4 &end, const float percent) {
+    // Dot product - the cosine of the angle between 2 vectors.
+    float cos_theta = dot(start, end);
+    // Clamp it to be in the range of Acos()
+    // This may be unnecessary, but floating point
+    // precision can be a fickle mistress.
+    cos_theta = clamp(cos_theta, -1.0f, 1.0f);
+    // Acos(dot) returns the angle between start and end,
+    // And multiplying that by percent returns the angle between
+    // start and the final result.
+    const float theta = acosf(cos_theta) * percent;
+    simd_fvec4 relative_vec = safe_normalize(end - start * cos_theta);
+    // Orthonormal basis
+    // The final result.
+    return start * cosf(theta) + relative_vec * sinf(theta);
+}
+
+//
+// asinf/acosf implemantation. Taken from apple libm source code
+//
+
+// Return arcsine(x) given that .57 < x
+force_inline float asin_tail(const float x) {
+    return (PI / 2) - ((x + 2.71745038f) * x + 14.0375338f) * (0.00440413551f * ((x - 8.31223679f) * x + 25.3978882f)) *
+                          sqrtf(1 - x);
+}
+
+float portable_asinf(float x) {
+    if (fabsf(x) > 0.57f) {
+        const float ret = asin_tail(fabsf(x));
+        return (x < 0.0f) ? -ret : ret;
+    } else {
+        const float x2 = x * x;
+        return x + (0.0517513789f * ((x2 + 1.83372748f) * x2 + 1.56678128f)) * x *
+                       (x2 * ((x2 - 1.48268414f) * x2 + 2.05554748f));
+    }
+}
+
+force_inline float acos_positive_tail(const float x) {
+    return (((x + 2.71850395f) * x + 14.7303705f)) * (0.00393401226f * ((x - 8.60734272f) * x + 27.0927486f)) *
+           sqrtf(1 - x);
+}
+
+force_inline float acos_negative_tail(const float x) {
+    return PI - (((x - 2.71850395f) * x + 14.7303705f)) * (0.00393401226f * ((x + 8.60734272f) * x + 27.0927486f)) *
+                    sqrtf(1 + x);
+}
+
+float portable_acosf(float x) {
+    if (x < -0.62f) {
+        return acos_negative_tail(x);
+    } else if (x <= 0.62f) {
+        const float x2 = x * x;
+        return (PI / 2) - x -
+               (0.0700945929f * x * ((x2 + 1.57144082f) * x2 + 1.25210774f)) *
+                   (x2 * ((x2 - 1.53757966f) * x2 + 1.89929986f));
+    } else {
+        return acos_positive_tail(x);
+    }
+}
+
+// Equivalent to acosf(dot(a, b)), but more numerically stable
+// Taken from PBRT source code
+force_inline float angle_between(const simd_fvec4 &v1, const simd_fvec4 &v2) {
+    if (dot(v1, v2) < 0) {
+        return PI - 2 * portable_asinf(length(v1 + v2) / 2);
+    } else {
+        return 2 * portable_asinf(length(v2 - v1) / 2);
+    }
+}
+
+// "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
+// Based on https://www.shadertoy.com/view/4tGGzd
+float SampleSphericalTriangle(const simd_fvec4 &A, const simd_fvec4 &B, const simd_fvec4 &C, const simd_fvec2 Xi,
+                              simd_fvec4 &w) {
+    // calculate internal angles of spherical triangle: alpha, beta and gamma
+    const simd_fvec4 BA = orthogonalize(A, B - A);
+    const simd_fvec4 CA = orthogonalize(A, C - A);
+    const simd_fvec4 AB = orthogonalize(B, A - B);
+    const simd_fvec4 CB = orthogonalize(B, C - B);
+    const simd_fvec4 BC = orthogonalize(C, B - C);
+    const simd_fvec4 AC = orthogonalize(C, A - C);
+
+    const float alpha = angle_between(BA, CA);
+    const float beta = angle_between(AB, CB);
+    const float gamma = angle_between(BC, AC);
+
+    const float area = alpha + beta + gamma - PI;
+    if (area <= SphericalAreaThreshold) {
+        return 0.0f;
+    }
+
+    // calculate arc lengths for edges of spherical triangle
+    // const float a = portable_acosf(clamp(dot(B, C), -1.0f, 1.0f));
+    const float b = portable_acosf(clamp(dot(C, A), -1.0f, 1.0f));
+    const float c = portable_acosf(clamp(dot(A, B), -1.0f, 1.0f));
+
+    // Use one random variable to select the new area
+    const float area_S = Xi.get<0>() * area;
+
+    // Save the sine and cosine of the angle delta
+    const float p = sinf(area_S - alpha);
+    const float q = cosf(area_S - alpha);
+
+    // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
+    const float u = q - cosf(alpha);
+    const float v = p + sinf(alpha) * cosf(c);
+
+    // Compute the s coordinate as normalized arc length from A to C_s
+    const float denom = ((v * p + u * q) * sinf(alpha));
+    const float s =
+        (1.0f / b) * portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
+
+    // Compute the third vertex of the sub - triangle
+    const simd_fvec4 C_s = slerp(A, C, s);
+
+    // Compute the t coordinate using C_s and Xi[1]
+    const float denom2 = portable_acosf(clamp(dot(C_s, B), -1.0f, 1.0f));
+    const float t = safe_div(portable_acosf(clamp(1.0f - Xi.get<1>() * (1.0f - dot(C_s, B)), -1.0f, 1.0f)), denom2);
+
+    // Construct the corresponding point on the sphere.
+    w = slerp(B, C_s, t);
+
+    // return pdf
+    return (1.0f / area);
 }
 
 } // namespace Ref
@@ -3297,8 +3439,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         const float w = 1.0f - inter.u - inter.v;
         const simd_fvec2 sh_uvs = simd_fvec2(v1.t) * w + simd_fvec2(v2.t) * inter.u + simd_fvec2(v3.t) * inter.v;
 
-        const simd_fvec2 tex_rand =
-            get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
+        const simd_fvec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
 
         struct {
             uint32_t index;
@@ -3592,26 +3733,53 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const transform_t &ltr = sc.transforms[l.tri.xform_index];
         const uint32_t ltri_index = l.tri.tri_index;
 
-        const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]];
-        const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
-        const vertex_t &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
+        const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]],
+                       &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]],
+                       &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
 
         const simd_fvec4 p1 = TransformPoint(simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f), ltr.xform),
                          p2 = TransformPoint(simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f), ltr.xform),
                          p3 = TransformPoint(simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f), ltr.xform);
         const simd_fvec2 uv1 = simd_fvec2(v1.t), uv2 = simd_fvec2(v2.t), uv3 = simd_fvec2(v3.t);
 
-        const float r1 = sqrtf(rand_light_uv.get<0>()), r2 = rand_light_uv.get<1>();
-
-        const simd_fvec2 luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
-        const simd_fvec4 lp = p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2);
-        simd_fvec4 light_forward = cross(p2 - p1, p3 - p1);
+        const simd_fvec4 e1 = p2 - p1, e2 = p3 - p1;
+        simd_fvec4 light_forward = cross(e1, e2);
         ls.area = 0.5f * length(light_forward);
         light_forward = normalize(light_forward);
 
-        ls.L = lp - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        simd_fvec4 lp;
+        simd_fvec2 luvs;
+        float pdf;
+
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+        // Spherical triangle sampling
+        const simd_fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
+        pdf = SampleSphericalTriangle(A, B, C, rand_light_uv, ls.L);
+        if (pdf > 0.0f) {
+            // find u, v of intersection point
+            const simd_fvec4 pvec = cross(ls.L, e2);
+            const simd_fvec4 tvec = P - p1, qvec = cross(tvec, e1);
+
+            const float inv_det = 1.0f / dot(e1, pvec);
+            const float tri_u = dot(tvec, pvec) * inv_det, tri_v = dot(ls.L, qvec) * inv_det;
+
+            lp = (1.0f - tri_u - tri_v) * p1 + tri_u * p2 + tri_v * p3;
+            luvs = (1.0f - tri_u - tri_v) * uv1 + tri_u * uv2 + tri_v * uv3;
+        } else
+#endif
+        {
+            // Simple area sampling
+            const float r1 = sqrtf(rand_light_uv.get<0>()), r2 = rand_light_uv.get<1>();
+            luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
+            lp = p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2);
+
+            ls.L = lp - P;
+            const float ls_dist = length(ls.L);
+            ls.L /= ls_dist;
+
+            const float cos_theta = -dot(ls.L, light_forward);
+            pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
+        }
 
         float cos_theta = -dot(ls.L, light_forward);
         ls.lp = offset_ray(lp, cos_theta >= 0.0f ? light_forward : -light_forward);
@@ -3620,7 +3788,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         }
 
         if (cos_theta > 0.0f) {
-            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
+            ls.pdf = pdf;
             if (l.tri.tex_index != 0xffffffff) {
                 simd_fvec4 tex_color = SampleBilinear(textures, l.tri.tex_index, luvs, 0 /* lod */, rand_tex_uv);
                 if (l.tri.tex_index & TEX_YCOCG_BIT) {
@@ -5198,7 +5366,28 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
             const float cos_theta = fabsf(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0f) {
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+                const simd_fvec4 P = TransformPoint(ro, tr->inv_xform);
+                const simd_fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
+
+                const simd_fvec4 BA = orthogonalize(A, B - A);
+                const simd_fvec4 CA = orthogonalize(A, C - A);
+                const simd_fvec4 AB = orthogonalize(B, A - B);
+                const simd_fvec4 CB = orthogonalize(B, C - B);
+                const simd_fvec4 BC = orthogonalize(C, B - C);
+                const simd_fvec4 AC = orthogonalize(C, A - C);
+                const float alpha = angle_between(BA, CA);
+                const float beta = angle_between(AB, CB);
+                const float gamma = angle_between(BC, AC);
+                const float area = alpha + beta + gamma - PI;
+
+                float light_pdf = safe_div_pos(1.0f, area * pdf_factor);
+                if (area < SphericalAreaThreshold) {
+                    light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
+                }
+#else
                 const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
+#endif
                 const float bsdf_pdf = ray.pdf;
 
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);

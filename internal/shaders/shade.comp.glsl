@@ -229,6 +229,62 @@ vec3 ensure_valid_reflection(vec3 Ng, vec3 I, vec3 N) {
     return N_new[0] * X + N_new[1] * Ng;
 }
 
+// "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
+// Based on https://www.shadertoy.com/view/4tGGzd
+float SampleSphericalTriangle(const vec3 A, const vec3 B, const vec3 C, const vec2 Xi, out vec3 w) {
+    // calculate internal angles of spherical triangle: alpha, beta and gamma
+    const vec3 BA = orthogonalize(A, B - A);
+    const vec3 CA = orthogonalize(A, C - A);
+    const vec3 AB = orthogonalize(B, A - B);
+    const vec3 CB = orthogonalize(B, C - B);
+    const vec3 BC = orthogonalize(C, B - C);
+    const vec3 AC = orthogonalize(C, A - C);
+
+    const float alpha = angle_between(BA, CA);
+    const float beta = angle_between(AB, CB);
+    const float gamma = angle_between(BC, AC);
+
+    const float area = alpha + beta + gamma - PI;
+    if (area <= SPHERICAL_AREA_THRESHOLD) {
+        return 0.0;
+    }
+
+    // calculate arc lengths for edges of spherical triangle
+    const float b = portable_acosf(clamp(dot(C, A), -1.0, 1.0));
+    const float c = portable_acosf(clamp(dot(A, B), -1.0, 1.0));
+
+    // Use one random variable to select the new area
+    const float area_S = Xi.x * area;
+
+    // Save the sine and cosine of the angle delta
+    const float p = sin(area_S - alpha);
+    const float q = cos(area_S - alpha);
+
+    // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
+    const float u = q - cos(alpha);
+    const float v = p + sin(alpha) * cos(c);
+
+    // Compute the s coordinate as normalized arc length from A to C_s
+    const float denom = (v * p + u * q) * sin(alpha);
+    const float a1 = ((v * q - u * p) * cos(alpha) - v) / denom;
+    const float s = (1.0 / b) * portable_acosf(clamp(a1, -1.0, 1.0));
+
+    // Compute the third vertex of the sub - triangle
+    const vec3 C_s = slerp(A, C, s);
+
+    // Compute the t coordinate using C_s and Xi[1]
+    const float b0 = dot(C_s, B);
+    const float denom2 = portable_acosf(clamp(b0, -1.0, 1.0));
+    const float c0 = 1.0 - Xi.y * (1.0 - dot(C_s, B));
+    const float t = portable_acosf(clamp(c0, -1.0, 1.0)) / denom2;
+
+    // Construct the corresponding point on the sphere.
+    w = slerp(B, C_s, t);
+
+    // return pdf
+    return (1.0 / area);
+}
+
 struct lobe_weights_t {
     float diffuse, specular, clearcoat, refraction;
 };
@@ -1029,19 +1085,45 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
                    uv2 = vec2(v2.t[0], v2.t[1]),
                    uv3 = vec2(v3.t[0], v3.t[1]);
 
-        float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
-        r1 = sqrt(r1);
-
-        const vec2 luvs = uv1 * (1.0 - r1) + r1 * (uv2 * (1.0 - r2) + uv3 * r2);
-        const vec3 lp = p1 * (1.0 - r1) + r1 * (p2 * (1.0 - r2) + p3 * r2);
-
-        vec3 light_forward = cross(p2 - p1, p3 - p1);
+        const vec3 e1 = p2 - p1, e2 = p3 - p1;
+        vec3 light_forward = cross(e1, e2);
         ls.area = 0.5 * length(light_forward);
         light_forward = normalize(light_forward);
 
-        ls.L = lp - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        vec3 lp;
+        vec2 luvs;
+        float pdf;
+
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+        // Spherical triangle sampling
+        const vec3 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
+        pdf = SampleSphericalTriangle(A, B, C, rand_light_uv, ls.L);
+        if (pdf > 0.0) {
+            // find u, v of intersection point
+            const vec3 pvec = cross(ls.L, e2);
+            const vec3 tvec = P - p1, qvec = cross(tvec, e1);
+
+            const float inv_det = 1.0 / dot(e1, pvec);
+            const float tri_u = dot(tvec, pvec) * inv_det, tri_v = dot(ls.L, qvec) * inv_det;
+
+            lp = (1.0 - tri_u - tri_v) * p1 + tri_u * p2 + tri_v * p3;
+            luvs = (1.0 - tri_u - tri_v) * uv1 + tri_u * uv2 + tri_v * uv3;
+        } else
+#endif
+        {
+            // Flat triangle sampling
+            const float r1 = sqrt(rand_light_uv.x), r2 = rand_light_uv.y;
+
+            luvs = uv1 * (1.0 - r1) + r1 * (uv2 * (1.0 - r2) + uv3 * r2);
+            lp = p1 * (1.0 - r1) + r1 * (p2 * (1.0 - r2) + p3 * r2);
+
+            ls.L = lp - P;
+            const float ls_dist = length(ls.L);
+            ls.L /= ls_dist;
+
+            const float cos_theta = -dot(ls.L, light_forward);
+            pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
+        }
 
         float cos_theta = -dot(ls.L, light_forward);
         ls.lp = offset_ray(lp, cos_theta >= 0.0 ? light_forward : -light_forward);
@@ -1049,8 +1131,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
             cos_theta = abs(cos_theta);
         }
         [[dont_flatten]] if (cos_theta > 0.0) {
-            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
-
+            ls.pdf = pdf;
             const uint tex_index = floatBitsToUint(l.TRI_TEX_INDEX);
             if (tex_index != 0xffffffff) {
                 ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, rand_tex_uv, true /* YCoCg */, true /* SRGB */).xyz;
@@ -2022,7 +2103,29 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
             const float cos_theta = abs(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0) {
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+                const vec3 P = (tr.inv_xform * vec4(ro, 1.0)).xyz;
+                const vec3 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
+
+                const vec3 BA = orthogonalize(A, B - A);
+                const vec3 CA = orthogonalize(A, C - A);
+                const vec3 AB = orthogonalize(B, A - B);
+                const vec3 CB = orthogonalize(B, C - B);
+                const vec3 BC = orthogonalize(C, B - C);
+                const vec3 AC = orthogonalize(C, A - C);
+
+                const float alpha = angle_between(BA, CA);
+                const float beta = angle_between(AB, CB);
+                const float gamma = angle_between(BC, AC);
+                const float area = alpha + beta + gamma - PI;
+
+                float light_pdf = 1.0 / (area * pdf_factor);
+                if (area <= SPHERICAL_AREA_THRESHOLD) {
+                    light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
+                }
+#else // USE_SPHERICAL_AREA_LIGHT_SAMPLING
                 const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
+#endif // USE_SPHERICAL_AREA_LIGHT_SAMPLING
                 const float bsdf_pdf = ray.pdf;
 
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);

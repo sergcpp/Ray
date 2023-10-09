@@ -25,6 +25,7 @@
 #define USE_PATH_TERMINATION 1
 // #define FORCE_TEXTURE_LOD 0
 #define USE_STOCH_TEXTURE_FILTERING 1
+#define USE_SPHERICAL_AREA_LIGHT_SAMPLING 1
 #define USE_SAFE_MATH 1
 
 namespace Ray {
@@ -311,6 +312,7 @@ template <int S>
 void TransformRay(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const float *xform, simd_fvec<S> out_ro[3],
                   simd_fvec<S> out_rd[3]);
 template <int S> void TransformPoint(const simd_fvec<S> p[3], const float *xform, simd_fvec<S> out_p[3]);
+template <int S> void TransformPoint(const simd_fvec<S> xform[16], simd_fvec<S> out_p[3]);
 template <int S> void TransformDirection(const simd_fvec<S> xform[16], simd_fvec<S> p[3]);
 template <int S> void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
 template <int S> void TransformNormal(const simd_fvec<S> n[3], const simd_fvec<S> inv_xform[16], simd_fvec<S> out_n[3]);
@@ -1508,7 +1510,7 @@ template <int S> force_inline void cross(const simd_fvec<S> v1[3], const simd_fv
     res[2] = v1[0] * v2[1] - v1[1] * v2[0];
 }
 
-template <int S> force_inline void cross(const simd_fvec<S> &v1, const simd_fvec<S> &v2, simd_fvec<S> &res) {
+template <int S> force_inline void cross(const simd_fvec<S> v1[3], const float v2[3], simd_fvec<S> res[3]) {
     res[0] = v1[1] * v2[2] - v1[2] * v2[1];
     res[1] = v1[2] * v2[0] - v1[0] * v2[2];
     res[2] = v1[0] * v2[1] - v1[1] * v2[0];
@@ -1626,6 +1628,180 @@ void get_scrambled_2d_rand(const simd_uvec<S> &dim, const simd_uvec<S> &seed, co
 
     out_val[0] = scramble_unorm(x_seed, gather(rand_seq, shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0));
     out_val[1] = scramble_unorm(y_seed, gather(rand_seq, shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1));
+}
+
+// Gram-Schmidt method
+template <int S>
+force_inline void orthogonalize(const simd_fvec<S> a[3], const simd_fvec<S> b[3], simd_fvec<S> out_v[3]) {
+    // we assume that a is normalized
+    const simd_fvec<S> temp = dot3(a, b);
+    UNROLLED_FOR(i, 3, { out_v[i] = b[i] - temp * a[i]; })
+    normalize(out_v);
+}
+
+template <int S> force_inline simd_fvec<S> acos(const simd_fvec<S> &v) {
+    simd_fvec<S> ret;
+    UNROLLED_FOR_S(i, S, { ret.set(i, acosf(v[i])); })
+    return ret;
+}
+
+template <int S> force_inline simd_fvec<S> asin(const simd_fvec<S> &v) {
+    simd_fvec<S> ret;
+    UNROLLED_FOR_S(i, S, { ret.set(i, asinf(v[i])); })
+    return ret;
+}
+
+template <int S>
+force_inline void slerp(const simd_fvec<S> start[3], const simd_fvec<S> end[3], const simd_fvec<S> &percent,
+                        simd_fvec<S> out_v[3]) {
+    // Dot product - the cosine of the angle between 2 vectors.
+    simd_fvec<S> cos_theta = dot3(start, end);
+    // Clamp it to be in the range of Acos()
+    // This may be unnecessary, but floating point
+    // precision can be a fickle mistress.
+    cos_theta = clamp(cos_theta, -1.0f, 1.0f);
+    // Acos(dot) returns the angle between start and end,
+    // And multiplying that by percent returns the angle between
+    // start and the final result.
+    const simd_fvec<S> theta = acos(cos_theta) * percent;
+    simd_fvec<S> relative_vec[3];
+    UNROLLED_FOR(i, 3, { relative_vec[i] = end[i] - start[i] * cos_theta; })
+    safe_normalize(relative_vec);
+    // Orthonormal basis
+    // The final result.
+    const simd_fvec<S> cos_theta2 = cos(theta), sin_theta = sin(theta);
+    UNROLLED_FOR(i, 3, { out_v[i] = start[i] * cos_theta2 + relative_vec[i] * sin_theta; })
+}
+
+// Return arcsine(x) given that .57 < x
+template <int S> force_inline simd_fvec<S> asin_tail(const simd_fvec<S> &x) {
+    return (PI / 2) - ((x + 2.71745038f) * x + 14.0375338f) * (0.00440413551f * ((x - 8.31223679f) * x + 25.3978882f)) *
+                          sqrt(1 - x);
+}
+
+template <int S> force_inline simd_fvec<S> portable_asinf(const simd_fvec<S> &x) {
+    simd_fvec<S> ret;
+
+    const simd_fvec<S> mask = abs(x) > 0.57f;
+    where(mask, ret) = asin_tail(abs(x));
+    where(x < 0.0f, ret) = -ret;
+
+    const simd_fvec<S> x2 = x * x;
+    where(~mask, ret) = x + (0.0517513789f * ((x2 + 1.83372748f) * x2 + 1.56678128f)) * x *
+                                (x2 * ((x2 - 1.48268414f) * x2 + 2.05554748f));
+
+    return ret;
+}
+
+// Equivalent to acosf(dot(a, b)), but more numerically stable
+// Taken from PBRT source code
+template <int S> simd_fvec<S> angle_between(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3]) {
+    const simd_fvec<S> dot_mask = dot3(v1, v2) < 0;
+
+    simd_fvec<S> arg[3];
+    UNROLLED_FOR(i, 3, {
+        arg[i] = v2[i] - v1[i];
+        where(dot_mask, arg[i]) = v1[i] + v2[i];
+    })
+
+    simd_fvec<S> ret = 2 * portable_asinf(length(arg) / 2);
+    where(dot_mask, ret) = PI - ret;
+    return ret;
+}
+
+template <int S> force_inline simd_fvec<S> acos_positive_tail(const simd_fvec<S> &x) {
+    return (((x + 2.71850395f) * x + 14.7303705f)) * (0.00393401226f * ((x - 8.60734272f) * x + 27.0927486f)) *
+           sqrt(1 - x);
+}
+
+template <int S> force_inline simd_fvec<S> acos_negative_tail(const simd_fvec<S> &x) {
+    return PI - (((x - 2.71850395f) * x + 14.7303705f)) * (0.00393401226f * ((x + 8.60734272f) * x + 27.0927486f)) *
+                    sqrt(1 + x);
+}
+
+template <int S> force_inline simd_fvec<S> portable_acosf(const simd_fvec<S> &x) {
+    const simd_fvec<S> mask1 = (x < -0.62f);
+    const simd_fvec<S> mask2 = (x <= 0.62f);
+
+    simd_fvec<S> ret;
+
+    where(mask1, ret) = acos_negative_tail(x);
+
+    const simd_fvec<S> x2 = x * x;
+    where(~mask1 & mask2, ret) =
+        (PI / 2) - x -
+        (0.0700945929f * x * ((x2 + 1.57144082f) * x2 + 1.25210774f)) * (x2 * ((x2 - 1.53757966f) * x2 + 1.89929986f));
+
+    where(~mask1 & ~mask2, ret) = acos_positive_tail(x);
+
+    return ret;
+}
+
+// "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
+// Based on https://www.shadertoy.com/view/4tGGzd
+template <int S>
+simd_fvec<S> SampleSphericalTriangle(const simd_fvec<S> A[3], const simd_fvec<S> B[3], const simd_fvec<S> C[3],
+                                     const simd_fvec<S> Xi[2], simd_fvec<S> w[3]) {
+    simd_fvec<S> BA[3], CA[3], AB[3], CB[3], BC[3], AC[3];
+    // calculate internal angles of spherical triangle: alpha, beta and gamma
+    for (int i = 0; i < 3; ++i) {
+        BA[i] = B[i] - A[i];
+        CA[i] = C[i] - A[i];
+        AB[i] = A[i] - B[i];
+        CB[i] = C[i] - B[i];
+        BC[i] = B[i] - C[i];
+        AC[i] = A[i] - C[i];
+    }
+    orthogonalize(A, BA, BA);
+    orthogonalize(A, CA, CA);
+    orthogonalize(B, AB, AB);
+    orthogonalize(B, CB, CB);
+    orthogonalize(C, BC, BC);
+    orthogonalize(C, AC, AC);
+    const simd_fvec<S> alpha = angle_between(BA, CA);
+    const simd_fvec<S> beta = angle_between(AB, CB);
+    const simd_fvec<S> gamma = angle_between(BC, AC);
+
+    const simd_fvec<S> area = alpha + beta + gamma - PI;
+    simd_ivec<S> mask = simd_cast(area > SphericalAreaThreshold);
+    if (mask.all_zeros()) {
+        return 0.0f;
+    }
+
+    // calculate arc lengths for edges of spherical triangle
+    const simd_fvec<S> b = portable_acosf(clamp(dot3(C, A), -1.0f, 1.0f));
+    const simd_fvec<S> c = portable_acosf(clamp(dot3(A, B), -1.0f, 1.0f));
+
+    // Use one random variable to select the new area
+    const simd_fvec<S> area_S = Xi[0] * area;
+
+    // Save the sine and cosine of the angle delta
+    const simd_fvec<S> p = sin(area_S - alpha);
+    const simd_fvec<S> q = cos(area_S - alpha);
+
+    // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
+    const simd_fvec<S> u = q - cos(alpha);
+    const simd_fvec<S> v = p + sin(alpha) * cos(c);
+
+    // Compute the s coordinate as normalized arc length from A to C_s
+    const simd_fvec<S> denom = ((v * p + u * q) * sin(alpha));
+    const simd_fvec<S> s = safe_div(simd_fvec<S>{1.0f}, b) *
+                           portable_acosf(clamp(safe_div(((v * q - u * p) * cos(alpha) - v), denom), -1.0f, 1.0f));
+
+    // Compute the third vertex of the sub - triangle.
+    simd_fvec<S> C_s[3];
+    slerp(A, C, s, C_s);
+
+    // Compute the t coordinate using C_s and Xi[1]
+    const simd_fvec<S> denom2 = portable_acosf(clamp(dot3(C_s, B), -1.0f, 1.0f));
+    const simd_fvec<S> t = safe_div(portable_acosf(clamp(1.0f - Xi[1] * (1.0f - dot3(C_s, B)), -1.0f, 1.0f)), denom2);
+
+    // Construct the corresponding point on the sphere
+    slerp(B, C_s, t, w);
+
+    simd_fvec<S> ret = 0.0f;
+    where(mask, ret) = safe_div_pos(1.0f, area);
+    return ret;
 }
 
 force_inline float floor(float x) { return float(int(x) - (x < 0.0f)); }
@@ -1871,7 +2047,7 @@ template <int S>
 void FetchTransformAndRecalcBasis(const transform_t *sc_transforms, const simd_ivec<S> &tr_index,
                                   const simd_fvec<S> P_ls[3], simd_fvec<S> inout_plane_N[3], simd_fvec<S> inout_N[3],
                                   simd_fvec<S> inout_B[3], simd_fvec<S> inout_T[3], simd_fvec<S> inout_tangent[3],
-                                  simd_fvec<S> out_transform[16]) {
+                                  simd_fvec<S> inout_ro_ls[3], simd_fvec<S> out_transform[16]) {
     const float *transforms = &sc_transforms[0].xform[0];
     const float *inv_transforms = &sc_transforms[0].inv_xform[0];
     const int TransformsStride = sizeof(transform_t) / sizeof(float);
@@ -1891,8 +2067,8 @@ void FetchTransformAndRecalcBasis(const transform_t *sc_transforms, const simd_i
     TransformNormal(inv_transform, inout_N);
     TransformNormal(inv_transform, inout_B);
     TransformNormal(inv_transform, inout_T);
-
     TransformNormal(inv_transform, inout_tangent);
+    TransformPoint(inv_transform, inout_ro_ls);
 }
 
 template <int S>
@@ -4459,6 +4635,16 @@ template <int S> void Ray::NS::TransformPoint(const simd_fvec<S> p[3], const flo
     out_p[2] = xform[2] * p[0] + xform[6] * p[1] + xform[10] * p[2] + xform[14];
 }
 
+template <int S> void Ray::NS::TransformPoint(const simd_fvec<S> xform[16], simd_fvec<S> p[3]) {
+    const simd_fvec<S> temp0 = xform[0] * p[0] + xform[4] * p[1] + xform[8] * p[2] + xform[12];
+    const simd_fvec<S> temp1 = xform[1] * p[0] + xform[5] * p[1] + xform[9] * p[2] + xform[13];
+    const simd_fvec<S> temp2 = xform[2] * p[0] + xform[6] * p[1] + xform[10] * p[2] + xform[14];
+
+    p[0] = temp0;
+    p[1] = temp1;
+    p[2] = temp2;
+}
+
 template <int S> void Ray::NS::TransformDirection(const simd_fvec<S> xform[16], simd_fvec<S> p[3]) {
     const simd_fvec<S> temp0 = xform[0] * p[0] + xform[4] * p[1] + xform[8] * p[2];
     const simd_fvec<S> temp1 = xform[1] * p[0] + xform[5] * p[1] + xform[9] * p[2];
@@ -5150,8 +5336,6 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                                 simd_ivec<S> ray_mask, light_sample_t<S> &ls) {
     simd_fvec<S> ri = rand_pick_light;
 
-    const simd_fvec<S> ru = rand_light_uv[0], rv = rand_light_uv[1];
-
 #if USE_HIERARCHICAL_NEE
     simd_ivec<S> light_index = -1;
     simd_fvec<S> factor = 1.0f;
@@ -5257,10 +5441,10 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             UNROLLED_FOR(i, 3, { center_to_surface[i] /= dist_to_center; })
 
             // sample hemisphere
-            const simd_fvec<S> r = sqrt(max(0.0f, 1.0f - ru * ru));
-            const simd_fvec<S> phi = 2.0f * PI * rv;
+            const simd_fvec<S> r = sqrt(max(0.0f, 1.0f - rand_light_uv[0] * rand_light_uv[0]));
+            const simd_fvec<S> phi = 2.0f * PI * rand_light_uv[1];
 
-            const simd_fvec<S> sampled_dir[3] = {r * cos(phi), r * sin(phi), ru};
+            const simd_fvec<S> sampled_dir[3] = {r * cos(phi), r * sin(phi), rand_light_uv[0]};
 
             simd_fvec<S> LT[3], LB[3];
             create_tbn(center_to_surface, LT, LB);
@@ -5325,7 +5509,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 const float radius = tanf(l.dir.angle);
 
                 simd_fvec<S> V[3];
-                MapToCone(ru, rv, ls.L, radius, V);
+                MapToCone(rand_light_uv[0], rand_light_uv[1], ls.L, radius, V);
                 safe_normalize(V);
 
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = V[i]; })
@@ -5340,7 +5524,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 where(ray_queue[index], ls.area) = 0.0f;
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
-            const simd_fvec<S> r1 = ru - 0.5f, r2 = rv - 0.5f;
+            const simd_fvec<S> r1 = rand_light_uv[0] - 0.5f, r2 = rand_light_uv[1] - 0.5f;
 
             const simd_fvec<S> lp[3] = {l.rect.pos[0] + l.rect.u[0] * r1 + l.rect.v[0] * r2,
                                         l.rect.pos[1] + l.rect.u[1] * r1 + l.rect.v[1] * r2,
@@ -5384,7 +5568,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 where(ray_queue[index], ls.from_env) = -1;
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
-            simd_fvec<S> offset[2] = {2.0f * ru - 1.0f, 2.0f * rv - 1.0f};
+            simd_fvec<S> offset[2] = {2.0f * rand_light_uv[0] - 1.0f, 2.0f * rand_light_uv[1] - 1.0f};
             const simd_ivec<S> mask = simd_cast(offset[0] != 0.0f & offset[1] != 0.0f);
             if (mask.not_all_zeros()) {
                 simd_fvec<S> theta = 0.5f * PI - 0.25f * PI * safe_div(offset[0], offset[1]), r = offset[1];
@@ -5452,7 +5636,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                                              light_u[2] * light_dir[0] - light_u[0] * light_dir[2],
                                              light_u[0] * light_dir[1] - light_u[1] * light_dir[0]};
 
-            const simd_fvec<S> phi = PI * ru;
+            const simd_fvec<S> phi = PI * rand_light_uv[0];
             const simd_fvec<S> cos_phi = cos(phi), sin_phi = sin(phi);
 
             const simd_fvec<S> normal[3] = {cos_phi * light_u[0] - sin_phi * light_v[0],
@@ -5460,9 +5644,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                                             cos_phi * light_u[2] - sin_phi * light_v[2]};
 
             const simd_fvec<S> lp[3] = {
-                l.line.pos[0] + normal[0] * l.line.radius + (rv - 0.5f) * light_dir[0] * l.line.height,
-                l.line.pos[1] + normal[1] * l.line.radius + (rv - 0.5f) * light_dir[1] * l.line.height,
-                l.line.pos[2] + normal[2] * l.line.radius + (rv - 0.5f) * light_dir[2] * l.line.height};
+                l.line.pos[0] + normal[0] * l.line.radius + (rand_light_uv[1] - 0.5f) * light_dir[0] * l.line.height,
+                l.line.pos[1] + normal[1] * l.line.radius + (rand_light_uv[1] - 0.5f) * light_dir[1] * l.line.height,
+                l.line.pos[2] + normal[2] * l.line.radius + (rand_light_uv[1] - 0.5f) * light_dir[2] * l.line.height};
 
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp[i]; })
 
@@ -5486,28 +5670,19 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             const transform_t &ltr = sc.transforms[l.tri.xform_index];
             const uint32_t ltri_index = l.tri.tri_index;
 
-            const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]];
-            const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
-            const vertex_t &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
-
-            const simd_fvec<S> r1 = sqrt(ru), r2 = rv;
+            const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]],
+                           &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]],
+                           &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
 
             float p1[3], p2[3], p3[3];
             TransformPoint(v1.p, ltr.xform, p1);
             TransformPoint(v2.p, ltr.xform, p2);
             TransformPoint(v3.p, ltr.xform, p3);
 
-            const simd_fvec<S> luvs[2] = {v1.t[0] * (1.0f - r1) + r1 * (v2.t[0] * (1.0f - r2) + v3.t[0] * r2),
-                                          v1.t[1] * (1.0f - r1) + r1 * (v2.t[1] * (1.0f - r2) + v3.t[1] * r2)};
-
-            const simd_fvec<S> lp[3] = {p1[0] * (1.0f - r1) + r1 * (p2[0] * (1.0f - r2) + p3[0] * r2),
-                                        p1[1] * (1.0f - r1) + r1 * (p2[1] * (1.0f - r2) + p3[1] * r2),
-                                        p1[2] * (1.0f - r1) + r1 * (p2[2] * (1.0f - r2) + p3[2] * r2)};
-
-            const float temp1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]};
-            const float temp2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
+            const float e1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]},
+                        e2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
             float light_forward[3];
-            cross(temp1, temp2, light_forward);
+            cross(e1, e2, light_forward);
 
             const float light_fwd_len =
                 sqrtf(light_forward[0] * light_forward[0] + light_forward[1] * light_forward[1] +
@@ -5515,9 +5690,66 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             where(ray_queue[index], ls.area) = 0.5f * light_fwd_len;
             UNROLLED_FOR(i, 3, { light_forward[i] /= light_fwd_len; })
 
-            const simd_fvec<S> to_light[3] = {lp[0] - P[0], lp[1] - P[1], lp[2] - P[2]};
-            const simd_fvec<S> ls_dist = length(to_light);
-            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = safe_div_pos(to_light[i], ls_dist); })
+            simd_fvec<S> lp[3] = {};
+            simd_fvec<S> luvs[2] = {};
+            simd_fvec<S> pdf = {};
+
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+            // Spherical triangle sampling
+            simd_fvec<S> A[3], B[3], C[3];
+            UNROLLED_FOR(i, 3, { A[i] = p1[i] - P[i]; })
+            UNROLLED_FOR(i, 3, { B[i] = p2[i] - P[i]; })
+            UNROLLED_FOR(i, 3, { C[i] = p3[i] - P[i]; })
+            normalize(A);
+            normalize(B);
+            normalize(C);
+
+            simd_fvec<S> dir[3];
+            pdf = SampleSphericalTriangle(A, B, C, rand_light_uv, dir);
+            const simd_ivec<S> pdf_positive = ray_queue[index] & simd_cast(pdf > 0.0f);
+            if (pdf_positive.not_all_zeros()) {
+                // find u, v, t of intersection point
+                simd_fvec<S> pvec[3];
+                cross(dir, e2, pvec);
+                simd_fvec<S> tvec[3];
+                UNROLLED_FOR(i, 3, { tvec[i] = P[i] - p1[i]; })
+                simd_fvec<S> qvec[3];
+                cross(tvec, e1, qvec);
+
+                const simd_fvec<S> inv_det = safe_div(simd_fvec<S>{1.0f}, dot3(e1, pvec));
+                const simd_fvec<S> tri_u = dot3(tvec, pvec) * inv_det, tri_v = dot3(dir, qvec) * inv_det;
+
+                UNROLLED_FOR(i, 3, {
+                    where(pdf_positive, lp[i]) = (1.0f - tri_u - tri_v) * p1[i] + tri_u * p2[i] + tri_v * p3[i];
+                })
+                UNROLLED_FOR(i, 2, {
+                    where(pdf_positive, luvs[i]) = (1.0f - tri_u - tri_v) * v1.t[i] + tri_u * v2.t[i] + tri_v * v3.t[i];
+                })
+
+                UNROLLED_FOR(i, 3, { where(pdf_positive, ls.L[i]) = dir[i]; })
+            }
+            const simd_ivec<S> pdf_negative = ray_queue[index] & ~pdf_positive;
+#else  // USE_SPHERICAL_AREA_LIGHT_SAMPLING
+            const simd_ivec<S> pdf_negative = -1;
+#endif // USE_SPHERICAL_AREA_LIGHT_SAMPLING
+            if (pdf_negative.not_all_zeros()) {
+                // Simple area sampling
+                const simd_fvec<S> r1 = sqrt(rand_light_uv[0]), r2 = rand_light_uv[1];
+
+                UNROLLED_FOR(i, 2, {
+                    where(pdf_negative, luvs[i]) = v1.t[i] * (1.0f - r1) + r1 * (v2.t[i] * (1.0f - r2) + v3.t[i] * r2);
+                })
+                UNROLLED_FOR(i, 3, {
+                    where(pdf_negative, lp[i]) = p1[i] * (1.0f - r1) + r1 * (p2[i] * (1.0f - r2) + p3[i] * r2);
+                })
+
+                const simd_fvec<S> to_light[3] = {lp[0] - P[0], lp[1] - P[1], lp[2] - P[2]};
+                const simd_fvec<S> ls_dist = length(to_light);
+                UNROLLED_FOR(i, 3, { where(pdf_negative, ls.L[i]) = safe_div_pos(to_light[i], ls_dist); })
+
+                const simd_fvec<S> cos_theta = -dot3(ls.L, light_forward);
+                where(pdf_negative, pdf) = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
+            }
 
             simd_fvec<S> cos_theta = -dot3(ls.L, light_forward);
 
@@ -5530,8 +5762,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             }
             simd_ivec<S> accept = simd_cast(cos_theta > 0.0f) & ray_queue[index];
             if (accept.not_all_zeros()) {
-                where(accept, ls.pdf) = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
-
+                where(accept, ls.pdf) = pdf;
                 if (l.tri.tex_index != 0xffffffff) {
                     simd_fvec<S> tex_col[4] = {};
                     SampleBilinear(textures, l.tri.tex_index, luvs, simd_ivec<S>{0}, rand_tex_uv, accept, tex_col);
@@ -5550,14 +5781,15 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 // Sample environment using quadtree
                 const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
 
-                Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, ri, ru, rv, dir_and_pdf);
+                Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, ri, rand_light_uv[0],
+                                rand_light_uv[1], dir_and_pdf);
             } else {
                 // Sample environment as hemishpere
-                const simd_fvec<S> phi = 2 * PI * rv;
+                const simd_fvec<S> phi = 2 * PI * rand_light_uv[1];
                 const simd_fvec<S> cos_phi = cos(phi), sin_phi = sin(phi);
-                const simd_fvec<S> dir = sqrt(1.0f - ru * ru);
+                const simd_fvec<S> dir = sqrt(1.0f - rand_light_uv[0] * rand_light_uv[0]);
 
-                const simd_fvec<S> V[3] = {dir * cos_phi, dir * sin_phi, ru}; // in tangent-space
+                const simd_fvec<S> V[3] = {dir * cos_phi, dir * sin_phi, rand_light_uv[0]}; // in tangent-space
                 world_from_tangent(T, B, N, V, dir_and_pdf);
                 dir_and_pdf[3] = 0.5f / PI;
             }
@@ -6887,8 +7119,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
 
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
 
-    simd_fvec<S> transform[16];
-    FetchTransformAndRecalcBasis(sc.transforms, tr_index, P_ls, surf.plane_N, surf.N, surf.B, surf.T, tangent,
+    simd_fvec<S> transform[16], ro_ls[3] = {ray.o[0], ray.o[1], ray.o[2]};
+    FetchTransformAndRecalcBasis(sc.transforms, tr_index, P_ls, surf.plane_N, surf.N, surf.B, surf.T, tangent, ro_ls,
                                  transform);
 
     // normalize vectors (scaling might have been applied)
@@ -7314,9 +7546,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
 #if USE_HIERARCHICAL_NEE
                     const simd_fvec<S> pdf_factor =
                         EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights, sc.light_wnodes);
-#else
+#else  // USE_HIERARCHICAL_NEE
                     const float pdf_factor = float(sc.li_indices.size());
-#endif
+#endif // USE_HIERARCHICAL_NEE
 
                     const simd_fvec<S> v1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]},
                                        v2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
@@ -7330,13 +7562,50 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
                     const simd_fvec<S> tri_area = 0.5f * light_forward_len;
 
                     const simd_fvec<S> cos_theta = abs(dot3(I, light_forward));
-                    const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, tri_area * cos_theta * pdf_factor);
-                    const simd_fvec<S> &bsdf_pdf = ray.pdf;
+                    const simd_ivec<S> emissive_mask =
+                        ray_queue[index] & simd_cast(cos_theta > 0.0f) & ((ray.depth & 0x00ffffff) != 0);
+                    if (emissive_mask.not_all_zeros()) {
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+                        simd_fvec<S> A[3], B[3], C[3];
+                        UNROLLED_FOR(i, 3, { A[i] = p1[i] - ro_ls[i]; })
+                        UNROLLED_FOR(i, 3, { B[i] = p2[i] - ro_ls[i]; })
+                        UNROLLED_FOR(i, 3, { C[i] = p3[i] - ro_ls[i]; })
+                        normalize(A);
+                        normalize(B);
+                        normalize(C);
 
-                    where((cos_theta > 0.0f) & simd_cast((ray.depth & 0x00ffffff) != 0), mis_weight) =
-                        power_heuristic(bsdf_pdf, light_pdf);
+                        simd_fvec<S> BA[3], CA[3], AB[3], CB[3], BC[3], AC[3];
+                        for (int i = 0; i < 3; ++i) {
+                            BA[i] = B[i] - A[i];
+                            CA[i] = C[i] - A[i];
+                            AB[i] = A[i] - B[i];
+                            CB[i] = C[i] - B[i];
+                            BC[i] = B[i] - C[i];
+                            AC[i] = A[i] - C[i];
+                        }
+                        orthogonalize(A, BA, BA);
+                        orthogonalize(A, CA, CA);
+                        orthogonalize(B, AB, AB);
+                        orthogonalize(B, CB, CB);
+                        orthogonalize(C, BC, BC);
+                        orthogonalize(C, AC, AC);
+
+                        const simd_fvec<S> alpha = angle_between(BA, CA);
+                        const simd_fvec<S> beta = angle_between(AB, CB);
+                        const simd_fvec<S> gamma = angle_between(BC, AC);
+                        const simd_fvec<S> area = alpha + beta + gamma - PI;
+
+                        const simd_fvec<S> light_pdf = safe_div_pos(simd_fvec<S>{1.0f}, area * pdf_factor);
+#else  // USE_SPHERICAL_AREA_LIGHT_SAMPLING
+                        const simd_fvec<S> light_pdf =
+                            safe_div_pos(inter.t * inter.t, tri_area * cos_theta * pdf_factor);
+#endif // USE_SPHERICAL_AREA_LIGHT_SAMPLING
+                        const simd_fvec<S> &bsdf_pdf = ray.pdf;
+
+                        where(emissive_mask, mis_weight) = power_heuristic(bsdf_pdf, light_pdf);
+                    }
                 }
-#endif
+#endif // USE_NEE
                 UNROLLED_FOR(i, 3, {
                     where(ray_queue[index], col[i]) += mix_weight * mis_weight * mat->strength * base_color[i];
                 })
