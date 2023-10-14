@@ -81,6 +81,8 @@ using namespace Ray::NS;
     simd_fvec4 v6 = v1 / v2;
     simd_fvec4 v66 = -v1;
     simd_fvec4 v666 = normalize(v1);
+    float v1_len;
+    simd_fvec4 v6666 = normalize_len(v1, v1_len);
 
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -111,6 +113,12 @@ using namespace Ray::NS;
     require(v666[1] == Approx(0.365148365));
     require(v666[2] == Approx(0.547722518));
     require(v666[3] == Approx(0.730296731));
+
+    require(v1_len == Approx(5.47722578));
+    require(v6666[0] == Approx(0.182574183));
+    require(v6666[1] == Approx(0.365148365));
+    require(v6666[2] == Approx(0.547722518));
+    require(v6666[3] == Approx(0.730296731));
 
     v5 = sqrt(v5);
 
@@ -622,6 +630,8 @@ using namespace Ray::NS;
     simd_fvec8 v6 = v1 / v2;
     simd_fvec8 v66 = -v1;
     simd_fvec8 v666 = normalize(v1);
+    float v1_len;
+    simd_fvec8 v6666 = normalize_len(v1, v1_len);
 
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -676,6 +686,16 @@ using namespace Ray::NS;
     require(v666[5] == Approx(0.436435759));
     require(v666[6] == Approx(0.327326834));
     require(v666[7] == Approx(0.218217880));
+
+    require(v1_len == Approx(9.16515160));
+    require(v6666[0] == Approx(0.109108940));
+    require(v6666[1] == Approx(0.218217880));
+    require(v6666[2] == Approx(0.327326834));
+    require(v6666[3] == Approx(0.436435759));
+    require(v6666[4] == Approx(0.545544684));
+    require(v6666[5] == Approx(0.436435759));
+    require(v6666[6] == Approx(0.327326834));
+    require(v6666[7] == Approx(0.218217880));
 
     v5 = sqrt(v5);
 
@@ -1356,6 +1376,8 @@ using namespace Ray::NS;
     simd_fvec16 v6 = v1 / v2;
     simd_fvec16 v66 = -v1;
     simd_fvec16 v666 = normalize(v1);
+    float v1_len;
+    simd_fvec16 v6666 = normalize_len(v1, v1_len);
 
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -1458,6 +1480,24 @@ using namespace Ray::NS;
     require(v666[13] == Approx(0.308606714));
     require(v666[14] == Approx(0.231455028));
     require(v666[15] == Approx(0.154303357));
+
+    require(v1_len == Approx(12.9614811));
+    require(v6666[0] == Approx(0.0771516785));
+    require(v6666[1] == Approx(0.154303357));
+    require(v6666[2] == Approx(0.231455028));
+    require(v6666[3] == Approx(0.308606714));
+    require(v6666[4] == Approx(0.385758370));
+    require(v6666[5] == Approx(0.308606714));
+    require(v6666[6] == Approx(0.231455028));
+    require(v6666[7] == Approx(0.154303357));
+    require(v6666[8] == Approx(0.0771516785));
+    require(v6666[9] == Approx(0.154303357));
+    require(v6666[10] == Approx(0.231455028));
+    require(v6666[11] == Approx(0.308606714));
+    require(v6666[12] == Approx(0.385758370));
+    require(v6666[13] == Approx(0.308606714));
+    require(v6666[14] == Approx(0.231455028));
+    require(v6666[15] == Approx(0.154303357));
 
     v5 = sqrt(v5);
 

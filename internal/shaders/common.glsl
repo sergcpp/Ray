@@ -63,6 +63,10 @@ float lum(const vec3 color) {
     return 0.212671 * color[0] + 0.715160 * color[1] + 0.072169 * color[2];
 }
 
+vec3 normalize_len(const vec3 v, out float len) {
+    return v / (len = length(v));
+}
+
 vec3 safe_invert(vec3 v) {
     vec3 inv_v = 1.0f / v;
 

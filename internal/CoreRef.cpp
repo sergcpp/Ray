@@ -3557,10 +3557,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
     if (l.type == LIGHT_TYPE_SPHERE) {
         const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
-        simd_fvec4 center_to_surface = P - make_fvec3(l.sph.pos);
-        float dist_to_center = length(center_to_surface);
-
-        center_to_surface /= dist_to_center;
+        float dist_to_center;
+        simd_fvec4 center_to_surface = normalize_len(P - make_fvec3(l.sph.pos), dist_to_center);
 
         // sample hemisphere
         const float r = sqrtf(fmaxf(0.0f, 1.0f - r1 * r1));
@@ -3576,9 +3574,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 light_forward = normalize(light_surf_pos - make_fvec3(l.sph.pos));
 
         ls.lp = offset_ray(light_surf_pos, light_forward);
-        ls.L = light_surf_pos - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        float ls_dist;
+        ls.L = normalize_len(light_surf_pos - P, ls_dist);
         ls.area = l.sph.area;
 
         const float cos_theta = fabsf(dot(ls.L, light_forward));
@@ -3630,9 +3627,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         ls.lp = offset_ray(lp, light_forward);
-        ls.L = lp - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        float ls_dist;
+        ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.rect.area;
 
         const float cos_theta = dot(-ls.L, light_forward);
@@ -3679,9 +3675,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         ls.lp = offset_ray(lp, light_forward);
-        ls.L = lp - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        float ls_dist;
+        ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.disk.area;
 
         const float cos_theta = dot(-ls.L, light_forward);
@@ -3719,9 +3714,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 lp = light_pos + normal * l.line.radius + (r2 - 0.5f) * light_dir * l.line.height;
 
         ls.lp = lp;
-        ls.L = lp - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        float ls_dist;
+        ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.line.area;
 
         const float cos_theta = 1.0f - fabsf(dot(ls.L, light_dir));
@@ -3746,9 +3740,9 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec2 uv1 = simd_fvec2(v1.t), uv2 = simd_fvec2(v2.t), uv3 = simd_fvec2(v3.t);
 
         const simd_fvec4 e1 = p2 - p1, e2 = p3 - p1;
-        simd_fvec4 light_forward = cross(e1, e2);
-        ls.area = 0.5f * length(light_forward);
-        light_forward = normalize(light_forward);
+        float light_fwd_len;
+        const simd_fvec4 light_forward = normalize_len(cross(e1, e2), light_fwd_len);
+        ls.area = 0.5f * light_fwd_len;
 
         simd_fvec4 lp;
         simd_fvec2 luvs;
@@ -3775,9 +3769,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
             lp = p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2);
 
-            ls.L = lp - P;
-            const float ls_dist = length(ls.L);
-            ls.L /= ls_dist;
+            float ls_dist;
+            ls.L = normalize_len(lp - P, ls_dist);
 
             const float cos_theta = -dot(ls.L, light_forward);
             pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
@@ -5117,9 +5110,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     surf.N = normalize(make_fvec3(v1.n) * w + make_fvec3(v2.n) * inter.u + make_fvec3(v3.n) * inter.v);
     surf.uvs = simd_fvec2(v1.t) * w + simd_fvec2(v2.t) * inter.u + simd_fvec2(v3.t) * inter.v;
 
-    surf.plane_N = cross(simd_fvec4{v2.p} - simd_fvec4{v1.p}, simd_fvec4{v3.p} - simd_fvec4{v1.p});
-    const float pa = length(surf.plane_N);
-    surf.plane_N /= pa;
+    float pa;
+    surf.plane_N = normalize_len(cross(simd_fvec4{v2.p} - simd_fvec4{v1.p}, simd_fvec4{v3.p} - simd_fvec4{v1.p}), pa);
 
     surf.B = make_fvec3(v1.b) * w + make_fvec3(v2.b) * inter.u + make_fvec3(v3.b) * inter.v;
     surf.T = cross(surf.B, surf.N);
@@ -5361,9 +5353,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
             const auto p1 = make_fvec3(v1.p), p2 = make_fvec3(v2.p), p3 = make_fvec3(v3.p);
 
-            simd_fvec4 light_forward = TransformDirection(cross(p2 - p1, p3 - p1), tr->xform);
-            const float light_forward_len = length(light_forward);
-            light_forward /= light_forward_len;
+            float light_forward_len;
+            simd_fvec4 light_forward = normalize_len(TransformDirection(cross(p2 - p1, p3 - p1), tr->xform), light_forward_len);
             const float tri_area = 0.5f * light_forward_len;
 
             const float cos_theta = fabsf(dot(I, light_forward)); // abs for doublesided light
@@ -5490,9 +5481,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     const float sh_lum = fmaxf(sh_r.c[0], fmaxf(sh_r.c[1], sh_r.c[2]));
     if (sh_lum > 0.0f) {
         // actual ray direction accouning for bias from both ends
-        const simd_fvec4 to_light = ls.lp - simd_fvec4{sh_r.o[0], sh_r.o[1], sh_r.o[2], 0.0f};
-        sh_r.dist = length(to_light);
-        memcpy(&sh_r.d[0], value_ptr(to_light / sh_r.dist), 3 * sizeof(float));
+        const simd_fvec4 to_light = normalize_len(ls.lp - simd_fvec4{sh_r.o[0], sh_r.o[1], sh_r.o[2], 0.0f}, sh_r.dist);
+        memcpy(&sh_r.d[0], value_ptr(to_light), 3 * sizeof(float));
         sh_r.dist *= ls.dist_mul;
         if (ls.from_env) {
             // NOTE: hacky way to identify env ray

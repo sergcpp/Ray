@@ -493,6 +493,10 @@ template <> class simd_vec<float, 4> {
     friend force_inline simd_vec<float, 4> vectorcall normalize(const simd_vec<float, 4> v1) {
         return v1 / v1.length();
     }
+    
+    friend force_inline simd_vec<float, 4> vectorcall normalize_len(const simd_vec<float, 4> v1, float &out_len) {
+        return v1 / (out_len = v1.length());
+    }
 
     friend force_inline simd_vec<float, 4> vectorcall inclusive_scan(simd_vec<float, 4> v1) {
         v1.vec_ = _mm_add_ps(v1.vec_, _mm_castsi128_ps(_mm_slli_si128(_mm_castps_si128(v1.vec_), 4)));

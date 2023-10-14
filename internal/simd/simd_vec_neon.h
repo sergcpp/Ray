@@ -455,6 +455,10 @@ template <> class simd_vec<float, 4> {
         return v1 / v1.length();
     }
 
+    friend force_inline simd_vec<float, 4> vectorcall normalize_len(const simd_vec<float, 4> v1, float &out_len) {
+        return v1 / (out_len = v1.length());
+    }
+
     friend force_inline simd_vec<float, 4> vectorcall inclusive_scan(simd_vec<float, 4> v1) {
         v1.vec_ = vaddq_f32(v1.vec_, vreinterpretq_f32_s32(slli<4>(vreinterpretq_s32_f32(v1.vec_))));
         v1.vec_ = vaddq_f32(v1.vec_, vreinterpretq_f32_s32(slli<8>(vreinterpretq_s32_f32(v1.vec_))));

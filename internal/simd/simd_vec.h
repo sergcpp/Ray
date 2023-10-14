@@ -714,6 +714,10 @@ template <typename T, int S> class simd_vec {
 
     friend force_inline simd_vec<T, S> normalize(const simd_vec<T, S> &v1) { return v1 / v1.length(); }
 
+    friend force_inline simd_vec<T, S> normalize_len(const simd_vec<T, S> &v1, T &out_len) {
+        return v1 / (out_len = v1.length());
+    }
+
     friend force_inline bool is_equal(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         bool res = true;
         UNROLLED_FOR_S(i, S, { res = res && (v1.comp_[i] == v2.comp_[i]); })

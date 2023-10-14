@@ -270,6 +270,7 @@ template <> class simd_vec<float, 8> {
     friend force_inline simd_vec<float, 8> vectorcall pow(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
 
     friend force_inline simd_vec<float, 8> vectorcall normalize(simd_vec<float, 8> v1);
+    friend force_inline simd_vec<float, 8> vectorcall normalize_len(simd_vec<float, 8> v1, float &out_len);
 
 #ifdef USE_FMA
     friend force_inline simd_vec<float, 8> vectorcall fmadd(simd_vec<float, 8> a, simd_vec<float, 8> b,
@@ -1922,6 +1923,10 @@ force_inline simd_vec<float, 8> vectorcall pow(const simd_vec<float, 8> v1, cons
 }
 
 force_inline simd_vec<float, 8> vectorcall normalize(const simd_vec<float, 8> v1) { return v1 / v1.length(); }
+
+force_inline simd_vec<float, 8> vectorcall normalize_len(const simd_vec<float, 8> v1, float &out_len) {
+    return v1 / (out_len = v1.length());
+}
 
 #ifdef USE_FMA
 force_inline simd_vec<float, 8> vectorcall fmadd(const simd_vec<float, 8> a, const simd_vec<float, 8> b,

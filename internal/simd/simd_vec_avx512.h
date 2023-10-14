@@ -214,6 +214,7 @@ template <> class simd_vec<float, 16> {
     friend force_inline simd_vec<float, 16> vectorcall clamp(simd_vec<float, 16> v1, float min, float max);
     friend force_inline simd_vec<float, 16> vectorcall pow(simd_vec<float, 16> v1, simd_vec<float, 16> v2);
     friend force_inline simd_vec<float, 16> vectorcall normalize(simd_vec<float, 16> v1);
+    friend force_inline simd_vec<float, 16> vectorcall normalize_len(simd_vec<float, 16> v1, float &out_len);
     friend force_inline simd_vec<float, 16> vectorcall inclusive_scan(simd_vec<float, 16> v1);
 
     friend force_inline simd_vec<float, 16> vectorcall fmadd(simd_vec<float, 16> a, simd_vec<float, 16> b,
@@ -1479,6 +1480,10 @@ force_inline simd_vec<float, 16> vectorcall pow(const simd_vec<float, 16> v1, co
 }
 
 force_inline simd_vec<float, 16> vectorcall normalize(const simd_vec<float, 16> v1) { return v1 / v1.length(); }
+
+force_inline simd_vec<float, 16> vectorcall normalize_len(const simd_vec<float, 16> v1, float &out_len) {
+    return v1 / (out_len = v1.length());
+}
 
 force_inline simd_vec<float, 16> vectorcall inclusive_scan(simd_vec<float, 16> v1) {
     v1.vec_ = _mm512_add_ps(v1.vec_, _mm512_castsi512_ps(_mm512_slli_si512(_mm512_castps_si512(v1.vec_), 1)));

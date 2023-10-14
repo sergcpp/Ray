@@ -895,10 +895,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
-        vec3 center_to_surface = P - l.SPH_POS;
-        float dist_to_center = length(center_to_surface);
-
-        center_to_surface /= dist_to_center;
+        float dist_to_center;
+        const vec3 center_to_surface = normalize_len(P - l.SPH_POS, dist_to_center);
 
         // sample hemisphere
         const float r = sqrt(clamp(1.0 - r1 * r1, 0.0, 1.0));
@@ -914,9 +912,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
 
         ls.lp = offset_ray(light_surf_pos, light_forward);
-        ls.L = light_surf_pos - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        float ls_dist;
+        ls.L = normalize_len(light_surf_pos - P, ls_dist);
         ls.area = l.SPH_AREA;
 
         const float cos_theta = abs(dot(ls.L, light_forward));
@@ -964,9 +961,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const vec3 light_forward = normalize(cross(light_u, light_v));
 
         ls.lp = offset_ray(lp, light_forward);
-        ls.L = lp - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        float ls_dist;
+        ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.RECT_AREA;
 
         const float cos_theta = dot(-ls.L, light_forward);
@@ -1015,9 +1011,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const vec3 light_forward = normalize(cross(light_u, light_v));
 
         ls.lp = offset_ray(lp, light_forward);
-        ls.L = lp - P;
-        const float ls_dist = length(ls.L);
-        ls.L /= ls_dist;
+        float ls_dist;
+        ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.DISK_AREA;
 
         const float cos_theta = dot(-ls.L, light_forward);
@@ -1059,9 +1054,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const vec3 lp = light_pos + normal * l.LINE_RADIUS + (r2 - 0.5) * light_dir * l.LINE_HEIGHT;
 
         ls.lp = lp;
-        const vec3 to_light = lp - P;
-        const float ls_dist = length(to_light);
-        ls.L = (to_light / ls_dist);
+        float ls_dist;
+        ls.L = normalize_len(lp - P, ls_dist);
 
         ls.area = l.LINE_AREA;
 
@@ -1089,9 +1083,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
                    uv3 = vec2(v3.t[0], v3.t[1]);
 
         const vec3 e1 = p2 - p1, e2 = p3 - p1;
-        vec3 light_forward = cross(e1, e2);
-        ls.area = 0.5 * length(light_forward);
-        light_forward = normalize(light_forward);
+        float light_fwd_len;
+        vec3 light_forward = normalize_len(cross(e1, e2), light_fwd_len);
+        ls.area = 0.5 * light_fwd_len;
 
         vec3 lp;
         vec2 luvs;
@@ -1119,9 +1113,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
             luvs = uv1 * (1.0 - r1) + r1 * (uv2 * (1.0 - r2) + uv3 * r2);
             lp = p1 * (1.0 - r1) + r1 * (p2 * (1.0 - r2) + p3 * r2);
 
-            ls.L = lp - P;
-            const float ls_dist = length(ls.L);
-            ls.L /= ls_dist;
+            float ls_dist;
+            ls.L = normalize_len(lp - P, ls_dist);
 
             const float cos_theta = -dot(ls.L, light_forward);
             pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
@@ -1872,9 +1865,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                vec2(v2.t[0], v2.t[1]) * inter.u +
                vec2(v3.t[0], v3.t[1]) * inter.v;
 
-    surf.plane_N = cross(vec3(p2 - p1), vec3(p3 - p1));
-    const float pa = length(surf.plane_N);
-    surf.plane_N /= pa;
+    float pa;
+    surf.plane_N = normalize_len(cross(vec3(p2 - p1), vec3(p3 - p1)), pa);
 
     surf.B = vec3(v1.b[0], v1.b[1], v1.b[2]) * w +
              vec3(v2.b[0], v2.b[1], v2.b[2]) * inter.u +
@@ -2098,9 +2090,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                        p2 = vec3(v2.p[0], v2.p[1], v2.p[2]),
                        p3 = vec3(v3.p[0], v3.p[1], v3.p[2]);
 
-            vec3 light_forward = (tr.xform * vec4(cross(p2 - p1, p3 - p1), 0.0)).xyz;
-            const float light_forward_len = length(light_forward);
-            light_forward /= light_forward_len;
+            float light_forward_len;
+            vec3 light_forward = normalize_len((tr.xform * vec4(cross(p2 - p1, p3 - p1), 0.0)).xyz, light_forward_len);
             const float tri_area = 0.5 * light_forward_len;
 
             const float cos_theta = abs(dot(I, light_forward)); // abs for doublesided light
@@ -2231,9 +2222,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     const float sh_lum = max(sh_r.c[0], max(sh_r.c[1], sh_r.c[2]));
     [[dont_flatten]] if (sh_lum > 0.0) {
         // actual ray direction accouning for bias from both ends
-        vec3 to_light = ls.lp - vec3(sh_r.o[0], sh_r.o[1], sh_r.o[2]);
-        float sh_dist = length(to_light);
-        to_light /= sh_dist;
+        float sh_dist;
+        const vec3 to_light = normalize_len(ls.lp - vec3(sh_r.o[0], sh_r.o[1], sh_r.o[2]), sh_dist);
         sh_dist *= ls.dist_mul;
         if (ls.from_env) {
             // NOTE: hacky way to identify env ray
