@@ -1493,7 +1493,7 @@ force_inline float angle_between(const simd_fvec4 &v1, const simd_fvec4 &v2) {
 // "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
 // Based on https://www.shadertoy.com/view/4tGGzd
 float SampleSphericalTriangle(const simd_fvec4 &P, const simd_fvec4 &p1, const simd_fvec4 &p2, const simd_fvec4 &p3,
-                              const simd_fvec2 Xi, simd_fvec4 &w) {
+                              const simd_fvec2 Xi, simd_fvec4 *out_dir) {
     // Setup spherical triangle
     const simd_fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
 
@@ -1514,38 +1514,108 @@ float SampleSphericalTriangle(const simd_fvec4 &P, const simd_fvec4 &p1, const s
         return 0.0f;
     }
 
-    // calculate arc lengths for edges of spherical triangle
-    // const float a = portable_acosf(clamp(dot(B, C), -1.0f, 1.0f));
-    const float b = portable_acosf(clamp(dot(C, A), -1.0f, 1.0f));
-    const float c = portable_acosf(clamp(dot(A, B), -1.0f, 1.0f));
+    if (out_dir) {
+        // calculate arc lengths for edges of spherical triangle
+        // const float a = portable_acosf(clamp(dot(B, C), -1.0f, 1.0f));
+        const float b = portable_acosf(clamp(dot(C, A), -1.0f, 1.0f));
+        const float c = portable_acosf(clamp(dot(A, B), -1.0f, 1.0f));
 
-    // Use one random variable to select the new area
-    const float area_S = Xi.get<0>() * area;
+        // Use one random variable to select the new area
+        const float area_S = Xi.get<0>() * area;
 
-    // Save the sine and cosine of the angle delta
-    const float p = sinf(area_S - alpha);
-    const float q = cosf(area_S - alpha);
+        // Save the sine and cosine of the angle delta
+        const float p = sinf(area_S - alpha);
+        const float q = cosf(area_S - alpha);
 
-    // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
-    const float u = q - cosf(alpha);
-    const float v = p + sinf(alpha) * cosf(c);
+        // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
+        const float u = q - cosf(alpha);
+        const float v = p + sinf(alpha) * cosf(c);
 
-    // Compute the s coordinate as normalized arc length from A to C_s
-    const float denom = ((v * p + u * q) * sinf(alpha));
-    const float s =
-        (1.0f / b) * portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
+        // Compute the s coordinate as normalized arc length from A to C_s
+        const float denom = ((v * p + u * q) * sinf(alpha));
+        const float s =
+            (1.0f / b) * portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
 
-    // Compute the third vertex of the sub - triangle
-    const simd_fvec4 C_s = slerp(A, C, s);
+        // Compute the third vertex of the sub - triangle
+        const simd_fvec4 C_s = slerp(A, C, s);
 
-    // Compute the t coordinate using C_s and Xi[1]
-    const float denom2 = portable_acosf(clamp(dot(C_s, B), -1.0f, 1.0f));
-    const float t = safe_div(portable_acosf(clamp(1.0f - Xi.get<1>() * (1.0f - dot(C_s, B)), -1.0f, 1.0f)), denom2);
+        // Compute the t coordinate using C_s and Xi[1]
+        const float denom2 = portable_acosf(clamp(dot(C_s, B), -1.0f, 1.0f));
+        const float t = safe_div(portable_acosf(clamp(1.0f - Xi.get<1>() * (1.0f - dot(C_s, B)), -1.0f, 1.0f)), denom2);
 
-    // Construct the corresponding point on the sphere.
-    w = slerp(B, C_s, t);
+        // Construct the corresponding point on the sphere.
+        (*out_dir) = slerp(B, C_s, t);
+    }
 
     // return pdf
+    return (1.0f / area);
+}
+
+// "An Area-Preserving Parametrization for Spherical Rectangles"
+// https://www.arnoldrenderer.com/research/egsr2013_spherical_rectangle.pdf
+// NOTE: no precomputation is done, everything is calculated in-place
+float SampleSphericalRectangle(const simd_fvec4 &P, const simd_fvec4 &light_pos, const simd_fvec4 &axis_u,
+                               const simd_fvec4 &axis_v, const simd_fvec2 Xi, simd_fvec4 *out_p) {
+    const simd_fvec4 corner = light_pos - 0.5f * axis_u - 0.5f * axis_v;
+
+    float axisu_len, axisv_len;
+    const simd_fvec4 x = normalize_len(axis_u, axisu_len), y = normalize_len(axis_v, axisv_len);
+    simd_fvec4 z = cross(x, y);
+
+    // compute rectangle coords in local reference system
+    const simd_fvec4 dir = corner - P;
+    float z0 = dot(dir, z);
+    // flip z to make it point against Q
+    if (z0 > 0.0f) {
+        z = -z;
+        z0 = -z0;
+    }
+    const float x0 = dot(dir, x);
+    const float y0 = dot(dir, y);
+    const float x1 = x0 + axisu_len;
+    const float y1 = y0 + axisv_len;
+    // compute internal angles (gamma_i)
+    const simd_fvec4 diff = simd_fvec4{x0, y1, x1, y0} - simd_fvec4{x1, y0, x0, y1};
+    simd_fvec4 nz = simd_fvec4{y0, x1, y1, x0} * diff;
+    nz = nz / sqrt(z0 * z0 * diff * diff + nz * nz);
+    const float g0 = portable_acosf(clamp(-nz.get<0>() * nz.get<1>(), -1.0f, 1.0f));
+    const float g1 = portable_acosf(clamp(-nz.get<1>() * nz.get<2>(), -1.0f, 1.0f));
+    const float g2 = portable_acosf(clamp(-nz.get<2>() * nz.get<3>(), -1.0f, 1.0f));
+    const float g3 = portable_acosf(clamp(-nz.get<3>() * nz.get<0>(), -1.0f, 1.0f));
+    // compute predefined constants
+    const float b0 = nz.get<0>();
+    const float b1 = nz.get<2>();
+    const float b0sq = b0 * b0;
+    const float k = 2 * PI - g2 - g3;
+    // compute solid angle from internal angles
+    const float area = g0 + g1 - k;
+    if (area <= SphericalAreaThreshold) {
+        return 0.0f;
+    }
+
+    if (out_p) {
+        // compute cu
+        const float au = Xi.get<0>() * area + k;
+        const float fu = safe_div((cosf(au) * b0 - b1), sinf(au));
+        float cu = 1.0f / sqrtf(fu * fu + b0sq) * (fu > 0.0f ? 1.0f : -1.0f);
+        cu = clamp(cu, -1.0f, 1.0f);
+        // compute xu
+        float xu = -(cu * z0) / fmaxf(sqrtf(1.0f - cu * cu), 1e-7f);
+        xu = clamp(xu, x0, x1);
+        // compute yv
+        const float z0sq = z0 * z0;
+        const float y0sq = y0 * y0;
+        const float y1sq = y1 * y1;
+        const float d = sqrtf(xu * xu + z0sq);
+        const float h0 = y0 / sqrtf(d * d + y0sq);
+        const float h1 = y1 / sqrtf(d * d + y1sq);
+        const float hv = h0 + Xi.get<1>() * (h1 - h0), hv2 = hv * hv;
+        const float yv = (hv2 < 1.0f - 1e-6f) ? (hv * d) / sqrtf(1.0f - hv2) : y1;
+
+        // transform (xu, yv, z0) to world coords
+        (*out_p) = P + xu * x + yv * y + z0 * z;
+    }
+
     return (1.0f / area);
 }
 
@@ -3618,36 +3688,38 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         }
     } else if (l.type == LIGHT_TYPE_RECT) {
         const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
-        const simd_fvec4 light_u = make_fvec3(l.rect.u);
-        const simd_fvec4 light_v = make_fvec3(l.rect.v);
-
-        const float r1 = rand_light_uv.get<0>() - 0.5f, r2 = rand_light_uv.get<1>() - 0.5f;
-
-        const simd_fvec4 lp = light_pos + light_u * r1 + light_v * r2;
+        const simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
         const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
-        ls.lp = offset_ray(lp, light_forward);
+        simd_fvec4 lp;
+        float pdf;
+
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+        pdf = SampleSphericalRectangle(P, light_pos, light_u, light_v, rand_light_uv, &lp);
+        if (pdf <= 0.0f)
+#endif
+        {
+            const float r1 = rand_light_uv.get<0>() - 0.5f, r2 = rand_light_uv.get<1>() - 0.5f;
+            lp = light_pos + light_u * r1 + light_v * r2;
+        }
+
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
-        ls.area = l.rect.area;
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0f) {
-            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
-        }
-
-        if (!l.visible) {
-            ls.area = 0.0f;
-        }
-
-        if (l.sky_portal != 0) {
-            simd_fvec4 env_col = make_fvec3(sc.env.env_col);
-            if (sc.env.env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map,
-                                              ls.L, sc.env.env_map_rotation, rand_tex_uv);
+            ls.lp = offset_ray(lp, light_forward);
+            ls.pdf = (pdf > 0.0f) ? pdf : (ls_dist * ls_dist) / (l.rect.area * cos_theta);
+            ls.area = l.visible ? l.rect.area : 0.0f;
+            if (l.sky_portal != 0) {
+                simd_fvec4 env_col = make_fvec3(sc.env.env_col);
+                if (sc.env.env_map != 0xffffffff) {
+                    env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
+                                                  sc.env.env_map, ls.L, sc.env.env_map_rotation, rand_tex_uv);
+                }
+                ls.col *= env_col;
+                ls.from_env = 1;
             }
-            ls.col *= env_col;
-            ls.from_env = 1;
         }
     } else if (l.type == LIGHT_TYPE_DISK) {
         const simd_fvec4 light_pos = make_fvec3(l.disk.pos);
@@ -3750,7 +3822,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
 
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
         // Spherical triangle sampling
-        pdf = SampleSphericalTriangle(P, p1, p2, p3, rand_light_uv, ls.L);
+        pdf = SampleSphericalTriangle(P, p1, p2, p3, rand_light_uv, &ls.L);
         if (pdf > 0.0f) {
             // find u, v of intersection point
             const simd_fvec4 pvec = cross(ls.L, e2);
@@ -4651,16 +4723,22 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         lcol *= mis_weight;
     } else if (l.type == LIGHT_TYPE_RECT) {
-        simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
+        const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
+        const simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
 
-        const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-        const float light_area = l.rect.area;
+        float light_pdf;
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+        light_pdf = SampleSphericalRectangle(make_fvec3(ray.o), light_pos, light_u, light_v, {}, nullptr) / pdf_factor;
+        if (light_pdf == 0.0f)
+#endif
+        {
+            const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+            const float light_area = l.rect.area;
+            const float cos_theta = dot(I, light_forward);
+            light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
+        }
 
-        const float cos_theta = dot(I, light_forward);
-
-        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
-
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         lcol *= mis_weight;
     } else if (l.type == LIGHT_TYPE_DISK) {
@@ -5354,35 +5432,23 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
             const auto p1 = make_fvec3(v1.p), p2 = make_fvec3(v2.p), p3 = make_fvec3(v3.p);
 
             float light_forward_len;
-            simd_fvec4 light_forward = normalize_len(TransformDirection(cross(p2 - p1, p3 - p1), tr->xform), light_forward_len);
+            simd_fvec4 light_forward =
+                normalize_len(TransformDirection(cross(p2 - p1, p3 - p1), tr->xform), light_forward_len);
             const float tri_area = 0.5f * light_forward_len;
 
             const float cos_theta = fabsf(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0f) {
+                float light_pdf;
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
                 const simd_fvec4 P = TransformPoint(ro, tr->inv_xform);
-                const simd_fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
-
-                const simd_fvec4 BA = orthogonalize(A, B - A);
-                const simd_fvec4 CA = orthogonalize(A, C - A);
-                const simd_fvec4 AB = orthogonalize(B, A - B);
-                const simd_fvec4 CB = orthogonalize(B, C - B);
-                const simd_fvec4 BC = orthogonalize(C, B - C);
-                const simd_fvec4 AC = orthogonalize(C, A - C);
-                const float alpha = angle_between(BA, CA);
-                const float beta = angle_between(AB, CB);
-                const float gamma = angle_between(BC, AC);
-                const float area = alpha + beta + gamma - PI;
-
-                float light_pdf = safe_div_pos(1.0f, area * pdf_factor);
-                if (area < SphericalAreaThreshold) {
+                light_pdf = SampleSphericalTriangle(P, p1, p2, p3, {}, nullptr) / pdf_factor;
+                if (light_pdf == 0.0f)
+#endif
+                {
                     light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
                 }
-#else
-                const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
-#endif
-                const float bsdf_pdf = ray.pdf;
 
+                const float bsdf_pdf = ray.pdf;
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             }
         }

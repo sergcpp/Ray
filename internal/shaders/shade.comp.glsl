@@ -231,7 +231,7 @@ vec3 ensure_valid_reflection(vec3 Ng, vec3 I, vec3 N) {
 
 // "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
 // Based on https://www.shadertoy.com/view/4tGGzd
-float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const vec3 p3, const vec2 Xi, out vec3 w) {
+float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const vec3 p3, const vec2 Xi, out vec3 out_dir) {
     // setup spherical triangle
     const vec3 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
 
@@ -282,9 +282,75 @@ float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const 
     const float t = portable_acosf(clamp(c0, -1.0, 1.0)) / denom2;
 
     // Construct the corresponding point on the sphere.
-    w = slerp(B, C_s, t);
+    out_dir = slerp(B, C_s, t);
 
     // return pdf
+    return (1.0 / area);
+}
+
+// "An Area-Preserving Parametrization for Spherical Rectangles"
+// https://www.arnoldrenderer.com/research/egsr2013_spherical_rectangle.pdf
+// NOTE: no precomputation is done, everything is calculated in-place
+float SampleSphericalRectangle(const vec3 P, const vec3 light_pos, const vec3 axis_u,
+                               const vec3 axis_v, const vec2 Xi, out vec3 out_p) {
+    const vec3 corner = light_pos - 0.5 * axis_u - 0.5 * axis_v;
+
+    float axisu_len, axisv_len;
+    const vec3 x = normalize_len(axis_u, axisu_len), y = normalize_len(axis_v, axisv_len);
+    vec3 z = cross(x, y);
+
+    // compute rectangle coords in local reference system
+    const vec3 dir = corner - P;
+    float z0 = dot(dir, z);
+    // flip z to make it point against Q
+    if (z0 > 0.0) {
+        z = -z;
+        z0 = -z0;
+    }
+    const float x0 = dot(dir, x);
+    const float y0 = dot(dir, y);
+    const float x1 = x0 + axisu_len;
+    const float y1 = y0 + axisv_len;
+    // compute internal angles (gamma_i)
+    const vec4 diff = vec4(x0, y1, x1, y0) - vec4(x1, y0, x0, y1);
+    vec4 nz = vec4(y0, x1, y1, x0) * diff;
+    nz = nz / sqrt(z0 * z0 * diff * diff + nz * nz);
+    const float g0 = portable_acosf(clamp(-nz.x * nz.y, -1.0, 1.0));
+    const float g1 = portable_acosf(clamp(-nz.y * nz.z, -1.0, 1.0));
+    const float g2 = portable_acosf(clamp(-nz.z * nz.w, -1.0, 1.0));
+    const float g3 = portable_acosf(clamp(-nz.w * nz.x, -1.0, 1.0));
+    // compute predefined constants
+    const float b0 = nz.x;
+    const float b1 = nz.z;
+    const float b0sq = b0 * b0;
+    const float k = 2 * PI - g2 - g3;
+    // compute solid angle from internal angles
+    const float area = g0 + g1 - k;
+    if (area <= SPHERICAL_AREA_THRESHOLD) {
+        return 0.0f;
+    }
+
+    // compute cu
+    const float au = Xi.x * area + k;
+    const float fu = (cos(au) * b0 - b1) / sin(au);
+    float cu = 1.0 / sqrt(fu * fu + b0sq) * (fu > 0.0 ? 1.0 : -1.0);
+    cu = clamp(cu, -1.0, 1.0);
+    // compute xu
+    float xu = -(cu * z0) / max(sqrt(1.0 - cu * cu), 1e-7);
+    xu = clamp(xu, x0, x1);
+    // compute yv
+    const float z0sq = z0 * z0;
+    const float y0sq = y0 * y0;
+    const float y1sq = y1 * y1;
+    const float d = sqrt(xu * xu + z0sq);
+    const float h0 = y0 / sqrt(d * d + y0sq);
+    const float h1 = y1 / sqrt(d * d + y1sq);
+    const float hv = h0 + Xi.y * (h1 - h0), hv2 = hv * hv;
+    const float yv = (hv2 < 1.0 - 1e-6) ? (hv * d) / sqrt(1.0 - hv2) : y1;
+
+    // transform (xu, yv, z0) to world coords
+    out_p = P + xu * x + yv * y + z0 * z;
+
     return (1.0 / area);
 }
 
@@ -952,40 +1018,45 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_RECT) {
         const vec3 light_pos = l.RECT_POS;
-        const vec3 light_u = l.RECT_U;
-        const vec3 light_v = l.RECT_V;
-
-        const float r1 = rand_light_uv.x - 0.5, r2 = rand_light_uv.y - 0.5;
-
-        const vec3 lp = light_pos + light_u * r1 + light_v * r2;
+        const vec3 light_u = l.RECT_U, light_v = l.RECT_V;
         const vec3 light_forward = normalize(cross(light_u, light_v));
 
-        ls.lp = offset_ray(lp, light_forward);
+        vec3 lp;
+        float pdf;
+
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+        pdf = SampleSphericalRectangle(P, light_pos, light_u, light_v, rand_light_uv, lp);
+        if (pdf <= 0.0)
+#endif
+        {
+            const float r1 = rand_light_uv.x - 0.5, r2 = rand_light_uv.y - 0.5;
+            lp = light_pos + light_u * r1 + light_v * r2;
+        }
+
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
-        ls.area = l.RECT_AREA;
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0) {
-            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
-        }
-
-        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
-            ls.area = 0.0;
-        }
-
-        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
-            vec3 env_col = g_params.env_col.xyz;
-            const uint env_map = floatBitsToUint(g_params.env_col.w);
-            if (env_map != 0xffffffff) {
-#if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, rand_tex_uv);
-#else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, rand_tex_uv);
-#endif
+            ls.lp = offset_ray(lp, light_forward);
+            ls.pdf = (pdf > 0.0) ? pdf : (ls_dist * ls_dist) / (ls.area * cos_theta);
+            ls.area = l.RECT_AREA;
+            if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
+                ls.area = 0.0;
             }
-            ls.col *= env_col;
-            ls.from_env = true;
+            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
+                vec3 env_col = g_params.env_col.xyz;
+                const uint env_map = floatBitsToUint(g_params.env_col.w);
+                if (env_map != 0xffffffff) {
+#if BINDLESS
+                    env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, rand_tex_uv);
+#else
+                    env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, rand_tex_uv);
+#endif
+                }
+                ls.col *= env_col;
+                ls.from_env = true;
+            }
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DISK) {
         const vec3 light_pos = l.DISK_POS;
@@ -1318,18 +1389,22 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
         lcol *= mis_weight;
     } else if (l_type == LIGHT_TYPE_RECT) {
         const vec3 light_pos = l.RECT_POS;
-        const vec3 light_u = l.RECT_U;
-        const vec3 light_v = l.RECT_V;
+        const vec3 light_u = l.RECT_U, light_v = l.RECT_V;
 
-        const vec3 light_forward = normalize(cross(light_u, light_v));
-        const float light_area = l.RECT_AREA;
+        float light_pdf;
+#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
+        vec3 _unused;
+        light_pdf = SampleSphericalRectangle(ro, light_pos, light_u, light_v, vec2(0.0), _unused) / pdf_factor;
+        if (light_pdf == 0.0)
+#endif
+        {
+            const vec3 light_forward = normalize(cross(light_u, light_v));
+            const float light_area = l.RECT_AREA;
+            const float cos_theta = dot(rd, light_forward);
+            light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
+        }
 
-        const float plane_dist = dot(light_forward, light_pos);
-        const float cos_theta = dot(rd, light_forward);
-
-        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
-
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         lcol *= mis_weight;
     } else if (l_type == LIGHT_TYPE_DISK) {
@@ -2096,29 +2171,17 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
             const float cos_theta = abs(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0) {
+                float light_pdf;
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
                 const vec3 P = (tr.inv_xform * vec4(ro, 1.0)).xyz;
-                const vec3 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
 
-                const vec3 BA = orthogonalize(A, B - A);
-                const vec3 CA = orthogonalize(A, C - A);
-                const vec3 AB = orthogonalize(B, A - B);
-                const vec3 CB = orthogonalize(B, C - B);
-                const vec3 BC = orthogonalize(C, B - C);
-                const vec3 AC = orthogonalize(C, A - C);
-
-                const float alpha = angle_between(BA, CA);
-                const float beta = angle_between(AB, CB);
-                const float gamma = angle_between(BC, AC);
-                const float area = alpha + beta + gamma - PI;
-
-                float light_pdf = 1.0 / (area * pdf_factor);
-                if (area <= SPHERICAL_AREA_THRESHOLD) {
+                vec3 _unused;
+                light_pdf = SampleSphericalTriangle(P, p1, p2, p3, vec2(0.0), _unused) / pdf_factor;
+                if (light_pdf == 0.0)
+#endif // USE_SPHERICAL_AREA_LIGHT_SAMPLING
+                {
                     light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
                 }
-#else // USE_SPHERICAL_AREA_LIGHT_SAMPLING
-                const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
-#endif // USE_SPHERICAL_AREA_LIGHT_SAMPLING
                 const float bsdf_pdf = ray.pdf;
 
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);
