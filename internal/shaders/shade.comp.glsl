@@ -231,7 +231,10 @@ vec3 ensure_valid_reflection(vec3 Ng, vec3 I, vec3 N) {
 
 // "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
 // Based on https://www.shadertoy.com/view/4tGGzd
-float SampleSphericalTriangle(const vec3 A, const vec3 B, const vec3 C, const vec2 Xi, out vec3 w) {
+float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const vec3 p3, const vec2 Xi, out vec3 w) {
+    // setup spherical triangle
+    const vec3 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
+
     // calculate internal angles of spherical triangle: alpha, beta and gamma
     const vec3 BA = orthogonalize(A, B - A);
     const vec3 CA = orthogonalize(A, C - A);
@@ -1096,8 +1099,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
 
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
         // Spherical triangle sampling
-        const vec3 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
-        pdf = SampleSphericalTriangle(A, B, C, rand_light_uv, ls.L);
+        pdf = SampleSphericalTriangle(P, p1, p2, p3, rand_light_uv, ls.L);
         if (pdf > 0.0) {
             // find u, v of intersection point
             const vec3 pvec = cross(ls.L, e2);

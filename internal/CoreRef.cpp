@@ -1492,8 +1492,11 @@ force_inline float angle_between(const simd_fvec4 &v1, const simd_fvec4 &v2) {
 
 // "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
 // Based on https://www.shadertoy.com/view/4tGGzd
-float SampleSphericalTriangle(const simd_fvec4 &A, const simd_fvec4 &B, const simd_fvec4 &C, const simd_fvec2 Xi,
-                              simd_fvec4 &w) {
+float SampleSphericalTriangle(const simd_fvec4 &P, const simd_fvec4 &p1, const simd_fvec4 &p2, const simd_fvec4 &p3,
+                              const simd_fvec2 Xi, simd_fvec4 &w) {
+    // Setup spherical triangle
+    const simd_fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
+
     // calculate internal angles of spherical triangle: alpha, beta and gamma
     const simd_fvec4 BA = orthogonalize(A, B - A);
     const simd_fvec4 CA = orthogonalize(A, C - A);
@@ -3753,8 +3756,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
 
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
         // Spherical triangle sampling
-        const simd_fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
-        pdf = SampleSphericalTriangle(A, B, C, rand_light_uv, ls.L);
+        pdf = SampleSphericalTriangle(P, p1, p2, p3, rand_light_uv, ls.L);
         if (pdf > 0.0f) {
             // find u, v of intersection point
             const simd_fvec4 pvec = cross(ls.L, e2);

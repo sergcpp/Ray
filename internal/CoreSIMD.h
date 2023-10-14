@@ -1740,8 +1740,17 @@ template <int S> force_inline simd_fvec<S> portable_acosf(const simd_fvec<S> &x)
 // "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
 // Based on https://www.shadertoy.com/view/4tGGzd
 template <int S>
-simd_fvec<S> SampleSphericalTriangle(const simd_fvec<S> A[3], const simd_fvec<S> B[3], const simd_fvec<S> C[3],
+simd_fvec<S> SampleSphericalTriangle(const simd_fvec<S> P[3], const float p1[3], const float p2[3], const float p3[3],
                                      const simd_fvec<S> Xi[2], simd_fvec<S> w[3]) {
+    // setup spherical triangle
+    simd_fvec<S> A[3], B[3], C[3];
+    UNROLLED_FOR(i, 3, { A[i] = p1[i] - P[i]; })
+    UNROLLED_FOR(i, 3, { B[i] = p2[i] - P[i]; })
+    UNROLLED_FOR(i, 3, { C[i] = p3[i] - P[i]; })
+    normalize(A);
+    normalize(B);
+    normalize(C);
+
     simd_fvec<S> BA[3], CA[3], AB[3], CB[3], BC[3], AC[3];
     // calculate internal angles of spherical triangle: alpha, beta and gamma
     for (int i = 0; i < 3; ++i) {
@@ -5696,16 +5705,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
             // Spherical triangle sampling
-            simd_fvec<S> A[3], B[3], C[3];
-            UNROLLED_FOR(i, 3, { A[i] = p1[i] - P[i]; })
-            UNROLLED_FOR(i, 3, { B[i] = p2[i] - P[i]; })
-            UNROLLED_FOR(i, 3, { C[i] = p3[i] - P[i]; })
-            normalize(A);
-            normalize(B);
-            normalize(C);
-
             simd_fvec<S> dir[3];
-            pdf = SampleSphericalTriangle(A, B, C, rand_light_uv, dir);
+            pdf = SampleSphericalTriangle(P, p1, p2, p3, rand_light_uv, dir);
             const simd_ivec<S> pdf_positive = ray_queue[index] & simd_cast(pdf > 0.0f);
             if (pdf_positive.not_all_zeros()) {
                 // find u, v, t of intersection point
