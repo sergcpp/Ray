@@ -7559,7 +7559,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
 
                     const simd_fvec<S> light_forward_len = length(light_forward);
                     UNROLLED_FOR(i, 3, { light_forward[i] /= light_forward_len; })
-                    const simd_fvec<S> tri_area = 0.5f * light_forward_len;
 
                     const simd_fvec<S> cos_theta = abs(dot3(I, light_forward));
                     const simd_ivec<S> emissive_mask =
