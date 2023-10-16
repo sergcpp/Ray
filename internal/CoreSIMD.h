@@ -2411,8 +2411,8 @@ template <int S> void create_tbn(const simd_fvec<S> N[3], simd_fvec<S> out_T[3],
 }
 
 template <int S>
-void MapToCone(const simd_fvec<S> &r1, const simd_fvec<S> &r2, const simd_fvec<S> N[3], float radius,
-               simd_fvec<S> out_V[3]) {
+void map_to_cone(const simd_fvec<S> &r1, const simd_fvec<S> &r2, const simd_fvec<S> N[3], float radius,
+                 simd_fvec<S> out_V[3]) {
     const simd_fvec<S> offset[2] = {2.0f * r1 - 1.0f, 2.0f * r2 - 1.0f};
 
     UNROLLED_FOR(i, 3, { out_V[i] = N[i]; })
@@ -2432,6 +2432,17 @@ void MapToCone(const simd_fvec<S> &r1, const simd_fvec<S> &r2, const simd_fvec<S
 
     const simd_fvec<S> mask = (offset[0] == 0.0f & offset[1] == 0.0f);
     UNROLLED_FOR(i, 3, { where(mask, out_V[i]) = N[i]; })
+}
+
+template <int S>
+force_inline simd_fvec<S> sphere_intersection(const float center[3], const float radius, const simd_fvec<S> ro[3],
+                                              const simd_fvec<S> rd[3]) {
+    const simd_fvec<S> oc[3] = {ro[0] - center[0], ro[1] - center[1], ro[2] - center[2]};
+    const simd_fvec<S> a = dot3(rd, rd);
+    const simd_fvec<S> b = 2 * dot3(oc, rd);
+    const simd_fvec<S> c = dot3(oc, oc) - radius * radius;
+    const simd_fvec<S> discriminant = b * b - 4 * a * c;
+    return (-b - sqrt(max(discriminant, 0.0f))) / (2 * a);
 }
 
 template <int S> force_inline simd_fvec<S> schlick_weight(const simd_fvec<S> &u) {
@@ -5526,50 +5537,31 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
         where(ray_queue[index], ls.cast_shadow) = l.cast_shadow ? -1 : 0;
 
         if (l.type == LIGHT_TYPE_SPHERE) {
-            simd_fvec<S> center_to_surface[3];
-            UNROLLED_FOR(i, 3, { center_to_surface[i] = P[i] - l.sph.pos[i]; })
-            normalize(center_to_surface);
+            const simd_fvec<S> r1 = rand_light_uv[0], r2 = rand_light_uv[1];
 
-            // sample hemisphere
-            const simd_fvec<S> r = sqrt(max(0.0f, 1.0f - rand_light_uv[0] * rand_light_uv[0]));
-            const simd_fvec<S> phi = 2.0f * PI * rand_light_uv[1];
+            const float *center = l.sph.pos;
+            const simd_fvec<S> surface_to_center[3] = {center[0] - P[0], center[1] - P[1], center[2] - P[2]};
+            simd_fvec<S> sampled_dir[3];
+            map_to_cone(r1, r2, surface_to_center, l.sph.radius, sampled_dir);
+            const simd_fvec<S> disk_dist = normalize(sampled_dir);
 
-            const simd_fvec<S> sampled_dir[3] = {r * cos(phi), r * sin(phi), rand_light_uv[0]};
+            const simd_fvec<S> ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
 
-            simd_fvec<S> LT[3], LB[3];
-            create_tbn(center_to_surface, LT, LB);
-
-            simd_fvec<S> _sampled_dir[3];
-            UNROLLED_FOR(i, 3, {
-                _sampled_dir[i] =
-                    LT[i] * sampled_dir[0] + LB[i] * sampled_dir[1] + center_to_surface[i] * sampled_dir[2];
-            })
-
-            simd_fvec<S> light_surf_pos[3];
-            UNROLLED_FOR(i, 3, { light_surf_pos[i] = l.sph.pos[i] + _sampled_dir[i] * l.sph.radius; })
-
-            simd_fvec<S> L[3];
-            UNROLLED_FOR(i, 3, { L[i] = light_surf_pos[i] - P[i]; })
-            const simd_fvec<S> ls_dist = normalize(L);
-
-            simd_fvec<S> light_forward[3];
-            UNROLLED_FOR(i, 3, { light_forward[i] = light_surf_pos[i] - l.sph.pos[i]; })
+            const simd_fvec<S> light_surf_pos[3] = {P[0] + sampled_dir[0] * ls_dist, P[1] + sampled_dir[1] * ls_dist,
+                                                    P[2] + sampled_dir[2] * ls_dist};
+            simd_fvec<S> light_forward[3] = {light_surf_pos[0] - center[0], light_surf_pos[1] - center[1],
+                                             light_surf_pos[2] - center[2]};
             normalize(light_forward);
 
             simd_fvec<S> lp_biased[3];
             offset_ray(light_surf_pos, light_forward, lp_biased);
+
             UNROLLED_FOR(i, 3, {
                 where(ray_queue[index], ls.lp[i]) = lp_biased[i];
-                where(ray_queue[index], ls.L[i]) = L[i];
+                where(ray_queue[index], ls.L[i]) = sampled_dir[i];
             })
-
             where(ray_queue[index], ls.area) = l.sph.area;
-
-            const simd_fvec<S> cos_theta = abs(dot3(ls.L, light_forward));
-
-            simd_fvec<S> pdf = safe_div_pos(ls_dist * ls_dist, 0.5f * ls.area * cos_theta);
-            where(cos_theta <= 0.0f, pdf) = 0.0f;
-            where(ray_queue[index], ls.pdf) = pdf;
+            where(ray_queue[index], ls.pdf) = safe_div_pos(disk_dist * disk_dist, PI * l.sph.radius * l.sph.radius);
 
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;
@@ -5600,7 +5592,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 const float radius = tanf(l.dir.angle);
 
                 simd_fvec<S> V[3];
-                MapToCone(rand_light_uv[0], rand_light_uv[1], ls.L, radius, V);
+                map_to_cone(rand_light_uv[0], rand_light_uv[1], ls.L, radius, V);
                 safe_normalize(V);
 
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = V[i]; })
@@ -6511,12 +6503,12 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
         }
 
         if (l.type == LIGHT_TYPE_SPHERE) {
-            simd_fvec<S> dd[3] = {l.sph.pos[0] - P[0], l.sph.pos[1] - P[1], l.sph.pos[2] - P[2]};
-            normalize(dd);
+            simd_fvec<S> disk_normal[3] = {ray.o[0] - l.sph.pos[0], ray.o[1] - l.sph.pos[1], ray.o[2] - l.sph.pos[2]};
+            normalize(disk_normal);
+            const simd_fvec<S> disk_dist = dot3(ray.o, disk_normal) - dot3(l.sph.pos, disk_normal);
 
-            const simd_fvec<S> cos_theta = dot3(ray.d, dd);
-
-            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, 0.5f * l.sph.area * cos_theta * pdf_factor);
+            const simd_fvec<S> light_pdf =
+                safe_div(disk_dist * disk_dist, PI * l.sph.radius * l.sph.radius * pdf_factor);
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -6621,7 +6613,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_DiffuseNode(const light_sample_t<S> &ls,
 
     UNROLLED_FOR(i, 3, { where(mask, sh_r.o[i]) = P_biased[i]; })
     UNROLLED_FOR(i, 3, {
-        const simd_fvec<S> temp = ls.col[i] * diff_col[i] * safe_div(mix_weight * mis_weight, ls.pdf);
+        const simd_fvec<S> temp = ls.col[i] * diff_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
         where(mask, sh_r.c[i]) = ray.c[i] * temp;
         where(mask & ~ls.cast_shadow, out_col[i]) += temp;
     })

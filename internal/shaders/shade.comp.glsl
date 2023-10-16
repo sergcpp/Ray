@@ -874,7 +874,7 @@ void create_tbn(const vec3 N, out vec3 out_T, out vec3 out_B) {
     out_B = cross(N, out_T);
 }
 
-vec3 MapToCone(float r1, float r2, vec3 N, float radius) {
+vec3 map_to_cone(float r1, float r2, vec3 N, float radius) {
     const vec2 offset = 2.0 * vec2(r1, r2) - vec2(1.0);
 
     if (offset[0] == 0.0 && offset[1] == 0.0) {
@@ -897,6 +897,15 @@ vec3 MapToCone(float r1, float r2, vec3 N, float radius) {
     create_tbn(N, LT, LB);
 
     return N + uv[0] * LT + uv[1] * LB;
+}
+
+float sphere_intersection(const vec3 center, const float radius, const vec3 ro, const vec3 rd) {
+    const vec3 oc = ro - center;
+    const float a = dot(rd, rd);
+    const float b = 2 * dot(oc, rd);
+    const float c = dot(oc, oc) - radius * radius;
+    const float discriminant = b * b - 4 * a * c;
+    return (-b - sqrt(max(discriminant, 0.0f))) / (2 * a);
 }
 
 void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_light, const vec2 rand_light_uv,
@@ -961,30 +970,22 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
-        float dist_to_center;
-        const vec3 center_to_surface = normalize_len(P - l.SPH_POS, dist_to_center);
+        const vec3 surface_to_center = l.SPH_POS - P;
+        float disk_dist;
+        const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, surface_to_center, l.SPH_RADIUS), disk_dist);
 
-        // sample hemisphere
-        const float r = sqrt(clamp(1.0 - r1 * r1, 0.0, 1.0));
-        const float phi = 2.0 * PI * r2;
-        vec3 sampled_dir = vec3(r * cos(phi), r * sin(phi), r1);
+        const float ls_dist = sphere_intersection(l.SPH_POS, l.SPH_RADIUS, P, sampled_dir);
 
-        vec3 LT, LB;
-        create_tbn(center_to_surface, LT, LB);
-
-        sampled_dir = LT * sampled_dir[0] + LB * sampled_dir[1] + center_to_surface * sampled_dir[2];
-
-        const vec3 light_surf_pos = l.SPH_POS + sampled_dir * l.SPH_RADIUS;
+        const vec3 light_surf_pos = P + sampled_dir * ls_dist;
         const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
 
         ls.lp = offset_ray(light_surf_pos, light_forward);
-        float ls_dist;
-        ls.L = normalize_len(light_surf_pos - P, ls_dist);
+        ls.L = sampled_dir;
         ls.area = l.SPH_AREA;
+        ls.pdf = (disk_dist * disk_dist) / (PI * l.SPH_RADIUS * l.SPH_RADIUS);
 
-        const float cos_theta = abs(dot(ls.L, light_forward));
-        [[flatten]] if (cos_theta > 0.0) {
-            ls.pdf = (ls_dist * ls_dist) / (0.5 * ls.area * cos_theta);
+        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
+            ls.area = 0.0;
         }
 
         [[dont_flatten]] if (l.SPH_SPOT > 0.0) {
@@ -1005,7 +1006,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
             const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
             const float radius = tan(l.DIR_ANGLE);
-            ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
+            ls.L = normalize(map_to_cone(r1, r2, ls.L, radius));
             ls.area = PI * radius * radius;
 
             const float cos_theta = dot(ls.L, l.DIR_DIR);
@@ -1354,16 +1355,10 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
 
     const uint l_type = (l.type_and_param0.x & 0x7);
     if (l_type == LIGHT_TYPE_SPHERE) {
-        const vec3 light_pos = l.SPH_POS;
-        const float light_area = l.SPH_AREA;
+        const vec3 disk_normal = normalize(ro - l.SPH_POS);
+        const float disk_dist = dot(ro, disk_normal) - dot(l.SPH_POS, disk_normal);
 
-        const vec3 op = light_pos - ro;
-        const float b = dot(op, rd);
-        const float det = sqrt(b * b - dot(op, op) + l.SPH_RADIUS * l.SPH_RADIUS);
-
-        const float cos_theta = dot(rd, normalize(light_pos - P));
-
-        const float light_pdf = (inter.t * inter.t) / (0.5 * light_area * cos_theta * pdf_factor);
+        const float light_pdf = (disk_dist * disk_dist) / (PI * l.SPH_RADIUS * l.SPH_RADIUS * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);

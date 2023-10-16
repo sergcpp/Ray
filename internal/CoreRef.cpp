@@ -961,7 +961,7 @@ void create_tbn(const simd_fvec4 &N, simd_fvec4 &out_T, simd_fvec4 &out_B) {
     out_B = cross(N, out_T);
 }
 
-simd_fvec4 MapToCone(float r1, float r2, simd_fvec4 N, float radius) {
+simd_fvec4 map_to_cone(float r1, float r2, simd_fvec4 N, float radius) {
     const simd_fvec2 offset = 2.0f * simd_fvec2(r1, r2) - simd_fvec2(1.0f);
     if (offset.get<0>() == 0.0f && offset.get<1>() == 0.0f) {
         return N;
@@ -983,6 +983,16 @@ simd_fvec4 MapToCone(float r1, float r2, simd_fvec4 N, float radius) {
     create_tbn(N, LT, LB);
 
     return N + uv.get<0>() * LT + uv.get<1>() * LB;
+}
+
+force_inline float sphere_intersection(const simd_fvec4 &center, const float radius, const simd_fvec4 &ro,
+                                       const simd_fvec4 &rd) {
+    const simd_fvec4 oc = ro - center;
+    const float a = dot(rd, rd);
+    const float b = 2 * dot(oc, rd);
+    const float c = dot(oc, oc) - radius * radius;
+    const float discriminant = b * b - 4 * a * c;
+    return (-b - sqrtf(fmaxf(discriminant, 0.0f))) / (2 * a);
 }
 
 simd_fvec4 rotate_around_axis(const simd_fvec4 &p, const simd_fvec4 &axis, const float angle) {
@@ -3627,31 +3637,20 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
     if (l.type == LIGHT_TYPE_SPHERE) {
         const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
-        float dist_to_center;
-        simd_fvec4 center_to_surface = normalize_len(P - make_fvec3(l.sph.pos), dist_to_center);
+        const simd_fvec4 center = make_fvec3(l.sph.pos);
+        const simd_fvec4 surface_to_center = center - P;
+        float disk_dist;
+        const simd_fvec4 sampled_dir = normalize_len(map_to_cone(r1, r2, surface_to_center, l.sph.radius), disk_dist);
 
-        // sample hemisphere
-        const float r = sqrtf(fmaxf(0.0f, 1.0f - r1 * r1));
-        const float phi = 2.0f * PI * r2;
-        auto sampled_dir = simd_fvec4{r * cosf(phi), r * sinf(phi), r1, 0.0f};
+        const float ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
 
-        simd_fvec4 LT, LB;
-        create_tbn(center_to_surface, LT, LB);
-
-        sampled_dir = LT * sampled_dir.get<0>() + LB * sampled_dir.get<1>() + center_to_surface * sampled_dir.get<2>();
-
-        const simd_fvec4 light_surf_pos = make_fvec3(l.sph.pos) + sampled_dir * l.sph.radius;
-        const simd_fvec4 light_forward = normalize(light_surf_pos - make_fvec3(l.sph.pos));
+        const simd_fvec4 light_surf_pos = P + sampled_dir * ls_dist;
+        const simd_fvec4 light_forward = normalize(light_surf_pos - center);
 
         ls.lp = offset_ray(light_surf_pos, light_forward);
-        float ls_dist;
-        ls.L = normalize_len(light_surf_pos - P, ls_dist);
+        ls.L = sampled_dir;
         ls.area = l.sph.area;
-
-        const float cos_theta = fabsf(dot(ls.L, light_forward));
-        if (cos_theta > 0.0f) {
-            ls.pdf = (ls_dist * ls_dist) / (0.5f * ls.area * cos_theta);
-        }
+        ls.pdf = (disk_dist * disk_dist) / (PI * l.sph.radius * l.sph.radius);
 
         if (!l.visible) {
             ls.area = 0.0f;
@@ -3674,7 +3673,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
             const float radius = tanf(l.dir.angle);
-            ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
+            ls.L = normalize(map_to_cone(r1, r2, ls.L, radius));
             ls.area = PI * radius * radius;
 
             const float cos_theta = dot(ls.L, make_fvec3(l.dir.dir));
@@ -3723,8 +3722,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         }
     } else if (l.type == LIGHT_TYPE_DISK) {
         const simd_fvec4 light_pos = make_fvec3(l.disk.pos);
-        const simd_fvec4 light_u = make_fvec3(l.disk.u);
-        const simd_fvec4 light_v = make_fvec3(l.disk.v);
+        const simd_fvec4 light_u = make_fvec3(l.disk.u), light_v = make_fvec3(l.disk.v);
 
         const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
@@ -4671,8 +4669,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
                                                    const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
                                                    Span<const light_t> lights, const uint32_t lights_count,
                                                    const simd_fvec2 &rand) {
-    const simd_fvec4 I = make_fvec3(ray.d);
-    const simd_fvec4 P = make_fvec3(ray.o) + inter.t * I;
+    const simd_fvec4 ro = make_fvec3(ray.o), I = make_fvec3(ray.d);
 
     const light_t &l = lights[-inter.obj_index - 1];
 #if USE_HIERARCHICAL_NEE
@@ -4692,11 +4689,11 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
 #if USE_NEE
     if (l.type == LIGHT_TYPE_SPHERE) {
         const simd_fvec4 light_pos = make_fvec3(l.sph.pos);
-        const float light_area = l.sph.area;
 
-        const float cos_theta = dot(I, normalize(light_pos - P));
+        const simd_fvec4 disk_normal = normalize(ro - light_pos);
+        const float disk_dist = dot(ro, disk_normal) - dot(light_pos, disk_normal);
 
-        const float light_pdf = (inter.t * inter.t) / (0.5f * light_area * cos_theta * pdf_factor);
+        const float light_pdf = (disk_dist * disk_dist) / (PI * l.sph.radius * l.sph.radius * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -4728,7 +4725,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
 
         float light_pdf;
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-        light_pdf = SampleSphericalRectangle(make_fvec3(ray.o), light_pos, light_u, light_v, {}, nullptr) / pdf_factor;
+        light_pdf = SampleSphericalRectangle(ro, light_pos, light_u, light_v, {}, nullptr) / pdf_factor;
         if (light_pdf == 0.0f)
 #endif
         {
