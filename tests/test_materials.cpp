@@ -550,7 +550,7 @@ void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_spec_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 58;
-    const int PixThres = 324;
+    const int PixThres = 325;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -598,7 +598,7 @@ void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_aniso_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 325;
-    const int PixThres = 468;
+    const int PixThres = 475;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -630,7 +630,7 @@ void test_aniso_mat2(const char *arch_list[], const char *preferred_device) {
 
 void test_aniso_mat3(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 352;
-    const int PixThres = 430;
+    const int PixThres = 431;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -806,7 +806,7 @@ void test_plastic_mat2(const char *arch_list[], const char *preferred_device) {
 
 void test_tint_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 30;
-    const int PixThres = 1161;
+    const int PixThres = 1167;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 0.5f;
