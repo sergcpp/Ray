@@ -3845,7 +3845,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             ls.L = normalize_len(lp - P, ls_dist);
 
             const float cos_theta = -dot(ls.L, light_forward);
-            pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
+            pdf = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
         }
 
         float cos_theta = -dot(ls.L, light_forward);
