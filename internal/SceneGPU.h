@@ -1486,12 +1486,14 @@ inline void Ray::NS::Scene::Finalize() {
             light_t l = {};
 
             l.type = LIGHT_TYPE_ENV;
+            l.visible = 1;
             l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
 
             const std::pair<uint32_t, uint32_t> li = lights_.push(l);
             env_map_light_ = LightHandle{li.first, li.second};
             li_indices_.PushBack(env_map_light_._index);
+            visible_lights_.PushBack(env_map_light_._index);
         }
     } else {
         // Dummy
