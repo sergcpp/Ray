@@ -79,7 +79,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+30F; // 3.402823466e+38F
 
-const int MAX_BOUNCES = 32;
+const int MAX_BOUNCES = 128;
 
 const float LIGHT_ATTEN_CUTOFF = 0.001f;
 
