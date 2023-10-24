@@ -8,7 +8,6 @@
 //
 // Useful macros for debugging
 //
-#define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
 #define USE_HIERARCHICAL_NEE 1
 #define USE_PATH_TERMINATION 1

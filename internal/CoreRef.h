@@ -217,29 +217,28 @@ float BRDF_PrincipledDiffuse(const simd_fvec4 &V, const simd_fvec4 &N, const sim
 simd_fvec4 Evaluate_OrenDiffuse_BSDF(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L, float roughness,
                                      const simd_fvec4 &base_color);
 simd_fvec4 Sample_OrenDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                   float roughness, const simd_fvec4 &base_color, float rand_u, float rand_v,
-                                   simd_fvec4 &out_V);
+                                   float roughness, const simd_fvec4 &base_color, simd_fvec2 rand, simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_PrincipledDiffuse_BSDF(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L,
                                            float roughness, const simd_fvec4 &base_color, const simd_fvec4 &sheen_color,
                                            bool uniform_sampling);
 simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
                                          const simd_fvec4 &I, float roughness, const simd_fvec4 &base_color,
-                                         const simd_fvec4 &sheen_color, bool uniform_sampling, float rand_u,
-                                         float rand_v, simd_fvec4 &out_V);
+                                         const simd_fvec4 &sheen_color, bool uniform_sampling, simd_fvec2 rand,
+                                         simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
-                                     const simd_fvec4 &reflected_dir_ts, float alpha_x, float alpha_y, float spec_ior,
+                                     const simd_fvec4 &reflected_dir_ts, simd_fvec2 alpha, float spec_ior,
                                      float spec_F0, const simd_fvec4 &spec_col);
 simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
                                    float roughness, float anisotropic, float spec_ior, float spec_F0,
-                                   const simd_fvec4 &spec_col, float rand_u, float rand_v, simd_fvec4 &out_V);
+                                   const simd_fvec4 &spec_col, simd_fvec2 rand, simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
                                        const simd_fvec4 &refr_dir_ts, float roughness2, float eta,
                                        const simd_fvec4 &refr_col);
 simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                     float roughness, float eta, const simd_fvec4 &refr_col, float rand_u, float rand_v,
+                                     float roughness, float eta, const simd_fvec4 &refr_col, simd_fvec2 rand,
                                      simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
@@ -247,7 +246,7 @@ simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec4 &view_dir_ts, cons
                                              float clearcoat_ior, float clearcoat_F0);
 simd_fvec4 Sample_PrincipledClearcoat_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
                                            const simd_fvec4 &I, float clearcoat_roughness2, float clearcoat_ior,
-                                           float clearcoat_F0, float rand_u, float rand_v, simd_fvec4 &out_V);
+                                           float clearcoat_F0, simd_fvec2 rand, simd_fvec4 &out_V);
 
 float Evaluate_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels, const simd_fvec4 &L);
 simd_fvec4 Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels, float rand,
@@ -316,21 +315,20 @@ simd_fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray,
                                 const simd_fvec4 &base_color, float roughness, float mix_weight, bool use_mis,
                                 shadow_ray_t &sh_r);
 void Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                        float rand_u, float rand_v, float mix_weight, ray_data_t &new_ray);
+                        simd_fvec2 rand, float mix_weight, ray_data_t &new_ray);
 
 simd_fvec4 Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
                                const simd_fvec4 &base_color, float roughness2, float spec_ior, float spec_F0,
                                float mix_weight, bool use_mis, shadow_ray_t &sh_r);
 void Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                       float spec_ior, float spec_F0, float rand_u, float rand_v, float mix_weight,
-                       ray_data_t &new_ray);
+                       float spec_ior, float spec_F0, simd_fvec2 rand, float mix_weight, ray_data_t &new_ray);
 
 simd_fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
                                    const simd_fvec4 &base_color, float roughness2, float eta, float mix_weight,
                                    bool use_mis, shadow_ray_t &sh_r);
 void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                           bool is_backfacing, float int_ior, float ext_ior, float rand_u, float rand_v,
-                           float mix_weight, ray_data_t &new_ray);
+                           bool is_backfacing, float int_ior, float ext_ior, simd_fvec2 rand, float mix_weight,
+                           ray_data_t &new_ray);
 
 struct diff_params_t {
     simd_fvec4 base_color;
@@ -372,8 +370,7 @@ simd_fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &r
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
                            const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
                            const clearcoat_params_t &coat, const transmission_params_t &trans, float metallic,
-                           float transmission, float rand_u, float rand_v, float mix_rand, float mix_weight,
-                           ray_data_t &new_ray);
+                           float transmission, simd_fvec2 rand, float mix_rand, float mix_weight, ray_data_t &new_ray);
 
 // Shade
 color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
@@ -382,8 +379,8 @@ color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, co
                           ray_data_t *out_secondary_rays, int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                           int *out_shadow_rays_count, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
 void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
-                  const uint32_t rand_seq[], uint32_t rand_seed, int iteration, const scene_data_t &sc, uint32_t node_index,
-                  const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                  const uint32_t rand_seq[], uint32_t rand_seed, int iteration, const scene_data_t &sc,
+                  uint32_t node_index, const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                   int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                   float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
                   color_rgba_t *out_depth_normal);

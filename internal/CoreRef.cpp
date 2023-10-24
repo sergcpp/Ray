@@ -10,7 +10,6 @@
 //
 // Useful macros for debugging
 //
-#define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
 #define USE_PATH_TERMINATION 1
 #define USE_HIERARCHICAL_NEE 1
@@ -841,10 +840,29 @@ simd_fvec4 SampleVNDF_Hemisphere_CrossSect(const simd_fvec4 &Vh, float U1, float
 }
 
 // https://arxiv.org/pdf/2306.05044.pdf
-simd_fvec4 SampleVNDF_Hemisphere_SphCap(const simd_fvec4 &Vh, float U1, float U2) {
+simd_fvec4 SampleVNDF_Hemisphere_SphCap(const simd_fvec4 &Vh, const simd_fvec2 alpha, const simd_fvec2 rand) {
     // sample a spherical cap in (-Vh.z, 1]
-    const float phi = 2.0f * PI * U1;
-    const float z = fma(1.0f - U2, 1.0f + Vh.get<2>(), -Vh.get<2>());
+    const float phi = 2.0f * PI * rand.get<0>();
+    const float z = fma(1.0f - rand.get<1>(), 1.0f + Vh.get<2>(), -Vh.get<2>());
+    const float sin_theta = sqrtf(saturate(1.0f - z * z));
+    const float x = sin_theta * cosf(phi);
+    const float y = sin_theta * sinf(phi);
+    const simd_fvec4 c = simd_fvec4{x, y, z, 0.0f};
+    // normalization will be done later
+    return c + Vh;
+}
+
+// https://gpuopen.com/download/publications/Bounded_VNDF_Sampling_for_Smith-GGX_Reflections.pdf
+simd_fvec4 SampleVNDF_Hemisphere_SphCap_Bounded(const simd_fvec4 &Ve, const simd_fvec4 &Vh, const simd_fvec2 alpha,
+                                                const simd_fvec2 rand) {
+    // sample a spherical cap in (-Vh.z, 1]
+    const float phi = 2.0f * PI * rand.get<0>();
+    const float a = saturate(fminf(alpha.get<0>(), alpha.get<1>()));
+    const float s = 1.0f + length(simd_fvec2{Ve.get<0>(), Ve.get<1>()});
+    const float a2 = a * a, s2 = s * s;
+    const float k = (1.0f - a2) * s2 / (s2 + a2 * Ve.get<2>() * Ve.get<2>());
+    const float b = (Ve.get<2>() > 0.0f) ? k * Vh.get<2>() : Vh.get<2>();
+    const float z = fma(1.0f - rand.get<1>(), 1.0f + b, -b);
     const float sin_theta = sqrtf(saturate(1.0f - z * z));
     const float x = sin_theta * cosf(phi);
     const float y = sin_theta * sinf(phi);
@@ -857,24 +875,51 @@ simd_fvec4 SampleVNDF_Hemisphere_SphCap(const simd_fvec4 &Vh, float U1, float U2
 // Input alpha_x, alpha_y: roughness parameters
 // Input U1, U2: uniform random numbers
 // Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
-simd_fvec4 SampleGGX_VNDF(const simd_fvec4 &Ve, float alpha_x, float alpha_y, float U1, float U2) {
+simd_fvec4 SampleGGX_VNDF(const simd_fvec4 &Ve, simd_fvec2 alpha, simd_fvec2 rand) {
     // transforming the view direction to the hemisphere configuration
-    const simd_fvec4 Vh = normalize(simd_fvec4(alpha_x * Ve.get<0>(), alpha_y * Ve.get<1>(), Ve.get<2>(), 0.0f));
+    const simd_fvec4 Vh =
+        normalize(simd_fvec4(alpha.get<0>() * Ve.get<0>(), alpha.get<1>() * Ve.get<1>(), Ve.get<2>(), 0.0f));
     // sample the hemisphere
-    const simd_fvec4 Nh = SampleVNDF_Hemisphere_SphCap(Vh, U1, U2);
+    const simd_fvec4 Nh = SampleVNDF_Hemisphere_SphCap(Vh, alpha, rand);
     // transforming the normal back to the ellipsoid configuration
-    const simd_fvec4 Ne =
-        normalize(simd_fvec4(alpha_x * Nh.get<0>(), alpha_y * Nh.get<1>(), fmaxf(0.0f, Nh.get<2>()), 0.0f));
+    const simd_fvec4 Ne = normalize(
+        simd_fvec4(alpha.get<0>() * Nh.get<0>(), alpha.get<1>() * Nh.get<1>(), fmaxf(0.0f, Nh.get<2>()), 0.0f));
     return Ne;
 }
 
+simd_fvec4 SampleGGX_VNDF_Bounded(const simd_fvec4 &Ve, simd_fvec2 alpha, simd_fvec2 rand) {
+    // transforming the view direction to the hemisphere configuration
+    const simd_fvec4 Vh =
+        normalize(simd_fvec4(alpha.get<0>() * Ve.get<0>(), alpha.get<1>() * Ve.get<1>(), Ve.get<2>(), 0.0f));
+    // sample the hemisphere
+    const simd_fvec4 Nh = SampleVNDF_Hemisphere_SphCap_Bounded(Ve, Vh, alpha, rand);
+    // transforming the normal back to the ellipsoid configuration
+    const simd_fvec4 Ne = normalize(
+        simd_fvec4(alpha.get<0>() * Nh.get<0>(), alpha.get<1>() * Nh.get<1>(), fmaxf(0.0f, Nh.get<2>()), 0.0f));
+    return Ne;
+}
+
+float GGX_VNDF_Reflection_Bounded_PDF(const float D, const simd_fvec4 &view_dir_ts, const simd_fvec2 alpha) {
+    const simd_fvec2 ai = alpha * simd_fvec2{view_dir_ts.get<0>(), view_dir_ts.get<1>()};
+    const float len2 = dot(ai, ai);
+    const float t = sqrtf(len2 + view_dir_ts.get<2>() * view_dir_ts.get<2>());
+    if (view_dir_ts.get<2>() >= 0.0f) {
+        const float a = saturate(fminf(alpha.get<0>(), alpha.get<1>()));
+        const float s = 1.0f + length(simd_fvec2{view_dir_ts.get<0>(), view_dir_ts.get<1>()});
+        const float a2 = a * a, s2 = s * s;
+        const float k = (1.0f - a2) * s2 / (s2 + a2 * view_dir_ts.get<2>() * view_dir_ts.get<2>());
+        return D / (2.0f * (k * view_dir_ts.get<2>() + t));
+    }
+    return D * (t - view_dir_ts.get<2>()) / (2.0f * len2);
+}
+
 // Smith shadowing function
-force_inline float G1(const simd_fvec4 &Ve, float alpha_x, float alpha_y) {
-    alpha_x *= alpha_x;
-    alpha_y *= alpha_y;
-    const float delta = (-1.0f + sqrtf(1.0f + safe_div_pos(alpha_x * sqr(Ve.get<0>()) + alpha_y * sqr(Ve.get<1>()),
-                                                           sqr(Ve.get<2>())))) /
-                        2.0f;
+force_inline float G1(const simd_fvec4 &Ve, simd_fvec2 alpha) {
+    alpha *= alpha;
+    const float delta =
+        (-1.0f + sqrtf(1.0f + safe_div_pos(alpha.get<0>() * sqr(Ve.get<0>()) + alpha.get<1>() * sqr(Ve.get<1>()),
+                                           sqr(Ve.get<2>())))) /
+        2.0f;
     return 1.0f / (1.0f + delta);
 }
 
@@ -899,15 +944,15 @@ float D_GTR2(const float N_dot_H, const float a) {
     return a2 / (PI * t * t);
 }
 
-float D_GGX(const simd_fvec4 &H, const float alpha_x, const float alpha_y) {
+float D_GGX(const simd_fvec4 &H, const simd_fvec2 alpha) {
     if (H.get<2>() == 0.0f) {
         return 0.0f;
     }
-    const float sx = -H.get<0>() / (H.get<2>() * alpha_x);
-    const float sy = -H.get<1>() / (H.get<2>() * alpha_y);
+    const float sx = -H.get<0>() / (H.get<2>() * alpha.get<0>());
+    const float sy = -H.get<1>() / (H.get<2>() * alpha.get<1>());
     const float s1 = 1.0f + sx * sx + sy * sy;
     const float cos_theta_h4 = sqr(sqr(H.get<2>()));
-    return 1.0f / (sqr(s1) * PI * alpha_x * alpha_y * cos_theta_h4);
+    return 1.0f / (sqr(s1) * PI * alpha.get<0>() * alpha.get<1>() * cos_theta_h4);
 }
 
 void create_tbn_matrix(const simd_fvec4 &N, simd_fvec4 out_TBN[3]) {
@@ -2749,14 +2794,14 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_OrenDiffuse_BSDF(const simd_fvec4 &V, co
 
 Ray::Ref::simd_fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
                                                        const simd_fvec4 &I, const float roughness,
-                                                       const simd_fvec4 &base_color, const float rand_u,
-                                                       const float rand_v, simd_fvec4 &out_V) {
+                                                       const simd_fvec4 &base_color, const simd_fvec2 rand,
+                                                       simd_fvec4 &out_V) {
 
-    const float phi = 2 * PI * rand_v;
+    const float phi = 2 * PI * rand.get<1>();
     const float cos_phi = cosf(phi), sin_phi = sinf(phi);
 
-    const float dir = sqrtf(1.0f - rand_u * rand_u);
-    auto V = simd_fvec4{dir * cos_phi, dir * sin_phi, rand_u, 0.0f}; // in tangent-space
+    const float dir = sqrtf(1.0f - rand.get<0>() * rand.get<1>());
+    auto V = simd_fvec4{dir * cos_phi, dir * sin_phi, rand.get<0>(), 0.0f}; // in tangent-space
 
     out_V = world_from_tangent(T, B, N, V);
     return Evaluate_OrenDiffuse_BSDF(-I, N, out_V, roughness, base_color);
@@ -2794,18 +2839,17 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const simd_fvec4 &T
                                                              const simd_fvec4 &N, const simd_fvec4 &I,
                                                              const float roughness, const simd_fvec4 &base_color,
                                                              const simd_fvec4 &sheen_color, const bool uniform_sampling,
-                                                             const float rand_u, const float rand_v,
-                                                             simd_fvec4 &out_V) {
-    const float phi = 2 * PI * rand_v;
+                                                             const simd_fvec2 rand, simd_fvec4 &out_V) {
+    const float phi = 2 * PI * rand.get<1>();
     const float cos_phi = cosf(phi), sin_phi = sinf(phi);
 
     simd_fvec4 V;
     if (uniform_sampling) {
-        const float dir = sqrtf(1.0f - rand_u * rand_u);
-        V = simd_fvec4{dir * cos_phi, dir * sin_phi, rand_u, 0.0f}; // in tangent-space
+        const float dir = sqrtf(1.0f - rand.get<0>() * rand.get<0>());
+        V = simd_fvec4{dir * cos_phi, dir * sin_phi, rand.get<0>(), 0.0f}; // in tangent-space
     } else {
-        const float dir = sqrtf(rand_u);
-        const float k = sqrtf(1.0f - rand_u);
+        const float dir = sqrtf(rand.get<0>());
+        const float k = sqrtf(1.0f - rand.get<0>());
         V = simd_fvec4{dir * cos_phi, dir * sin_phi, k, 0.0f}; // in tangent-space
     }
 
@@ -2815,16 +2859,11 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const simd_fvec4 &T
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_dir_ts,
                                                          const simd_fvec4 &sampled_normal_ts,
-                                                         const simd_fvec4 &reflected_dir_ts, const float alpha_x,
-                                                         const float alpha_y, const float spec_ior, const float spec_F0,
+                                                         const simd_fvec4 &reflected_dir_ts, const simd_fvec2 alpha,
+                                                         const float spec_ior, const float spec_F0,
                                                          const simd_fvec4 &spec_col) {
-#if USE_VNDF_GGX_SAMPLING == 1
-    const float D = D_GGX(sampled_normal_ts, alpha_x, alpha_y);
-#else
-    const float D = D_GTR2(sampled_normal_ts.get<2>(), alpha_x);
-#endif
-
-    const float G = G1(view_dir_ts, alpha_x, alpha_y) * G1(reflected_dir_ts, alpha_x, alpha_y);
+    const float D = D_GGX(sampled_normal_ts, alpha);
+    const float G = G1(view_dir_ts, alpha) * G1(reflected_dir_ts, alpha);
 
     const float FH =
         (fresnel_dielectric_cos(dot(view_dir_ts, sampled_normal_ts), spec_ior) - spec_F0) / (1.0f - spec_F0);
@@ -2832,19 +2871,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_
 
     const float denom = 4.0f * fabsf(view_dir_ts.get<2>() * reflected_dir_ts.get<2>());
     F *= (denom != 0.0f) ? (D * G / denom) : 0.0f;
-
-#if USE_VNDF_GGX_SAMPLING == 1
-    float pdf = safe_div_pos(D * G1(view_dir_ts, alpha_x, alpha_y) * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f),
-                             fabsf(view_dir_ts.get<2>()));
-    const float div = 4.0f * dot(view_dir_ts, sampled_normal_ts);
-    if (div != 0.0f) {
-        pdf /= div;
-    }
-#else
-    const float pdf = D * sampled_normal_ts.get<2>() / (4.0f * dot(view_dir_ts, sampled_normal_ts));
-#endif
-
     F *= fmaxf(reflected_dir_ts.get<2>(), 0.0f);
+
+    const float pdf = GGX_VNDF_Reflection_Bounded_PDF(D, view_dir_ts, alpha);
     F.set<3>(pdf);
 
     return F;
@@ -2854,14 +2883,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
                                                        const simd_fvec4 &I, const float roughness,
                                                        const float anisotropic, const float spec_ior,
                                                        const float spec_F0, const simd_fvec4 &spec_col,
-                                                       const float rand_u, const float rand_v, simd_fvec4 &out_V) {
+                                                       const simd_fvec2 rand, simd_fvec4 &out_V) {
     const float roughness2 = sqr(roughness);
     const float aspect = sqrtf(1.0f - 0.9f * anisotropic);
 
-    const float alpha_x = roughness2 / aspect;
-    const float alpha_y = roughness2 * aspect;
+    const simd_fvec2 alpha = {roughness2 / aspect, roughness2 * aspect};
 
-    if (alpha_x * alpha_y < 1e-7f) {
+    if (alpha.get<0>() * alpha.get<1>() < 1e-7f) {
         const simd_fvec4 V = reflect(I, N, dot(N, I));
         const float FH = (fresnel_dielectric_cos(dot(V, N), spec_ior) - spec_F0) / (1.0f - spec_F0);
         simd_fvec4 F = mix(spec_col, simd_fvec4(1.0f), FH);
@@ -2870,17 +2898,14 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
     }
 
     const simd_fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
-#if USE_VNDF_GGX_SAMPLING == 1
-    const simd_fvec4 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, alpha_x, alpha_y, rand_u, rand_v);
-#else
-    const simd_fvec4 sampled_normal_ts = Sample_GGX_NDF(alpha_x, rand_u, rand_v);
-#endif
+    const simd_fvec4 sampled_normal_ts = SampleGGX_VNDF_Bounded(view_dir_ts, alpha, rand);
+
     const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
     const simd_fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts, dot_N_V));
 
     out_V = world_from_tangent(T, B, N, reflected_dir_ts);
-    return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha_x, alpha_y, spec_ior,
-                                     spec_F0, spec_col);
+    return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha, spec_ior, spec_F0,
+                                     spec_col);
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts,
@@ -2892,14 +2917,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &vie
         return simd_fvec4{0.0f};
     }
 
-#if USE_VNDF_GGX_SAMPLING == 1
-    const float D = D_GGX(sampled_normal_ts, roughness2, roughness2);
-#else
-    const float D = D_GTR2(sampled_normal_ts.get<2>(), roughness2);
-#endif
+    const simd_fvec2 alpha = {roughness2, roughness2};
+    const float D = D_GGX(sampled_normal_ts, alpha);
 
-    const float G1o = G1(refr_dir_ts, roughness2, roughness2);
-    const float G1i = G1(view_dir_ts, roughness2, roughness2);
+    const float G1o = G1(refr_dir_ts, alpha), G1i = G1(view_dir_ts, alpha);
 
     const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
     const float jacobian = denom != 0.0f ? fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
@@ -2907,12 +2928,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &vie
     float F = D * G1i * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
               (/*-refr_dir_ts.get<2>() */ view_dir_ts.get<2>());
 
-#if USE_VNDF_GGX_SAMPLING == 1
     float pdf = D * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian / view_dir_ts.get<2>();
-#else
+
     // const float pdf = D * fmaxf(sampled_normal_ts.get<2>(), 0.0f) * jacobian;
-    const float pdf = D * sampled_normal_ts.get<2>() * fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / denom;
-#endif
+    // const float pdf = D * sampled_normal_ts.get<2>() * fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / denom;
 
     simd_fvec4 ret = F * refr_col;
     // ret *= (-refr_dir_ts.get<2>());
@@ -2923,8 +2942,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &vie
 
 Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
                                                          const simd_fvec4 &I, float roughness, const float eta,
-                                                         const simd_fvec4 &refr_col, const float rand_u,
-                                                         const float rand_v, simd_fvec4 &out_V) {
+                                                         const simd_fvec4 &refr_col, const simd_fvec2 rand,
+                                                         simd_fvec4 &out_V) {
     const float roughness2 = sqr(roughness);
     if (roughness2 * roughness2 < 1e-7f) {
         const float cosi = -dot(I, N);
@@ -2940,11 +2959,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec4 &T, co
     }
 
     const simd_fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
-#if USE_VNDF_GGX_SAMPLING == 1
-    const simd_fvec4 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, roughness2, roughness2, rand_u, rand_v);
-#else
-    const simd_fvec4 sampled_normal_ts = Sample_GGX_NDF(roughness2, rand_u, rand_v);
-#endif
+    const simd_fvec4 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, roughness2, rand);
 
     const float cosi = dot(view_dir_ts, sampled_normal_ts);
     const float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
@@ -2969,9 +2984,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec
                                                                  const float clearcoat_ior, const float clearcoat_F0) {
     const float D = D_GTR1(sampled_normal_ts.get<2>(), clearcoat_roughness2);
     // Always assume roughness of 0.25 for clearcoat
-    const float clearcoat_alpha = (0.25f * 0.25f);
-    const float G =
-        G1(view_dir_ts, clearcoat_alpha, clearcoat_alpha) * G1(reflected_dir_ts, clearcoat_alpha, clearcoat_alpha);
+    const simd_fvec2 clearcoat_alpha = {0.25f * 0.25f};
+    const float G = G1(view_dir_ts, clearcoat_alpha) * G1(reflected_dir_ts, clearcoat_alpha);
 
     const float FH = (fresnel_dielectric_cos(dot(reflected_dir_ts, sampled_normal_ts), clearcoat_ior) - clearcoat_F0) /
                      (1.0f - clearcoat_F0);
@@ -2979,19 +2993,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec
 
     const float denom = 4.0f * fabsf(view_dir_ts.get<2>()) * fabsf(reflected_dir_ts.get<2>());
     F *= (denom != 0.0f) ? D * G / denom : 0.0f;
-
-#if USE_VNDF_GGX_SAMPLING == 1
-    float pdf = D * G1(view_dir_ts, clearcoat_alpha, clearcoat_alpha) *
-                fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) / fabsf(view_dir_ts.get<2>());
-    const float div = 4.0f * dot(view_dir_ts, sampled_normal_ts);
-    if (div != 0.0f) {
-        pdf /= div;
-    }
-#else
-    float pdf = D * sampled_normal_ts.get<2>() / (4.0f * dot(view_dir_ts, sampled_normal_ts));
-#endif
-
     F *= fmaxf(reflected_dir_ts.get<2>(), 0.0f);
+
+    const float pdf = GGX_VNDF_Reflection_Bounded_PDF(D, view_dir_ts, clearcoat_alpha);
     return simd_fvec4{F, F, F, pdf};
 }
 
@@ -2999,8 +3003,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const simd_fvec4 
                                                                const simd_fvec4 &N, const simd_fvec4 &I,
                                                                const float clearcoat_roughness2,
                                                                const float clearcoat_ior, const float clearcoat_F0,
-                                                               const float rand_u, const float rand_v,
-                                                               simd_fvec4 &out_V) {
+                                                               const simd_fvec2 rand, simd_fvec4 &out_V) {
     if (sqr(clearcoat_roughness2) < 1e-7f) {
         const simd_fvec4 V = reflect(I, N, dot(N, I));
 
@@ -3013,12 +3016,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const simd_fvec4 
 
     const simd_fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
     // NOTE: GTR1 distribution is not used for sampling because Cycles does it this way (???!)
-#if USE_VNDF_GGX_SAMPLING == 1
-    const simd_fvec4 sampled_normal_ts =
-        SampleGGX_VNDF(view_dir_ts, clearcoat_roughness2, clearcoat_roughness2, rand_u, rand_v);
-#else
-    const simd_fvec4 sampled_normal_ts = Sample_GGX_NDF(clearcoat_roughness2, rand_u, rand_v);
-#endif
+    const simd_fvec4 sampled_normal_ts = SampleGGX_VNDF_Bounded(view_dir_ts, clearcoat_roughness2, rand);
+
     const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
     const simd_fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts, dot_N_V));
 
@@ -4797,12 +4796,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, co
 }
 
 void Ray::Ref::Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
-                                  const float roughness, const float rand_u, const float rand_v, const float mix_weight,
+                                  const float roughness, const simd_fvec2 rand, const float mix_weight,
                                   ray_data_t &new_ray) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     simd_fvec4 V;
-    const simd_fvec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand_u, rand_v, V);
+    const simd_fvec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand, V);
 
     new_ray.depth = ray.depth + 0x00000001;
 
@@ -4824,7 +4823,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, con
     const simd_fvec4 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
 
     const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, sqr(roughness),
-                                                          sqr(roughness), spec_ior, spec_F0, base_color);
+                                                          spec_ior, spec_F0, base_color);
     const float bsdf_pdf = spec_col[3];
 
     float mis_weight = 1.0f;
@@ -4847,13 +4846,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, con
 }
 
 void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
-                                 const float roughness, const float spec_ior, const float spec_F0, const float rand_u,
-                                 const float rand_v, const float mix_weight, ray_data_t &new_ray) {
+                                 const float roughness, const float spec_ior, const float spec_F0,
+                                 const simd_fvec2 rand, const float mix_weight, ray_data_t &new_ray) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     simd_fvec4 V;
-    const simd_fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0f, spec_ior, spec_F0,
-                                                 base_color, rand_u, rand_v, V);
+    const simd_fvec4 F =
+        Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0f, spec_ior, spec_F0, base_color, rand, V);
 
     new_ray.depth = ray.depth + 0x00000100;
 
@@ -4898,14 +4897,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls,
 
 void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
                                      const float roughness, const bool is_backfacing, const float int_ior,
-                                     const float ext_ior, const float rand_u, const float rand_v,
-                                     const float mix_weight, ray_data_t &new_ray) {
+                                     const float ext_ior, const simd_fvec2 rand, const float mix_weight,
+                                     ray_data_t &new_ray) {
     const simd_fvec4 I = make_fvec3(ray.d);
     const float eta = is_backfacing ? (int_ior / ext_ior) : (ext_ior / int_ior);
 
     simd_fvec4 V;
-    const simd_fvec4 F =
-        Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, roughness, eta, base_color, rand_u, rand_v, V);
+    const simd_fvec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, roughness, eta, base_color, rand, V);
 
     new_ray.depth = ray.depth + 0x00010000;
 
@@ -4954,16 +4952,15 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
 
     const float aspect = sqrtf(1.0f - 0.9f * spec.anisotropy);
     const float roughness2 = sqr(spec.roughness);
-    const float alpha_x = roughness2 / aspect;
-    const float alpha_y = roughness2 * aspect;
+    const simd_fvec2 alpha = {roughness2 / aspect, roughness2 * aspect};
 
     const simd_fvec4 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
     const simd_fvec4 light_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, ls.L);
     const simd_fvec4 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
 
-    if (lobe_weights.specular > 0.0f && alpha_x * alpha_y >= 1e-7f && N_dot_L > 0.0f) {
-        const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x,
-                                                              alpha_y, spec.ior, spec.F0, spec.tmp_col);
+    if (lobe_weights.specular > 0.0f && alpha.get<0>() * alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
+        const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha,
+                                                              spec.ior, spec.F0, spec.tmp_col);
         bsdf_pdf += lobe_weights.specular * spec_col.get<3>();
 
         lcol += ls.col * spec_col / ls.pdf;
@@ -4982,8 +4979,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
     if (lobe_weights.refraction > 0.0f) {
         if (trans.fresnel != 0.0f && sqr(roughness2) >= 1e-7f && N_dot_L > 0.0f) {
             const simd_fvec4 spec_col =
-                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2,
-                                          1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
+                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, 1.0f /* ior */,
+                                          0.0f /* F0 */, simd_fvec4{1.0f});
             bsdf_pdf += lobe_weights.refraction * trans.fresnel * spec_col.get<3>();
 
             lcol += ls.col * spec_col * (trans.fresnel / ls.pdf);
@@ -5021,7 +5018,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
                                      const lobe_weights_t &lobe_weights, const diff_params_t &diff,
                                      const spec_params_t &spec, const clearcoat_params_t &coat,
                                      const transmission_params_t &trans, const float metallic, const float transmission,
-                                     const float rand_u, const float rand_v, float mix_rand, const float mix_weight,
+                                     const simd_fvec2 rand, float mix_rand, const float mix_weight,
                                      ray_data_t &new_ray) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
@@ -5038,7 +5035,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 V;
             simd_fvec4 F = Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, I, diff.roughness, diff.base_color,
-                                                         diff.sheen_color, false, rand_u, rand_v, V);
+                                                         diff.sheen_color, false, rand, V);
             const float pdf = F.get<3>(); // * lobe_weights.diffuse;
 
             F *= (1.0f - metallic) * (1.0f - transmission);
@@ -5059,7 +5056,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 V;
             simd_fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, spec.anisotropy, spec.ior,
-                                                   spec.F0, spec.tmp_col, rand_u, rand_v, V);
+                                                   spec.F0, spec.tmp_col, rand, V);
             const float pdf = F.get<3>() * lobe_weights.specular;
 
             new_ray.depth = ray.depth + 0x00000100;
@@ -5077,7 +5074,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 V;
             simd_fvec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I, sqr(coat.roughness), coat.ior,
-                                                           coat.F0, rand_u, rand_v, V);
+                                                           coat.F0, rand, V);
             const float pdf = F.get<3>() * lobe_weights.clearcoat;
 
             new_ray.depth = ray.depth + 0x00000100;
@@ -5103,13 +5100,13 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             simd_fvec4 F, V;
             if (mix_rand < trans.fresnel) {
                 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, 0.0f /* anisotropic */,
-                                            1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f}, rand_u, rand_v, V);
+                                            1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f}, rand, V);
 
                 new_ray.depth = ray.depth + 0x00000100;
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             } else {
                 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, trans.roughness, trans.eta, diff.base_color,
-                                              rand_u, rand_v, V);
+                                              rand, V);
 
                 new_ray.depth = ray.depth + 0x00010000;
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
@@ -5365,7 +5362,6 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     }
 
     const simd_fvec2 rand_bsdf = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF, rand_hash, iteration - 1, rand_seq);
-    const float rand_u = rand_bsdf.get<0>(), rand_v = rand_bsdf.get<1>();
 
     ray_data_t &new_ray = out_secondary_rays[*out_secondary_rays_count];
     memcpy(new_ray.ior, ray.ior, 4 * sizeof(float));
@@ -5388,7 +5384,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         }
 #endif
         if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
-            Sample_DiffuseNode(ray, surf, base_color, roughness, rand_u, rand_v, mix_weight, new_ray);
+            Sample_DiffuseNode(ray, surf, base_color, roughness, rand_bsdf, mix_weight, new_ray);
         }
     } else if (mat->type == eShadingNode::Glossy) {
         const float specular = 0.5f;
@@ -5402,7 +5398,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         }
 #endif
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
-            Sample_GlossyNode(ray, surf, base_color, roughness, spec_ior, spec_F0, rand_u, rand_v, mix_weight, new_ray);
+            Sample_GlossyNode(ray, surf, base_color, roughness, spec_ior, spec_F0, rand_bsdf, mix_weight, new_ray);
         }
     } else if (mat->type == eShadingNode::Refractive) {
 #if USE_NEE
@@ -5414,7 +5410,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         }
 #endif
         if (refr_depth < ps.max_refr_depth && total_depth < ps.max_total_depth) {
-            Sample_RefractiveNode(ray, surf, base_color, roughness, is_backfacing, mat->ior, ext_ior, rand_u, rand_v,
+            Sample_RefractiveNode(ray, surf, base_color, roughness, is_backfacing, mat->ior, ext_ior, rand_bsdf,
                                   mix_weight, new_ray);
         }
     } else if (mat->type == eShadingNode::Emissive) {
@@ -5519,8 +5515,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
                                            N_dot_L, mix_weight, (total_depth < ps.max_total_depth), sh_r);
         }
 #endif
-        Sample_PrincipledNode(ps, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_u,
-                              rand_v, mix_rand, mix_weight, new_ray);
+        Sample_PrincipledNode(ps, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_bsdf,
+                              mix_rand, mix_weight, new_ray);
     } /*else if (mat->type == TransparentNode) {
         assert(false);
     }*/
@@ -6035,7 +6031,6 @@ Ray::Ref::simd_fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform vie
 
 #undef sqr
 
-#undef USE_VNDF_GGX_SAMPLING
 #undef USE_NEE
 #undef USE_PATH_TERMINATION
 #undef VECTORIZE_BBOX_INTERSECTION
