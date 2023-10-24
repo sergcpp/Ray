@@ -505,6 +505,8 @@ force_inline float clamp(const float val, const float min, const float max) {
     return val < min ? min : (val > max ? max : val);
 }
 
+force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
+
 force_inline int clamp(const int val, const int min, const int max) {
     return val < min ? min : (val > max ? max : val);
 }
@@ -606,7 +608,7 @@ force_inline simd_fvec4 YCoCg_to_RGB(const simd_fvec4 &col) {
     col_rgb.set<1>(Y + Cg);
     col_rgb.set<2>(Y - Co - Cg);
 
-    return clamp(col_rgb, 0.0f, 1.0f);
+    return saturate(col_rgb);
 }
 
 force_inline float fast_log2(float val) {
@@ -735,7 +737,7 @@ force_inline float power_heuristic(const float a, const float b) {
 }
 
 force_inline float schlick_weight(const float u) {
-    const float m = clamp(1.0f - u, 0.0f, 1.0f);
+    const float m = saturate(1.0f - u);
     return pow5(m);
 }
 
@@ -812,7 +814,7 @@ simd_fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
     const float phi = r1 * (2.0f * PI);
 
     const float cosTheta = sqrtf((1.0f - r2) / (1.0f + (a * a - 1.0f) * r2));
-    const float sinTheta = clamp(sqrtf(1.0f - (cosTheta * cosTheta)), 0.0f, 1.0f);
+    const float sinTheta = saturate(sqrtf(1.0f - (cosTheta * cosTheta)));
     const float sinPhi = sinf(phi), cosPhi = cosf(phi);
 
     return simd_fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
@@ -843,7 +845,7 @@ simd_fvec4 SampleVNDF_Hemisphere_SphCap(const simd_fvec4 &Vh, float U1, float U2
     // sample a spherical cap in (-Vh.z, 1]
     const float phi = 2.0f * PI * U1;
     const float z = fma(1.0f - U2, 1.0f + Vh.get<2>(), -Vh.get<2>());
-    const float sin_theta = sqrtf(clamp(1.0f - z * z, 0.0f, 1.0f));
+    const float sin_theta = sqrtf(saturate(1.0f - z * z));
     const float x = sin_theta * cosf(phi);
     const float y = sin_theta * sinf(phi);
     const simd_fvec4 c = simd_fvec4{x, y, z, 0.0f};
@@ -3659,8 +3661,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.sph.spot > 0.0f) {
             const float _dot = -dot(ls.L, simd_fvec4{l.sph.dir});
             if (_dot > 0.0f) {
-                const float _angle = acosf(clamp(_dot, 0.0f, 1.0f));
-                ls.col *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                const float _angle = acosf(saturate(_dot));
+                ls.col *= saturate((l.sph.spot - _angle) / l.sph.blend);
             } else {
                 ls.col *= 0.0f;
             }
@@ -4032,7 +4034,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                             if (l.sph.spot > 0.0f) {
                                 const float _dot = -dot(rd, simd_fvec4{l.sph.dir});
                                 if (_dot > 0.0f) {
-                                    const float _angle = acosf(clamp(_dot, 0.0f, 1.0f));
+                                    const float _angle = acosf(saturate(_dot));
                                     accept &= (_angle <= l.sph.spot);
                                 } else {
                                     accept = false;
@@ -4228,7 +4230,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                             if (l.sph.spot > 0.0f) {
                                 const float _dot = -dot(rd, simd_fvec4{l.sph.dir});
                                 if (_dot > 0.0f) {
-                                    const float _angle = acosf(clamp(_dot, 0.0f, 1.0f));
+                                    const float _angle = acosf(saturate(_dot));
                                     accept &= (_angle <= l.sph.spot);
                                 } else {
                                     accept = false;
@@ -4702,10 +4704,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
         if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
             const float _dot = -dot(I, simd_fvec4{l.sph.dir});
             assert(_dot > 0.0f);
-            const float _angle = acosf(clamp(_dot, 0.0f, 1.0f));
+            const float _angle = acosf(saturate(_dot));
             assert(_angle <= l.sph.spot);
             if (l.sph.blend > 0.0f) {
-                lcol *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                lcol *= saturate((l.sph.spot - _angle) / l.sph.blend);
             }
         }
     } else if (l.type == LIGHT_TYPE_DIR) {
@@ -5257,7 +5259,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         const float eta = is_backfacing ? safe_div_pos(ext_ior, mat->ior) : safe_div_pos(mat->ior, ext_ior);
         const float RR = mat->ior != 0.0f ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0f;
 
-        mix_val *= clamp(RR, 0.0f, 1.0f);
+        mix_val *= saturate(RR);
 
         if (mix_rand > mix_val) {
             mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / (1.0f - mix_val) : 1.0f;

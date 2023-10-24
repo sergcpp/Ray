@@ -1546,20 +1546,6 @@ template <int S> force_inline simd_fvec<S> distance(const simd_fvec<S> p1[3], co
     return length(temp);
 }
 
-template <int S> force_inline simd_fvec<S> clamp(const simd_fvec<S> &v, float min, float max) {
-    simd_fvec<S> ret = v;
-    where(ret < min, ret) = min;
-    where(ret > max, ret) = max;
-    return ret;
-}
-
-template <int S> force_inline simd_ivec<S> clamp(const simd_ivec<S> &v, int min, int max) {
-    simd_ivec<S> ret = v;
-    where(ret < min, ret) = min;
-    where(ret > max, ret) = max;
-    return ret;
-}
-
 template <int S> force_inline simd_uvec<S> hash(simd_uvec<S> x) {
     // finalizer from murmurhash3
     x ^= x >> 16;
@@ -1923,13 +1909,13 @@ force_inline void TransformDirection(const float d[3], const float *xform, float
 template <int S> force_inline simd_fvec<S> pow5(const simd_fvec<S> &v) { return (v * v) * (v * v) * v; }
 
 template <int S> simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const float root_min[3], const float cell_size[3]) {
-    simd_ivec<S> x = clamp((simd_ivec<S>)((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
-                 y = clamp((simd_ivec<S>)((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
-                 z = clamp((simd_ivec<S>)((r.o[2] - root_min[2]) / cell_size[2]), 0, 255);
+    simd_ivec<S> x = clamp(simd_ivec<S>((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
+                 y = clamp(simd_ivec<S>((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
+                 z = clamp(simd_ivec<S>((r.o[2] - root_min[2]) / cell_size[2]), 0, 255);
 
-    simd_ivec<S> omega_index = clamp((simd_ivec<S>)((1.0f + r.d[2]) / omega_step), 0, 32),
-                 phi_index_i = clamp((simd_ivec<S>)((1.0f + r.d[1]) / phi_step), 0, 16),
-                 phi_index_j = clamp((simd_ivec<S>)((1.0f + r.d[0]) / phi_step), 0, 16);
+    simd_ivec<S> omega_index = clamp(simd_ivec<S>((1.0f + r.d[2]) / omega_step), 0, 32),
+                 phi_index_i = clamp(simd_ivec<S>((1.0f + r.d[1]) / phi_step), 0, 16),
+                 phi_index_j = clamp(simd_ivec<S>((1.0f + r.d[0]) / phi_step), 0, 16);
 
     simd_ivec<S> o, p;
 
@@ -2032,9 +2018,9 @@ template <int S> force_inline void YCoCg_to_RGB(const simd_fvec<S> in_col[4], si
     const simd_fvec<S> Co = (in_col[0] - (0.5f * 256.0f / 255.0f)) / scale;
     const simd_fvec<S> Cg = (in_col[1] - (0.5f * 256.0f / 255.0f)) / scale;
 
-    out_col[0] = clamp(Y + Co - Cg, 0.0f, 1.0f);
-    out_col[1] = clamp(Y + Cg, 0.0f, 1.0f);
-    out_col[2] = clamp(Y - Co - Cg, 0.0f, 1.0f);
+    out_col[0] = saturate(Y + Co - Cg);
+    out_col[1] = saturate(Y + Cg);
+    out_col[2] = saturate(Y - Co - Cg);
 }
 
 template <int S>
@@ -2343,7 +2329,7 @@ void SampleVNDF_Hemisphere_SphCap(const simd_fvec<S> Vh[3], const simd_fvec<S> &
                                   simd_fvec<S> out_Nh[3]) {
     const simd_fvec<S> phi = 2.0f * PI * U1;
     const simd_fvec<S> z = fmadd(1.0f - U2, 1.0f + Vh[2], -Vh[2]);
-    const simd_fvec<S> sin_theta = sqrt(clamp(1.0f - z * z, 0.0f, 1.0f));
+    const simd_fvec<S> sin_theta = sqrt(saturate(1.0f - z * z));
     out_Nh[0] = Vh[0] + sin_theta * cos(phi);
     out_Nh[1] = Vh[1] + sin_theta * sin(phi);
     out_Nh[2] = Vh[2] + z;
@@ -2446,7 +2432,7 @@ force_inline simd_fvec<S> sphere_intersection(const float center[3], const float
 }
 
 template <int S> force_inline simd_fvec<S> schlick_weight(const simd_fvec<S> &u) {
-    const simd_fvec<S> m = clamp(1.0f - u, 0.0f, 1.0f);
+    const simd_fvec<S> m = saturate(1.0f - u);
     return pow5(m);
 }
 
@@ -5578,7 +5564,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                             _angle.template set<i>(acosf(_dot.template get<i>()));
                         }
                     })
-                    const simd_fvec<S> k = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                    const simd_fvec<S> k = saturate((l.sph.spot - _angle) / l.sph.blend);
                     UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= k; })
                 }
                 UNROLLED_FOR(i, 3, { where(~mask & ray_queue[index], ls.col[i]) = 0.0f; })
@@ -6527,7 +6513,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
                 })
                 assert((ray_queue[index] & simd_cast(_angle > l.sph.spot)).all_zeros());
                 if (l.sph.blend > 0.0f) {
-                    const simd_fvec<S> spot_weight = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                    const simd_fvec<S> spot_weight = saturate((l.sph.spot - _angle) / l.sph.blend);
                     UNROLLED_FOR(i, 3, { lcol[i] *= spot_weight; })
                 }
             }
@@ -7302,7 +7288,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
         simd_fvec<S> RR = fresnel_dielectric_cos(dot3(I, surf.N), eta);
         where(ior == 0.0f, RR) = 1.0f;
 
-        mix_val *= clamp(RR, 0.0f, 1.0f);
+        mix_val *= saturate(RR);
 
         const simd_ivec<S> use_mat1 = simd_cast(mix_rand > mix_val) & is_mix_mat;
         const simd_ivec<S> use_mat2 = ~use_mat1 & is_mix_mat;

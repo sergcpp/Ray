@@ -469,7 +469,7 @@ force_inline simd_fvec4 vectorcall Tonemap(const tonemap_params_t &params, simd_
         c = pow(c, simd_fvec4{params.inv_gamma, params.inv_gamma, params.inv_gamma, 1.0f});
     }
 
-    return clamp(c, 0.0f, 1.0f);
+    return saturate(c);
 }
 
 } // namespace Ref

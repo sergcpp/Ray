@@ -706,6 +706,8 @@ template <typename T, int S> class simd_vec {
         return ret;
     }
 
+    friend force_inline simd_vec<T, S> saturate(const simd_vec<T, S> &v1) { return clamp(v1, T(0), T(1)); }
+
     friend force_inline simd_vec<T, S> pow(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
         UNROLLED_FOR_S(i, S, { ret.comp_[i] = std::pow(v1.comp_[i], v2.comp_[i]); })

@@ -135,7 +135,7 @@ void main() {
                         if (l.SPH_SPOT > 0.0) {
                             const float _dot = -dot(rd, l.SPH_DIR);
                             if (_dot > 0.0) {
-                                const float _angle = acos(clamp(_dot, 0.0, 1.0));
+                                const float _angle = acos(saturate(_dot));
                                 accept = accept && (_angle <= l.SPH_SPOT);
                             } else {
                                 accept = false;

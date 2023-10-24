@@ -42,6 +42,10 @@ force_inline float clamp(const float val, const float min, const float max) {
     return val < min ? min : (val > max ? max : val);
 }
 
+force_inline float saturate(const float val) {
+    return clamp(val, 0.0f, 1.0f);
+}
+
 // Math
 Ref::simd_fvec2 SphereIntersection(Ref::simd_fvec4 ray_start, const Ref::simd_fvec4 &ray_dir,
                                    const Ref::simd_fvec4 &sphere_center, const float sphere_radius) {
@@ -135,7 +139,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(Ref::simd_fvec4 ray_start, const R
     // leave the atmosphere.
     float ray_height = AtmosphereHeight(ray_start);
     float sample_distribution_exponent =
-        1.0f + clamp(1.0f - ray_height / ATMOSPHERE_HEIGHT, 0.0f, 1.0f) * 8.0f; // Slightly arbitrary max exponent of 9
+        1.0f + saturate(1.0f - ray_height / ATMOSPHERE_HEIGHT) * 8.0f; // Slightly arbitrary max exponent of 9
 
     const Ref::simd_fvec2 intersection = AtmosphereIntersection(ray_start, ray_dir);
     ray_length = fminf(ray_length, intersection.get<1>());

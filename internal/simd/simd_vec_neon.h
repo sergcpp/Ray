@@ -288,6 +288,15 @@ template <> class simd_vec<float, 4> {
         return temp;
     }
 
+    friend force_inline simd_vec<float, 4> vectorcall clamp(const simd_vec<float, 4> v1, const float _min,
+                                                            const float _max) {
+        return max(simd_vec<float, 4>{_min}, min(v1, simd_vec<float, 4>{_max}));
+    }
+
+    friend force_inline simd_vec<float, 4> vectorcall saturate(const simd_vec<float, 4> v1) {
+        return clamp(v1, 0.0f, 1.0f);
+    }
+
     force_inline static simd_vec<float, 4> vectorcall and_not(const simd_vec<float, 4> v1,
                                                               const simd_vec<float, 4> v2) {
         simd_vec<float, 4> temp;
@@ -434,13 +443,6 @@ template <> class simd_vec<float, 4> {
         float32x4_t r1 = vmulq_f32(v1.vec_, v2.vec_);
         float32x2_t r2 = vadd_f32(vget_high_f32(r1), vget_low_f32(r1));
         return vget_lane_f32(vpadd_f32(r2, r2), 0);
-    }
-
-    friend force_inline simd_vec<float, 4> vectorcall clamp(const simd_vec<float, 4> v1, const float min,
-                                                            const float max) {
-        simd_vec<float, 4> ret;
-        ret.vec_ = vmaxq_f32(vdupq_n_f32(min), vminq_f32(v1.vec_, vdupq_n_f32(max)));
-        return ret;
     }
 
     friend force_inline simd_vec<float, 4> vectorcall pow(const simd_vec<float, 4> v1, const simd_vec<float, 4> v2) {
@@ -779,6 +781,10 @@ template <> class simd_vec<int, 4> {
         simd_vec<int, 4> temp;
         temp.vec_ = vmaxq_s32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<int, 4> vectorcall clamp(const simd_vec<int, 4> v1, const int _min, const int _max) {
+        return max(simd_vec<int, 4>{_min}, min(v1, simd_vec<int, 4>{_max}));
     }
 
     force_inline static simd_vec<int, 4> vectorcall and_not(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
@@ -1314,6 +1320,11 @@ template <> class simd_vec<unsigned, 4> {
         simd_vec<unsigned, 4> temp;
         temp.vec_ = vmaxq_u32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall clamp(const simd_vec<unsigned, 4> v1, const unsigned _min,
+                                                               const unsigned _max) {
+        return max(simd_vec<unsigned, 4>{_min}, min(v1, simd_vec<unsigned, 4>{_max}));
     }
 
     force_inline static simd_vec<unsigned, 4> vectorcall and_not(const simd_vec<unsigned, 4> v1,

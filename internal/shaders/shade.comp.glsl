@@ -107,7 +107,7 @@ float power_heuristic(float a, float b) {
 float pow5(float v) { return (v * v) * (v * v) * v; }
 
 float schlick_weight(float u) {
-    const float m = clamp(1.0 - u, 0.0, 1.0);
+    const float m = saturate(1.0 - u);
     return pow5(m);
 }
 
@@ -442,7 +442,7 @@ vec3 SampleVNDF_Hemisphere_SphCap(const vec3 Vh, float U1, float U2) {
     // sample a spherical cap in (-Vh.z, 1]
     const float phi = 2.0f * PI * U1;
     const float z = fma(1.0 - U2, 1.0 + Vh.z, -Vh.z);
-    const float sin_theta = sqrt(clamp(1.0 - z * z, 0.0, 1.0));
+    const float sin_theta = sqrt(saturate(1.0 - z * z));
     const float x = sin_theta * cos(phi);
     const float y = sin_theta * sin(phi);
     const vec3 c = vec3(x, y, z);
@@ -678,7 +678,7 @@ vec4 Evaluate_GGXSpecular_BSDF(vec3 view_dir_ts, vec3 sampled_normal_ts,
     F *= (denom != 0.0) ? (D * G / denom) : 0.0;
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    float pdf = D * G1(view_dir_ts, alpha_x, alpha_y) * clamp(dot(view_dir_ts, sampled_normal_ts), 0.0, 1.0) /
+    float pdf = D * G1(view_dir_ts, alpha_x, alpha_y) * saturate(dot(view_dir_ts, sampled_normal_ts)) /
                 abs(view_dir_ts[2]);
     const float div = 4.0 * dot(view_dir_ts, sampled_normal_ts);
     if (div != 0.0) {
@@ -751,7 +751,7 @@ vec4 Evaluate_PrincipledClearcoat_BSDF(vec3 view_dir_ts, vec3 sampled_normal_ts,
     float pdf = D * sampled_normal_ts[2] / (4.0 * dot(view_dir_ts, sampled_normal_ts));
 #endif
 
-    F *= clamp(reflected_dir_ts[2], 0.0, 1.0);
+    F *= saturate(reflected_dir_ts[2]);
     return vec4(F, F, F, pdf);
 }
 
@@ -802,16 +802,16 @@ vec4 Evaluate_GGXRefraction_BSDF(vec3 view_dir_ts, vec3 sampled_normal_ts,
     const float G1i = G1(view_dir_ts, roughness2, roughness2);
 
     const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
-    const float jacobian = clamp(-dot(refr_dir_ts, sampled_normal_ts), 0.0, 1.0) / (denom * denom);
+    const float jacobian = saturate(-dot(refr_dir_ts, sampled_normal_ts)) / (denom * denom);
 
-    float F = D * G1i * G1o * clamp(dot(view_dir_ts, sampled_normal_ts), 0.0, 1.0) * jacobian /
+    float F = D * G1i * G1o * saturate(dot(view_dir_ts, sampled_normal_ts)) * jacobian /
               (/*-refr_dir_ts[2] */ view_dir_ts[2]);
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    float pdf = D * G1o * clamp(dot(view_dir_ts, sampled_normal_ts), 0.0, 1.0) * jacobian / view_dir_ts[2];
+    float pdf = D * G1o * saturate(dot(view_dir_ts, sampled_normal_ts)) * jacobian / view_dir_ts[2];
 #else
     // const float pdf = D * std::max(sampled_normal_ts[2], 0.0) * jacobian;
-    const float pdf = D * sampled_normal_ts[2] * clamp(-dot(refr_dir_ts, sampled_normal_ts), 0.0, 1.0) / denom;
+    const float pdf = D * sampled_normal_ts[2] * saturate(-dot(refr_dir_ts, sampled_normal_ts)) / denom;
 #endif
 
     return vec4(F * refr_col, pdf);
@@ -991,8 +991,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         [[dont_flatten]] if (l.SPH_SPOT > 0.0) {
             const float _dot = -dot(ls.L, l.SPH_DIR);
             if (_dot > 0.0) {
-                const float _angle = acos(clamp(_dot, 0.0, 1.0));
-                ls.col *= clamp((l.SPH_SPOT - _angle) / l.SPH_BLEND, 0.0, 1.0);
+                const float _angle = acos(saturate(_dot));
+                ls.col *= saturate((l.SPH_SPOT - _angle) / l.SPH_BLEND);
             } else {
                 ls.col *= 0.0;
             }
@@ -1366,9 +1366,9 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
 
         [[dont_flatten]] if (l.SPH_SPOT > 0.0 && l.SPH_BLEND > 0.0) {
             const float _dot = -dot(rd, l.SPH_DIR);
-            const float _angle = acos(clamp(_dot, 0.0, 1.0));
+            const float _angle = acos(saturate(_dot));
             [[flatten]] if (l.SPH_BLEND > 0.0) {
-                lcol *= clamp((l.SPH_SPOT - _angle) / l.SPH_BLEND, 0.0, 1.0);
+                lcol *= saturate((l.SPH_SPOT - _angle) / l.SPH_BLEND);
             }
         }
     } else if (l_type == LIGHT_TYPE_DIR) {
@@ -1995,7 +1995,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         const float eta = is_backfacing ? (ext_ior / mat.ior) : (mat.ior / ext_ior);
         const float RR = mat.ior != 0.0 ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0;
 
-        mix_val *= clamp(RR, 0.0, 1.0);
+        mix_val *= saturate(RR);
 
         if (mix_rand > mix_val) {
             mix_weight *= (mat.flags & MAT_FLAG_MIX_ADD) != 0 ? 1.0 / (1.0 - mix_val) : 1.0;

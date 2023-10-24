@@ -212,6 +212,9 @@ template <> class simd_vec<float, 16> {
     friend force_inline simd_vec<float, 16> vectorcall operator!=(simd_vec<float, 16> v1, float v2);
 
     friend force_inline simd_vec<float, 16> vectorcall clamp(simd_vec<float, 16> v1, float min, float max);
+    friend force_inline simd_vec<float, 16> vectorcall saturate(const simd_vec<float, 16> v1) {
+        return clamp(v1, 0.0f, 1.0f);
+    }
     friend force_inline simd_vec<float, 16> vectorcall pow(simd_vec<float, 16> v1, simd_vec<float, 16> v2);
     friend force_inline simd_vec<float, 16> vectorcall normalize(simd_vec<float, 16> v1);
     friend force_inline simd_vec<float, 16> vectorcall normalize_len(simd_vec<float, 16> v1, float &out_len);
@@ -465,6 +468,10 @@ template <> class simd_vec<int, 16> {
         simd_vec<int, 16> temp;
         temp.vec_ = _mm512_max_epi32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<int, 16> vectorcall clamp(const simd_vec<int, 16> v1, const int _min, const int _max) {
+        return max(simd_vec<int, 16>{_min}, min(v1, simd_vec<int, 16>{_max}));
     }
 
     force_inline static simd_vec<int, 16> vectorcall and_not(const simd_vec<int, 16> v1, const simd_vec<int, 16> v2) {
@@ -955,6 +962,11 @@ template <> class simd_vec<unsigned, 16> {
         simd_vec<unsigned, 16> temp;
         temp.vec_ = _mm512_max_epu32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 16> vectorcall clamp(const simd_vec<unsigned, 16> v1, const unsigned _min,
+                                                               const unsigned _max) {
+        return max(simd_vec<unsigned, 16>{_min}, min(v1, simd_vec<unsigned, 16>{_max}));
     }
 
     force_inline static simd_vec<unsigned, 16> vectorcall and_not(const simd_vec<unsigned, 16> v1,

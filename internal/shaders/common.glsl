@@ -25,6 +25,14 @@ uint hash(uint x) {
     return x;
 }
 
+float saturate(float val) {
+    return clamp(val, 0.0, 1.0);
+}
+
+vec3 saturate(vec3 val) {
+    return clamp(val, vec3(0.0), vec3(1.0));
+}
+
 float construct_float(uint m) {
     const uint ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
     const uint ieeeOne      = 0x3F800000u; // 1.0 in IEEE binary32
@@ -114,7 +122,7 @@ vec3 YCoCg_to_RGB(vec4 col) {
     col_rgb.g = Y + Cg;
     col_rgb.b = Y - Co - Cg;
 
-    return clamp(col_rgb, vec3(0.0), vec3(1.0));
+    return saturate(col_rgb);
 }
 
 float get_texture_lod(const ivec2 res, const float lambda) {
@@ -243,7 +251,7 @@ vec3 TonemapStandard(float inv_gamma, vec3 col) {
         col = pow(col, vec3(inv_gamma));
     }
 
-    return clamp(col, vec3(0.0), vec3(1.0));
+    return saturate(col);
 }
 
 vec4 TonemapStandard(float inv_gamma, vec4 col) {
@@ -323,7 +331,7 @@ vec4 reversible_tonemap(vec4 c) { return vec4(reversible_tonemap(c.xyz), c.w); }
 vec4 reversible_tonemap_invert(vec4 c) { return vec4(reversible_tonemap_invert(c.xyz), c.w); }
 
 #define pack_unorm_16(x) uint(x * 65535.0)
-#define unpack_unorm_16(x) clamp(float(x) / 65535.0, 0.0, 1.0)
+#define unpack_unorm_16(x) saturate(float(x) / 65535.0)
 
 #define length2(x) dot(x, x)
 #define sqr(x) ((x) * (x))

@@ -45,7 +45,7 @@ float approx_acos(float x) { // max error is 0.000068f
     ret = ret - 0.2121144;
     ret = ret * x;
     ret = ret + 1.5707288;
-    ret = ret * sqrt(1.0 - clamp(x, 0.0, 1.0));
+    ret = ret * sqrt(1.0 - saturate(x));
     ret = ret - 2.0 * negate * ret;
     return negate * PI + ret;
 }
