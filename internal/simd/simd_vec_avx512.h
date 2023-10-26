@@ -34,6 +34,9 @@
 namespace Ray {
 namespace NS {
 
+template <> force_inline __m512 _mm_cast(__m512i x) { return _mm512_castsi512_ps(x); }
+template <> force_inline __m512i _mm_cast(__m512 x) { return _mm512_castps_si512(x); }
+
 template <> class simd_vec<int, 16>;
 template <> class simd_vec<unsigned, 16>;
 
@@ -235,6 +238,17 @@ template <> class simd_vec<float, 16> {
     friend force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> vindex, simd_vec<float, 16> v);
     friend force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
                                                 simd_vec<float, 16> v);
+
+    template <typename U>
+    friend force_inline simd_vec<float, 16>
+        vectorcall select(const simd_vec<U, 16> mask, const simd_vec<float, 16> vec1, const simd_vec<float, 16> vec2);
+    template <typename U>
+    friend force_inline simd_vec<int, 16> vectorcall select(const simd_vec<U, 16> mask, const simd_vec<int, 16> vec1,
+                                                            const simd_vec<int, 16> vec2);
+    template <typename U>
+    friend force_inline simd_vec<unsigned, 16> vectorcall select(const simd_vec<U, 16> mask,
+                                                                 const simd_vec<unsigned, 16> vec1,
+                                                                 const simd_vec<unsigned, 16> vec2);
 
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<float, 16> mask) {
@@ -730,6 +744,17 @@ template <> class simd_vec<int, 16> {
     friend force_inline void vectorcall scatter(unsigned *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
                                                 simd_vec<unsigned, 16> v);
 
+    template <typename U>
+    friend force_inline simd_vec<float, 16>
+        vectorcall select(const simd_vec<U, 16> mask, const simd_vec<float, 16> vec1, const simd_vec<float, 16> vec2);
+    template <typename U>
+    friend force_inline simd_vec<int, 16> vectorcall select(const simd_vec<U, 16> mask, const simd_vec<int, 16> vec1,
+                                                            const simd_vec<int, 16> vec2);
+    template <typename U>
+    friend force_inline simd_vec<unsigned, 16> vectorcall select(const simd_vec<U, 16> mask,
+                                                                 const simd_vec<unsigned, 16> vec1,
+                                                                 const simd_vec<unsigned, 16> vec2);
+
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<int, 16> mask) {
         UNROLLED_FOR(i, 16, {
@@ -965,7 +990,7 @@ template <> class simd_vec<unsigned, 16> {
     }
 
     friend force_inline simd_vec<unsigned, 16> vectorcall clamp(const simd_vec<unsigned, 16> v1, const unsigned _min,
-                                                               const unsigned _max) {
+                                                                const unsigned _max) {
         return max(simd_vec<unsigned, 16>{_min}, min(v1, simd_vec<unsigned, 16>{_max}));
     }
 
@@ -1218,6 +1243,17 @@ template <> class simd_vec<unsigned, 16> {
                                                 const unsigned v) {
         scatter(base_addr, mask, vindex, simd_vec<unsigned, 16>{v});
     }
+
+    template <typename U>
+    friend force_inline simd_vec<float, 16>
+        vectorcall select(const simd_vec<U, 16> mask, const simd_vec<float, 16> vec1, const simd_vec<float, 16> vec2);
+    template <typename U>
+    friend force_inline simd_vec<int, 16> vectorcall select(const simd_vec<U, 16> mask, const simd_vec<int, 16> vec1,
+                                                            const simd_vec<int, 16> vec2);
+    template <typename U>
+    friend force_inline simd_vec<unsigned, 16> vectorcall select(const simd_vec<U, 16> mask,
+                                                                 const simd_vec<unsigned, 16> vec1,
+                                                                 const simd_vec<unsigned, 16> vec2);
 
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<unsigned, 16> mask) {
@@ -1604,6 +1640,35 @@ force_inline void vectorcall scatter(unsigned *base_addr, simd_vec<int, 16> vind
 force_inline void vectorcall scatter(unsigned *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
                                      simd_vec<unsigned, 16> v) {
     _mm512_mask_i32scatter_epi32(base_addr, mask.movemask(), vindex.vec_, v.vec_, sizeof(int));
+}
+
+template <typename U>
+force_inline simd_vec<float, 16> vectorcall select(const simd_vec<U, 16> mask, const simd_vec<float, 16> vec1,
+                                                   const simd_vec<float, 16> vec2) {
+    validate_mask(mask);
+    simd_vec<float, 16> ret;
+    ret.vec_ = _mm512_blendv_ps(vec2.vec_, vec1.vec_, _mm_cast<__m512>(mask.vec_));
+    return ret;
+}
+
+template <typename U>
+force_inline simd_vec<int, 16> vectorcall select(const simd_vec<U, 16> mask, const simd_vec<int, 16> vec1,
+                                                 const simd_vec<int, 16> vec2) {
+    validate_mask(mask);
+    simd_vec<int, 16> ret;
+    ret.vec_ =
+        _mm512_ternarylogic_epi32(vec2.vec_, vec1.vec_, _mm512_srai_epi32(_mm_cast<__m512i>(mask.vec_), 31), 0xd8);
+    return ret;
+}
+
+template <typename U>
+force_inline simd_vec<unsigned, 16> vectorcall select(const simd_vec<U, 16> mask, const simd_vec<unsigned, 16> vec1,
+                                                      const simd_vec<unsigned, 16> vec2) {
+    validate_mask(mask);
+    simd_vec<unsigned, 16> ret;
+    ret.vec_ =
+        _mm512_ternarylogic_epi32(vec2.vec_, vec1.vec_, _mm512_srai_epi32(_mm_cast<__m512i>(mask.vec_), 31), 0xd8);
+    return ret;
 }
 
 } // namespace NS

@@ -647,8 +647,7 @@ namespace Ray {
 namespace NS {
 template <int S> force_inline simd_fvec<S> safe_inv(const simd_fvec<S> &a) {
 #if USE_SAFE_MATH
-    simd_fvec<S> denom = a;
-    where(denom == 0.0f, denom) = FLT_EPS;
+    const simd_fvec<S> denom = select(a != 0.0f, a, simd_fvec<S>{FLT_EPS});
     return 1.0f / denom;
 #else
     return 1.0f / a;
@@ -665,8 +664,7 @@ template <int S> force_inline simd_fvec<S> safe_inv_pos(const simd_fvec<S> &a) {
 
 template <int S> force_inline simd_fvec<S> safe_div(const simd_fvec<S> &a, const simd_fvec<S> &b) {
 #if USE_SAFE_MATH
-    simd_fvec<S> denom = b;
-    where(denom == 0.0f, denom) = FLT_EPS;
+    const simd_fvec<S> denom = select(b != 0.0f, b, simd_fvec<S>{FLT_EPS});
     return a / denom;
 #else
     return a / b;
@@ -1431,8 +1429,7 @@ template <int S>
 force_inline void comp_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S> d[3], simd_fvec<S> inv_d[3],
                                       simd_fvec<S> inv_d_o[3]) {
     for (int i = 0; i < 3; i++) {
-        simd_fvec<S> denom = d[i];
-        where(denom == 0.0f, denom) = FLT_EPS;
+        const simd_fvec<S> denom = select(d[i] != 0.0f, d[i], simd_fvec<S>{FLT_EPS});
 
         inv_d[i] = 1.0f / denom;
         inv_d_o[i] = o[i] * inv_d[i];
@@ -1791,9 +1788,7 @@ simd_fvec<S> SampleSphericalTriangle(const simd_fvec<S> P[3], const simd_fvec<S>
         slerp(B, C_s, t, out_dir);
     }
 
-    simd_fvec<S> ret = 0.0f;
-    where(mask, ret) = safe_div_pos(1.0f, area);
-    return ret;
+    return select(mask, safe_div_pos(1.0f, area), simd_fvec<S>{0.0f});
 }
 
 // "An Area-Preserving Parametrization for Spherical Rectangles"
@@ -1873,9 +1868,7 @@ simd_fvec<S> SampleSphericalRectangle(const simd_fvec<S> P[3], const simd_fvec<S
         UNROLLED_FOR(i, 3, { out_p[i] = P[i] + xu * x[i] + yv * y[i] + z0 * z[i]; })
     }
 
-    simd_fvec<S> ret = 0.0f;
-    where(mask, ret) = safe_div_pos(1.0f, area);
-    return ret;
+    return select(mask, safe_div_pos(1.0f, area), simd_fvec<S>{0.0f});
 }
 
 force_inline float floor(float x) { return float(int(x) - (x < 0.0f)); }
@@ -2001,9 +1994,7 @@ template <int S> force_inline simd_fvec<S> lum(const simd_fvec<S> color[3]) {
 
 template <int S> force_inline void srgb_to_rgb(const simd_fvec<S> in_col[4], simd_fvec<S> out_col[4]) {
     UNROLLED_FOR(i, 3, {
-        simd_fvec<S> temp = in_col[i] / 12.92f;
-        where(in_col[i] > 0.04045f, temp) = pow((in_col[i] + 0.055f) / 1.055f, 2.4f);
-        out_col[i] = temp;
+        out_col[i] = select(in_col[i] > 0.04045f, pow((in_col[i] + 0.055f) / 1.055f, 2.4f), in_col[i] / 12.92f);
     })
     out_col[3] = in_col[3];
 }
@@ -2232,8 +2223,7 @@ void EnsureValidReflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], si
         const simd_ivec<S> exclude = ~(valid1 & valid2);
 
         // Only one solution passes the N'.z criterium, so pick that one.
-        simd_fvec<S> Nz2 = N2_z2;
-        where(valid1, Nz2) = N1_z2;
+        const simd_fvec<S> Nz2 = select(valid1, N1_z2, N2_z2);
 
         where(exclude & (valid1 | valid2), N_new[0]) = safe_sqrtf(1.0f - Nz2);
         where(exclude & (valid1 | valid2), N_new[1]) = safe_sqrtf(Nz2);
@@ -2341,8 +2331,7 @@ void SampleVNDF_Hemisphere_SphCap_Bounded(const simd_fvec<S> Ve[3], const simd_f
     const simd_fvec<S> s = 1.0f + sqrt(Ve[0] * Ve[0] + Ve[1] * Ve[1]);
     const simd_fvec<S> a2 = a * a, s2 = s * s;
     const simd_fvec<S> k = (1.0f - a2) * s2 / (s2 + a2 * Ve[2] * Ve[2]);
-    simd_fvec<S> b = Vh[2];
-    where(Ve[2] > 0.0f, b) = k * Vh[2];
+    const simd_fvec<S> b = select(Ve[2] > 0.0f, k * Vh[2], Vh[2]);
     const simd_fvec<S> z = fmadd(1.0f - rand[1], 1.0f + b, -b);
     const simd_fvec<S> sin_theta = sqrt(saturate(1.0f - z * z));
     const simd_fvec<S> x = sin_theta * cos(phi);
@@ -2417,23 +2406,17 @@ template <int S> force_inline simd_fvec<S> G1(const simd_fvec<S> Ve[3], simd_fve
 }
 
 template <int S> simd_fvec<S> D_GTR1(const simd_fvec<S> &NDotH, const simd_fvec<S> &a) {
-    simd_fvec<S> ret = 1.0f / PI;
     const simd_fvec<S> a2 = sqr(a);
     const simd_fvec<S> t = 1.0f + (a2 - 1.0f) * NDotH * NDotH;
-    where(a < 1.0f, ret) = safe_div(a2 - 1.0f, PI * log(a2) * t);
-    return ret;
+    return select(a < 1.0f, safe_div(a2 - 1.0f, PI * log(a2) * t), simd_fvec<S>{1.0f / PI});
 }
 
 template <int S> simd_fvec<S> D_GGX(const simd_fvec<S> H[3], const simd_fvec<S> &alpha_x, const simd_fvec<S> &alpha_y) {
-    simd_fvec<S> ret = 0.0f;
-
     const simd_fvec<S> sx = -safe_div(H[0], H[2] * alpha_x);
     const simd_fvec<S> sy = -safe_div(H[1], H[2] * alpha_y);
     const simd_fvec<S> s1 = 1.0f + sx * sx + sy * sy;
     const simd_fvec<S> cos_theta_h4 = H[2] * H[2] * H[2] * H[2];
-
-    where(H[2] != 0.0f, ret) = safe_inv_pos((s1 * s1) * PI * alpha_x * alpha_y * cos_theta_h4);
-    return ret;
+    return select(H[2] != 0.0f, safe_inv_pos((s1 * s1) * PI * alpha_x * alpha_y * cos_theta_h4), simd_fvec<S>{0.0f});
 }
 
 template <int S> void create_tbn(const simd_fvec<S> N[3], simd_fvec<S> out_T[3], simd_fvec<S> out_B[3]) {
@@ -2511,14 +2494,11 @@ template <int S> simd_fvec<S> fresnel_dielectric_cos(const simd_fvec<S> &cosi, c
     simd_fvec<S> g = eta * eta - 1 + c * c;
     const simd_fvec<S> mask = (g > 0.0f);
 
-    simd_fvec<S> result = 1.0f; // TIR (no refracted component)
-
     g = safe_sqrt(g);
     const simd_fvec<S> A = safe_div(g - c, g + c);
     const simd_fvec<S> B = safe_div(c * (g + c) - 1, c * (g - c) + 1);
-    where(mask, result) = 0.5f * A * A * (1 + B * B);
 
-    return result;
+    return select(mask, 0.5f * A * A * (1 + B * B), simd_fvec<S>{1.0f} /* TIR (no refracted component) */);
 }
 
 template <int S>
@@ -2557,8 +2537,7 @@ force_inline simd_ivec<S> quadratic(const simd_fvec<S> &a, const simd_fvec<S> &b
                                     simd_fvec<S> &t0, simd_fvec<S> &t1) {
     const simd_fvec<S> d = b * b - 4.0f * a * c;
     const simd_fvec<S> sqrt_d = safe_sqrt(d);
-    simd_fvec<S> q = -0.5f * (b + sqrt_d);
-    where(b < 0.0f, q) = -0.5f * (b - sqrt_d);
+    const simd_fvec<S> q = select(b < 0.0f, -0.5f * (b - sqrt_d), -0.5f * (b + sqrt_d));
     t0 = safe_div(q, a);
     t1 = safe_div(c, q);
     return simd_cast(d >= 0.0f);
@@ -2701,8 +2680,7 @@ template <int S> force_inline simd_fvec<S> approx_cos(simd_fvec<S> x) { // max e
 }
 
 template <int S> force_inline simd_fvec<S> approx_acos(simd_fvec<S> x) { // max error is 0.000068f
-    simd_fvec<S> negate = 0.0f;
-    where(x < 0, negate) = 1.0f;
+    const simd_fvec<S> negate = select(x < 0, simd_fvec<S>{1.0f}, simd_fvec<S>{0.0f});
     x = abs(x);
     simd_fvec<S> ret = -0.0187293f;
     ret = ret * x;
@@ -2778,8 +2756,7 @@ void calc_lnode_importance(const light_wbvh_node_t &n, const simd_fvec<S> P[3], 
             UNROLLED_FOR(j, 3, { v[j] = safe_div_pos(v[j], v_len); })
             const simd_fvec<S> omega = approx_acos(min(dot3(axis, v), 1.0f)) - 0.00007f;
             const simd_fvec<S> omega_ = max(0.0f, omega - n.omega_n[i] - omega_u);
-            mul = 0.0f;
-            where(omega_ < n.omega_e[i], mul) = approx_cos(omega_) + 0.057f;
+            mul = select(omega_ < n.omega_e[i], approx_cos(omega_) + 0.057f, simd_fvec<S>{0.0f});
         }
 
         importance[i] = safe_div_pos(n.flux[i] * mul, v_len2);
@@ -4228,10 +4205,7 @@ Ray::NS::simd_fvec<S> Ray::NS::BRDF_PrincipledDiffuse(const simd_fvec<S> V[3], c
     const simd_fvec<S> Fd90 = 0.5f + 2.0f * L_dot_H * L_dot_H * roughness;
     const simd_fvec<S> Fd = mix(simd_fvec<S>{1.0f}, Fd90, FL) * mix(simd_fvec<S>{1.0f}, Fd90, FV);
 
-    simd_fvec<S> ret = 0.0f;
-    where(N_dot_L > 0.0f, ret) = Fd;
-
-    return ret;
+    return select(N_dot_L > 0.0f, Fd, simd_fvec<S>{0.0f});
 }
 
 template <int S>
@@ -4351,10 +4325,7 @@ void Ray::NS::Evaluate_GGXSpecular_BSDF(const simd_fvec<S> view_dir_ts[3], const
     UNROLLED_FOR(i, 3, { F[i] = mix(spec_col[i], simd_fvec<S>{1.0f}, FH); })
 
     const simd_fvec<S> denom = 4.0f * abs(view_dir_ts[2] * reflected_dir_ts[2]);
-    UNROLLED_FOR(i, 3, {
-        F[i] *= safe_div_pos(D * G, denom);
-        where(denom == 0.0f, F[i]) = 0.0f;
-    })
+    UNROLLED_FOR(i, 3, { F[i] = select(denom != 0.0f, F[i] * safe_div_pos(D * G, denom), simd_fvec<S>{0.0f}); })
 
     const simd_fvec<S> pdf = GGX_VNDF_Reflection_Bounded_PDF(D, view_dir_ts, alpha);
 
@@ -4428,19 +4399,16 @@ void Ray::NS::Evaluate_GGXRefraction_BSDF(const simd_fvec<S> view_dir_ts[3], con
     simd_fvec<S> F = safe_div(D * G1i * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian,
                               (/*-refr_dir_ts[2] */ view_dir_ts[2]));
 
-    simd_fvec<S> pdf = safe_div(D * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian, view_dir_ts[2]);
+    const simd_fvec<S> pdf =
+        safe_div(D * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian, view_dir_ts[2]);
 
     // const float pdf = D * fmaxf(sampled_normal_ts[2], 0.0f) * jacobian;
     // const float pdf = safe_div(D * sampled_normal_ts[2] * fmaxf(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom);
 
     const simd_fvec<S> is_valid = (refr_dir_ts[2] < 0.0f) & (view_dir_ts[2] > 0.0f);
 
-    UNROLLED_FOR(i, 3, {
-        out_color[i] = 0.0f;
-        where(is_valid, out_color[i]) = F * refr_col[i];
-    })
-    out_color[3] = 0.0f;
-    where(is_valid, out_color[3]) = pdf;
+    UNROLLED_FOR(i, 3, { out_color[i] = select(is_valid, F * refr_col[i], simd_fvec<S>{0.0f}); })
+    out_color[3] = select(is_valid, pdf, simd_fvec<S>{0.0f});
 }
 
 template <int S>
@@ -4459,12 +4427,8 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
         safe_normalize(out_V);
 
         out_V[3] = m;
-        UNROLLED_FOR(i, 3, {
-            out_color[i] = refr_col[i] * 1e6f;
-            where(cost2 < 0, out_color[i]) = 0.0f;
-        })
-        out_color[3] = 1e6f;
-        where(cost2 < 0, out_color[3]) = 0.0f;
+        UNROLLED_FOR(i, 3, { out_color[i] = select(cost2 >= 0, refr_col[i] * 1e6f, simd_fvec<S>{0.0f}); })
+        out_color[3] = select(cost2 >= 0, simd_fvec<S>{1e6f}, simd_fvec<S>{0.0f});
     }
 
     const simd_ivec<S> is_glossy = ~is_mirror;
@@ -4521,9 +4485,7 @@ void Ray::NS::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec<S> view_dir_ts[3
     simd_fvec<S> F = mix(simd_fvec<S>{0.04f}, simd_fvec<S>{1.0f}, FH);
 
     const simd_fvec<S> denom = 4.0f * abs(view_dir_ts[2]) * abs(reflected_dir_ts[2]);
-    F *= safe_div_pos(D * G, denom);
-    where(denom == 0.0f, F) = 0.0f;
-
+    F = select(denom != 0.0f, safe_div_pos(F * D * G, denom), simd_fvec<S>{0.0f});
     F *= max(reflected_dir_ts[2], 0.0f);
 
     const simd_fvec<S> pdf = GGX_VNDF_Reflection_Bounded_PDF(D, view_dir_ts, clearcoat_alpha);
@@ -5282,8 +5244,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
                              const int iteration, const Cpu::TexStorageBase *const textures[], simd_fvec<S> rc[3]) {
     simd_fvec<S> ro[3] = {r.o[0], r.o[1], r.o[2]};
     UNROLLED_FOR(i, 3, { rc[i] = r.c[i]; })
-    simd_fvec<S> dist = r.dist;
-    where(r.dist < 0.0f, dist) = MAX_DIST;
+    simd_fvec<S> dist = select(r.dist >= 0.0f, r.dist, simd_fvec<S>{MAX_DIST});
     simd_ivec<S> depth = (r.depth >> 24);
 
     const simd_uvec<S> px_hash = hash(r.xy);
@@ -6601,8 +6562,8 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_DiffuseNode(const light_sample_t<S> &ls,
     Evaluate_OrenDiffuse_BSDF(nI, surf.N, ls.L, roughness, base_color, diff_col);
     const simd_fvec<S> &bsdf_pdf = diff_col[3];
 
-    simd_fvec<S> mis_weight = 1.0f;
-    where(mis_mask & simd_cast(ls.area > 0.0f), mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
+    const simd_fvec<S> mis_weight =
+        select(mis_mask & simd_cast(ls.area > 0.0f), power_heuristic(ls.pdf, bsdf_pdf), simd_fvec<S>{1.0f});
 
     simd_fvec<S> P_biased[3];
     offset_ray(surf.P, surf.plane_N, P_biased);
@@ -6658,8 +6619,8 @@ Ray::NS::Evaluate_GlossyNode(const light_sample_t<S> &ls, const ray_data_t<S> &r
                               simd_fvec<S>{spec_F0}, base_color, spec_col);
     const simd_fvec<S> &bsdf_pdf = spec_col[3];
 
-    simd_fvec<S> mis_weight = 1.0f;
-    where(mis_mask & simd_cast(ls.area > 0.0f), mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
+    const simd_fvec<S> mis_weight =
+        select(mis_mask & simd_cast(ls.area > 0.0f), power_heuristic(ls.pdf, bsdf_pdf), simd_fvec<S>{1.0f});
 
     simd_fvec<S> P_biased[3];
     offset_ray(surf.P, surf.plane_N, P_biased);
@@ -6717,8 +6678,8 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_RefractiveNode(const light_sample_t<S> &
                                 refr_col);
     const simd_fvec<S> &bsdf_pdf = refr_col[3];
 
-    simd_fvec<S> mis_weight = 1.0f;
-    where(mis_mask & simd_cast(ls.area > 0.0f), mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
+    const simd_fvec<S> mis_weight =
+        select(mis_mask & simd_cast(ls.area > 0.0f), power_heuristic(ls.pdf, bsdf_pdf), simd_fvec<S>{1.0f});
 
     simd_fvec<S> P_biased[3];
     const simd_fvec<S> _plane_N[3] = {-surf.plane_N[0], -surf.plane_N[1], -surf.plane_N[2]};
@@ -6740,8 +6701,7 @@ void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const simd_ivec<S>
                                     const simd_ivec<S> &is_backfacing, const simd_fvec<S> &int_ior,
                                     const simd_fvec<S> &ext_ior, const simd_fvec<S> rand[2],
                                     const simd_fvec<S> &mix_weight, ray_data_t<S> &new_ray) {
-    simd_fvec<S> eta = (ext_ior / int_ior);
-    where(is_backfacing, eta) = (int_ior / ext_ior);
+    const simd_fvec<S> eta = select(is_backfacing, (int_ior / ext_ior), (ext_ior / int_ior));
 
     simd_fvec<S> V[4], F[4];
     Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, ray.d, roughness, eta, base_color, rand, V, F);
@@ -6793,10 +6753,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     }
 
     simd_fvec<S> H[3];
-    UNROLLED_FOR(i, 3, {
-        H[i] = ls.L[i] - ray.d[i] * trans.eta;
-        where(_is_frontfacing, H[i]) = ls.L[i] - ray.d[i];
-    })
+    UNROLLED_FOR(i, 3, { H[i] = select(_is_frontfacing, ls.L[i] - ray.d[i], ls.L[i] - ray.d[i] * trans.eta); })
     safe_normalize(H);
 
     const simd_fvec<S> roughness2 = sqr(spec.roughness);
@@ -6867,8 +6824,8 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
         })
     }
 
-    simd_fvec<S> mis_weight = 1.0f;
-    where(mis_mask & simd_cast(ls.area > 0.0f), mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
+    const simd_fvec<S> mis_weight =
+        select(mis_mask & simd_cast(ls.area > 0.0f), power_heuristic(ls.pdf, bsdf_pdf), simd_fvec<S>{1.0f});
     UNROLLED_FOR(i, 3, { where(mask, lcol[i]) *= mix_weight * mis_weight; })
 
     ///
@@ -7077,13 +7034,13 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     const simd_ivec<S> ino_hit = ~inter.mask;
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
-        simd_fvec<S> pdf_factor = -1.0f;
-        where(total_depth < ps.max_total_depth, pdf_factor) =
+        const simd_fvec<S> pdf_factor = select(total_depth < ps.max_total_depth,
 #if USE_HIERARCHICAL_NEE
-            safe_div_pos(1.0f, inter.u);
+                                               safe_div_pos(1.0f, inter.u),
 #else
-            float(sc.li_indices.size());
+                                               float(sc.li_indices.size()),
 #endif
+                                               simd_fvec<S>{-1.0f});
         Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), pdf_factor,
                           tex_rand, env_col);
 
@@ -7117,12 +7074,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
         return;
     }
 
-    simd_ivec<S> tri_index = inter.prim_index;
-    const simd_ivec<S> is_backfacing = (tri_index < 0);
-    where(is_backfacing, tri_index) = -tri_index - 1;
+    const simd_ivec<S> is_backfacing = (inter.prim_index < 0);
+    const simd_ivec<S> tri_index = select(is_backfacing, -inter.prim_index - 1, inter.prim_index);
 
-    simd_ivec<S> obj_index = inter.obj_index;
-    where(~is_active_lane, obj_index) = 0;
+    const simd_ivec<S> obj_index = select(is_active_lane, inter.obj_index, simd_ivec<S>{0});
 
     simd_ivec<S> mat_index = gather(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
                              simd_ivec<S>((MATERIAL_INDEX_BITS << 16) | MATERIAL_INDEX_BITS);
@@ -7291,11 +7246,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
 
         const simd_fvec<S> ior = gather(iors, mat_index * MatDWORDStride);
 
-        simd_fvec<S> eta = safe_div_pos(ior, ext_ior);
-        where(is_backfacing, eta) = safe_div_pos(ext_ior, ior);
-
-        simd_fvec<S> RR = fresnel_dielectric_cos(dot3(I, surf.N), eta);
-        where(ior == 0.0f, RR) = 1.0f;
+        const simd_fvec<S> eta = select(is_backfacing, safe_div_pos(ext_ior, ior), safe_div_pos(ior, ext_ior));
+        const simd_fvec<S> RR = select(ior != 0.0f, fresnel_dielectric_cos(dot3(I, surf.N), eta), simd_fvec<S>{1.0f});
 
         mix_val *= saturate(RR);
 
@@ -7722,8 +7674,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
                 trans.roughness =
                     1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
                 trans.int_ior = mat->ior;
-                trans.eta = (ext_ior / mat->ior);
-                where(is_backfacing, trans.eta) = (mat->ior / ext_ior);
+                trans.eta = select(is_backfacing, (mat->ior / ext_ior), (ext_ior / mat->ior));
                 trans.fresnel = fresnel_dielectric_cos(dot3(I, surf.N), 1.0f / trans.eta);
                 trans.backfacing = is_backfacing;
 
@@ -7767,8 +7718,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
 
     const simd_fvec<S> lum = max(new_ray.c[0], max(new_ray.c[1], new_ray.c[2]));
     const simd_fvec<S> &p = mix_term_rand[1];
-    simd_fvec<S> q = 0.0f;
-    where(can_terminate_path, q) = max(0.05f, 1.0f - lum);
+    const simd_fvec<S> q = select(can_terminate_path, max(0.05f, 1.0f - lum), simd_fvec<S>{0.0f});
 
     secondary_mask &= simd_cast(p >= q) & simd_cast(lum > 0.0f) & simd_cast(new_ray.pdf > 0.0f);
     if (secondary_mask.not_all_zeros()) {

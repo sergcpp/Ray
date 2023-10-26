@@ -916,6 +916,14 @@ force_inline simd_comp_where_inv_helper<T, U, S> where_not(const simd_vec<U, S> 
     return {mask, vec};
 }
 
+template <typename T, typename U, int S>
+force_inline simd_vec<T, S> select(const simd_vec<U, S> &mask, const simd_vec<T, S> &vec1, const simd_vec<T, S> &vec2) {
+    simd_vec<T, S> ret;
+    UNROLLED_FOR_S(i, S,
+                   { ret.template set<i>(mask.template get<i>() ? vec1.template get<i>() : vec2.template get<i>()); });
+    return ret;
+}
+
 template <int S> force_inline simd_vec<int, S> simd_cast(const simd_vec<float, S> &vec) {
     simd_vec<int, S> ret;
     memcpy(&ret, &vec, sizeof(simd_vec<int, S>));

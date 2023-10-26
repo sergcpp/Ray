@@ -31,6 +31,14 @@ template <int imm> force_inline int32x4_t slli(int32x4_t a) {
     return vextq_s8(vdupq_n_s8(0), vreinterpretq_s32_s64(a), ((imm <= 0 || imm > 15) ? 0 : (16 - imm)));
 }
 
+template <typename To, typename From> To _vcast(From x) { return x; }
+#if !defined(_MSC_VER) || defined(__clang__)
+template <> force_inline float32x4_t _vcast(int32x4_t x) { return vreinterpretq_f32_s32(x); }
+template <> force_inline float32x4_t _vcast(uint32x4_t x) { return vreinterpretq_f32_u32(x); }
+template <> force_inline int32x4_t _vcast(float32x4_t x) { return vreinterpretq_s32_f32(x); }
+template <> force_inline uint32x4_t _vcast(float32x4_t x) { return vreinterpretq_u32_f32(x); }
+#endif
+
 template <> class simd_vec<int, 4>;
 template <> class simd_vec<unsigned, 4>;
 
@@ -466,6 +474,17 @@ template <> class simd_vec<float, 4> {
         v1.vec_ = vaddq_f32(v1.vec_, vreinterpretq_f32_s32(slli<8>(vreinterpretq_s32_f32(v1.vec_))));
         return v1;
     }
+
+    template <typename U>
+    friend force_inline simd_vec<float, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<float, 4> vec1,
+                                                             const simd_vec<float, 4> vec2);
+    template <typename U>
+    friend force_inline simd_vec<int, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<int, 4> vec1,
+                                                           const simd_vec<int, 4> vec2);
+    template <typename U>
+    friend force_inline simd_vec<unsigned, 4> vectorcall select(const simd_vec<U, 4> mask,
+                                                                const simd_vec<unsigned, 4> vec1,
+                                                                const simd_vec<unsigned, 4> vec2);
 
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<float, 4> mask) {
@@ -1006,6 +1025,17 @@ template <> class simd_vec<int, 4> {
         v1.vec_ = vaddq_s32(v1.vec_, slli<8>(v1.vec_));
         return v1;
     }
+
+    template <typename U>
+    friend force_inline simd_vec<float, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<float, 4> vec1,
+                                                             const simd_vec<float, 4> vec2);
+    template <typename U>
+    friend force_inline simd_vec<int, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<int, 4> vec1,
+                                                           const simd_vec<int, 4> vec2);
+    template <typename U>
+    friend force_inline simd_vec<unsigned, 4> vectorcall select(const simd_vec<U, 4> mask,
+                                                                const simd_vec<unsigned, 4> vec1,
+                                                                const simd_vec<unsigned, 4> vec2);
 
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<int, 4> mask) {
@@ -1551,6 +1581,17 @@ template <> class simd_vec<unsigned, 4> {
         return v1;
     }
 
+    template <typename U>
+    friend force_inline simd_vec<float, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<float, 4> vec1,
+                                                             const simd_vec<float, 4> vec2);
+    template <typename U>
+    friend force_inline simd_vec<int, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<int, 4> vec1,
+                                                           const simd_vec<int, 4> vec2);
+    template <typename U>
+    friend force_inline simd_vec<unsigned, 4> vectorcall select(const simd_vec<U, 4> mask,
+                                                                const simd_vec<unsigned, 4> vec1,
+                                                                const simd_vec<unsigned, 4> vec2);
+
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<unsigned, 4> mask) {
         UNROLLED_FOR(i, 4, {
@@ -1586,6 +1627,39 @@ force_inline simd_vec<float, 4>::operator simd_vec<unsigned, 4>() const {
 force_inline simd_vec<int, 4>::operator simd_vec<unsigned, 4>() const {
     simd_vec<unsigned, 4> ret;
     ret.vec_ = vreinterpretq_u32_s32(vec_);
+    return ret;
+}
+
+template <typename U>
+force_inline simd_vec<float, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<float, 4> vec1,
+                                                  const simd_vec<float, 4> vec2) {
+    validate_mask(mask);
+    simd_vec<float, 4> ret;
+    const int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(vec1.vec_), _vcast<int32x4_t>(mask.vec_));
+    const int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(vec2.vec_), _vcast<int32x4_t>(mask.vec_));
+    ret.vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
+    return ret;
+}
+
+template <typename U>
+force_inline simd_vec<int, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<int, 4> vec1,
+                                                const simd_vec<int, 4> vec2) {
+    validate_mask(mask);
+    simd_vec<int, 4> ret;
+    const int32x4_t temp1 = vandq_s32(vec1.vec_, _vcast<int32x4_t>(mask.vec_));
+    const int32x4_t temp2 = vbicq_s32(vec2.vec_, _vcast<int32x4_t>(mask.vec_));
+    ret.vec_ = vorrq_s32(temp1, temp2);
+    return ret;
+}
+
+template <typename U>
+force_inline simd_vec<unsigned, 4> vectorcall select(const simd_vec<U, 4> mask, const simd_vec<unsigned, 4> vec1,
+                                                     const simd_vec<unsigned, 4> vec2) {
+    validate_mask(mask);
+    simd_vec<unsigned, 4> ret;
+    const uint32x4_t temp1 = vandq_u32(vec1.vec_, _vcast<uint32x4_t>(mask.vec_));
+    const uint32x4_t temp2 = vbicq_u32(vec2.vec_, _vcast<uint32x4_t>(mask.vec_));
+    ret.vec_ = vorrq_u32(temp1, temp2);
     return ret;
 }
 

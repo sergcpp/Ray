@@ -200,6 +200,23 @@ using namespace Ray::NS;
     require(v17[2] == 8.0f);
     require(v17[3] == 9.0f);
 
+    const simd_ivec4 vmask = {-1, 0, 0, -1};
+
+    simd_fvec4 v18 = v3;
+    where(vmask, v18) = v2;
+
+    const simd_fvec4 v19 = select(vmask, v2, v3);
+
+    require(v18.get<0>() == 4.0f);
+    require(v18.get<1>() == 7.0f);
+    require(v18.get<2>() == 9.0f);
+    require(v18.get<3>() == 7.0f);
+
+    require(v19.get<0>() == 4.0f);
+    require(v19.get<1>() == 7.0f);
+    require(v19.get<2>() == 9.0f);
+    require(v19.get<3>() == 7.0f);
+
     printf("OK\n");
 }
 
@@ -377,6 +394,23 @@ using namespace Ray::NS;
     require(v18[2] == 8);
     require(v18[3] == 9);
 
+    const simd_uvec4 vmask = {0xffffffff, 0, 0, 0xffffffff};
+
+    simd_ivec4 v19 = v3;
+    where(vmask, v19) = v2;
+
+    const simd_ivec4 v20 = select(vmask, v2, v3);
+
+    require(v19.get<0>() == 4);
+    require(v19.get<1>() == 7);
+    require(v19.get<2>() == 9);
+    require(v19.get<3>() == 7);
+
+    require(v20.get<0>() == 4);
+    require(v20.get<1>() == 7);
+    require(v20.get<2>() == 9);
+    require(v20.get<3>() == 7);
+
     printf("OK\n");
 }
 
@@ -545,6 +579,23 @@ using namespace Ray::NS;
     require(v18[1] == 4);
     require(v18[2] == 8);
     require(v18[3] == 9);
+
+    const simd_ivec4 vmask = {-1, 0, 0, -1};
+
+    simd_uvec4 v19 = v3;
+    where(vmask, v19) = v2;
+
+    const simd_uvec4 v20 = select(vmask, v2, v3);
+
+    require(v19.get<0>() == 4);
+    require(v19.get<1>() == 7);
+    require(v19.get<2>() == 9);
+    require(v19.get<3>() == 7);
+
+    require(v20.get<0>() == 4);
+    require(v20.get<1>() == 7);
+    require(v20.get<2>() == 9);
+    require(v20.get<3>() == 7);
 
     printf("OK\n");
 }
@@ -812,6 +863,31 @@ using namespace Ray::NS;
     require(v17[6] == 17.0f);
     require(v17[7] == 18.0f);
 
+    const simd_ivec8 vmask = {-1, 0, 0, -1, -1, 0, 0, -1};
+
+    simd_fvec8 v18 = v3;
+    where(vmask, v18) = v2;
+
+    const simd_fvec8 v19 = select(vmask, v2, v3);
+
+    require(v18.get<0>() == 4.0f);
+    require(v18.get<1>() == 7.0f);
+    require(v18.get<2>() == 9.0f);
+    require(v18.get<3>() == 7.0f);
+    require(v18.get<4>() == 8.0f);
+    require(v18.get<5>() == 14.0f);
+    require(v18.get<6>() == 15.0f);
+    require(v18.get<7>() == 1.0f);
+
+    require(v19.get<0>() == 4.0f);
+    require(v19.get<1>() == 7.0f);
+    require(v19.get<2>() == 9.0f);
+    require(v19.get<3>() == 7.0f);
+    require(v19.get<4>() == 8.0f);
+    require(v19.get<5>() == 14.0f);
+    require(v19.get<6>() == 15.0f);
+    require(v19.get<7>() == 1.0f);
+
     printf("OK\n");
 }
 
@@ -1029,6 +1105,31 @@ using namespace Ray::NS;
     require(v18[6] == 17);
     require(v18[7] == 18);
 
+    const simd_uvec8 vmask = {0xffffffff, 0, 0, 0xffffffff, 0xffffffff, 0, 0, 0xffffffff};
+
+    simd_ivec8 v19 = v3;
+    where(vmask, v19) = v2;
+
+    const simd_ivec8 v20 = select(vmask, v2, v3);
+
+    require(v19.get<0>() == 4);
+    require(v19.get<1>() == 7);
+    require(v19.get<2>() == 9);
+    require(v19.get<3>() == 7);
+    require(v19.get<4>() == 8);
+    require(v19.get<5>() == 14);
+    require(v19.get<6>() == 15);
+    require(v19.get<7>() == 1);
+
+    require(v20.get<0>() == 4);
+    require(v20.get<1>() == 7);
+    require(v20.get<2>() == 9);
+    require(v20.get<3>() == 7);
+    require(v20.get<4>() == 8);
+    require(v20.get<5>() == 14);
+    require(v20.get<6>() == 15);
+    require(v20.get<7>() == 1);
+
     printf("OK\n");
 }
 
@@ -1232,6 +1333,31 @@ using namespace Ray::NS;
     require(v18[5] == 13);
     require(v18[6] == 17);
     require(v18[7] == 18);
+
+    const simd_ivec8 vmask = {-1, 0, 0, -1, -1, 0, 0, -1};
+
+    simd_uvec8 v19 = v3;
+    where(vmask, v19) = v2;
+
+    const simd_uvec8 v20 = select(vmask, v2, v3);
+
+    require(v19.get<0>() == 4);
+    require(v19.get<1>() == 7);
+    require(v19.get<2>() == 9);
+    require(v19.get<3>() == 7);
+    require(v19.get<4>() == 8);
+    require(v19.get<5>() == 14);
+    require(v19.get<6>() == 15);
+    require(v19.get<7>() == 1);
+
+    require(v20.get<0>() == 4);
+    require(v20.get<1>() == 7);
+    require(v20.get<2>() == 9);
+    require(v20.get<3>() == 7);
+    require(v20.get<4>() == 8);
+    require(v20.get<5>() == 14);
+    require(v20.get<6>() == 15);
+    require(v20.get<7>() == 1);
 
     printf("OK\n");
 }
@@ -1669,6 +1795,47 @@ using namespace Ray::NS;
     require(v17[14] == 35.0f);
     require(v17[15] == 36.0f);
 
+    const simd_ivec16 vmask = {-1, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, -1};
+
+    simd_fvec16 v18 = v3;
+    where(vmask, v18) = v2;
+
+    const simd_fvec16 v19 = select(vmask, v2, v3);
+
+    require(v18.get<0>() == 4.0f);
+    require(v18.get<1>() == 7.0f);
+    require(v18.get<2>() == 9.0f);
+    require(v18.get<3>() == 7.0f);
+    require(v18.get<4>() == 8.0f);
+    require(v18.get<5>() == 14.0f);
+    require(v18.get<6>() == 15.0f);
+    require(v18.get<7>() == 1.0f);
+    require(v18.get<8>() == 4.0f);
+    require(v18.get<9>() == 7.0f);
+    require(v18.get<10>() == 9.0f);
+    require(v18.get<11>() == 7.0f);
+    require(v18.get<12>() == 8.0f);
+    require(v18.get<13>() == 14.0f);
+    require(v18.get<14>() == 15.0f);
+    require(v18.get<15>() == 1.0f);
+
+    require(v19.get<0>() == 4.0f);
+    require(v19.get<1>() == 7.0f);
+    require(v19.get<2>() == 9.0f);
+    require(v19.get<3>() == 7.0f);
+    require(v19.get<4>() == 8.0f);
+    require(v19.get<5>() == 14.0f);
+    require(v19.get<6>() == 15.0f);
+    require(v19.get<7>() == 1.0f);
+    require(v19.get<8>() == 4.0f);
+    require(v19.get<9>() == 7.0f);
+    require(v19.get<10>() == 9.0f);
+    require(v19.get<11>() == 7.0f);
+    require(v19.get<12>() == 8.0f);
+    require(v19.get<13>() == 14.0f);
+    require(v19.get<14>() == 15.0f);
+    require(v19.get<15>() == 1.0f);
+
     printf("OK\n");
 }
 
@@ -2030,6 +2197,48 @@ using namespace Ray::NS;
     require(v18[14] == 35);
     require(v18[15] == 36);
 
+    const simd_uvec16 vmask = {0xffffffff, 0, 0, 0xffffffff, 0xffffffff, 0, 0, 0xffffffff,
+                               0xffffffff, 0, 0, 0xffffffff, 0xffffffff, 0, 0, 0xffffffff};
+
+    simd_ivec16 v19 = v3;
+    where(vmask, v19) = v2;
+
+    const simd_ivec16 v20 = select(vmask, v2, v3);
+
+    require(v19.get<0>() == 4);
+    require(v19.get<1>() == 7);
+    require(v19.get<2>() == 9);
+    require(v19.get<3>() == 7);
+    require(v19.get<4>() == 8);
+    require(v19.get<5>() == 14);
+    require(v19.get<6>() == 15);
+    require(v19.get<7>() == 1);
+    require(v19.get<8>() == 4);
+    require(v19.get<9>() == 7);
+    require(v19.get<10>() == 9);
+    require(v19.get<11>() == 7);
+    require(v19.get<12>() == 8);
+    require(v19.get<13>() == 14);
+    require(v19.get<14>() == 15);
+    require(v19.get<15>() == 1);
+
+    require(v20.get<0>() == 4);
+    require(v20.get<1>() == 7);
+    require(v20.get<2>() == 9);
+    require(v20.get<3>() == 7);
+    require(v20.get<4>() == 8);
+    require(v20.get<5>() == 14);
+    require(v20.get<6>() == 15);
+    require(v20.get<7>() == 1);
+    require(v20.get<8>() == 4);
+    require(v20.get<9>() == 7);
+    require(v20.get<10>() == 9);
+    require(v20.get<11>() == 7);
+    require(v20.get<12>() == 8);
+    require(v20.get<13>() == 14);
+    require(v20.get<14>() == 15);
+    require(v20.get<15>() == 1);
+
     printf("OK\n");
 }
 
@@ -2371,6 +2580,47 @@ using namespace Ray::NS;
     require(v18[13] == 31);
     require(v18[14] == 35);
     require(v18[15] == 36);
+
+    const simd_ivec16 vmask = {-1, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, -1};
+
+    simd_uvec16 v19 = v3;
+    where(vmask, v19) = v2;
+
+    const simd_uvec16 v20 = select(vmask, v2, v3);
+
+    require(v19.get<0>() == 4);
+    require(v19.get<1>() == 7);
+    require(v19.get<2>() == 9);
+    require(v19.get<3>() == 7);
+    require(v19.get<4>() == 8);
+    require(v19.get<5>() == 14);
+    require(v19.get<6>() == 15);
+    require(v19.get<7>() == 1);
+    require(v19.get<8>() == 4);
+    require(v19.get<9>() == 7);
+    require(v19.get<10>() == 9);
+    require(v19.get<11>() == 7);
+    require(v19.get<12>() == 8);
+    require(v19.get<13>() == 14);
+    require(v19.get<14>() == 15);
+    require(v19.get<15>() == 1);
+
+    require(v20.get<0>() == 4);
+    require(v20.get<1>() == 7);
+    require(v20.get<2>() == 9);
+    require(v20.get<3>() == 7);
+    require(v20.get<4>() == 8);
+    require(v20.get<5>() == 14);
+    require(v20.get<6>() == 15);
+    require(v20.get<7>() == 1);
+    require(v20.get<8>() == 4);
+    require(v20.get<9>() == 7);
+    require(v20.get<10>() == 9);
+    require(v20.get<11>() == 7);
+    require(v20.get<12>() == 8);
+    require(v20.get<13>() == 14);
+    require(v20.get<14>() == 15);
+    require(v20.get<15>() == 1);
 
     printf("OK\n");
 }
