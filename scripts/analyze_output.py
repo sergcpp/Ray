@@ -8,7 +8,7 @@ def process_file(f, all_tests):
         m = re.search(r'^Test\s*(\w+).*100.0%.*PSNR:\s*([.\w]+)\/([.\w]+).*Fireflies:\s*([.\w]+)\/([.\w]+).*', line)
         #m = re.search(r'^Test.*', line)
         if m:
-            test_name, psnr_tested, psnr_threshold, fireflies_tested, fireflies_threshold = m[1], m[2], m[3], m[4], m[5]
+            test_name, psnr_tested, psnr_threshold, fireflies_tested, fireflies_threshold = m[1], float(m[2]), float(m[3]), int(m[4]), int(m[5])
             if test_name not in all_tests:
                 new_test = {}
                 new_test['psnr_tested'] = psnr_tested
@@ -25,7 +25,7 @@ def process_file(f, all_tests):
         else:
             m = re.search(r'^Required sample count for\s*(\w+):\s*(\w+).*', line)
             if m:
-                test_name, required_samples = m[1], m[2]
+                test_name, required_samples = m[1], int(m[2])
                 test = all_tests[test_name]
                 if 'required_samples' not in test:
                     test.pop('psnr_tested', None)
