@@ -36,6 +36,27 @@ VkDeviceSize align_up(const VkDeviceSize size, const VkDeviceSize alignment) {
 Ray::Vk::Scene::~Scene() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
+    for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
+        MeshInstanceHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveMeshInstance_nolock(to_delete);
+    }
+    for (auto it = meshes_.begin(); it != meshes_.end();) {
+        MeshHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveMesh_nolock(to_delete);
+    }
+    for (auto it = lights_.begin(); it != lights_.end();) {
+        LightHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveLight_nolock(to_delete);
+    }
+
+    if (macro_nodes_root_ != 0xffffffff) {
+        nodes_.Erase(macro_nodes_block_);
+        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+    }
+
     bindless_textures_.clear();
     ctx_->api().vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.descr_layout, nullptr);
     ctx_->api().vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.rt_descr_layout, nullptr);
@@ -281,6 +302,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         VkAccelerationStructureBuildGeometryInfoKHR build_info = {};
     };
     std::vector<Blas> all_blases;
+    std::vector<uint32_t> mesh_to_blas(meshes_.capacity(), 0xffffffff);
 
     uint32_t needed_build_scratch_size = 0;
     uint32_t needed_total_acc_struct_size = 0;
@@ -288,13 +310,15 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
     for (auto it = meshes_.cbegin(); it != meshes_.cend(); ++it) {
         const mesh_t &mesh = *it;
 
+        mesh_to_blas[it.index()] = uint32_t(all_blases.size());
+
         VkAccelerationStructureGeometryTrianglesDataKHR tri_data = {
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR};
         tri_data.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-        tri_data.vertexData.deviceAddress = vertices_.buf().vk_device_address();
+        tri_data.vertexData.deviceAddress = vertices_.gpu_buf().vk_device_address();
         tri_data.vertexStride = sizeof(vertex_t);
         tri_data.indexType = VK_INDEX_TYPE_UINT32;
-        tri_data.indexData.deviceAddress = vtx_indices_.buf().vk_device_address();
+        tri_data.indexData.deviceAddress = vtx_indices_.gpu_buf().vk_device_address();
         // TODO: fix this!
         tri_data.maxVertex = mesh.vert_index + mesh.vert_count;
 
@@ -507,7 +531,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
     for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
         const mesh_instance_t &instance = *it;
 
-        auto &blas = rt_mesh_blases_[instance.mesh_index];
+        auto &blas = rt_mesh_blases_[mesh_to_blas[instance.mesh_index]];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;
 

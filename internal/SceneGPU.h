@@ -56,19 +56,16 @@ class Scene : public SceneCommon {
     Context *ctx_;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
 
-    Vector<bvh_node_t> nodes_;
-    Vector<tri_accel_t> tris_;
-    Vector<uint32_t> tri_indices_;
-    Vector<tri_mat_data_t> tri_materials_;
-    std::vector<tri_mat_data_t> tri_materials_cpu_;
+    SparseStorage<bvh_node_t> nodes_;
+    SparseStorage<tri_accel_t> tris_;
+    SparseStorage<uint32_t> tri_indices_;
+    SparseStorage<tri_mat_data_t> tri_materials_;
     SparseStorage<transform_t> transforms_;
     SparseStorage<mesh_t> meshes_;
     SparseStorage<mesh_instance_t> mesh_instances_;
     Vector<uint32_t> mi_indices_;
-    Vector<vertex_t> vertices_;
-    std::vector<vertex_t> vertices_cpu_;
-    Vector<uint32_t> vtx_indices_;
-    std::vector<uint32_t> vtx_indices_cpu_;
+    SparseStorage<vertex_t> vertices_;
+    SparseStorage<uint32_t> vtx_indices_;
 
     SparseStorage<material_t> materials_;
     SparseStorage<atlas_texture_t> atlas_textures_;
@@ -94,7 +91,7 @@ class Scene : public SceneCommon {
         Texture2D tex;
     } env_map_qtree_;
 
-    uint32_t macro_nodes_start_ = 0xffffffff, macro_nodes_count_ = 0;
+    uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_block_ = 0xffffffff;
 
     bvh_node_t tlas_root_node_ = {};
 
@@ -110,8 +107,9 @@ class Scene : public SceneCommon {
     MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);
     void SetMeshInstanceTransform_nolock(MeshInstanceHandle mi_handle, const float *xform);
 
+    void RemoveMesh_nolock(MeshHandle m);
+    void RemoveMeshInstance_nolock(MeshInstanceHandle i);
     void RemoveLight_nolock(LightHandle i);
-    void RemoveNodes_nolock(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS_nolock();
     void RebuildLightTree_nolock();
 
@@ -163,7 +161,10 @@ class Scene : public SceneCommon {
     }
 
     MeshHandle AddMesh(const mesh_desc_t &m) override;
-    void RemoveMesh(MeshHandle) override;
+    void RemoveMesh(MeshHandle m) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        RemoveMesh_nolock(m);
+    }
 
     LightHandle AddLight(const directional_light_desc_t &l) override;
     LightHandle AddLight(const sphere_light_desc_t &l) override;
@@ -181,7 +182,10 @@ class Scene : public SceneCommon {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
         SetMeshInstanceTransform_nolock(mi_handle, xform);
     }
-    void RemoveMeshInstance(MeshInstanceHandle) override;
+    void RemoveMeshInstance(MeshInstanceHandle mi) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        RemoveMeshInstance_nolock(mi);
+    }
 
     void Finalize() override;
 
@@ -1025,46 +1029,51 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     for (int i = 0; i < _m.vtx_indices.size(); ++i) {
-        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + uint32_t(vertices_.size()));
+        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex);
     }
 
-    // offset nodes and primitives
-    for (bvh_node_t &n : new_nodes) {
-        if (n.prim_index & LEAF_NODE_BIT) {
-            n.prim_index += uint32_t(tri_indices_.size());
-        } else {
-            n.left_child += uint32_t(nodes_.size());
-            n.right_child += uint32_t(nodes_.size());
-        }
-    }
-
+    const std::pair<uint32_t, uint32_t> trimat_index =
+        tri_materials_.Allocate(new_tri_materials.data(), uint32_t(new_tri_materials.size()));
     // offset triangle indices
     for (uint32_t &i : new_tri_indices) {
-        i += uint32_t(tri_materials_.size());
+        i += trimat_index.first;
     }
 
-    tri_materials_.Append(&new_tri_materials[0], new_tri_materials.size());
-    tri_materials_cpu_.insert(tri_materials_cpu_.end(), new_tri_materials.data(),
-                              new_tri_materials.data() + new_tri_materials.size());
-    assert(tri_materials_.size() == tri_materials_cpu_.size());
+    std::pair<uint32_t, uint32_t> tris_index = {}, tri_indices_index = {}, nodes_index = {};
+    if (!use_hwrt_) {
+        tris_index = tris_.Allocate(&new_tris[0], new_tris.size());
+        tri_indices_index = tri_indices_.Allocate(&new_tri_indices[0], new_tri_indices.size());
+        assert(tri_indices_index.first == tris_index.first);
+        assert(tri_indices_index.second == tris_index.second);
+        assert(trimat_index.second == tris_index.second);
+
+        nodes_index = nodes_.Allocate(nullptr, uint32_t(new_nodes.size()));
+    } else {
+        tris_index = trimat_index;
+    }
+
+    if (!use_hwrt_) {
+        // offset nodes and primitives
+        for (bvh_node_t &n : new_nodes) {
+            if (n.prim_index & LEAF_NODE_BIT) {
+                n.prim_index += tri_indices_index.first;
+            } else {
+                n.left_child += nodes_index.first;
+                n.right_child += nodes_index.first;
+            }
+        }
+        nodes_.Set(nodes_index.first, uint32_t(new_nodes.size()), new_nodes.data());
+    }
 
     // add mesh
     mesh_t m = {};
     memcpy(m.bbox_min, value_ptr(bbox_min), 3 * sizeof(float));
     memcpy(m.bbox_max, value_ptr(bbox_max), 3 * sizeof(float));
-    m.node_index = uint32_t(nodes_.size());
-    m.node_count = uint32_t(new_nodes.size());
-    m.tris_index = uint32_t(tris_.size());
+    m.node_index = nodes_index.first;
+    m.node_block = nodes_index.second;
+    m.tris_index = tris_index.first;
+    m.tris_block = tris_index.second;
     m.tris_count = uint32_t(new_tris.size());
-    m.vert_index = uint32_t(vtx_indices_.size());
-    m.vert_count = uint32_t(new_vtx_indices.size());
-
-    const std::pair<uint32_t, uint32_t> mesh_index = meshes_.push(m);
-
-    if (!use_hwrt_) {
-        // add nodes
-        nodes_.Append(&new_nodes[0], new_nodes.size());
-    }
 
     const size_t stride = AttrStrides[int(_m.layout)];
 
@@ -1096,31 +1105,61 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     if (_m.layout == eVertexLayout::PxyzNxyzTuv || _m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
-        ComputeTangentBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices);
+        ComputeTangentBasis(0, 0, new_vertices, new_vtx_indices, _m.vtx_indices);
     }
 
-    vertices_.Append(&new_vertices[0], new_vertices.size());
-    vertices_cpu_.insert(std::end(vertices_cpu_), std::begin(new_vertices), std::end(new_vertices));
-    assert(vertices_.size() == vertices_cpu_.size());
+    const std::pair<uint32_t, uint32_t> vtx_index = vertices_.Allocate(new_vertices.data(), new_vertices.size());
 
-    // add vertex indices
-    vtx_indices_.Append(&new_vtx_indices[0], new_vtx_indices.size());
-    vtx_indices_cpu_.insert(vtx_indices_cpu_.end(), std::begin(new_vtx_indices), std::end(new_vtx_indices));
-    assert(vtx_indices_.size() == vtx_indices_cpu_.size());
-
-    if (!use_hwrt_) {
-        // add triangles
-        tris_.Append(&new_tris[0], new_tris.size());
-        // add triangle indices
-        tri_indices_.Append(&new_tri_indices[0], new_tri_indices.size());
+    const std::pair<uint32_t, uint32_t> vtx_indices_index = vtx_indices_.Allocate(nullptr, new_vtx_indices.size());
+    assert(trimat_index.second == vtx_indices_index.second);
+    for (uint32_t &i : new_vtx_indices) {
+        i += vtx_index.first;
     }
+    vtx_indices_.Set(vtx_indices_index.first, uint32_t(new_vtx_indices.size()), new_vtx_indices.data());
 
+    m.vert_index = vtx_indices_index.first;
+    m.vert_block = vtx_indices_index.second;
+    m.vert_count = uint32_t(new_vtx_indices.size());
+
+    m.vert_data_index = vtx_index.first;
+    m.vert_data_block = vtx_index.second;
+
+    const std::pair<uint32_t, uint32_t> mesh_index = meshes_.push(m);
     return MeshHandle{mesh_index.first, mesh_index.second};
 }
 
-inline void Ray::NS::Scene::RemoveMesh(MeshHandle) {
-    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-    // TODO!!!
+inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
+    const mesh_t &m = meshes_[i._index];
+
+    const uint32_t node_block = m.node_block;
+    const uint32_t tris_block = m.tris_block;
+    const uint32_t vert_block = m.vert_block, vert_data_block = m.vert_data_block;
+
+    meshes_.Erase(i._block);
+
+    bool rebuild_required = false;
+    for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
+        mesh_instance_t &mi = *it;
+        if (mi.mesh_index == i._index) {
+            it = mesh_instances_.erase(it);
+            rebuild_required = true;
+        } else {
+            ++it;
+        }
+    }
+
+    if (!use_hwrt_) {
+        tris_.Erase(tris_block);
+        tri_indices_.Erase(tris_block);
+        nodes_.Erase(node_block);
+    }
+    tri_materials_.Erase(tris_block);
+    vertices_.Erase(vert_data_block);
+    vtx_indices_.Erase(vert_block);
+
+    if (rebuild_required) {
+        RebuildTLAS_nolock();
+    }
 }
 
 inline Ray::LightHandle Ray::NS::Scene::AddLight(const directional_light_desc_t &_l) {
@@ -1223,8 +1262,8 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
 
     l.rect.area = _l.width * _l.height;
 
-    const Ref::simd_fvec4 uvec = _l.width * Ref::TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const Ref::simd_fvec4 vvec = _l.height * Ref::TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 uvec = _l.width * TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 vvec = _l.height * TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
 
     memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
@@ -1259,8 +1298,8 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
 
     l.disk.area = 0.25f * PI * _l.size_x * _l.size_y;
 
-    const Ref::simd_fvec4 uvec = _l.size_x * Ref::TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const Ref::simd_fvec4 vvec = _l.size_y * Ref::TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 uvec = _l.size_x * TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 vvec = _l.size_y * TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
 
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
@@ -1344,6 +1383,7 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
     mi.mesh_index = mi_desc.mesh._index;
     mi.tr_index = tr_index.first;
     mi.tr_block = tr_index.second;
+    mi.lights_index = 0xffffffff;
     mi.ray_visibility = 0x000000ff;
 
     if (!mi_desc.camera_visibility) {
@@ -1364,12 +1404,12 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
 
     const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.push(mi);
 
-    std::vector<uint32_t> new_li_indices;
-
     { // find emissive triangles and add them as light emitters
+        std::vector<uint32_t> new_li_indices;
+
         const mesh_t &m = meshes_[mi_desc.mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
-            const tri_mat_data_t &tri_mat = tri_materials_cpu_[tri];
+            const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
             SmallVector<uint16_t, 64> mat_indices;
             mat_indices.push_back(tri_mat.front_mi & MATERIAL_INDEX_BITS);
@@ -1421,10 +1461,10 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
                 new_li_indices.push_back(index.first);
             }
         }
-    }
 
-    if (!new_li_indices.empty()) {
-        li_indices_.Append(new_li_indices.data(), new_li_indices.size());
+        if (!new_li_indices.empty()) {
+            li_indices_.Append(new_li_indices.data(), new_li_indices.size());
+        }
     }
 
     auto ret = MeshInstanceHandle{mi_index.first, mi_index.second};
@@ -1451,8 +1491,16 @@ inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHa
     RebuildTLAS_nolock();
 }
 
-inline void Ray::NS::Scene::RemoveMeshInstance(MeshInstanceHandle) {
-    // TODO!!
+inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
+    mesh_instance_t &mi = mesh_instances_[i._index];
+
+    transforms_.Erase(mi.tr_block);
+    if (mi.lights_index != 0xffffffff) {
+        lights_.Erase(mi.ray_visibility >> 8);
+    }
+    mesh_instances_.Erase(i._block);
+
+    RebuildTLAS_nolock();
 }
 
 inline void Ray::NS::Scene::Finalize() {
@@ -1528,53 +1576,17 @@ inline void Ray::NS::Scene::Finalize() {
     RebuildLightTree_nolock();
 }
 
-inline void Ray::NS::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
-    if (!node_count) {
-        return;
-    }
-
-    /*nodes_.Erase(node_index, node_count);
-
-    if (node_index != nodes_.size()) {
-        size_t meshes_count = meshes_.size();
-        std::vector<mesh_t> meshes(meshes_count);
-        meshes_.Get(&meshes[0], 0, meshes_.size());
-
-        for (mesh_t &m : meshes) {
-            if (m.node_index > node_index) {
-                m.node_index -= node_count;
-            }
-        }
-        meshes_.Set(&meshes[0], 0, meshes_count);
-
-        size_t nodes_count = nodes_.size();
-        std::vector<bvh_node_t> nodes(nodes_count);
-        nodes_.Get(&nodes[0], 0, nodes_count);
-
-        for (uint32_t i = node_index; i < nodes.size(); i++) {
-            bvh_node_t &n = nodes[i];
-            if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-                if (n.left_child > node_index) {
-                    n.left_child -= node_count;
-                }
-                if ((n.right_child & RIGHT_CHILD_BITS) > node_index) {
-                    n.right_child -= node_count;
-                }
-            }
-        }
-        nodes_.Set(&nodes[0], 0, nodes_count);
-
-        if (macro_nodes_start_ > node_index) {
-            macro_nodes_start_ -= node_count;
-        }
-    }*/
-}
-
 inline void Ray::NS::Scene::RebuildTLAS_nolock() {
-    RemoveNodes_nolock(macro_nodes_start_, macro_nodes_count_);
+    if (macro_nodes_root_ != 0xffffffff) {
+        nodes_.Erase(macro_nodes_block_);
+        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+    }
     mi_indices_.Clear();
 
     const size_t mi_count = mesh_instances_.size();
+    if (!mi_count) {
+        return;
+    }
 
     aligned_vector<prim_t> primitives;
     primitives.reserve(mi_count);
@@ -1587,19 +1599,22 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
     std::vector<bvh_node_t> bvh_nodes;
     std::vector<uint32_t> mi_indices;
 
-    macro_nodes_start_ = uint32_t(nodes_.size());
-    macro_nodes_count_ = PreprocessPrims_SAH(primitives, nullptr, 0, {}, bvh_nodes, mi_indices);
+    PreprocessPrims_SAH(primitives, nullptr, 0, {}, bvh_nodes, mi_indices);
 
+    const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, bvh_nodes.size());
     // offset nodes
     for (bvh_node_t &n : bvh_nodes) {
         if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-            n.left_child += uint32_t(nodes_.size());
-            n.right_child += uint32_t(nodes_.size());
+            n.left_child += nodes_index.first;
+            n.right_child += nodes_index.first;
         }
     }
+    nodes_.Set(nodes_index.first, uint32_t(bvh_nodes.size()), bvh_nodes.data());
 
-    nodes_.Append(&bvh_nodes[0], bvh_nodes.size());
     mi_indices_.Append(&mi_indices[0], mi_indices.size());
+
+    macro_nodes_root_ = nodes_index.first;
+    macro_nodes_block_ = nodes_index.second;
 
     // store root node
     tlas_root_node_ = bvh_nodes[0];
@@ -2012,9 +2027,9 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             const transform_t &ltr = transforms_[l.tri.xform_index];
             const uint32_t ltri_index = l.tri.tri_index;
 
-            const vertex_t &v1 = vertices_cpu_[vtx_indices_cpu_[ltri_index * 3 + 0]];
-            const vertex_t &v2 = vertices_cpu_[vtx_indices_cpu_[ltri_index * 3 + 1]];
-            const vertex_t &v3 = vertices_cpu_[vtx_indices_cpu_[ltri_index * 3 + 2]];
+            const vertex_t &v1 = vertices_[vtx_indices_[ltri_index * 3 + 0]];
+            const vertex_t &v2 = vertices_[vtx_indices_[ltri_index * 3 + 1]];
+            const vertex_t &v3 = vertices_[vtx_indices_[ltri_index * 3 + 2]];
 
             auto p1 = Ref::simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
                  p2 = Ref::simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),

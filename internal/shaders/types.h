@@ -170,7 +170,8 @@ struct mesh_t {
     float bbox_min[3], bbox_max[3];
     UINT_TYPE node_index, node_count;
     UINT_TYPE tris_index, tris_block, tris_count;
-    UINT_TYPE vert_index, vert_count;
+    UINT_TYPE vert_index, vert_block, vert_count;
+    UINT_TYPE vert_data_index, vert_data_block;
 };
 
 struct transform_t {

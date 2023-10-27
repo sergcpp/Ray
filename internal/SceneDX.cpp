@@ -39,6 +39,27 @@ void to_dxr_xform(const float xform[16], float matrix[3][4]) {
 Ray::Dx::Scene::~Scene() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
+    for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
+        MeshInstanceHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveMeshInstance_nolock(to_delete);
+    }
+    for (auto it = meshes_.begin(); it != meshes_.end();) {
+        MeshHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveMesh_nolock(to_delete);
+    }
+    for (auto it = lights_.begin(); it != lights_.end();) {
+        LightHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveLight_nolock(to_delete);
+    }
+
+    if (macro_nodes_root_ != 0xffffffff) {
+        nodes_.Erase(macro_nodes_block_);
+        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+    }
+
     bindless_textures_.clear();
 }
 
@@ -138,12 +159,16 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc = {};
     };
     std::vector<Blas> all_blases;
+    std::vector<uint32_t> mesh_to_blas(meshes_.capacity(), 0xffffffff);
 
     uint32_t needed_build_scratch_size = 0;
     uint32_t needed_total_acc_struct_size = 0;
 
     for (auto it = meshes_.cbegin(); it != meshes_.cend(); ++it) {
         const mesh_t &mesh = *it;
+
+        mesh_to_blas[it.index()] = uint32_t(all_blases.size());
+
         //
         // Gather geometries
         //
@@ -157,12 +182,12 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
 
             new_geo.Triangles.Transform3x4 = 0;
             new_geo.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-            new_geo.Triangles.VertexBuffer.StartAddress = vertices_.buf().dx_resource()->GetGPUVirtualAddress();
+            new_geo.Triangles.VertexBuffer.StartAddress = vertices_.gpu_buf().dx_resource()->GetGPUVirtualAddress();
             new_geo.Triangles.VertexBuffer.StrideInBytes = sizeof(vertex_t);
-            new_geo.Triangles.VertexCount = vertices_.buf().size() / sizeof(vertex_t);
+            new_geo.Triangles.VertexCount = vertices_.gpu_buf().size() / sizeof(vertex_t);
             new_geo.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
             new_geo.Triangles.IndexBuffer =
-                vtx_indices_.buf().dx_resource()->GetGPUVirtualAddress() + mesh.vert_index * sizeof(uint32_t);
+                vtx_indices_.gpu_buf().dx_resource()->GetGPUVirtualAddress() + mesh.vert_index * sizeof(uint32_t);
             new_geo.Triangles.IndexCount = mesh.vert_count;
 
             // auto &new_range = new_blas.build_ranges.emplace_back();
@@ -338,7 +363,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
     for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
         const mesh_instance_t &instance = *it;
 
-        auto &blas = rt_mesh_blases_[instance.mesh_index];
+        auto &blas = rt_mesh_blases_[mesh_to_blas[instance.mesh_index]];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;
 

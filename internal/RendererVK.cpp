@@ -492,7 +492,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         return;
     }
 
-    const uint32_t macro_tree_root = s->macro_nodes_start_;
+    const uint32_t macro_tree_root = s->macro_nodes_root_;
 
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
@@ -637,12 +637,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                   s->mi_indices_.buf(),
                                   s->meshes_.gpu_buf(),
                                   s->transforms_.gpu_buf(),
-                                  s->vtx_indices_.buf(),
-                                  s->vertices_.buf(),
-                                  s->nodes_.buf(),
-                                  s->tris_.buf(),
-                                  s->tri_indices_.buf(),
-                                  s->tri_materials_.buf(),
+                                  s->vtx_indices_.gpu_buf(),
+                                  s->vertices_.gpu_buf(),
+                                  s->nodes_.gpu_buf(),
+                                  s->tris_.gpu_buf(),
+                                  s->tri_indices_.gpu_buf(),
+                                  s->tri_materials_.gpu_buf(),
                                   s->materials_.gpu_buf(),
                                   s->atlas_textures_.gpu_buf(),
                                   s->lights_.gpu_buf(),

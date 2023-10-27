@@ -61,6 +61,15 @@ Ray::Cpu::Scene::~Scene() {
         Scene::RemoveLight_nolock(to_delete);
     }
 
+    if (macro_nodes_root_ != 0xffffffff) {
+        if (use_wide_bvh_) {
+            wnodes_.Erase(macro_nodes_block_);
+        } else {
+            nodes_.Erase(macro_nodes_block_);
+        }
+        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+    }
+
     materials_.clear();
     lights_.clear();
 }
@@ -389,12 +398,9 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    mesh_t m = {};
-    m.node_index = uint32_t(nodes_.size());
-    m.node_count = uint32_t(temp_nodes.size());
-
     const std::pair<uint32_t, uint32_t> tris_index = tris_.Allocate(uint32_t(temp_tris.size()));
 
+    mesh_t m = {};
     m.tris_index = tris_index.first;
     m.tris_block = tris_index.second;
     m.tris_count = uint32_t(temp_tris.size());
@@ -408,26 +414,12 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         mtris_[mtris_index.first + i] = temp_mtris[i];
     }
 
-    const auto tris_offset = uint32_t(tri_materials_.size());
-
+    const std::pair<uint32_t, uint32_t> trimat_index = tri_materials_.Allocate(_m.vtx_indices.size() / 3);
     const std::pair<uint32_t, uint32_t> tri_indices_index = tri_indices_.Allocate(uint32_t(temp_tri_indices.size()));
-    assert(tri_indices_index.first == m.tris_index);
-    assert(tri_indices_index.second == m.tris_block);
+    assert(tri_indices_index.first == tris_index.first);
+    assert(tri_indices_index.second == tris_index.second);
     for (uint32_t i = 0; i < uint32_t(temp_tri_indices.size()); ++i) {
-        tri_indices_[tri_indices_index.first + i] = tris_offset + temp_tri_indices[i];
-    }
-
-    { // Apply required offsets
-        const auto nodes_offset = uint32_t(nodes_.size());
-
-        for (bvh_node_t &n : temp_nodes) {
-            if (n.prim_index & LEAF_NODE_BIT) {
-                n.prim_index += tri_indices_index.first;
-            } else {
-                n.left_child += nodes_offset;
-                n.right_child += nodes_offset;
-            }
-        }
+        tri_indices_[tri_indices_index.first + i] = trimat_index.first + temp_tri_indices[i];
     }
 
     memcpy(m.bbox_min, temp_nodes[0].bbox_min, 3 * sizeof(float));
@@ -436,20 +428,52 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     if (use_wide_bvh_) {
         const uint64_t t2 = Ray::GetTimeMs();
 
-        const auto before_count = uint32_t(wnodes_.size());
-        const uint32_t new_root = FlattenBVH_r(temp_nodes.data(), m.node_index, 0xffffffff, wnodes_);
+        aligned_vector<wbvh_node_t> temp_wnodes;
+        temp_wnodes.reserve(temp_nodes.size() / 8);
 
-        m.node_index = new_root;
-        m.node_count = uint32_t(wnodes_.size() - before_count);
+        FlattenBVH_r(temp_nodes.data(), 0, 0xffffffff, temp_wnodes);
+        const std::pair<uint32_t, uint32_t> wnodes_index = wnodes_.Allocate(uint32_t(temp_wnodes.size()));
+
+        for (uint32_t i = 0; i < uint32_t(temp_wnodes.size()); ++i) {
+            const wbvh_node_t &in_n = temp_wnodes[i];
+            wbvh_node_t &out_n = wnodes_[wnodes_index.first + i];
+
+            out_n = in_n;
+            if (out_n.child[0] & LEAF_NODE_BIT) {
+                out_n.child[0] += tri_indices_index.first;
+            } else {
+                for (int j = 0; j < 8; ++j) {
+                    if (out_n.child[j] != 0x7fffffff) {
+                        out_n.child[j] += wnodes_index.first;
+                    }
+                }
+            }
+        }
+
+        m.node_index = wnodes_index.first;
+        m.node_block = wnodes_index.second;
 
         log_->Info("Ray: Mesh \'%s\' BVH flattened in %lldms", _m.name ? _m.name : "(unknown)",
                    (Ray::GetTimeMs() - t2));
     } else {
-        nodes_.insert(nodes_.end(), temp_nodes.begin(), temp_nodes.end());
-    }
+        const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_nodes.size()));
 
-    const auto tri_materials_start = uint32_t(tri_materials_.size());
-    tri_materials_.resize(tri_materials_start + (_m.vtx_indices.size() / 3));
+        for (uint32_t i = 0; i < uint32_t(temp_nodes.size()); ++i) {
+            const bvh_node_t &in_n = temp_nodes[i];
+            bvh_node_t &out_n = nodes_[nodes_index.first + i];
+
+            out_n = in_n;
+            if (out_n.prim_index & LEAF_NODE_BIT) {
+                out_n.prim_index += tri_indices_index.first;
+            } else {
+                out_n.left_child += nodes_index.first;
+                out_n.right_child += nodes_index.first;
+            }
+        }
+
+        m.node_index = nodes_index.first;
+        m.node_block = nodes_index.second;
+    }
 
     // init triangle materials
     for (const mat_group_desc_t &grp : _m.groups) {
@@ -487,7 +511,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         }
 
         for (size_t i = grp.vtx_start; i < grp.vtx_start + grp.vtx_count; i += 3) {
-            tri_mat_data_t &tri_mat = tri_materials_[tri_materials_start + (i / 3)];
+            tri_mat_data_t &tri_mat = tri_materials_[trimat_index.first + (i / 3)];
 
             assert(grp.front_mat._index < (1 << 14) && "Not enough bits to reference material!");
             assert(grp.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
@@ -504,19 +528,17 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     }
 
-    std::vector<uint32_t> new_vtx_indices;
-    new_vtx_indices.reserve(_m.vtx_indices.size());
-    for (int i = 0; i < _m.vtx_indices.size(); ++i) {
-        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + uint32_t(vertices_.size()));
-    }
-
     const size_t stride = AttrStrides[int(_m.layout)];
 
+    std::vector<vertex_t> new_vertices(_m.vtx_attrs.size() / stride);
+    std::vector<uint32_t> new_vtx_indices(_m.vtx_indices.size());
+    for (int i = 0; i < _m.vtx_indices.size(); ++i) {
+        new_vtx_indices[i] = _m.vtx_indices[i] + _m.base_vertex;
+    }
+
     // add attributes
-    const size_t new_vertices_start = vertices_.size();
-    vertices_.resize(new_vertices_start + _m.vtx_attrs.size() / stride);
     for (int i = 0; i < _m.vtx_attrs.size() / stride; ++i) {
-        vertex_t &v = vertices_[new_vertices_start + i];
+        vertex_t &v = new_vertices[i];
 
         memcpy(&v.p[0], (_m.vtx_attrs.data() + i * stride), 3 * sizeof(float));
         memcpy(&v.n[0], (_m.vtx_attrs.data() + i * stride + 3), 3 * sizeof(float));
@@ -541,13 +563,25 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     if (_m.layout == eVertexLayout::PxyzNxyzTuv || _m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
-        ComputeTangentBasis(0, new_vertices_start, vertices_, new_vtx_indices, new_vtx_indices);
+        // NOTE: this may add some vertices and indices
+        ComputeTangentBasis(0, 0, new_vertices, new_vtx_indices, new_vtx_indices);
     }
 
-    m.vert_index = uint32_t(vtx_indices_.size());
+    const std::pair<uint32_t, uint32_t> vtx_index = vertices_.Allocate(new_vertices.size());
+    memcpy(&vertices_[vtx_index.first], new_vertices.data(), new_vertices.size() * sizeof(vertex_t));
+
+    const std::pair<uint32_t, uint32_t> vtx_indices_index = vtx_indices_.Allocate(new_vtx_indices.size());
+    assert(trimat_index.second == vtx_indices_index.second);
+    for (uint32_t i = 0; i < uint32_t(new_vtx_indices.size()); ++i) {
+        vtx_indices_[vtx_indices_index.first + i] = vtx_index.first + new_vtx_indices[i];
+    }
+
+    m.vert_index = vtx_indices_index.first;
+    m.vert_block = vtx_indices_index.second;
     m.vert_count = uint32_t(new_vtx_indices.size());
 
-    vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
+    m.vert_data_index = vtx_index.first;
+    m.vert_data_block = vtx_index.second;
 
     const std::pair<uint32_t, uint32_t> ret = meshes_.emplace(m);
     return MeshHandle{ret.first, ret.second};
@@ -556,8 +590,9 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
 void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
     const mesh_t &m = meshes_[i._index];
 
-    const uint32_t node_index = m.node_index, node_count = m.node_count;
+    const uint32_t node_block = m.node_block;
     const uint32_t tris_block = m.tris_block;
+    const uint32_t vert_block = m.vert_block, vert_data_block = m.vert_data_block;
 
     meshes_.Erase(i._block);
 
@@ -575,7 +610,14 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
     tris_.Erase(tris_block);
     mtris_.Erase(tris_block);
     tri_indices_.Erase(tris_block);
-    RemoveNodes_nolock(node_index, node_count);
+    tri_materials_.Erase(tris_block);
+    vertices_.Erase(vert_data_block);
+    vtx_indices_.Erase(vert_block);
+    if (use_wide_bvh_) {
+        wnodes_.Erase(node_block);
+    } else {
+        nodes_.Erase(node_block);
+    }
 
     if (rebuild_needed) {
         RebuildTLAS_nolock();
@@ -947,79 +989,16 @@ void Ray::Cpu::Scene::Finalize() {
     RebuildLightTree_nolock();
 }
 
-void Ray::Cpu::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
-    if (!node_count) {
-        return;
-    }
-
-    if (!use_wide_bvh_) {
-        nodes_.erase(std::next(nodes_.begin(), node_index), std::next(nodes_.begin(), node_index + node_count));
-    } else {
-        wnodes_.erase(std::next(wnodes_.begin(), node_index), std::next(wnodes_.begin(), node_index + node_count));
-    }
-
-    if ((!use_wide_bvh_ && node_index != nodes_.size()) || (use_wide_bvh_ && node_index != wnodes_.size())) {
-        for (mesh_t &m : meshes_) {
-            if (m.node_index > node_index) {
-                m.node_index -= node_count;
-            }
-        }
-
-        for (uint32_t i = node_index; i < nodes_.size(); i++) {
-            bvh_node_t &n = nodes_[i];
-            if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-                if (n.left_child > node_index) {
-                    n.left_child -= node_count;
-                }
-                if ((n.right_child & RIGHT_CHILD_BITS) > node_index) {
-                    n.right_child -= node_count;
-                }
-            }
-        }
-
-        for (uint32_t i = node_index; i < wnodes_.size(); i++) {
-            wbvh_node_t &n = wnodes_[i];
-
-            if ((n.child[0] & LEAF_NODE_BIT) == 0) {
-                if (n.child[0] > node_index) {
-                    n.child[0] -= node_count;
-                }
-                if (n.child[1] > node_index) {
-                    n.child[1] -= node_count;
-                }
-                if (n.child[2] > node_index) {
-                    n.child[2] -= node_count;
-                }
-                if (n.child[3] > node_index) {
-                    n.child[3] -= node_count;
-                }
-                if (n.child[4] > node_index) {
-                    n.child[4] -= node_count;
-                }
-                if (n.child[5] > node_index) {
-                    n.child[5] -= node_count;
-                }
-                if (n.child[6] > node_index) {
-                    n.child[6] -= node_count;
-                }
-                if (n.child[7] > node_index) {
-                    n.child[7] -= node_count;
-                }
-            }
-        }
-
-        if (macro_nodes_root_ > node_index) {
-            macro_nodes_root_ -= node_count;
-        }
-    }
-}
-
 void Ray::Cpu::Scene::RebuildTLAS_nolock() {
-    RemoveNodes_nolock(macro_nodes_root_, macro_nodes_count_);
+    if (macro_nodes_root_ != 0xffffffff) {
+        if (use_wide_bvh_) {
+            wnodes_.Erase(macro_nodes_block_);
+        } else {
+            nodes_.Erase(macro_nodes_block_);
+        }
+        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+    }
     mi_indices_.clear();
-
-    macro_nodes_root_ = 0xffffffff;
-    macro_nodes_count_ = 0;
 
     if (mesh_instances_.empty()) {
         return;
@@ -1033,18 +1012,48 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
                               Ref::simd_fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
     }
 
-    macro_nodes_root_ = uint32_t(nodes_.size());
-    macro_nodes_count_ = PreprocessPrims_SAH(primitives, nullptr, 0, {}, nodes_, mi_indices_);
+    std::vector<bvh_node_t> temp_nodes;
+    PreprocessPrims_SAH(primitives, nullptr, 0, {}, temp_nodes, mi_indices_);
 
     if (use_wide_bvh_) {
-        const auto before_count = uint32_t(wnodes_.size());
-        const uint32_t new_root = FlattenBVH_r(nodes_.data(), macro_nodes_root_, 0xffffffff, wnodes_);
+        aligned_vector<wbvh_node_t> temp_wnodes;
+        temp_wnodes.reserve(temp_nodes.size() / 8);
 
-        macro_nodes_root_ = new_root;
-        macro_nodes_count_ = static_cast<uint32_t>(wnodes_.size() - before_count);
+        FlattenBVH_r(temp_nodes.data(), 0, 0xffffffff, temp_wnodes);
+        const std::pair<uint32_t, uint32_t> wnodes_index = wnodes_.Allocate(uint32_t(temp_wnodes.size()));
 
-        // nodes_ is temporary storage when wide BVH is used
-        nodes_.clear();
+        for (uint32_t i = 0; i < uint32_t(temp_wnodes.size()); ++i) {
+            const wbvh_node_t &in_n = temp_wnodes[i];
+            wbvh_node_t &out_n = wnodes_[wnodes_index.first + i];
+
+            out_n = in_n;
+            if ((out_n.child[0] & LEAF_NODE_BIT) == 0) {
+                for (int j = 0; j < 8; ++j) {
+                    if (out_n.child[j] != 0x7fffffff) {
+                        out_n.child[j] += wnodes_index.first;
+                    }
+                }
+            }
+        }
+
+        macro_nodes_root_ = wnodes_index.first;
+        macro_nodes_block_ = wnodes_index.second;
+    } else {
+        const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_nodes.size()));
+
+        for (uint32_t i = 0; i < uint32_t(temp_nodes.size()); ++i) {
+            const bvh_node_t &in_n = temp_nodes[i];
+            bvh_node_t &out_n = nodes_[nodes_index.first + i];
+
+            out_n = in_n;
+            if ((out_n.prim_index & LEAF_NODE_BIT) == 0) {
+                out_n.left_child += nodes_index.first;
+                out_n.right_child += nodes_index.first;
+            }
+        }
+
+        macro_nodes_root_ = nodes_index.first;
+        macro_nodes_block_ = nodes_index.second;
     }
 }
 
@@ -1483,8 +1492,8 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
             light_nodes_[parent].omega_n =
                 fminf(0.5f * (light_nodes_[parent].omega_n +
-                             fmaxf(light_nodes_[parent].omega_n, angle_between + light_nodes_[n].omega_n)),
-                     PI);
+                              fmaxf(light_nodes_[parent].omega_n, angle_between + light_nodes_[n].omega_n)),
+                      PI);
         }
         light_nodes_[parent].omega_e = fmaxf(light_nodes_[parent].omega_e, light_nodes_[n].omega_e);
         if ((light_nodes_[parent].left_child & LEFT_CHILD_BITS) == n) {

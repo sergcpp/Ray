@@ -49,18 +49,18 @@ class Scene : public SceneCommon {
 
     bool use_wide_bvh_, use_tex_compression_;
 
-    std::vector<bvh_node_t> nodes_;
-    aligned_vector<wbvh_node_t> wnodes_;
+    SparseStorage<bvh_node_t> nodes_;
+    SparseStorage<wbvh_node_t> wnodes_;
     SparseStorage<tri_accel_t> tris_;
     SparseStorage<uint32_t> tri_indices_;
     SparseStorage<mtri_accel_t> mtris_;
-    std::vector<tri_mat_data_t> tri_materials_;
+    SparseStorage<tri_mat_data_t> tri_materials_;
     SparseStorage<transform_t> transforms_;
     SparseStorage<mesh_t> meshes_;
     SparseStorage<mesh_instance_t> mesh_instances_;
     std::vector<uint32_t> mi_indices_;
-    std::vector<vertex_t> vertices_;
-    std::vector<uint32_t> vtx_indices_;
+    SparseStorage<vertex_t> vertices_;
+    SparseStorage<uint32_t> vtx_indices_;
 
     SparseStorage<material_t> materials_;
 
@@ -93,12 +93,11 @@ class Scene : public SceneCommon {
         SmallVector<aligned_vector<float, 16>, 16> mips;
     } env_map_qtree_;
 
-    uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_count_ = 0;
+    uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_block_ = 0xffffffff;
 
     void RemoveMesh_nolock(MeshHandle m);
-    void RemoveMeshInstance_nolock(MeshInstanceHandle);
+    void RemoveMeshInstance_nolock(MeshInstanceHandle i);
     void RemoveLight_nolock(LightHandle l);
-    void RemoveNodes_nolock(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS_nolock();
     void RebuildLightTree_nolock();
 
