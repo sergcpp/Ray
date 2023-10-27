@@ -167,7 +167,7 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
             uint prim_count = floatBitsToUint(n.bbox_max.w);
             for (uint i = prim_index; i < prim_index + prim_count; ++i) {
                 mesh_instance_t mi = g_mesh_instances[g_mi_indices[i]];
-                if ((mi.block_ndx.z & (1u << RAY_TYPE_SHADOW)) == 0) {
+                if ((mi.block_ndx.w & (1u << RAY_TYPE_SHADOW)) == 0) {
                     continue;
                 }
 

@@ -402,8 +402,8 @@ struct mesh_instance_t {
     uint32_t mesh_index;
     uint32_t tr_block;
     uint32_t mesh_block;
-    uint32_t ray_visibility;
-    uint32_t _pad1;
+    uint32_t lights_index;
+    uint32_t ray_visibility; // upper 24 bits identify lights_block
 };
 static_assert(sizeof(mesh_instance_t) == 48, "!");
 

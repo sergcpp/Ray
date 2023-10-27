@@ -77,6 +77,12 @@ template <typename T> class Vector {
             while (to_copy) {
                 const size_t portion = std::min(count, to_copy);
 
+                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+                CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * (pos + count)), buf_, uint32_t(sizeof(T) * pos),
+                                   uint32_t(sizeof(T) * portion), cmd_buf);
+                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                      ctx_->temp_command_pool());
+
                 // const cl_int error = queue_.enqueueCopyBuffer(buf_, buf_, sizeof(T) * (pos + count), sizeof(T) * pos,
                 //                                               sizeof(T) * portion);
                 // if (error != CL_SUCCESS) {
@@ -165,7 +171,7 @@ template <typename T> class Vector {
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 };
-} // namespace Vk
+} // namespace NS
 } // namespace Ray
 
 #pragma warning(pop)

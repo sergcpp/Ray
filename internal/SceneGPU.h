@@ -77,8 +77,11 @@ class Scene : public SceneCommon {
 
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;
+    std::vector<uint32_t> li_indices_cpu_;
     Vector<uint32_t> visible_lights_;
+    std::vector<uint32_t> visible_lights_cpu_;
     Vector<uint32_t> blocker_lights_;
+    std::vector<uint32_t> blocker_lights_cpu_;
     Vector<light_wbvh_node_t> light_wnodes_;
 
     environment_t env_;
@@ -1187,8 +1190,10 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const directional_light_desc_t 
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
+    li_indices_cpu_.push_back(light_index.first);
     if (_l.visible) {
         visible_lights_.PushBack(light_index.first);
+        visible_lights_cpu_.push_back(light_index.first);
     }
     return LightHandle{light_index.first, light_index.second};
 }
@@ -1212,8 +1217,10 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const sphere_light_desc_t &_l) 
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
+    li_indices_cpu_.push_back(light_index.first);
     if (_l.visible) {
         visible_lights_.PushBack(light_index.first);
+        visible_lights_cpu_.push_back(light_index.first);
     }
     return LightHandle{light_index.first, light_index.second};
 }
@@ -1239,8 +1246,10 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const spot_light_desc_t &_l) {
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
+    li_indices_cpu_.push_back(light_index.first);
     if (_l.visible) {
         visible_lights_.PushBack(light_index.first);
+        visible_lights_cpu_.push_back(light_index.first);
     }
     return LightHandle{light_index.first, light_index.second};
 }
@@ -1272,11 +1281,14 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
+    li_indices_cpu_.push_back(light_index.first);
     if (_l.visible) {
         visible_lights_.PushBack(light_index.first);
+        visible_lights_cpu_.push_back(light_index.first);
     }
     if (_l.sky_portal) {
         blocker_lights_.PushBack(light_index.first);
+        blocker_lights_cpu_.push_back(light_index.first);
     }
     return LightHandle{light_index.first, light_index.second};
 }
@@ -1308,11 +1320,14 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
+    li_indices_cpu_.push_back(light_index.first);
     if (_l.visible) {
         visible_lights_.PushBack(light_index.first);
+        visible_lights_cpu_.push_back(light_index.first);
     }
     if (_l.sky_portal) {
         blocker_lights_.PushBack(light_index.first);
+        blocker_lights_cpu_.push_back(light_index.first);
     }
     return LightHandle{light_index.first, light_index.second};
 }
@@ -1346,30 +1361,38 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, co
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
+    li_indices_cpu_.push_back(light_index.first);
     if (_l.visible) {
         visible_lights_.PushBack(light_index.first);
+        visible_lights_cpu_.push_back(light_index.first);
     }
     return LightHandle{light_index.first, light_index.second};
 }
 
 inline void Ray::NS::Scene::RemoveLight_nolock(const LightHandle i) {
-    //{ // remove from compacted list
-    //    auto it = find(begin(li_indices_), end(li_indices_), i);
-    //    assert(it != end(li_indices_));
-    //    li_indices_.erase(it);
-    //}
+    { // remove from compacted list
+        auto it = find(begin(li_indices_cpu_), end(li_indices_cpu_), i._index);
+        assert(it != end(li_indices_cpu_));
+        li_indices_.Erase(it - begin(li_indices_cpu_));
+        li_indices_cpu_.erase(it);
+        assert(li_indices_.size() == li_indices_cpu_.size());
+    }
 
-    // if (lights_[i].visible) {
-    //     auto it = find(begin(visible_lights_), end(visible_lights_), i);
-    //     assert(it != end(visible_lights_));
-    //     visible_lights_.erase(it);
-    // }
+    if (lights_[i._index].visible) {
+        auto it = find(begin(visible_lights_cpu_), end(visible_lights_cpu_), i._index);
+        assert(it != end(visible_lights_cpu_));
+        visible_lights_.Erase(it - begin(visible_lights_cpu_));
+        visible_lights_cpu_.erase(it);
+        assert(visible_lights_.size() == visible_lights_cpu_.size());
+    }
 
-    // if (lights_[i].sky_portal) {
-    //     auto it = find(begin(blocker_lights_), end(blocker_lights_), i);
-    //     assert(it != end(blocker_lights_));
-    //     blocker_lights_.erase(it);
-    // }
+    if (lights_[i._index].sky_portal) {
+        auto it = find(begin(blocker_lights_cpu_), end(blocker_lights_cpu_), i._index);
+        assert(it != end(blocker_lights_cpu_));
+        blocker_lights_.Erase(it - begin(blocker_lights_cpu_));
+        blocker_lights_cpu_.erase(it);
+        assert(blocker_lights_.size() == blocker_lights_cpu_.size());
+    }
 
     lights_.Erase(i._block);
 }
@@ -1405,7 +1428,7 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
     const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.push(mi);
 
     { // find emissive triangles and add them as light emitters
-        std::vector<uint32_t> new_li_indices;
+        std::vector<light_t> new_lights;
 
         const mesh_t &m = meshes_[mi_desc.mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
@@ -1444,7 +1467,8 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
             if (front_emissive != 0xffff) {
                 const material_t &mat = materials_[front_emissive];
 
-                light_t new_light = {};
+                new_lights.emplace_back();
+                light_t &new_light = new_lights.back();
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.doublesided = (back_emissive != 0xffff) ? 1 : 0;
                 new_light.cast_shadow = 1;
@@ -1457,13 +1481,22 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
                 new_light.col[0] = mat.base_color[0] * mat.strength;
                 new_light.col[1] = mat.base_color[1] * mat.strength;
                 new_light.col[2] = mat.base_color[2] * mat.strength;
-                const std::pair<uint32_t, uint32_t> index = lights_.push(new_light);
-                new_li_indices.push_back(index.first);
             }
         }
 
-        if (!new_li_indices.empty()) {
+        if (!new_lights.empty()) {
+            const std::pair<uint32_t, uint32_t> lights_index =
+                lights_.Allocate(new_lights.data(), uint32_t(new_lights.size()));
+            std::vector<uint32_t> new_li_indices(new_lights.size());
+            for (uint32_t i = 0; i < uint32_t(new_lights.size()); ++i) {
+                new_li_indices[i] = (lights_index.first + i);
+            }
             li_indices_.Append(new_li_indices.data(), new_li_indices.size());
+            li_indices_cpu_.insert(end(li_indices_cpu_), begin(new_li_indices), end(new_li_indices));
+
+            mi.lights_index = lights_index.first;
+            assert(lights_index.second <= 0xffffff);
+            mi.ray_visibility |= (lights_index.second << 8);
         }
     }
 
@@ -1496,7 +1529,14 @@ inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i
 
     transforms_.Erase(mi.tr_block);
     if (mi.lights_index != 0xffffffff) {
-        lights_.Erase(mi.ray_visibility >> 8);
+        const uint32_t light_block = (mi.ray_visibility >> 8), light_count = lights_.GetCount(light_block);
+        lights_.Erase(light_block);
+        // TODO: Do this more efficiently
+        auto it = std::find(begin(li_indices_cpu_), end(li_indices_cpu_), mi.lights_index);
+        assert(it != end(li_indices_cpu_));
+        li_indices_.Erase(it - begin(li_indices_cpu_), light_count);
+        li_indices_cpu_.erase(it, it + light_count);
+        assert(li_indices_.size() == li_indices_cpu_.size());
     }
     mesh_instances_.Erase(i._block);
 
@@ -1543,7 +1583,9 @@ inline void Ray::NS::Scene::Finalize() {
             env_map_light_ = LightHandle{li.first, li.second};
             env_.light_index = env_map_light_._index;
             li_indices_.PushBack(env_map_light_._index);
+            li_indices_cpu_.push_back(env_map_light_._index);
             visible_lights_.PushBack(env_map_light_._index);
+            visible_lights_cpu_.push_back(env_map_light_._index);
         }
     } else {
         // Dummy

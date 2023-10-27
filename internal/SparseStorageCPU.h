@@ -106,6 +106,8 @@ template <typename T> class SparseStorage {
         assert(size_ == 0);
     }
 
+    uint32_t GetCount(const uint32_t block_index) { return alloc_->GetBlockRange(block_index).size; }
+
     void Erase(const uint32_t block_index) {
         const FreelistAlloc::Range r = alloc_->GetBlockRange(block_index);
         for (uint32_t i = r.offset; i < r.offset + r.size; ++i) {

@@ -596,12 +596,12 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
 
     meshes_.Erase(i._block);
 
-    bool rebuild_needed = false;
+    bool rebuild_required = false;
     for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
         mesh_instance_t &mi = *it;
         if (mi.mesh_index == i._index) {
             it = mesh_instances_.erase(it);
-            rebuild_needed = true;
+            rebuild_required = true;
         } else {
             ++it;
         }
@@ -619,7 +619,7 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
         nodes_.Erase(node_block);
     }
 
-    if (rebuild_needed) {
+    if (rebuild_required) {
         RebuildTLAS_nolock();
     }
 }
@@ -816,18 +816,21 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const fl
 
 void Ray::Cpu::Scene::RemoveLight_nolock(const LightHandle i) {
     { // remove from compacted list
+        // TODO: do this more efficiently
         auto it = find(begin(li_indices_), end(li_indices_), i._index);
         assert(it != end(li_indices_));
         li_indices_.erase(it);
     }
 
     if (lights_[i._index].visible) {
+        // TODO: do this more efficiently
         auto it = find(begin(visible_lights_), end(visible_lights_), i._index);
         assert(it != end(visible_lights_));
         visible_lights_.erase(it);
     }
 
     if (lights_[i._index].sky_portal) {
+        // TODO: do this more efficiently
         auto it = find(begin(blocker_lights_), end(blocker_lights_), i._index);
         assert(it != end(blocker_lights_));
         blocker_lights_.erase(it);
@@ -847,6 +850,7 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
     mi.mesh_block = mi_desc.mesh._block;
     mi.tr_index = tr_index.first;
     mi.tr_block = tr_index.second;
+    mi.lights_index = 0xffffffff;
     mi.ray_visibility = 0x000000ff;
 
     if (!mi_desc.camera_visibility) {
@@ -866,6 +870,8 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
     }
 
     { // find emissive triangles and add them as light emitters
+        std::vector<light_t> new_lights;
+
         const mesh_t &m = meshes_[mi_desc.mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
@@ -903,7 +909,8 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
             if (front_emissive != 0xffff) {
                 const material_t &mat = materials_[front_emissive];
 
-                light_t new_light = {};
+                new_lights.emplace_back();
+                light_t &new_light = new_lights.back();
                 new_light.cast_shadow = 1;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.doublesided = (back_emissive != 0xffff) ? 1 : 0;
@@ -917,9 +924,19 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
                 new_light.col[0] = mat.base_color[0] * mat.strength;
                 new_light.col[1] = mat.base_color[1] * mat.strength;
                 new_light.col[2] = mat.base_color[2] * mat.strength;
-                const uint32_t index = lights_.push(new_light).first;
-                li_indices_.push_back(index);
             }
+        }
+
+        if (!new_lights.empty()) {
+            const std::pair<uint32_t, uint32_t> lights_index = lights_.Allocate(uint32_t(new_lights.size()));
+            for (uint32_t i = 0; i < uint32_t(new_lights.size()); ++i) {
+                lights_[lights_index.first + i] = new_lights[i];
+                li_indices_.push_back(lights_index.first + i);
+            }
+
+            mi.lights_index = lights_index.first;
+            assert(lights_index.second <= 0xffffff);
+            mi.ray_visibility |= (lights_index.second << 8);
         }
     }
 
@@ -946,6 +963,14 @@ void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
     mesh_instance_t &mi = mesh_instances_[i._index];
 
     transforms_.Erase(mi.tr_block);
+    if (mi.lights_index != 0xffffffff) {
+        const uint32_t light_block = (mi.ray_visibility >> 8), light_count = lights_.GetCount(light_block);
+        lights_.Erase(light_block);
+        // TODO: Do this more efficiently
+        auto it = std::find(begin(li_indices_), end(li_indices_), mi.lights_index);
+        assert(it != end(li_indices_));
+        li_indices_.erase(it, it + light_count);
+    }
     mesh_instances_.Erase(i._block);
 
     RebuildTLAS_nolock();

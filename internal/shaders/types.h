@@ -168,7 +168,7 @@ struct vertex_t {
 
 struct mesh_t {
     float bbox_min[3], bbox_max[3];
-    UINT_TYPE node_index, node_count;
+    UINT_TYPE node_index, node_block;
     UINT_TYPE tris_index, tris_block, tris_count;
     UINT_TYPE vert_index, vert_block, vert_count;
     UINT_TYPE vert_data_index, vert_data_block;
@@ -181,7 +181,7 @@ struct transform_t {
 struct mesh_instance_t {
     VEC4_TYPE bbox_min; // w is tr_index
     VEC4_TYPE bbox_max; // w is mesh_index
-    UVEC4_TYPE block_ndx; // xy - indexes of transform and mesh blocks, z - ray_visibility
+    UVEC4_TYPE block_ndx; // xy - indexes of transform and mesh blocks, z - lights index, w - ray_visibility
 };
 
 struct light_t {

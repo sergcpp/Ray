@@ -2318,7 +2318,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
     return res;
 }
 
-bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type,
+bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const int ray_type,
                                               const bvh_node_t *nodes, const uint32_t root_index,
                                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                               const mesh_t *meshes, const transform_t *transforms,
@@ -2384,7 +2384,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
     return false;
 }
 
-bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type,
+bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const int ray_type,
                                               const wbvh_node_t *nodes, const uint32_t root_index,
                                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                               const mesh_t *meshes, const transform_t *transforms,
