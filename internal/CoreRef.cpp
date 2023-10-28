@@ -2196,6 +2196,13 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
         }
     }
 
+    // resolve primitive index indirection
+    if (inter.prim_index < 0) {
+        inter.prim_index = -int(tri_indices[-inter.prim_index - 1]) - 1;
+    } else {
+        inter.prim_index = int(tri_indices[inter.prim_index]);
+    }
+
     return res;
 }
 
@@ -4593,7 +4600,11 @@ void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_tr
     IntersectScene(rays, min_transp_depth, max_transp_depth, rand_seq, rand_seed, iteration, sc, node_index, textures,
                    out_inter);
     if (trace_lights && !sc.visible_lights.empty()) {
-        IntersectAreaLights(rays, sc.lights, sc.light_wnodes, out_inter);
+        if (!sc.light_wnodes.empty()) {
+            IntersectAreaLights(rays, sc.lights, sc.light_wnodes, out_inter);
+        } else {
+            IntersectAreaLights(rays, sc.lights, sc.light_nodes, out_inter);
+        }
     }
 }
 
@@ -5308,7 +5319,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
 #if USE_NEE
     light_sample_t ls;
-    if (!sc.light_wnodes.empty() && mat->type != eShadingNode::Emissive) {
+    if ((!sc.light_wnodes.empty() || !sc.light_nodes.empty()) && mat->type != eShadingNode::Emissive) {
         const float rand_pick_light =
             get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT_PICK, rand_hash, iteration - 1, rand_seq).get<0>();
         const simd_fvec2 rand_light_uv =
@@ -5419,7 +5430,12 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         if ((ray.depth & 0x00ffffff) != 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
 #if USE_HIERARCHICAL_NEE
             // TODO: maybe this can be done more efficiently
-            const float pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_wnodes);
+            float pdf_factor;
+            if (!sc.light_wnodes.empty()) {
+                pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_wnodes);
+            } else {
+                pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_nodes);
+            }
 #else
             const float pdf_factor = float(sc.li_indices.size());
 #endif
