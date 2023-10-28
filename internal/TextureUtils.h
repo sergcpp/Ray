@@ -115,7 +115,7 @@ int Preprocess_BCn(const uint8_t in_data[], int tiles_w, int tiles_h, bool flip_
                    uint8_t out_data[], int out_pitch = 0);
 
 void ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
-                         std::vector<uint32_t> &new_vtx_indices, Span<const uint32_t> indices);
+                         Span<uint32_t> new_vtx_indices, Span<const uint32_t> indices);
 
 std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format);
 bool ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,

@@ -1812,7 +1812,7 @@ template int Ray::Preprocess_BCn<4>(const uint8_t in_data[], const int tiles_w, 
                                     int out_pitch);
 
 void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
-                              std::vector<uint32_t> &new_vtx_indices, Span<const uint32_t> indices) {
+                              Span<uint32_t> new_vtx_indices, Span<const uint32_t> indices) {
     auto cross = [](const Ref::simd_fvec3 &v1, const Ref::simd_fvec3 &v2) -> Ref::simd_fvec3 {
         return Ref::simd_fvec3{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2],
                                v1[0] * v2[1] - v1[1] * v2[0]};
