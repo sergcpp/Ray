@@ -78,7 +78,7 @@ class Scene : public SceneCommon {
 
     SparseStorage<light_t> lights_;
     std::vector<uint32_t> li_indices_;     // compacted list of all lights
-    std::vector<uint32_t> visible_lights_; // compacted list of all visible lights
+    uint32_t visible_lights_count_ = 0;
     std::vector<uint32_t> blocker_lights_; // compacted list of all light blocker lights
 
     std::vector<light_bvh_node_t> light_nodes_;

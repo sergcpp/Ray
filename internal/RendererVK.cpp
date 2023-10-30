@@ -648,8 +648,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                   s->lights_.gpu_buf(),
                                   s->li_indices_.buf(),
                                   int(s->li_indices_.size()),
-                                  s->visible_lights_.buf(),
-                                  int(s->visible_lights_.size()),
+                                  s->visible_lights_count_,
                                   s->blocker_lights_.buf(),
                                   int(s->blocker_lights_.size()),
                                   s->light_wnodes_.buf(),
@@ -764,9 +763,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         }
         if (sc_data.li_indices && sc_data.li_indices.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.li_indices, eResState::ShaderResource);
-        }
-        if (sc_data.visible_lights && sc_data.visible_lights.resource_state != eResState::ShaderResource) {
-            res_transitions.emplace_back(&sc_data.visible_lights, eResState::ShaderResource);
         }
         if (sc_data.env_qtree.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.env_qtree, eResState::ShaderResource);

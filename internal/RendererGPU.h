@@ -23,8 +23,7 @@ struct scene_data_t {
     const Buffer &lights;
     const Buffer &li_indices;
     const int li_count;
-    const Buffer &visible_lights;
-    const int visible_lights_count;
+    const uint32_t visible_lights_count;
     const Buffer &blocker_lights;
     const int blocker_lights_count;
     const Buffer &light_wnodes;

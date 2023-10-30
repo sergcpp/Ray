@@ -340,7 +340,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
                                   s->materials_.empty() ? nullptr : &s->materials_[0],
                                   {s->lights_.data(), s->lights_.capacity()},
                                   {s->li_indices_},
-                                  {s->visible_lights_},
+                                  s->visible_lights_count_,
                                   {s->blocker_lights_},
                                   {s->light_nodes_},
                                   {s->light_wnodes_}};

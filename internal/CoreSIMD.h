@@ -5197,7 +5197,7 @@ void Ray::NS::TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_
 
         IntersectScene(r, min_transp_depth, max_transp_depth, rand_seq, rand_seed, iteration, sc, root_index, textures,
                        inter);
-        if (trace_lights && !sc.visible_lights.empty()) {
+        if (trace_lights && sc.visible_lights_count) {
             IntersectAreaLights(r, sc.lights, sc.light_wnodes, inter);
         }
     }
