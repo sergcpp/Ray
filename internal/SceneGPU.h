@@ -1425,8 +1425,6 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
         mi.ray_visibility &= ~(1u << RAY_TYPE_SHADOW);
     }
 
-    const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.push(mi);
-
     { // find emissive triangles and add them as light emitters
         std::vector<light_t> new_lights;
 
@@ -1499,6 +1497,8 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
             mi.ray_visibility |= (lights_index.second << 8);
         }
     }
+
+    const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.push(mi);
 
     auto ret = MeshInstanceHandle{mi_index.first, mi_index.second};
 
