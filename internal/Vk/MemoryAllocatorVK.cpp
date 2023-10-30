@@ -11,6 +11,10 @@ uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProper
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size) {
     for (uint32_t i = search_from; i < 32; i++) {
         const VkMemoryType mem_type = mem_properties->memoryTypes[i];
+        if (mem_type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD) {
+            // skip for now
+            continue;
+        }
         if (mem_type_bits & 1u) {
             if ((mem_type.propertyFlags & desired_mem_flags) == desired_mem_flags &&
                 mem_properties->memoryHeaps[mem_type.heapIndex].size >= desired_size) {
