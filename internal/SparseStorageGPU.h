@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 #include "FreelistAlloc.h"
@@ -16,7 +17,7 @@ namespace Ray {
 namespace NS {
 class Context;
 
-template <typename T> class SparseStorage {
+template <typename T, bool Replicate = true> class SparseStorage {
     Context *ctx_ = nullptr;
     std::string name_;
     std::unique_ptr<FreelistAlloc> alloc_;
@@ -42,11 +43,11 @@ template <typename T> class SparseStorage {
     }
 
     force_inline uint32_t size() const { return size_; }
-    force_inline uint32_t capacity() const { return uint32_t(cpu_buf_.size() / sizeof(T)); }
+    force_inline uint32_t capacity() const { return uint32_t(gpu_buf_.size() / sizeof(T)); }
 
     force_inline bool empty() const { return size_ == 0; }
 
-    force_inline T *data() { return cpu_buf_.mapped_ptr<T>(); }
+    // force_inline T *::type data() { return cpu_buf_.mapped_ptr<T>(); }
     force_inline const T *data() const { return cpu_buf_.mapped_ptr<T>(); }
 
     Buffer &gpu_buf() const { return gpu_buf_; }
@@ -63,18 +64,24 @@ template <typename T> class SparseStorage {
             alloc_->ResizePool(0, new_capacity);
         }
 
-        if (!cpu_buf_.ctx()) {
-            cpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Upload, uint32_t(new_capacity * sizeof(T))};
+        if (!gpu_buf_.ctx()) {
+            if (Replicate) {
+                cpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Upload, uint32_t(new_capacity * sizeof(T))};
+            }
             gpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T))};
         } else {
-            cpu_buf_.Unmap();
-            cpu_buf_.Resize(new_capacity * sizeof(T));
+            if (Replicate) {
+                cpu_buf_.Unmap();
+                cpu_buf_.Resize(new_capacity * sizeof(T));
+            }
             gpu_buf_.Resize(new_capacity * sizeof(T));
         }
 
         assert(new_capacity == capacity());
 
-        cpu_buf_.Map(true /* persistent */);
+        if (Replicate) {
+            cpu_buf_.Map(true /* persistent */);
+        }
     }
 
     template <class... Args> std::pair<uint32_t, uint32_t> emplace(Args &&...args) {
@@ -84,35 +91,34 @@ template <typename T> class SparseStorage {
 
         const FreelistAlloc::Allocation al = alloc_->Alloc(1);
 
-        T *el = cpu_buf_.mapped_ptr<T>() + al.offset;
-        new (el) T(std::forward<Args>(args)...);
-        cpu_buf_.FlushMappedRange(al.offset * sizeof(T), sizeof(T), true /* align size */);
-
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), sizeof(T), cpu_buf_, al.offset * sizeof(T), cmd_buf);
-        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        Buffer temp_buf;
 
-        ++size_;
-        return std::make_pair(al.offset, al.block);
-    }
+        if (Replicate) {
+            T *el = cpu_buf_.mapped_ptr<T>() + al.offset;
+            new (el) T(std::forward<Args>(args)...);
+            cpu_buf_.FlushMappedRange(al.offset * sizeof(T), sizeof(T), true /* align size */);
 
-    std::pair<uint32_t, uint32_t> push(const T &el) {
-        if (size_ + 1 > capacity()) {
-            reserve(std::max(capacity() * 2, InitialNonZeroCapacity));
+            gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), sizeof(T), cpu_buf_, al.offset * sizeof(T), cmd_buf);
+        } else {
+            temp_buf = Buffer("Temp staging buf", ctx_, eBufType::Upload, sizeof(T));
+
+            T *el = reinterpret_cast<T *>(temp_buf.Map());
+            new (el) T(std::forward<Args>(args)...);
+            temp_buf.FlushMappedRange(0, sizeof(T), true /* align size */);
+            temp_buf.Unmap();
+
+            gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), sizeof(T), temp_buf, 0, cmd_buf);
         }
 
-        const FreelistAlloc::Allocation al = alloc_->Alloc(1);
-
-        new (cpu_buf_.mapped_ptr<T>() + al.offset) T(el);
-        cpu_buf_.FlushMappedRange(al.offset * sizeof(T), sizeof(T), true /* align size */);
-
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), sizeof(T), cpu_buf_, al.offset * sizeof(T), cmd_buf);
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        temp_buf.FreeImmediate();
 
         ++size_;
         return std::make_pair(al.offset, al.block);
     }
+
+    std::pair<uint32_t, uint32_t> push(const T &el) { return emplace(el); }
 
     std::pair<uint32_t, uint32_t> Allocate(const T *beg, const uint32_t count) {
         if (size_ + count > capacity()) {
@@ -130,17 +136,33 @@ template <typename T> class SparseStorage {
         }
 
         if (beg && count) {
-            const T *it = beg;
-            for (uint32_t i = al.offset; i < al.offset + count; ++i) {
-                new (cpu_buf_.mapped_ptr<T>() + i) T(*it++);
-            }
-            cpu_buf_.FlushMappedRange(al.offset * sizeof(T), count * sizeof(T), true /* align size */);
-
             CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-            gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), count * sizeof(T), cpu_buf_, al.offset * sizeof(T),
-                                     cmd_buf);
+            Buffer temp_buf;
+
+            const T *it = beg;
+            if (Replicate) {
+                for (uint32_t i = al.offset; i < al.offset + count; ++i) {
+                    new (cpu_buf_.mapped_ptr<T>() + i) T(*it++);
+                }
+                cpu_buf_.FlushMappedRange(al.offset * sizeof(T), count * sizeof(T), true /* align size */);
+
+                gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), count * sizeof(T), cpu_buf_, al.offset * sizeof(T),
+                                         cmd_buf);
+            } else {
+                temp_buf = Buffer("Temp staging buf", ctx_, eBufType::Upload, count * sizeof(T));
+                T *el = reinterpret_cast<T *>(temp_buf.Map());
+                for (uint32_t i = 0; i < count; ++i) {
+                    new (el + i) T(*it++);
+                }
+                temp_buf.FlushMappedRange(0, count * sizeof(T), true /* align size */);
+                temp_buf.Unmap();
+
+                gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), count * sizeof(T), temp_buf, 0, cmd_buf);
+            }
+
             EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
                                   ctx_->temp_command_pool());
+            temp_buf.FreeImmediate();
         }
 
         size_ += count;
@@ -156,7 +178,9 @@ template <typename T> class SparseStorage {
         Ray::FreelistAlloc::Range r = alloc_->GetFirstOccupiedBlock(0);
         while (r.size) {
             for (uint32_t i = r.offset; i < r.offset + r.size; ++i) {
-                (cpu_buf_.mapped_ptr<T>() + i)->~T();
+                if (Replicate) {
+                    (cpu_buf_.mapped_ptr<T>() + i)->~T();
+                }
                 assert(size_ > 0);
                 --size_;
             }
@@ -172,25 +196,41 @@ template <typename T> class SparseStorage {
     void Erase(const uint32_t block_index) {
         const FreelistAlloc::Range r = alloc_->GetBlockRange(block_index);
         for (uint32_t i = r.offset; i < r.offset + r.size; ++i) {
-            (cpu_buf_.mapped_ptr<T>() + i)->~T();
+            if (Replicate) {
+                (cpu_buf_.mapped_ptr<T>() + i)->~T();
+            }
             --size_;
         }
         alloc_->Free(block_index);
     }
 
-    void Set(const uint32_t index, const T &el) {
-        Set(index, 1, &el);
-    }
+    void Set(const uint32_t index, const T &el) { Set(index, 1, &el); }
 
     void Set(const uint32_t start, const uint32_t count, const T els[]) {
-        for (uint32_t i = 0; i < count; ++i) {
-            new (cpu_buf_.mapped_ptr<T>() + start + i) T(els[i]);
-        }
-        cpu_buf_.FlushMappedRange(start * sizeof(T), count * sizeof(T), true /* align size */);
-
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        gpu_buf_.UpdateSubRegion(start * sizeof(T), count * sizeof(T), cpu_buf_, start * sizeof(T), cmd_buf);
+        Buffer temp_buf;
+
+        if (Replicate) {
+            for (uint32_t i = 0; i < count; ++i) {
+                new (cpu_buf_.mapped_ptr<T>() + start + i) T(els[i]);
+            }
+            cpu_buf_.FlushMappedRange(start * sizeof(T), count * sizeof(T), true /* align size */);
+
+            gpu_buf_.UpdateSubRegion(start * sizeof(T), count * sizeof(T), cpu_buf_, start * sizeof(T), cmd_buf);
+        } else {
+            temp_buf = Buffer("Temp staging buf", ctx_, eBufType::Upload, count * sizeof(T));
+            T *el = reinterpret_cast<T *>(temp_buf.Map());
+            for (uint32_t i = 0; i < count; ++i) {
+                new (el + i) T(els[i]);
+            }
+            temp_buf.FlushMappedRange(0, count * sizeof(T), true /* align size */);
+            temp_buf.Unmap();
+
+            gpu_buf_.UpdateSubRegion(start * sizeof(T), count * sizeof(T), temp_buf, 0, cmd_buf);
+        }
+
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        temp_buf.FreeImmediate();
     }
 
     force_inline const T &at(const uint32_t index) const { return *(cpu_buf_.mapped_ptr<T>() + index); }
@@ -304,6 +344,6 @@ template <typename T> class SparseStorage {
     bool IntegrityCheck() const { return alloc_->IntegrityCheck(); }
 };
 
-template <typename T> const uint32_t SparseStorage<T>::InitialNonZeroCapacity;
+template <typename T, bool Replicate> const uint32_t SparseStorage<T, Replicate>::InitialNonZeroCapacity;
 } // namespace NS
 } // namespace Ray

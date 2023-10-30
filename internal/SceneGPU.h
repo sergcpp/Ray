@@ -56,9 +56,9 @@ class Scene : public SceneCommon {
     Context *ctx_;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
 
-    SparseStorage<bvh_node_t> nodes_;
-    SparseStorage<tri_accel_t> tris_;
-    SparseStorage<uint32_t> tri_indices_;
+    SparseStorage<bvh_node_t, false /* Replicate */> nodes_;
+    SparseStorage<tri_accel_t, false /* Replicate */> tris_;
+    SparseStorage<uint32_t, false /* Replicate */> tri_indices_;
     SparseStorage<tri_mat_data_t> tri_materials_;
     SparseStorage<transform_t> transforms_;
     SparseStorage<mesh_t> meshes_;
@@ -1440,7 +1440,7 @@ inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHa
 }
 
 inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
-    mesh_instance_t &mi = mesh_instances_[i._index];
+    const mesh_instance_t &mi = mesh_instances_[i._index];
 
     transforms_.Erase(mi.tr_block);
     if (mi.lights_index != 0xffffffff) {
