@@ -247,6 +247,13 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         subgroup_supported_ &= (subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT) != 0;
     }
 
+    log_->Info("Memory Heaps:");
+    for (uint32_t i = 0; i < mem_properties_.memoryHeapCount; ++i) {
+        const VkMemoryHeap &heap = mem_properties_.memoryHeaps[i];
+        const bool is_device_local = (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0;
+        log_->Info("\tHeap %i, size %.2f MB %s", i, double(heap.size) / (1024 * 1024), is_device_local ? "(device local)" : "");
+    }
+
     default_memory_allocs_ =
         std::make_unique<MemoryAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
                                            1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
@@ -275,6 +282,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 
 bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
                                       const int enabled_layers_count, ILog *log) {
+    bool enable_validation = false;
 #ifndef NDEBUG
     { // Find validation layer
         uint32_t layers_count = 0;
@@ -288,28 +296,29 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
         SmallVector<VkLayerProperties, 16> layers_available(layers_count);
         api.vkEnumerateInstanceLayerProperties(&layers_count, &layers_available[0]);
 
-        bool found_validation = false;
         for (uint32_t i = 0; i < layers_count; i++) {
             if (strcmp(layers_available[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
-                found_validation = true;
+                enable_validation = true;
             }
         }
 
-        if (!found_validation) {
-            log->Error("Could not find validation layer");
-            return false;
+        if (!enable_validation) {
+            log->Warning("Could not find validation layer");
         }
     }
 #endif
 
-    const char *desired_extensions[] = {VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-                                        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+    SmallVector<const char *, 8> desired_extensions = {VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+                                                       VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+                                                       VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
 #ifndef NDEBUG
-                                        VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME
+    if (enable_validation) {
+        desired_extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+    }
 #endif
-    };
+
     const uint32_t number_required_extensions = 0;
-    const uint32_t number_optional_extensions = COUNT_OF(desired_extensions) - number_required_extensions;
+    const uint32_t number_optional_extensions = desired_extensions.size() - number_required_extensions;
 
     { // Find required extensions
         uint32_t ext_count = 0;
@@ -351,24 +360,27 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
 
     VkInstanceCreateInfo instance_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instance_info.pApplicationInfo = &app_info;
-    instance_info.enabledLayerCount = enabled_layers_count;
-    instance_info.ppEnabledLayerNames = enabled_layers;
+    if (enable_validation) {
+        instance_info.enabledLayerCount = enabled_layers_count;
+        instance_info.ppEnabledLayerNames = enabled_layers;
+    }
     instance_info.enabledExtensionCount = number_required_extensions + number_optional_extensions;
-    instance_info.ppEnabledExtensionNames = desired_extensions;
+    instance_info.ppEnabledExtensionNames = desired_extensions.data();
 
 #ifndef NDEBUG
-    const VkValidationFeatureEnableEXT enabled_validation_features[] = {
+    static const VkValidationFeatureEnableEXT enabled_validation_features[] = {
         VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
         // VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
         //  VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT
     };
-
     VkValidationFeaturesEXT validation_features = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-    validation_features.enabledValidationFeatureCount = COUNT_OF(enabled_validation_features);
-    validation_features.pEnabledValidationFeatures = enabled_validation_features;
+    if (enable_validation) {
+        validation_features.enabledValidationFeatureCount = COUNT_OF(enabled_validation_features);
+        validation_features.pEnabledValidationFeatures = enabled_validation_features;
 
-    instance_info.pNext = &validation_features;
+        instance_info.pNext = &validation_features;
+    }
 #endif
 
     const VkResult res = api.vkCreateInstance(&instance_info, nullptr, &instance);
