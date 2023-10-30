@@ -4627,7 +4627,7 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
 
         simd_fvec4 rc =
             IntersectScene(sh_r, max_transp_depth, sc, node_index, rand_seq, rand_seed, iteration, textures);
-        if (!sc.blocker_lights.empty()) {
+        if (sc.blocker_lights_count) {
             rc *= IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
         }
 

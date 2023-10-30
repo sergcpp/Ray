@@ -725,9 +725,6 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const fl
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.push_back(light_index.first);
-    if (_l.sky_portal) {
-        blocker_lights_.push_back(light_index.first);
-    }
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -758,9 +755,6 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const fl
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.push_back(light_index.first);
-    if (_l.sky_portal) {
-        blocker_lights_.push_back(light_index.first);
-    }
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -802,13 +796,6 @@ void Ray::Cpu::Scene::RemoveLight_nolock(const LightHandle i) {
         auto it = find(begin(li_indices_), end(li_indices_), i._index);
         assert(it != end(li_indices_));
         li_indices_.erase(it);
-    }
-
-    if (lights_[i._index].sky_portal) {
-        // TODO: do this more efficiently
-        auto it = find(begin(blocker_lights_), end(blocker_lights_), i._index);
-        assert(it != end(blocker_lights_));
-        blocker_lights_.erase(it);
     }
 
     lights_.Erase(i._block);
@@ -1282,7 +1269,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     aligned_vector<additional_data_t> additional_data;
     additional_data.reserve(lights_.size());
 
-    visible_lights_count_ = 0;
+    visible_lights_count_ = blocker_lights_count_ = 0;
 
     for (const light_t &l : lights_) {
         Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
@@ -1291,6 +1278,9 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
         if (l.visible) {
             ++visible_lights_count_;
+        }
+        if (l.blocking) {
+            ++blocker_lights_count_;
         }
 
         switch (l.type) {

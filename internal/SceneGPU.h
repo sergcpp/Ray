@@ -78,9 +78,7 @@ class Scene : public SceneCommon {
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;
     std::vector<uint32_t> li_indices_cpu_;
-    uint32_t visible_lights_count_ = 0;
-    Vector<uint32_t> blocker_lights_;
-    std::vector<uint32_t> blocker_lights_cpu_;
+    uint32_t visible_lights_count_ = 0, blocker_lights_count_ = 0;
     Vector<light_wbvh_node_t> light_wnodes_;
 
     environment_t env_;
@@ -222,8 +220,7 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
           {ctx, "Atlas BC3", eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), blocker_lights_(ctx, "Blocker Lights"),
-      light_wnodes_(ctx, "Light WNodes") {
+      lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_wnodes_(ctx, "Light WNodes") {
     SceneBase::log_ = ctx->log();
     SetEnvironment({});
 }
@@ -1269,10 +1266,6 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
     li_indices_cpu_.push_back(light_index.first);
-    if (_l.sky_portal) {
-        blocker_lights_.PushBack(light_index.first);
-        blocker_lights_cpu_.push_back(light_index.first);
-    }
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -1304,10 +1297,6 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
     li_indices_.PushBack(light_index.first);
     li_indices_cpu_.push_back(light_index.first);
-    if (_l.sky_portal) {
-        blocker_lights_.PushBack(light_index.first);
-        blocker_lights_cpu_.push_back(light_index.first);
-    }
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -1351,14 +1340,6 @@ inline void Ray::NS::Scene::RemoveLight_nolock(const LightHandle i) {
         li_indices_.Erase(it - begin(li_indices_cpu_));
         li_indices_cpu_.erase(it);
         assert(li_indices_.size() == li_indices_cpu_.size());
-    }
-
-    if (lights_[i._index].sky_portal) {
-        auto it = find(begin(blocker_lights_cpu_), end(blocker_lights_cpu_), i._index);
-        assert(it != end(blocker_lights_cpu_));
-        blocker_lights_.Erase(it - begin(blocker_lights_cpu_));
-        blocker_lights_cpu_.erase(it);
-        assert(blocker_lights_.size() == blocker_lights_cpu_.size());
     }
 
     lights_.Erase(i._block);
@@ -1952,7 +1933,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     aligned_vector<additional_data_t> additional_data;
     additional_data.reserve(lights_.size());
 
-    visible_lights_count_ = 0;
+    visible_lights_count_ = blocker_lights_count_ = 0;
 
     for (auto it = lights_.cbegin(); it != lights_.cend(); ++it) {
         const light_t &l = *it;
@@ -1962,6 +1943,9 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
 
         if (l.visible) {
             ++visible_lights_count_;
+        }
+        if (l.blocking) {
+            ++blocker_lights_count_;
         }
 
         switch (l.type) {

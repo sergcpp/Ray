@@ -5218,7 +5218,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
 
         simd_fvec<S> rc[3];
         IntersectScene(sh_r, max_transp_depth, sc, root_index, rand_seq, rand_seed, iteration, textures, rc);
-        if (!sc.blocker_lights.empty()) {
+        if (sc.blocker_lights_count) {
             const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
             UNROLLED_FOR(j, 3, { rc[j] *= k; })
         }

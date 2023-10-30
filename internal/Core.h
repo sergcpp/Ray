@@ -503,7 +503,7 @@ struct scene_data_t {
     Span<const light_t> lights;
     Span<const uint32_t> li_indices;
     uint32_t visible_lights_count;
-    Span<const uint32_t> blocker_lights;
+    uint32_t blocker_lights_count;
     Span<const light_bvh_node_t> light_nodes;
     Span<const light_wbvh_node_t> light_wnodes;
 };

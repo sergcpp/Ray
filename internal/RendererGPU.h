@@ -24,8 +24,7 @@ struct scene_data_t {
     const Buffer &li_indices;
     const int li_count;
     const uint32_t visible_lights_count;
-    const Buffer &blocker_lights;
-    const int blocker_lights_count;
+    const uint32_t blocker_lights_count;
     const Buffer &light_wnodes;
     const AccStructure &rt_tlas;
     const Texture2D &env_qtree;
