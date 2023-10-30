@@ -96,7 +96,6 @@ class Scene : public SceneCommon {
 
     void RemoveMesh_nolock(MeshHandle m);
     void RemoveMeshInstance_nolock(MeshInstanceHandle i);
-    void RemoveLight_nolock(LightHandle l);
     void RebuildTLAS_nolock();
     void RebuildLightTree_nolock();
 
@@ -143,7 +142,7 @@ class Scene : public SceneCommon {
     LightHandle AddLight(const line_light_desc_t &l, const float *xform) override;
     void RemoveLight(LightHandle l) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-        RemoveLight_nolock(l);
+        lights_.Erase(l._block);
     }
 
     MeshInstanceHandle AddMeshInstance(const mesh_instance_desc_t &mi) override;

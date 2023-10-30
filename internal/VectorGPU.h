@@ -67,31 +67,25 @@ template <typename T> class Vector {
     void Erase(const size_t offset, const size_t count) {
 #ifndef NDEBUG
         if (offset + count > size_) {
-            throw std::out_of_range("VectorVK::Erase");
+            throw std::out_of_range("Vector::Erase");
         }
 #endif
         if (offset + count != size_) {
-            size_t pos = offset;
-            size_t to_copy = size_ - offset - count;
+            const size_t pos = offset;
+            const size_t to_copy = size_ - offset - count;
 
-            while (to_copy) {
-                const size_t portion = std::min(count, to_copy);
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-                CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * (pos + count)), buf_, uint32_t(sizeof(T) * pos),
-                                   uint32_t(sizeof(T) * portion), cmd_buf);
-                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
-                                      ctx_->temp_command_pool());
+            Buffer temp_buf("Temp buf", ctx_, eBufType::Storage, to_copy * sizeof(T));
 
-                // const cl_int error = queue_.enqueueCopyBuffer(buf_, buf_, sizeof(T) * (pos + count), sizeof(T) * pos,
-                //                                               sizeof(T) * portion);
-                // if (error != CL_SUCCESS) {
-                //     throw std::runtime_error("Cannot access OpenCL buffer!");
-                // }
+            CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * (pos + count)), temp_buf, 0, uint32_t(sizeof(T) * to_copy),
+                               cmd_buf);
+            CopyBufferToBuffer(temp_buf, 0, buf_, uint32_t(sizeof(T) * pos), uint32_t(sizeof(T) * to_copy), cmd_buf);
 
-                pos += portion;
-                to_copy -= portion;
-            }
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
+
+            temp_buf.FreeImmediate();
         }
 
         size_ -= count;
@@ -102,7 +96,7 @@ template <typename T> class Vector {
     void Get(const size_t i, T &v) const {
 #ifndef NDEBUG
         if (i >= size_) {
-            throw std::out_of_range("VectorVK::Get");
+            throw std::out_of_range("Vector::Get");
         }
 #endif
 
@@ -120,7 +114,7 @@ template <typename T> class Vector {
     void Get(T *p, const size_t offset, const size_t count) const {
 #ifndef NDEBUG
         if (offset + count > size_) {
-            throw std::out_of_range("VectorVK::Get");
+            throw std::out_of_range("Vector::Get");
         }
 #endif
 
@@ -138,7 +132,7 @@ template <typename T> class Vector {
     void Set(const size_t i, const T &v) {
 #ifndef NDEBUG
         if (i >= size_) {
-            throw std::out_of_range("VectorVK::Set");
+            throw std::out_of_range("Vector::Set");
         }
 #endif
 
@@ -156,7 +150,7 @@ template <typename T> class Vector {
     void Set(const T *p, const size_t offset, const size_t count) {
 #ifndef NDEBUG
         if (offset + count > size_) {
-            throw std::out_of_range("VectorVK::Set");
+            throw std::out_of_range("Vector::Set");
         }
 #endif
 

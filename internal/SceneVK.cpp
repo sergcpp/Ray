@@ -46,11 +46,6 @@ Ray::Vk::Scene::~Scene() {
         ++it;
         Scene::RemoveMesh_nolock(to_delete);
     }
-    for (auto it = lights_.begin(); it != lights_.end();) {
-        LightHandle to_delete = {it.index(), it.block()};
-        ++it;
-        Scene::RemoveLight_nolock(to_delete);
-    }
 
     if (macro_nodes_root_ != 0xffffffff) {
         nodes_.Erase(macro_nodes_block_);

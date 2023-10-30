@@ -55,11 +55,6 @@ Ray::Cpu::Scene::~Scene() {
         ++it;
         Scene::RemoveMesh_nolock(to_delete);
     }
-    for (auto it = lights_.begin(); it != lights_.end();) {
-        LightHandle to_delete = {it.index(), it.block()};
-        ++it;
-        Scene::RemoveLight_nolock(to_delete);
-    }
 
     if (macro_nodes_root_ != 0xffffffff) {
         if (use_wide_bvh_) {
@@ -69,9 +64,6 @@ Ray::Cpu::Scene::~Scene() {
         }
         macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
     }
-
-    materials_.clear();
-    lights_.clear();
 }
 
 void Ray::Cpu::Scene::GetEnvironment(environment_desc_t &env) {
@@ -648,7 +640,6 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
-    li_indices_.push_back(light_index.first);
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -670,7 +661,6 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const sphere_light_desc_t &_l) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
-    li_indices_.push_back(light_index.first);
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -694,7 +684,6 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const spot_light_desc_t &_l) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
-    li_indices_.push_back(light_index.first);
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -724,7 +713,6 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const fl
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
-    li_indices_.push_back(light_index.first);
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -754,7 +742,6 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const fl
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
-    li_indices_.push_back(light_index.first);
     return LightHandle{light_index.first, light_index.second};
 }
 
@@ -786,19 +773,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const fl
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
-    li_indices_.push_back(light_index.first);
     return LightHandle{light_index.first, light_index.second};
-}
-
-void Ray::Cpu::Scene::RemoveLight_nolock(const LightHandle i) {
-    { // remove from compacted list
-        // TODO: do this more efficiently
-        auto it = find(begin(li_indices_), end(li_indices_), i._index);
-        assert(it != end(li_indices_));
-        li_indices_.erase(it);
-    }
-
-    lights_.Erase(i._block);
 }
 
 Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_desc_t &mi_desc) {
@@ -926,12 +901,8 @@ void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
 
     transforms_.Erase(mi.tr_block);
     if (mi.lights_index != 0xffffffff) {
-        const uint32_t light_block = (mi.ray_visibility >> 8), light_count = lights_.GetCount(light_block);
+        const uint32_t light_block = (mi.ray_visibility >> 8);
         lights_.Erase(light_block);
-        // TODO: Do this more efficiently
-        auto it = std::find(begin(li_indices_), end(li_indices_), mi.lights_index);
-        assert(it != end(li_indices_));
-        li_indices_.erase(it, it + light_count);
     }
     mesh_instances_.Erase(i._block);
 
@@ -942,7 +913,7 @@ void Ray::Cpu::Scene::Finalize() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     if (env_map_light_ != InvalidLightHandle) {
-        RemoveLight_nolock(env_map_light_);
+        lights_.Erase(env_map_light_._block);
     }
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
@@ -968,7 +939,6 @@ void Ray::Cpu::Scene::Finalize() {
             const std::pair<uint32_t, uint32_t> li = lights_.push(l);
             env_map_light_ = LightHandle{li.first, li.second};
             env_.light_index = env_map_light_._index;
-            li_indices_.push_back(env_map_light_._index);
         }
     }
 
@@ -1050,10 +1020,9 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
 
     // Find directional light sources
     std::vector<uint32_t> dir_lights;
-    for (const uint32_t li_index : li_indices_) {
-        const light_t &l = lights_[li_index];
-        if (l.type == LIGHT_TYPE_DIR) {
-            dir_lights.push_back(li_index);
+    for (auto it = lights_.cbegin(); it != lights_.cend(); ++it) {
+        if (it->type == LIGHT_TYPE_DIR) {
+            dir_lights.push_back(it.index());
         }
     }
 
@@ -1270,12 +1239,16 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     additional_data.reserve(lights_.size());
 
     visible_lights_count_ = blocker_lights_count_ = 0;
+    li_indices_.clear();
 
-    for (const light_t &l : lights_) {
+    for (auto it = lights_.cbegin(); it != lights_.cend(); ++it) {
+        const light_t &l = *it;
+
         Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
         float area = 1.0f, omega_n = 0.0f, omega_e = 0.0f;
         float lum = l.col[0] + l.col[1] + l.col[2];
 
+        li_indices_.push_back(it.index());
         if (l.visible) {
             ++visible_lights_count_;
         }

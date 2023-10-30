@@ -215,12 +215,12 @@ template <typename T> class SparseStorage {
         uint32_t index() const { return range_.offset; }
         uint32_t block() const { return range_.block; }
 
-        bool operator<(const SparseStorageIterator &rhs) const { return range_.offset < rhs.range_.offset; }
-        bool operator<=(const SparseStorageIterator &rhs) const { return range_.offset <= rhs.range_.offset; }
-        bool operator>(const SparseStorageIterator &rhs) const { return range_.offset > rhs.range_.offset; }
-        bool operator>=(const SparseStorageIterator &rhs) const { return range_.offset >= rhs.range_.offset; }
-        bool operator==(const SparseStorageIterator &rhs) const { return range_.offset == rhs.range_.offset; }
-        bool operator!=(const SparseStorageIterator &rhs) const { return range_.offset != rhs.range_.offset; }
+        bool operator<(const SparseStorageConstIterator &rhs) const { return range_.offset < rhs.range_.offset; }
+        bool operator<=(const SparseStorageConstIterator &rhs) const { return range_.offset <= rhs.range_.offset; }
+        bool operator>(const SparseStorageConstIterator &rhs) const { return range_.offset > rhs.range_.offset; }
+        bool operator>=(const SparseStorageConstIterator &rhs) const { return range_.offset >= rhs.range_.offset; }
+        bool operator==(const SparseStorageConstIterator &rhs) const { return range_.offset == rhs.range_.offset; }
+        bool operator!=(const SparseStorageConstIterator &rhs) const { return range_.offset != rhs.range_.offset; }
     };
 
     using iterator = SparseStorageIterator;
