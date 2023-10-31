@@ -150,7 +150,7 @@ bool Ray::MatchDeviceNames(const char *name, const char *pattern) {
     return std::regex_search(name, match_name) || strcmp(name, pattern) == 0;
 }
 
-const char *Ray::Version() { return "unknown"; }
+const char *Ray::Version() { return "v0.2.0-186-gb9fca7e"; }
 
 // Workaround for a strange clang behavior
 template class std::vector<float, Ray::aligned_allocator<float, 64>>;
