@@ -10,9 +10,13 @@ def main():
     all_lines = []
     with open(file_name, "r", encoding='utf-8') as f:
         for line in f.readlines():
-            m = re.search(r'^const char \*\w+::Version\(\) \{ return ".*"; \}', line)
+            m = re.search(r'^const char \*(\w+)::Version\(\)\s*(const)?\s*\{ return ".*"; \}', line)
             if m:
-                line = 'const char *Ray::Version() { return "'
+                NS = str(m[1])
+                line = 'const char *' + NS + '::Version() ';
+                if m[2] != None:
+                    line += 'const '
+                line += '{ return "'
                 line += version_string.decode('UTF-8')[0:-1]
                 line += '"; }\n'
                 print('Writing version: ', version_string.decode('UTF-8')[0:-1])
