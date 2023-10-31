@@ -5981,13 +5981,13 @@ Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Up
 
 namespace Ray {
 extern const int LUT_DIMS = 48;
-#include "luts/__filmic_high_contrast.inl"
-#include "luts/__filmic_low_contrast.inl"
-#include "luts/__filmic_med_contrast.inl"
-#include "luts/__filmic_med_high_contrast.inl"
-#include "luts/__filmic_med_low_contrast.inl"
-#include "luts/__filmic_very_high_contrast.inl"
-#include "luts/__filmic_very_low_contrast.inl"
+#include "precomputed/__filmic_high_contrast.inl"
+#include "precomputed/__filmic_low_contrast.inl"
+#include "precomputed/__filmic_med_contrast.inl"
+#include "precomputed/__filmic_med_high_contrast.inl"
+#include "precomputed/__filmic_med_low_contrast.inl"
+#include "precomputed/__filmic_very_high_contrast.inl"
+#include "precomputed/__filmic_very_low_contrast.inl"
 
 const uint32_t *transform_luts[] = {
     nullptr,                    // Standard

@@ -8,13 +8,13 @@ namespace Ray {
 float f16_to_f32(uint16_t h);
 int round_up(int v, int align);
 namespace unet_weights_hdr {
-#include "weights/__oidn_weights_hdr.inl"
+#include "precomputed/__oidn_weights_hdr.inl"
 }
 namespace unet_weights_hdr_alb {
-#include "weights/__oidn_weights_hdr_alb.inl"
+#include "precomputed/__oidn_weights_hdr_alb.inl"
 }
 namespace unet_weights_hdr_alb_nrm {
-#include "weights/__oidn_weights_hdr_alb_nrm.inl"
+#include "precomputed/__oidn_weights_hdr_alb_nrm.inl"
 }
 
 template <typename T> T convert_weight(const uint16_t val);

@@ -12,7 +12,7 @@
 #include "BVHSplit.h"
 
 namespace Ray {
-#include "pmj/__pmj02_samples.inl"
+#include "precomputed/__pmj02_samples.inl"
 
 force_inline Ref::simd_fvec3 cross(const Ref::simd_fvec3 &v1, const Ref::simd_fvec3 &v2) {
     return {v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
