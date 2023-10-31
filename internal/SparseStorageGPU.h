@@ -68,7 +68,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
             if (Replicate) {
                 auto new_buf = std::make_unique<T[]>(new_capacity);
                 memcpy(new_buf.get(), cpu_buf_.get(), capacity() * sizeof(T));
-                cpu_buf_ = move(new_buf);
+                cpu_buf_ = std::move(new_buf);
             }
             gpu_buf_.Resize(new_capacity * sizeof(T));
         }

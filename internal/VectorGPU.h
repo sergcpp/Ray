@@ -35,6 +35,10 @@ template <typename T> class Vector {
     }
 
     void Append(const T *vec, size_t num) {
+        if (!num) {
+            return;
+        }
+
         Reserve(size_ + num);
 
         { // Write buffer
