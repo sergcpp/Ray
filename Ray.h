@@ -39,4 +39,9 @@ int QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], int capacity
     @return true if name matches pattern
 */
 bool MatchDeviceNames(const char *name, const char *pattern);
+
+/** @brief Get version string
+    @return version string
+*/
+const char *Version();
 } // namespace Ray

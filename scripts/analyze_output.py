@@ -6,7 +6,6 @@ import sys
 def process_file(f, all_tests):
     for line in f.readlines():
         m = re.search(r'^Test\s*(\w+).*100.0%.*PSNR:\s*([.\w]+)\/([.\w]+).*Fireflies:\s*([.\w]+)\/([.\w]+).*', line)
-        #m = re.search(r'^Test.*', line)
         if m:
             test_name, psnr_tested, psnr_threshold, fireflies_tested, fireflies_threshold = m[1], float(m[2]), float(m[3]), int(m[4]), int(m[5])
             if test_name not in all_tests:

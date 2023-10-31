@@ -8,6 +8,7 @@
 #include <chrono>
 #include <future>
 
+#include "../Ray.h"
 #include "thread_pool.h"
 
 void test_simd();
@@ -136,6 +137,9 @@ int main(int argc, char *argv[]) {
         printf("%s ", argv[i]);
     }
     printf("\n");
+
+    printf("Ray Version: %s\n", Ray::Version());
+    puts(" ---------------");
 
     using namespace std::chrono;
 

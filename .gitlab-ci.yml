@@ -9,6 +9,7 @@ stages:
     - windows
   script:
     - echo "Compiling the code..."
+    - python scripts/update_version_string.py Ray.cpp
     - mkdir build
     - cd build
     - echo $UNITY
@@ -39,6 +40,7 @@ stages:
     - linux
   script:
     - echo "Compiling the code..."
+    - python scripts/update_version_string.py Ray.cpp
     - mkdir build
     - cd build
     - cmake .. -DCMAKE_BUILD_TYPE=$CONFIG -DCMAKE_UNITY_BUILD=$UNITY -DENABLE_REF_IMPL=ON
@@ -70,6 +72,7 @@ stages:
     - macos
   script:
     - echo "Compiling the code..."
+    - python3 scripts/update_version_string.py Ray.cpp
     - mkdir build
     - cd build
     - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=$CONFIG -DCMAKE_UNITY_BUILD=$UNITY -DENABLE_REF_IMPL=ON
