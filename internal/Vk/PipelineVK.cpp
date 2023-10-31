@@ -146,7 +146,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
         layout_create_info.pushConstantRangeCount = prog->pc_range_count();
         layout_create_info.pPushConstantRanges = prog->pc_ranges();
 
-        const VkResult res = ctx_->api().vkCreatePipelineLayout(ctx->device(), &layout_create_info, nullptr, &layout_);
+        const VkResult res = ctx->api().vkCreatePipelineLayout(ctx->device(), &layout_create_info, nullptr, &layout_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create pipeline layout!");
             return false;
@@ -421,6 +421,10 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
         return false;
     }
 
+    ctx_ = ctx;
+    type_ = type;
+    prog_ = prog;
+
     { // create pipeline layout
         VkPipelineLayoutCreateInfo layout_create_info = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
         layout_create_info.setLayoutCount = prog->descr_set_layouts_count();
@@ -544,10 +548,6 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             }
         }
     }
-
-    ctx_ = ctx;
-    type_ = type;
-    prog_ = prog;
 
     return true;
 }
