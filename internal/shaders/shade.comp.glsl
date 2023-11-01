@@ -1283,10 +1283,10 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const float pdf_factor, const vec2 tex_ra
     const uint env_map_res = g_params.back_map_res;
     const float env_map_rotation = g_params.back_rotation;
 #else
-    vec3 env_col = (ray.depth & 0x00ffffff) != 0 ? g_params.env_col.xyz : g_params.back_col.xyz;
-    const uint env_map = (ray.depth & 0x00ffffff) != 0 ? floatBitsToUint(g_params.env_col.w) : floatBitsToUint(g_params.back_col.w);
-    const uint env_map_res = (ray.depth & 0x00ffffff) != 0 ? g_params.env_map_res : g_params.back_map_res;
-    const float env_map_rotation = (ray.depth & 0x00ffffff) != 0 ? g_params.env_rotation : g_params.back_rotation;
+    vec3 env_col = is_indirect(ray) ? g_params.env_col.xyz : g_params.back_col.xyz;
+    const uint env_map = is_indirect(ray) ? floatBitsToUint(g_params.env_col.w) : floatBitsToUint(g_params.back_col.w);
+    const uint env_map_res = is_indirect(ray) ? g_params.env_map_res : g_params.back_map_res;
+    const float env_map_rotation = is_indirect(ray) ? g_params.env_rotation : g_params.back_rotation;
 #endif
     if (env_map != 0xffffffff) {
 #if BINDLESS
@@ -1468,7 +1468,7 @@ void Sample_DiffuseNode(const ray_data_t ray, const surface_t surf, const vec3 b
     vec3 V;
     const vec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand, V);
 
-    new_ray.depth = ray.depth + 0x00000001;
+    new_ray.depth = ray.depth + pack_depth(1, 0, 0, 0);
 
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1528,7 +1528,7 @@ void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 ba
     vec3 V;
     const vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0, spec_ior, spec_F0, base_color, rand, V);
 
-    new_ray.depth = ray.depth + 0x00000100;
+    new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
 
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1589,7 +1589,7 @@ void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec
     const vec3 V = _V.xyz;
     const float m = _V[3];
 
-    new_ray.depth = ray.depth + 0x00010000;
+    new_ray.depth = ray.depth + pack_depth(0, 0, 1, 0);
 
     new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
     new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
@@ -1738,10 +1738,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                            const vec2 rand, float mix_rand, const float mix_weight, inout ray_data_t new_ray) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
-    const int diff_depth = int(ray.depth & 0x000000ff);
-    const int spec_depth = int(ray.depth >> 8) & 0x000000ff;
-    const int refr_depth = int(ray.depth >> 16) & 0x000000ff;
-    const int transp_depth = int(ray.depth >> 24) & 0x000000ff;
+    const int diff_depth = get_diff_depth(ray.depth), spec_depth = get_spec_depth(ray.depth),
+                           refr_depth = get_refr_depth(ray.depth), transp_depth = get_transp_depth(ray.depth);
     // NOTE: transparency depth is not accounted here
     const int total_depth = diff_depth + spec_depth + refr_depth;
 
@@ -1756,7 +1754,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             F.rgb *= (1.0 - metallic) * (1.0 - transmission);
             //F[3] *= lobe_weights.diffuse;
 
-            new_ray.depth = ray.depth + 0x00000001;
+            new_ray.depth = ray.depth + pack_depth(1, 0, 0, 0);
 
             const vec3 new_o = offset_ray(surf.P, surf.plane_N);
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1777,7 +1775,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                                              spec.ior, spec.F0, spec.tmp_col, rand, V);
             F[3] *= lobe_weights.specular;
 
-            new_ray.depth = ray.depth + 0x00000100;
+            new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
 
             new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
             new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
@@ -1798,7 +1796,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                                                      coat.F0, rand, V);
             F[3] *= lobe_weights.clearcoat;
 
-            new_ray.depth = ray.depth + 0x00000100;
+            new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
 
             new_ray.c[0] = 0.25 * ray.c[0] * F[0] * mix_weight / F[3];
             new_ray.c[1] = 0.25 * ray.c[1] * F[1] * mix_weight / F[3];
@@ -1824,7 +1822,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, 0.0 /* anisotropic */, 1.0 /* ior */,
                                             0.0 /* F0 */, vec3(1.0), rand, V);
 
-                new_ray.depth = ray.depth + 0x00000100;
+                new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
 
                 const vec3 new_o = offset_ray(surf.P, surf.plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1834,7 +1832,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                                               rand, _V);
                 V = _V.xyz;
 
-                new_ray.depth = ray.depth + 0x00010000;
+                new_ray.depth = ray.depth + pack_depth(0, 0, 1, 0);
 
                 const vec3 new_o = offset_ray(surf.P, -surf.plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1864,10 +1862,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
-    const int diff_depth = int(ray.depth & 0x000000ff);
-    const int spec_depth = int(ray.depth >> 8) & 0x000000ff;
-    const int refr_depth = int(ray.depth >> 16) & 0x000000ff;
-    const int transp_depth = int(ray.depth >> 24) & 0x000000ff;
+    const int diff_depth = get_diff_depth(ray.depth), spec_depth = get_spec_depth(ray.depth),
+                           refr_depth = get_refr_depth(ray.depth), transp_depth = get_transp_depth(ray.depth);
     // NOTE: transparency depth is not accounted here
     const int total_depth = diff_depth + spec_depth + refr_depth;
 
@@ -2231,17 +2227,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         }
 #endif
         Sample_PrincipledNode(ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_bsdf_uv, mix_rand, mix_weight, new_ray);
-    } /*else [[dont_flatten]] if (mat.type == TransparentNode) {
-        [[dont_flatten]] if (transp_depth < g_params.max_transp_depth && total_depth < g_params.max_total_depth) {
-            new_ray.depth = ray.depth + 0x01000000;
-            new_ray.pdf = ray.pdf;
-
-            const vec3 new_o = offset_ray(surf.P, -surf.plane_N);
-            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-            new_ray.d[0] = ray.d[0]; new_ray.d[1] = ray.d[1]; new_ray.d[2] = ray.d[2];
-            new_ray.c[0] = ray.c[0]; new_ray.c[1] = ray.c[1]; new_ray.c[2] = ray.c[2];
-        }
-    }*/
+    }
 
 #if USE_PATH_TERMINATION
     const bool can_terminate_path = total_depth > g_params.min_total_depth;

@@ -221,20 +221,25 @@ vec3 slerp(const vec3 start, const vec3 end, const float percent) {
     return start * cos(theta) + relative_vec * sin(theta);
 }
 
-int total_depth(const ray_data_t r) {
-    const int diff_depth = int(r.depth & 0x000000ff);
-    const int spec_depth = int(r.depth >> 8) & 0x000000ff;
-    const int refr_depth = int(r.depth >> 16) & 0x000000ff;
-    const int transp_depth = int(r.depth >> 24) & 0x000000ff;
-    return diff_depth + spec_depth + refr_depth + transp_depth;
+uint pack_depth(const int diff_depth, const int spec_depth, const int refr_depth, const int transp_depth) {
+    uint ret = 0;
+    ret |= (diff_depth << 0);
+    ret |= (spec_depth << 8);
+    ret |= (refr_depth << 16);
+    ret |= (transp_depth << 24);
+    return ret;
+}
+int get_diff_depth(const uint depth) { return int(depth & 0x000000ff); }
+int get_spec_depth(const uint depth) { return int(depth >> 8) & 0x000000ff; }
+int get_refr_depth(const uint depth) { return int(depth >> 16) & 0x000000ff; }
+int get_transp_depth(const uint depth) { return int(depth >> 24) & 0x000000ff; }
+int get_total_depth(const uint depth) {
+    return get_diff_depth(depth) + get_spec_depth(depth) + get_refr_depth(depth) + get_transp_depth(depth);
 }
 
-int total_depth(const shadow_ray_t r) {
-    const int diff_depth = int(r.depth & 0x000000ff);
-    const int spec_depth = int(r.depth >> 8) & 0x000000ff;
-    const int refr_depth = int(r.depth >> 16) & 0x000000ff;
-    const int transp_depth = int(r.depth >> 24) & 0x000000ff;
-    return diff_depth + spec_depth + refr_depth + transp_depth;
+bool is_indirect(const ray_data_t r) {
+    // not only transparency ray
+    return (r.depth & 0x00ffffff) != 0;
 }
 
 vec3 TonemapStandard(float inv_gamma, vec3 col) {

@@ -210,6 +210,8 @@ int main(int argc, char *argv[]) {
     bool detailed_material_tests_needed = full_tests;
     bool tests_success_final = g_tests_success;
 
+    full_tests = true;
+
     const char **arch_list = ArchListDefault;
     if (preferred_arch[0]) {
         arch_list = preferred_arch;

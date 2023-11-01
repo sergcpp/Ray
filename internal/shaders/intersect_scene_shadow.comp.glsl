@@ -197,12 +197,12 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
     vec3 ro = vec3(r.o[0], r.o[1], r.o[2]);
     vec3 rd = vec3(r.d[0], r.d[1], r.d[2]);
     vec3 rc = vec3(r.c[0], r.c[1], r.c[2]);
-    int depth = int(r.depth >> 24);
+    int depth = get_transp_depth(r.depth);
 
     const uint px_hash = hash(r.xy);
     const uint rand_hash = hash_combine(px_hash, g_params.rand_seed);
 
-    uint rand_dim = RAND_DIM_BASE_COUNT + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
+    uint rand_dim = RAND_DIM_BASE_COUNT + get_total_depth(r.depth) * RAND_DIM_BOUNCE_COUNT;
 
     float dist = r.dist > 0.0 ? r.dist : MAX_DIST;
 #if !HWRT

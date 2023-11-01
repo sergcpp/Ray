@@ -205,7 +205,7 @@ void main() {
     const uint px_hash = hash(g_rays[index].xy);
     const uint rand_hash = hash_combine(px_hash, g_params.rand_seed);
 
-    uint rand_dim = RAND_DIM_BASE_COUNT + total_depth(g_rays[index]) * RAND_DIM_BOUNCE_COUNT;
+    uint rand_dim = RAND_DIM_BASE_COUNT + get_total_depth(g_rays[index].depth) * RAND_DIM_BOUNCE_COUNT;
     while (true) {
         const float t_val = inter.t;
 #if !HWRT
@@ -298,7 +298,7 @@ void main() {
         }
 
 #if USE_PATH_TERMINATION
-        const bool can_terminate_path = (g_rays[index].depth >> 24) > g_params.min_transp_depth;
+        const bool can_terminate_path = get_transp_depth(g_rays[index].depth) > g_params.min_transp_depth;
 #else
         const bool can_terminate_path = false;
 #endif
@@ -306,7 +306,7 @@ void main() {
         const float lum = max(g_rays[index].c[0], max(g_rays[index].c[1], g_rays[index].c[2]));
         const float p = trans_term_rand.y;
         const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
-        if (p < q || lum == 0.0 || (g_rays[index].depth >> 24) + 1 >= g_params.max_transp_depth) {
+        if (p < q || lum == 0.0 || get_transp_depth(g_rays[index].depth) + 1 >= g_params.max_transp_depth) {
             // terminate ray
             g_rays[index].c[0] = g_rays[index].c[1] = g_rays[index].c[2] = 0.0;
             break;
@@ -323,7 +323,7 @@ void main() {
         inter.mask = 0;
         inter.t = t_val - inter.t;
 
-        g_rays[index].depth += 0x01000000;
+        g_rays[index].depth += pack_depth(0, 0, 0, 1);
         rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 
