@@ -242,10 +242,11 @@ simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &
 
 simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
                                      const simd_fvec4 &reflected_dir_ts, simd_fvec2 alpha, float spec_ior,
-                                     float spec_F0, const simd_fvec4 &spec_col);
+                                     float spec_F0, const simd_fvec4 &spec_col, const simd_fvec4 &spec_col_90);
 simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
                                    float roughness, float anisotropic, float spec_ior, float spec_F0,
-                                   const simd_fvec4 &spec_col, simd_fvec2 rand, simd_fvec4 &out_V);
+                                   const simd_fvec4 &spec_col, const simd_fvec4 &spec_col_90, simd_fvec2 rand,
+                                   simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
                                        const simd_fvec4 &refr_dir_ts, float roughness2, float eta,

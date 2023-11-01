@@ -702,13 +702,13 @@ vec4 Sample_PrincipledDiffuse_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughne
 
 vec4 Evaluate_GGXSpecular_BSDF(const vec3 view_dir_ts, const vec3 sampled_normal_ts,
                                const vec3 reflected_dir_ts, const vec2 alpha, const float spec_ior,
-                               const float spec_F0, const vec3 spec_col) {
+                               const float spec_F0, const vec3 spec_col, const vec3 spec_col_90) {
     const float D = D_GGX(sampled_normal_ts, alpha);
     const float G = G1(view_dir_ts, alpha) * G1(reflected_dir_ts, alpha);
 
     const float FH =
         (fresnel_dielectric_cos(dot(view_dir_ts, sampled_normal_ts), spec_ior) - spec_F0) / (1.0 - spec_F0);
-    vec3 F = mix(spec_col, vec3(1.0), FH);
+    vec3 F = mix(spec_col, spec_col_90, FH);
 
     const float denom = 4.0 * abs(view_dir_ts[2] * reflected_dir_ts[2]);
     F *= (denom != 0.0) ? (D * G / denom) : 0.0;
@@ -720,7 +720,7 @@ vec4 Evaluate_GGXSpecular_BSDF(const vec3 view_dir_ts, const vec3 sampled_normal
 
 vec4 Sample_GGXSpecular_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, const float roughness,
                              const float anisotropic, const float spec_ior, const float spec_F0,
-                             const vec3 spec_col, const vec2 rand, out vec3 out_V) {
+                             const vec3 spec_col, const vec3 spec_col_90, const vec2 rand, out vec3 out_V) {
     const float roughness2 = sqr(roughness);
     const float aspect = sqrt(1.0 - 0.9 * anisotropic);
 
@@ -729,7 +729,7 @@ vec4 Sample_GGXSpecular_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, const float roughne
     [[dont_flatten]] if (alpha.x * alpha.y < 1e-7) {
         const vec3 V = reflect(I, N);
         const float FH = (fresnel_dielectric_cos(dot(V, N), spec_ior) - spec_F0) / (1.0 - spec_F0);
-        vec3 F = mix(spec_col, vec3(1.0), FH);
+        vec3 F = mix(spec_col, spec_col_90, FH);
         out_V = V;
         return vec4(F[0] * 1e6f, F[1] * 1e6f, F[2] * 1e6f, 1e6f);
     }
@@ -742,7 +742,7 @@ vec4 Sample_GGXSpecular_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, const float roughne
 
     out_V = world_from_tangent(T, B, N, reflected_dir_ts);
     return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha, spec_ior,
-                                     spec_F0, spec_col);
+                                     spec_F0, spec_col, spec_col_90);
 }
 
 vec4 Evaluate_PrincipledClearcoat_BSDF(vec3 view_dir_ts, vec3 sampled_normal_ts, vec3 reflected_dir_ts,
@@ -1495,7 +1495,7 @@ vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray,
     const float roughness2 = sqr(roughness);
 
     const vec4 spec_col = Evaluate_GGXSpecular_BSDF(
-        view_dir_ts, sampled_normal_ts, light_dir_ts, vec2(roughness2), spec_ior, spec_F0, base_color);
+        view_dir_ts, sampled_normal_ts, light_dir_ts, vec2(roughness2), spec_ior, spec_F0, base_color, base_color);
     const float bsdf_pdf = spec_col[3];
 
     float mis_weight = 1.0;
@@ -1527,7 +1527,8 @@ void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 ba
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
     vec3 V;
-    const vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0, spec_ior, spec_F0, base_color, rand, V);
+    const vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0, spec_ior, spec_F0,
+                                           base_color, base_color, rand, V);
 
     new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
     new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
@@ -1678,7 +1679,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
 
     [[dont_flatten]] if (lobe_weights.specular > 0.0 && alpha.x * alpha.y >= 1e-7 && N_dot_L > 0.0) {
         const vec4 spec_col = Evaluate_GGXSpecular_BSDF(
-            view_dir_ts, sampled_normal_ts, light_dir_ts, alpha, spec.ior, spec.F0, spec.tmp_col);
+            view_dir_ts, sampled_normal_ts, light_dir_ts, alpha, spec.ior, spec.F0, spec.tmp_col, vec3(1.0));
         bsdf_pdf += lobe_weights.specular * spec_col[3];
         lcol += ls.col * spec_col.rgb / ls.pdf;
     }
@@ -1696,7 +1697,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
         [[dont_flatten]] if (trans.fresnel != 0.0 && sqr(roughness2) >= 1e-7 && N_dot_L > 0.0) {
             const vec4 spec_col =
                 Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, vec2(roughness2),
-                                          1.0 /* ior */, 0.0 /* F0 */, vec3(1.0));
+                                          1.0 /* ior */, 0.0 /* F0 */, vec3(1.0), vec3(1.0));
             bsdf_pdf += lobe_weights.refraction * trans.fresnel * spec_col[3];
             lcol += ls.col * spec_col.rgb * (trans.fresnel / ls.pdf);
         }
@@ -1776,7 +1777,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
         if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
             vec3 V;
             vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, spec.anisotropy,
-                                             spec.ior, spec.F0, spec.tmp_col, rand, V);
+                                             spec.ior, spec.F0, spec.tmp_col, vec3(1.0), rand, V);
             F[3] *= lobe_weights.specular;
 
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
@@ -1826,7 +1827,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             vec3 V;
             [[dont_flatten]] if (mix_rand < trans.fresnel) {
                 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, 0.0 /* anisotropic */, 1.0 /* ior */,
-                                            0.0 /* F0 */, vec3(1.0), rand, V);
+                                            0.0 /* F0 */, vec3(1.0), vec3(1.0), rand, V);
 
                 new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
                 new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);

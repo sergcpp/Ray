@@ -299,12 +299,14 @@ template <int S>
 void Evaluate_GGXSpecular_BSDF(const simd_fvec<S> view_dir_ts[3], const simd_fvec<S> sampled_normal_ts[3],
                                const simd_fvec<S> reflected_dir_ts[3], const simd_fvec<S> alpha[2],
                                const simd_fvec<S> &spec_ior, const simd_fvec<S> &spec_F0,
-                               const simd_fvec<S> spec_col[3], simd_fvec<S> out_color[4]);
+                               const simd_fvec<S> spec_col[3], const simd_fvec<S> spec_col_90[3],
+                               simd_fvec<S> out_color[4]);
 template <int S>
 void Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S> B[3], const simd_fvec<S> N[3],
                              const simd_fvec<S> I[3], const simd_fvec<S> &roughness, const simd_fvec<S> &anisotropic,
                              const simd_fvec<S> &spec_ior, const simd_fvec<S> &spec_F0, const simd_fvec<S> spec_col[3],
-                             const simd_fvec<S> rand[2], simd_fvec<S> out_V[3], simd_fvec<S> out_color[4]);
+                             const simd_fvec<S> spec_col_90[3], const simd_fvec<S> rand[2], simd_fvec<S> out_V[3],
+                             simd_fvec<S> out_color[4]);
 
 template <int S>
 void Evaluate_GGXRefraction_BSDF(const simd_fvec<S> view_dir_ts[3], const simd_fvec<S> sampled_normal_ts[3],
@@ -4346,7 +4348,8 @@ template <int S>
 void Ray::NS::Evaluate_GGXSpecular_BSDF(const simd_fvec<S> view_dir_ts[3], const simd_fvec<S> sampled_normal_ts[3],
                                         const simd_fvec<S> reflected_dir_ts[3], const simd_fvec<S> alpha[2],
                                         const simd_fvec<S> &spec_ior, const simd_fvec<S> &spec_F0,
-                                        const simd_fvec<S> spec_col[3], simd_fvec<S> out_color[4]) {
+                                        const simd_fvec<S> spec_col[3], const simd_fvec<S> spec_col_90[3],
+                                        simd_fvec<S> out_color[4]) {
     const simd_fvec<S> D = D_GGX(sampled_normal_ts, alpha[0], alpha[1]);
 
     const simd_fvec<S> G = G1(view_dir_ts, alpha[0], alpha[1]) * G1(reflected_dir_ts, alpha[0], alpha[1]);
@@ -4355,7 +4358,7 @@ void Ray::NS::Evaluate_GGXSpecular_BSDF(const simd_fvec<S> view_dir_ts[3], const
         (fresnel_dielectric_cos(dot3(view_dir_ts, sampled_normal_ts), spec_ior) - spec_F0) / (1.0f - spec_F0);
 
     simd_fvec<S> F[3];
-    UNROLLED_FOR(i, 3, { F[i] = mix(spec_col[i], simd_fvec<S>{1.0f}, FH); })
+    UNROLLED_FOR(i, 3, { F[i] = mix(spec_col[i], spec_col_90[i], FH); })
 
     const simd_fvec<S> denom = 4.0f * abs(view_dir_ts[2] * reflected_dir_ts[2]);
     UNROLLED_FOR(i, 3, { F[i] = select(denom != 0.0f, F[i] * safe_div_pos(D * G, denom), simd_fvec<S>{0.0f}); })
@@ -4371,7 +4374,8 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
                                       const simd_fvec<S> I[3], const simd_fvec<S> &roughness,
                                       const simd_fvec<S> &anisotropic, const simd_fvec<S> &spec_ior,
                                       const simd_fvec<S> &spec_F0, const simd_fvec<S> spec_col[3],
-                                      const simd_fvec<S> rand[2], simd_fvec<S> out_V[3], simd_fvec<S> out_color[4]) {
+                                      const simd_fvec<S> spec_col_90[3], const simd_fvec<S> rand[2],
+                                      simd_fvec<S> out_V[3], simd_fvec<S> out_color[4]) {
     const simd_fvec<S> roughness2 = sqr(roughness);
     const simd_fvec<S> aspect = sqrt(1.0f - 0.9f * anisotropic);
 
@@ -4381,7 +4385,7 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
     if (is_mirror.not_all_zeros()) {
         reflect(I, N, dot3(N, I), out_V);
         const simd_fvec<S> FH = (fresnel_dielectric_cos(dot3(out_V, N), spec_ior) - spec_F0) / (1.0f - spec_F0);
-        UNROLLED_FOR(i, 3, { out_color[i] = mix(spec_col[i], simd_fvec<S>{1.0f}, FH) * 1e6f; })
+        UNROLLED_FOR(i, 3, { out_color[i] = mix(spec_col[i], spec_col_90[i], FH) * 1e6f; })
         out_color[3] = 1e6f;
     }
 
@@ -4411,7 +4415,7 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
     simd_fvec<S> glossy_V[3], glossy_F[4];
     world_from_tangent(T, B, N, reflected_dir_ts, glossy_V);
     Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha, spec_ior, spec_F0, spec_col,
-                              glossy_F);
+                              spec_col_90, glossy_F);
 
     UNROLLED_FOR(i, 3, { where(is_glossy, out_V[i]) = glossy_V[i]; })
     UNROLLED_FOR(i, 4, { where(is_glossy, out_color[i]) = glossy_F[i]; })
@@ -6651,7 +6655,7 @@ Ray::NS::Evaluate_GlossyNode(const light_sample_t<S> &ls, const ray_data_t<S> &r
 
     simd_fvec<S> spec_col[4], alpha[2] = {sqr(roughness), sqr(roughness)};
     Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha, simd_fvec<S>{spec_ior},
-                              simd_fvec<S>{spec_F0}, base_color, spec_col);
+                              simd_fvec<S>{spec_F0}, base_color, base_color, spec_col);
     const simd_fvec<S> &bsdf_pdf = spec_col[3];
 
     const simd_fvec<S> mis_weight =
@@ -6677,7 +6681,7 @@ void Ray::NS::Sample_GlossyNode(const ray_data_t<S> &ray, const simd_ivec<S> &ma
                                 const simd_fvec<S> &mix_weight, ray_data_t<S> &new_ray) {
     simd_fvec<S> V[3], F[4];
     Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, ray.d, roughness, simd_fvec<S>{0.0f}, spec_ior, spec_F0, base_color,
-                            rand, V, F);
+                            base_color, rand, V, F);
 
     where(mask, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
     where(mask, new_ray.depth) |=
@@ -6800,6 +6804,8 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
 
     const simd_fvec<S> alpha[2] = {roughness2 / aspect, roughness2 * aspect};
 
+    const simd_fvec<S> spec_col_90[3] = {1.0f, 1.0f, 1.0f};
+
     simd_fvec<S> view_dir_ts[3], light_dir_ts[3], sampled_normal_ts[3];
     tangent_from_world(surf.T, surf.B, surf.N, nI, view_dir_ts);
     tangent_from_world(surf.T, surf.B, surf.N, ls.L, light_dir_ts);
@@ -6810,7 +6816,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     if (eval_spec_lobe.not_all_zeros()) {
         simd_fvec<S> spec_col[4], _alpha[2] = {max(alpha[0], 1e-7f), max(alpha[1], 1e-7f)};
         Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, _alpha, spec.ior, spec.F0, spec.tmp_col,
-                                  spec_col);
+                                  spec_col_90, spec_col);
 
         where(eval_spec_lobe, bsdf_pdf) += lobe_weights.specular * spec_col[3];
 
@@ -6838,7 +6844,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     if (eval_refr_spec_lobe.not_all_zeros()) {
         simd_fvec<S> spec_col[4], spec_temp_col[3] = {1.0f, 1.0f, 1.0f}, alpha[2] = {roughness2, roughness2};
         Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha, simd_fvec<S>{1.0f} /* ior */,
-                                  simd_fvec<S>{0.0f} /* F0 */, spec_temp_col, spec_col);
+                                  simd_fvec<S>{0.0f} /* F0 */, spec_temp_col, spec_col_90, spec_col);
         where(eval_refr_spec_lobe, bsdf_pdf) += lobe_weights.refraction * trans.fresnel * spec_col[3];
 
         UNROLLED_FOR(i, 3, {
@@ -6932,9 +6938,11 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
                                           simd_cast(mix_rand >= lobe_weights.diffuse) &
                                           simd_cast(mix_rand < lobe_weights.diffuse + lobe_weights.specular) & mask;
     if (sample_spec_lobe.not_all_zeros()) {
+        const simd_fvec<S> spec_col_90[3] = {1.0f, 1.0f, 1.0f};
+
         simd_fvec<S> V[3], F[4];
         Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, ray.d, spec.roughness, spec.anisotropy, spec.ior, spec.F0,
-                                spec.tmp_col, rand, V, F);
+                                spec.tmp_col, spec_col_90, rand, V, F);
         F[3] *= lobe_weights.specular;
 
         simd_fvec<S> new_p[3];
@@ -6998,17 +7006,18 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
 
         const simd_ivec<S> sample_trans_spec_lobe = simd_cast(mix_rand < trans.fresnel) & sample_trans_lobe;
         if (sample_trans_spec_lobe.not_all_zeros()) {
-            const simd_fvec<S> _spec_tmp_col[3] = {{1.0f}, {1.0f}, {1.0f}};
+            const simd_fvec<S> _spec_tmp_col[3] = {1.0f, 1.0f, 1.0f};
             Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, ray.d, spec.roughness, simd_fvec<S>{0.0f} /* anisotropic */,
-                                    simd_fvec<S>{1.0f} /* ior */, simd_fvec<S>{0.0f} /* F0 */, _spec_tmp_col, rand, V,
-                                    F);
+                                    simd_fvec<S>{1.0f} /* ior */, simd_fvec<S>{0.0f} /* F0 */, _spec_tmp_col,
+                                    _spec_tmp_col, rand, V, F);
 
             simd_fvec<S> new_p[3];
             offset_ray(surf.P, surf.plane_N, new_p);
 
             where(sample_trans_spec_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
             where(sample_trans_spec_lobe, new_ray.depth) |=
-                mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
+                mask_ray_depth(ray.depth) +
+                pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
             UNROLLED_FOR(i, 3, { where(sample_trans_spec_lobe, new_ray.o[i]) = new_p[i]; })
         }
@@ -7025,7 +7034,8 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
 
             where(sample_trans_refr_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_REFR);
             where(sample_trans_refr_lobe, new_ray.depth) |=
-                mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0});
+                mask_ray_depth(ray.depth) +
+                pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0});
 
             UNROLLED_FOR(i, 4, { where(sample_trans_refr_lobe, F[i]) = temp_F[i]; })
             UNROLLED_FOR(i, 3, {

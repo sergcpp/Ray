@@ -2870,13 +2870,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_
                                                          const simd_fvec4 &sampled_normal_ts,
                                                          const simd_fvec4 &reflected_dir_ts, const simd_fvec2 alpha,
                                                          const float spec_ior, const float spec_F0,
-                                                         const simd_fvec4 &spec_col) {
+                                                         const simd_fvec4 &spec_col, const simd_fvec4 &spec_col_90) {
     const float D = D_GGX(sampled_normal_ts, alpha);
     const float G = G1(view_dir_ts, alpha) * G1(reflected_dir_ts, alpha);
 
     const float FH =
         (fresnel_dielectric_cos(dot(view_dir_ts, sampled_normal_ts), spec_ior) - spec_F0) / (1.0f - spec_F0);
-    simd_fvec4 F = mix(spec_col, simd_fvec4(1.0f), FH);
+    simd_fvec4 F = mix(spec_col, spec_col_90, FH);
 
     const float denom = 4.0f * fabsf(view_dir_ts.get<2>() * reflected_dir_ts.get<2>());
     F *= (denom != 0.0f) ? (D * G / denom) : 0.0f;
@@ -2892,7 +2892,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
                                                        const simd_fvec4 &I, const float roughness,
                                                        const float anisotropic, const float spec_ior,
                                                        const float spec_F0, const simd_fvec4 &spec_col,
-                                                       const simd_fvec2 rand, simd_fvec4 &out_V) {
+                                                       const simd_fvec4 &spec_col_90, const simd_fvec2 rand,
+                                                       simd_fvec4 &out_V) {
     const float roughness2 = sqr(roughness);
     const float aspect = sqrtf(1.0f - 0.9f * anisotropic);
 
@@ -2901,7 +2902,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
     if (alpha.get<0>() * alpha.get<1>() < 1e-7f) {
         const simd_fvec4 V = reflect(I, N, dot(N, I));
         const float FH = (fresnel_dielectric_cos(dot(V, N), spec_ior) - spec_F0) / (1.0f - spec_F0);
-        simd_fvec4 F = mix(spec_col, simd_fvec4(1.0f), FH);
+        simd_fvec4 F = mix(spec_col, spec_col_90, FH);
         out_V = V;
         return simd_fvec4{F.get<0>() * 1e6f, F.get<1>() * 1e6f, F.get<2>() * 1e6f, 1e6f};
     }
@@ -2914,7 +2915,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
 
     out_V = world_from_tangent(T, B, N, reflected_dir_ts);
     return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha, spec_ior, spec_F0,
-                                     spec_col);
+                                     spec_col, spec_col_90);
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts,
@@ -4837,7 +4838,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, con
     const simd_fvec4 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
 
     const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, sqr(roughness),
-                                                          spec_ior, spec_F0, base_color);
+                                                          spec_ior, spec_F0, base_color, base_color);
     const float bsdf_pdf = spec_col[3];
 
     float mis_weight = 1.0f;
@@ -4865,8 +4866,8 @@ void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, c
     const simd_fvec4 I = make_fvec3(ray.d);
 
     simd_fvec4 V;
-    const simd_fvec4 F =
-        Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0f, spec_ior, spec_F0, base_color, rand, V);
+    const simd_fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0f, spec_ior, spec_F0,
+                                                 base_color, base_color, rand, V);
 
     new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
     new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
@@ -4976,7 +4977,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
 
     if (lobe_weights.specular > 0.0f && alpha.get<0>() * alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
         const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha,
-                                                              spec.ior, spec.F0, spec.tmp_col);
+                                                              spec.ior, spec.F0, spec.tmp_col, simd_fvec4{1.0f});
         bsdf_pdf += lobe_weights.specular * spec_col.get<3>();
 
         lcol += ls.col * spec_col / ls.pdf;
@@ -4996,7 +4997,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
         if (trans.fresnel != 0.0f && sqr(roughness2) >= 1e-7f && N_dot_L > 0.0f) {
             const simd_fvec4 spec_col =
                 Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, 1.0f /* ior */,
-                                          0.0f /* F0 */, simd_fvec4{1.0f});
+                                          0.0f /* F0 */, simd_fvec4{1.0f}, simd_fvec4{1.0f});
             bsdf_pdf += lobe_weights.refraction * trans.fresnel * spec_col.get<3>();
 
             lcol += ls.col * spec_col * (trans.fresnel / ls.pdf);
@@ -5072,7 +5073,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 V;
             simd_fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, spec.anisotropy, spec.ior,
-                                                   spec.F0, spec.tmp_col, rand, V);
+                                                   spec.F0, spec.tmp_col, simd_fvec4{1.0f}, rand, V);
             const float pdf = F.get<3>() * lobe_weights.specular;
 
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
@@ -5118,7 +5119,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             simd_fvec4 F, V;
             if (mix_rand < trans.fresnel) {
                 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, 0.0f /* anisotropic */,
-                                            1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f}, rand, V);
+                                            1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f}, simd_fvec4{1.0f}, rand, V);
 
                 new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
                 new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
