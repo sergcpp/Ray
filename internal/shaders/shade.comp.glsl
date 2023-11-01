@@ -1738,10 +1738,10 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                            const vec2 rand, float mix_rand, const float mix_weight, inout ray_data_t new_ray) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
-    const int diff_depth = ray.depth & 0x000000ff;
-    const int spec_depth = (ray.depth >> 8) & 0x000000ff;
-    const int refr_depth = (ray.depth >> 16) & 0x000000ff;
-    const int transp_depth = (ray.depth >> 24) & 0x000000ff;
+    const int diff_depth = int(ray.depth & 0x000000ff);
+    const int spec_depth = int(ray.depth >> 8) & 0x000000ff;
+    const int refr_depth = int(ray.depth >> 16) & 0x000000ff;
+    const int transp_depth = int(ray.depth >> 24) & 0x000000ff;
     // NOTE: transparency depth is not accounted here
     const int total_depth = diff_depth + spec_depth + refr_depth;
 
@@ -1864,10 +1864,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
-    const int diff_depth = ray.depth & 0x000000ff;
-    const int spec_depth = (ray.depth >> 8) & 0x000000ff;
-    const int refr_depth = (ray.depth >> 16) & 0x000000ff;
-    const int transp_depth = (ray.depth >> 24) & 0x000000ff;
+    const int diff_depth = int(ray.depth & 0x000000ff);
+    const int spec_depth = int(ray.depth >> 8) & 0x000000ff;
+    const int refr_depth = int(ray.depth >> 16) & 0x000000ff;
+    const int transp_depth = int(ray.depth >> 24) & 0x000000ff;
     // NOTE: transparency depth is not accounted here
     const int total_depth = diff_depth + spec_depth + refr_depth;
 

@@ -81,7 +81,7 @@ template <int S> struct ray_data_t {
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
     simd_uvec<S> xy;
     // four 8-bit ray depth counters
-    simd_ivec<S> depth;
+    simd_uvec<S> depth;
 };
 
 template <int S> struct shadow_ray_t {
@@ -90,7 +90,7 @@ template <int S> struct shadow_ray_t {
     // origins of rays in packet
     simd_fvec<S> o[3];
     // four 8-bit ray depth counters
-    simd_ivec<S> depth;
+    simd_uvec<S> depth;
     // directions of rays in packet
     simd_fvec<S> d[3], dist;
     // throughput color of ray
@@ -131,11 +131,11 @@ template <int S> struct light_sample_t {
     force_inline light_sample_t() = default;
 };
 
-template <int S> force_inline simd_ivec<S> total_depth(const simd_ivec<S> &r_depth) {
-    const simd_ivec<S> diff_depth = r_depth & 0x000000ff;
-    const simd_ivec<S> spec_depth = (r_depth >> 8) & 0x000000ff;
-    const simd_ivec<S> refr_depth = (r_depth >> 16) & 0x000000ff;
-    const simd_ivec<S> transp_depth = (r_depth >> 24) & 0x000000ff;
+template <int S> force_inline simd_ivec<S> total_depth(const simd_uvec<S> &r_depth) {
+    const simd_ivec<S> diff_depth = simd_ivec<S>(r_depth & 0x000000ff);
+    const simd_ivec<S> spec_depth = simd_ivec<S>(r_depth >> 8) & 0x000000ff;
+    const simd_ivec<S> refr_depth = simd_ivec<S>(r_depth >> 16) & 0x000000ff;
+    const simd_ivec<S> transp_depth = simd_ivec<S>(r_depth >> 24) & 0x000000ff;
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
@@ -2888,7 +2888,7 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
             out_r.pdf = {1e6f};
             out_r.xy = simd_uvec<S>((ixx << 16) | iyy);
-            out_r.depth = 0;
+            out_r.depth = 0u;
 
             hit_data_t<S> &out_i = out_inters[i++];
             out_i = {};
@@ -3024,7 +3024,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                     UNROLLED_FOR(i, 3, { where(fmask, out_ray.o[i]) = p[i] + n[i]; })
                     UNROLLED_FOR(i, 3, { where(fmask, out_ray.d[i]) = -n[i]; })
                     // where(fmask, out_ray.ior) = 1.0f;
-                    where(fmask, out_ray.depth) = 0;
+                    where(fmask, out_ray.depth) = 0u;
 
                     out_inter.mask = (out_inter.mask | imask);
                     where(imask, out_inter.prim_index) = tri;
@@ -5147,7 +5147,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                     }
 
 #if USE_PATH_TERMINATION
-                    const simd_ivec<S> can_terminate_path = (r.depth >> 24) > min_transp_depth;
+                    const simd_ivec<S> can_terminate_path = simd_ivec<S>(r.depth >> 24) > min_transp_depth;
 #else
                     const simd_ivec<S> can_terminate_path = 0;
 #endif
@@ -5156,8 +5156,8 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                     simd_fvec<S> q = 0.0f;
                     where(can_terminate_path, q) = max(0.05f, 1.0f - lum);
 
-                    const simd_ivec<S> _terminate =
-                        simd_cast(p < q) | simd_cast(lum == 0.0f) | ((r.depth >> 24) + 1 >= max_transp_depth);
+                    const simd_ivec<S> _terminate = simd_cast(p < q) | simd_cast(lum == 0.0f) |
+                                                    (simd_ivec<S>(r.depth >> 24) + 1 >= max_transp_depth);
 
                     UNROLLED_FOR(i, 3, {
                         where(ray_queue[index] & _terminate, r.c[i]) = 0.0f;
@@ -5245,7 +5245,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
     simd_fvec<S> ro[3] = {r.o[0], r.o[1], r.o[2]};
     UNROLLED_FOR(i, 3, { rc[i] = r.c[i]; })
     simd_fvec<S> dist = select(r.dist >= 0.0f, r.dist, simd_fvec<S>{MAX_DIST});
-    simd_ivec<S> depth = (r.depth >> 24);
+    simd_ivec<S> depth = simd_ivec<S>(r.depth >> 24);
 
     const simd_uvec<S> px_hash = hash(r.xy);
     const simd_uvec<S> rand_hash = hash_combine(px_hash, rand_seed);
@@ -6375,7 +6375,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
                                 const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]) {
     const uint32_t env_map = env.env_map;
     const float env_map_rotation = env.env_map_rotation;
-    const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
+    const simd_ivec<S> env_map_mask = simd_ivec<S>(ray.depth & 0x00ffffff) != 0;
 
     if ((mask & env_map_mask).not_all_zeros()) {
         UNROLLED_FOR(i, 3, { env_col[i] = 1.0f; })
@@ -6856,9 +6856,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
                                     const simd_fvec<S> &metallic, const float transmission, const simd_fvec<S> rand[2],
                                     simd_fvec<S> mix_rand, const simd_fvec<S> &mix_weight, simd_ivec<S> &secondary_mask,
                                     ray_data_t<S> &new_ray) {
-    const simd_ivec<S> diff_depth = ray.depth & 0x000000ff;
-    const simd_ivec<S> spec_depth = (ray.depth >> 8) & 0x000000ff;
-    const simd_ivec<S> refr_depth = (ray.depth >> 16) & 0x000000ff;
+    const simd_ivec<S> diff_depth = simd_ivec<S>(ray.depth) & 0x000000ff;
+    const simd_ivec<S> spec_depth = simd_ivec<S>(ray.depth >> 8) & 0x000000ff;
+    const simd_ivec<S> refr_depth = simd_ivec<S>(ray.depth >> 16) & 0x000000ff;
     // NOTE: transparency depth is not accounted here
     const simd_ivec<S> total_depth = diff_depth + spec_depth + refr_depth;
 
@@ -7018,10 +7018,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     const simd_uvec<S> px_hash = hash(ray.xy);
     const simd_uvec<S> rand_hash = hash_combine(px_hash, rand_seed);
 
-    const simd_ivec<S> diff_depth = ray.depth & 0x000000ff;
-    const simd_ivec<S> spec_depth = (ray.depth >> 8) & 0x000000ff;
-    const simd_ivec<S> refr_depth = (ray.depth >> 16) & 0x000000ff;
-    const simd_ivec<S> transp_depth = (ray.depth >> 24) & 0x000000ff;
+    const simd_ivec<S> diff_depth = simd_ivec<S>(ray.depth) & 0x000000ff;
+    const simd_ivec<S> spec_depth = simd_ivec<S>(ray.depth >> 8) & 0x000000ff;
+    const simd_ivec<S> refr_depth = simd_ivec<S>(ray.depth >> 16) & 0x000000ff;
+    const simd_ivec<S> transp_depth = simd_ivec<S>(ray.depth >> 24) & 0x000000ff;
     // NOTE: transparency depth is not accounted here
     const simd_ivec<S> total_depth = diff_depth + spec_depth + refr_depth;
 
@@ -7484,7 +7484,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
     new_ray.xy = ray.xy;
-    new_ray.depth = 0;
+    new_ray.depth = 0u;
 
     shadow_ray_t<S> &sh_r = out_shadow_rays[*out_shadow_rays_count];
     sh_r = {};
@@ -7598,7 +7598,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
 
                     const simd_fvec<S> cos_theta = abs(dot3(I, light_forward));
                     const simd_ivec<S> emissive_mask =
-                        ray_queue[index] & simd_cast(cos_theta > 0.0f) & ((ray.depth & 0x00ffffff) != 0);
+                        ray_queue[index] & simd_cast(cos_theta > 0.0f) & (simd_ivec<S>(ray.depth & 0x00ffffff) != 0);
                     if (emissive_mask.not_all_zeros()) {
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
                         simd_fvec<S> light_pdf =

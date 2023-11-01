@@ -55,7 +55,7 @@ struct ray_data_t {
     // 16-bit pixel coordinates of ray ((x << 16) | y)
     uint32_t xy;
     // four 8-bit ray depth counters
-    int depth;
+    uint32_t depth;
 };
 static_assert(sizeof(ray_data_t) == 72, "!");
 

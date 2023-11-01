@@ -222,18 +222,18 @@ vec3 slerp(const vec3 start, const vec3 end, const float percent) {
 }
 
 int total_depth(const ray_data_t r) {
-    const int diff_depth = r.depth & 0x000000ff;
-    const int spec_depth = (r.depth >> 8) & 0x000000ff;
-    const int refr_depth = (r.depth >> 16) & 0x000000ff;
-    const int transp_depth = (r.depth >> 24) & 0x000000ff;
+    const int diff_depth = int(r.depth & 0x000000ff);
+    const int spec_depth = int(r.depth >> 8) & 0x000000ff;
+    const int refr_depth = int(r.depth >> 16) & 0x000000ff;
+    const int transp_depth = int(r.depth >> 24) & 0x000000ff;
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
 int total_depth(const shadow_ray_t r) {
-    const int diff_depth = r.depth & 0x000000ff;
-    const int spec_depth = (r.depth >> 8) & 0x000000ff;
-    const int refr_depth = (r.depth >> 16) & 0x000000ff;
-    const int transp_depth = (r.depth >> 24) & 0x000000ff;
+    const int diff_depth = int(r.depth & 0x000000ff);
+    const int spec_depth = int(r.depth >> 8) & 0x000000ff;
+    const int refr_depth = int(r.depth >> 16) & 0x000000ff;
+    const int transp_depth = int(r.depth >> 24) & 0x000000ff;
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 

@@ -107,14 +107,14 @@ struct ray_data_t {
     float ior[4];
 	float cone_width, cone_spread;
 	UINT_TYPE xy;
-	int depth;
+	UINT_TYPE depth;
 };
 
 struct shadow_ray_t {
     // origin
     float o[3];
     // four 8-bit ray depth counters
-    int depth;
+    UINT_TYPE depth;
     // direction and distance
     float d[3], dist;
     // throughput color of ray
