@@ -238,6 +238,7 @@ int get_transp_depth(const uint depth) { return int(depth >> 21) & 0x7f; }
 int get_total_depth(const uint depth) {
     return get_diff_depth(depth) + get_spec_depth(depth) + get_refr_depth(depth) + get_transp_depth(depth);
 }
+int get_ray_type(const uint depth) { return int(depth >> 28) & 0xf; }
 
 bool is_indirect(const ray_data_t r) {
     // not only transparency ray

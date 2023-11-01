@@ -19,12 +19,14 @@ template int SortRays_GPU<RPSize>(Span<ray_data_t<RPSize>> rays, const float roo
                                   ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
 template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3],
+                                                         const simd_uvec<RPSize> &ray_flags,
                                                          const simd_ivec<RPSize> &ray_mask, const bvh_node_t *nodes,
                                                          uint32_t node_index, const mesh_instance_t *mesh_instances,
                                                          const uint32_t *mi_indices, const mesh_t *meshes,
                                                          const transform_t *transforms, const tri_accel_t *tris,
                                                          const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
 template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3],
+                                                         const simd_uvec<RPSize> &ray_flags,
                                                          const simd_ivec<RPSize> &ray_mask, const wbvh_node_t *nodes,
                                                          uint32_t node_index, const mesh_instance_t *mesh_instances,
                                                          const uint32_t *mi_indices, const mesh_t *meshes,

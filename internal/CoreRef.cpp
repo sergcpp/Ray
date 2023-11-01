@@ -2151,11 +2151,12 @@ bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const 
     return inter.mask != 0;
 }
 
-bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
-                                                  uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                                  const uint32_t *mi_indices, const mesh_t *meshes,
-                                                  const transform_t *transforms, const tri_accel_t *tris,
-                                                  const uint32_t *tri_indices, hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
+                                                  const bvh_node_t *nodes, uint32_t root_index,
+                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                                  const mesh_t *meshes, const transform_t *transforms,
+                                                  const tri_accel_t *tris, const uint32_t *tri_indices,
+                                                  hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -2180,12 +2181,12 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
             const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; ++i) {
                 const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                const mesh_t &m = meshes[mi.mesh_index];
-                const transform_t &tr = transforms[mi.tr_index];
-
-                if (!bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
+                if ((mi.ray_visibility & ray_flags) == 0 || !bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
                     continue;
                 }
+
+                const mesh_t &m = meshes[mi.mesh_index];
+                const transform_t &tr = transforms[mi.tr_index];
 
                 float _ro[3], _rd[3];
                 TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
@@ -2208,11 +2209,12 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
     return res;
 }
 
-bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
-                                                  uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                                  const uint32_t *mi_indices, const mesh_t *meshes,
-                                                  const transform_t *transforms, const mtri_accel_t *mtris,
-                                                  const uint32_t *tri_indices, hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
+                                                  const wbvh_node_t *nodes, uint32_t root_index,
+                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                                  const mesh_t *meshes, const transform_t *transforms,
+                                                  const mtri_accel_t *mtris, const uint32_t *tri_indices,
+                                                  hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -2292,12 +2294,12 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
             const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur.index].child[1]; ++i) {
                 const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                const mesh_t &m = meshes[mi.mesh_index];
-                const transform_t &tr = transforms[mi.tr_index];
-
-                if (!bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
+                if ((mi.ray_visibility & ray_flags) == 0 || !bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
                     continue;
                 }
+
+                const mesh_t &m = meshes[mi.mesh_index];
+                const transform_t &tr = transforms[mi.tr_index];
 
                 float _ro[3], _rd[3];
                 TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
@@ -3371,6 +3373,8 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
         const simd_fvec4 rd = make_fvec3(r.d);
         simd_fvec4 ro = make_fvec3(r.o);
 
+        const uint32_t ray_flags = (1u << get_ray_type(r.depth));
+
         const uint32_t px_hash = hash(r.xy);
         const uint32_t rand_hash = hash_combine(px_hash, rand_seed);
 
@@ -3380,12 +3384,12 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 
             bool hit_found = false;
             if (sc.wnodes) {
-                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.wnodes, root_index,
-                                                               sc.mesh_instances, sc.mi_indices, sc.meshes,
+                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.wnodes,
+                                                               root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
                                                                sc.transforms, sc.mtris, sc.tri_indices, inter);
             } else {
-                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
-                                                               sc.mesh_instances, sc.mi_indices, sc.meshes,
+                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.nodes,
+                                                               root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
                                                                sc.transforms, sc.tris, sc.tri_indices, inter);
             }
 

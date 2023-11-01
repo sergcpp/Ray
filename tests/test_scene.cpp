@@ -385,6 +385,30 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         disc_light_mat = scene.AddMaterial(disc_light_mat_desc);
     }
 
+    Ray::MaterialHandle glossy_red, glossy_green;
+    {
+        Ray::shading_node_desc_t glossy_mat_desc;
+        glossy_mat_desc.type = Ray::eShadingNode::Glossy;
+        glossy_mat_desc.base_color[0] = 1.0f;
+        glossy_mat_desc.base_color[1] = glossy_mat_desc.base_color[2] = 0.0f;
+
+        glossy_red = scene.AddMaterial(glossy_mat_desc);
+
+        glossy_mat_desc.base_color[1] = 1.0f;
+        glossy_mat_desc.base_color[0] = glossy_mat_desc.base_color[2] = 0.0f;
+
+        glossy_green = scene.AddMaterial(glossy_mat_desc);
+    }
+
+    Ray::MaterialHandle refr_mat_flags;
+    {
+        Ray::principled_mat_desc_t refr_mat_flags_desc;
+        refr_mat_flags_desc.roughness = 0.0f;
+        refr_mat_flags_desc.transmission = 1.0f;
+        refr_mat_flags_desc.ior = 2.3f;
+        refr_mat_flags = scene.AddMaterial(refr_mat_flags_desc);
+    }
+
     Ray::MaterialHandle glassball_mat0;
     if (test_scene == eTestScene::Standard_GlassBall0) {
         Ray::shading_node_desc_t glassball_mat0_desc;
@@ -634,6 +658,31 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         glassball_mesh = scene.AddMesh(glassball_mesh_desc);
     }
 
+    Ray::MeshHandle box_mesh, box2_mesh, box3_mesh;
+    {
+        std::vector<float> box_attrs;
+        std::vector<uint32_t> box_indices, box_groups;
+        std::tie(box_attrs, box_indices, box_groups) = LoadBIN("test_data/meshes/mat_test/box.bin");
+
+        Ray::mesh_desc_t box_mesh_desc;
+        box_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        box_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
+        box_mesh_desc.vtx_attrs = box_attrs;
+        box_mesh_desc.vtx_indices = box_indices;
+
+        const Ray::mat_group_desc_t groups[] = {{glossy_red, glossy_red, box_groups[0], box_groups[1]}};
+        box_mesh_desc.groups = groups;
+        box_mesh = scene.AddMesh(box_mesh_desc);
+
+        const Ray::mat_group_desc_t groups2[] = {{refr_mat_flags, refr_mat_flags, box_groups[0], box_groups[1]}};
+        box_mesh_desc.groups = groups2;
+        box2_mesh = scene.AddMesh(box_mesh_desc);
+
+        const Ray::mat_group_desc_t groups3[] = {{glossy_green, glossy_green, box_groups[0], box_groups[1]}};
+        box_mesh_desc.groups = groups3;
+        box3_mesh = scene.AddMesh(box_mesh_desc);
+    }
+
     static const float identity[16] = {1.0f, 0.0f, 0.0f, 0.0f, // NOLINT
                                        0.0f, 1.0f, 0.0f, 0.0f, // NOLINT
                                        0.0f, 0.0f, 1.0f, 0.0f, // NOLINT
@@ -657,6 +706,49 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
                                                   0.0f, 0.05f, 0.0f, 1.0f};
 
         scene.AddMeshInstance(glassball_mesh, glassball_xform);
+    } else if (test_scene == eTestScene::Ray_Flags) {
+        float box_xform[16] = {0.01f,  0.0f,  0.0f,  0.0f, // NOLINT
+                               0.0f,   0.05f, 0.0f,  0.0f, // NOLINT
+                               0.0f,   0.0f,  0.01f, 0.0f, // NOLINT
+                               -0.05f, 0.05f, 0.0f,  1.0f};
+        Ray::mesh_instance_desc_t mi;
+        mi.xform = box_xform;
+        mi.mesh = box_mesh;
+
+        mi.shadow_visibility = false;
+        scene.AddMeshInstance(mi);
+        mi.shadow_visibility = true;
+
+        box_xform[12] = 0.0f;
+        box_xform[13] = 0.051f;
+        mi.specular_visibility = false;
+        mi.mesh = box2_mesh;
+        scene.AddMeshInstance(mi);
+        mi.mesh = box_mesh;
+        mi.specular_visibility = true;
+
+        box_xform[12] = 0.05f;
+        box_xform[13] = 0.05f;
+        mi.diffuse_visibility = false;
+        scene.AddMeshInstance(mi);
+        mi.diffuse_visibility = true;
+
+        // second row
+        mi.mesh = box3_mesh;
+        
+        box_xform[12] = -0.05f;
+        box_xform[14] = -0.05f;
+        mi.camera_visibility = false;
+        scene.AddMeshInstance(mi);
+        mi.camera_visibility = true;
+
+        box_xform[12] = 0.0f;
+        mi.refraction_visibility = false;
+        scene.AddMeshInstance(mi);
+        mi.refraction_visibility = true;
+
+        box_xform[12] = 0.05f;
+        scene.AddMeshInstance(mi);
     } else {
         scene.AddMeshInstance(model_mesh, model_xform);
         scene.AddMeshInstance(base_mesh, identity);
@@ -676,13 +768,15 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
     } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_SphereLight ||
                test_scene == eTestScene::Standard_SpotLight || test_scene == eTestScene::Standard_DOF0 ||
                test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
+               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
+               test_scene == eTestScene::Ray_Flags) {
         //
         // Use explicit lights sources
         //
         if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_DOF0 ||
             test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-            test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
+            test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
+            test_scene == eTestScene::Ray_Flags) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,

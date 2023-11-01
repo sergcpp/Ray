@@ -1927,3 +1927,13 @@ void test_complex_mat7_principled(const char *arch_list[], const char *preferred
     run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, MinPSNR, PixThres,
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall1);
 }
+
+void test_ray_flags(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 48;
+    const double MinPSNR = 23.0;
+    const int PixThres = 10918;
+
+    Ray::principled_mat_desc_t unused;
+    run_material_test(arch_list, preferred_device, "ray_flags", unused, SampleCount, MinPSNR, PixThres,
+                      eDenoiseMethod::None, false, nullptr, eTestScene::Ray_Flags);
+}

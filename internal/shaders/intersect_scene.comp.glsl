@@ -123,8 +123,8 @@ void Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
     }
 }
 
-void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint node_index,
-                                  inout hit_data_t inter) {
+void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, uint ray_flags, vec3 orig_inv_rd, uint node_index,
+                             inout hit_data_t inter) {
     vec3 orig_neg_inv_do = -orig_inv_rd * orig_ro;
 
     uint stack_size = 0;
@@ -147,12 +147,13 @@ void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
             uint prim_count = floatBitsToUint(n.bbox_max.w);
             for (uint i = prim_index; i < prim_index + prim_count; ++i) {
                 mesh_instance_t mi = g_mesh_instances[g_mi_indices[i]];
-                mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
-                transform_t tr = g_transforms[floatBitsToUint(mi.bbox_min.w)];
-
-                if (!_bbox_test_fma(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
+                if ((mi.block_ndx.w & ray_flags) == 0 ||
+                    !_bbox_test_fma(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
                     continue;
                 }
+
+                mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
+                transform_t tr = g_transforms[floatBitsToUint(mi.bbox_min.w)];
 
                 vec3 ro = (tr.inv_xform * vec4(orig_ro, 1.0)).xyz;
                 vec3 rd = (tr.inv_xform * vec4(orig_rd, 0.0)).xyz;
@@ -202,6 +203,8 @@ void main() {
         inter.t = MAX_DIST;
     }
 
+    const uint ray_flags = (1u << get_ray_type(g_rays[index].depth));
+
     const uint px_hash = hash(g_rays[index].xy);
     const uint rand_hash = hash_combine(px_hash, g_params.rand_seed);
 
@@ -209,20 +212,18 @@ void main() {
     while (true) {
         const float t_val = inter.t;
 #if !HWRT
-        Traverse_TLAS_WithStack(ro, rd, inv_d, g_params.node_index, inter);
+        Traverse_TLAS_WithStack(ro, rd, ray_flags, inv_d, g_params.node_index, inter);
         if (inter.prim_index < 0) {
             inter.prim_index = -int(g_tri_indices[-inter.prim_index - 1]) - 1;
         } else {
             inter.prim_index = int(g_tri_indices[inter.prim_index]);
         }
 #else
-        const uint ray_flags = 0;//gl_RayFlagsCullBackFacingTrianglesEXT;
-
         rayQueryEXT rq;
         rayQueryInitializeEXT(rq,               // rayQuery
                               g_tlas,           // topLevel
-                              ray_flags,        // rayFlags
-                              0xff,             // cullMask
+                              0,                // rayFlags
+                              ray_flags,        // cullMask
                               ro,               // origin
                               0.0,              // tMin
                               rd,               // direction

@@ -163,6 +163,9 @@ template <int S> force_inline simd_ivec<S> get_transp_depth(const simd_uvec<S> &
 template <int S> force_inline simd_ivec<S> get_total_depth(const simd_uvec<S> &depth) {
     return get_diff_depth(depth) + get_spec_depth(depth) + get_refr_depth(depth) + get_transp_depth(depth);
 }
+template <int S> force_inline simd_ivec<S> get_ray_type(const simd_uvec<S> &depth) {
+    return simd_ivec<S>(depth >> 28) & 0xf;
+}
 
 template <int S> force_inline simd_ivec<S> is_indirect(const ray_data_t<S> &r) {
     // not only transparency ray
@@ -222,13 +225,15 @@ bool IntersectTris_AnyHit(const float o[3], const float d[3], const mtri_accel_t
 // Traverse acceleration structure
 template <int S>
 bool Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
-                                        const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                        const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
+                                        const bvh_node_t *nodes, uint32_t node_index,
                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                         const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
                                         const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
 bool Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
-                                        const simd_ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
+                                        const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
+                                        const wbvh_node_t *nodes, uint32_t node_index,
                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                         const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris,
                                         const uint32_t *tri_indices, hit_data_t<S> &inter);
@@ -3453,11 +3458,12 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], const mtr
 
 template <int S>
 bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
-                                                 const simd_ivec<S> &ray_mask, const bvh_node_t *nodes,
-                                                 uint32_t node_index, const mesh_instance_t *mesh_instances,
-                                                 const uint32_t *mi_indices, const mesh_t *meshes,
-                                                 const transform_t *transforms, const tri_accel_t *tris,
-                                                 const uint32_t *tri_indices, hit_data_t<S> &inter) {
+                                                 const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
+                                                 const bvh_node_t *nodes, uint32_t node_index,
+                                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                                 const mesh_t *meshes, const transform_t *transforms,
+                                                 const tri_accel_t *tris, const uint32_t *tri_indices,
+                                                 hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
@@ -3498,8 +3504,9 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                     const mesh_t &m = meshes[mi.mesh_index];
                     const transform_t &tr = transforms[mi.tr_index];
 
-                    simd_ivec<S> bbox_mask =
-                        bbox_test_fma(inv_d, inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                    simd_ivec<S> bbox_mask = simd_ivec<S>((mi.ray_visibility & ray_flags) != 0) &
+                                             bbox_test_fma(inv_d, inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) &
+                                             st.queue[st.index].mask;
                     if (bbox_mask.all_zeros()) {
                         continue;
                     }
@@ -3527,11 +3534,12 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
 
 template <int S>
 bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
-                                                 const simd_ivec<S> &ray_mask, const wbvh_node_t *nodes,
-                                                 uint32_t node_index, const mesh_instance_t *mesh_instances,
-                                                 const uint32_t *mi_indices, const mesh_t *meshes,
-                                                 const transform_t *transforms, const mtri_accel_t *mtris,
-                                                 const uint32_t *tri_indices, hit_data_t<S> &inter) {
+                                                 const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
+                                                 const wbvh_node_t *nodes, uint32_t node_index,
+                                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                                 const mesh_t *meshes, const transform_t *transforms,
+                                                 const mtri_accel_t *mtris, const uint32_t *tri_indices,
+                                                 hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
@@ -3554,6 +3562,9 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
     inter.t.store_to(inter_t, simd_mem_aligned);
     inter.u.store_to(inter_u, simd_mem_aligned);
     inter.v.store_to(inter_v, simd_mem_aligned);
+
+    alignas(S * 4) unsigned _ray_flags[S];
+    ray_flags.store_to(_ray_flags, simd_mem_aligned);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_masks[ri]) {
@@ -3640,12 +3651,13 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                 const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
                 for (uint32_t j = prim_index; j < prim_index + nodes[cur.index].child[1]; j++) {
                     const mesh_instance_t &mi = mesh_instances[mi_indices[j]];
-                    const mesh_t &m = meshes[mi.mesh_index];
-                    const transform_t &tr = transforms[mi.tr_index];
-
-                    if (!bbox_test(_inv_d, _inv_d_o, inter_t[ri], mi.bbox_min, mi.bbox_max)) {
+                    if ((mi.ray_visibility & _ray_flags[ri]) == 0 ||
+                        !bbox_test(_inv_d, _inv_d_o, inter_t[ri], mi.bbox_min, mi.bbox_max)) {
                         continue;
                     }
+
+                    const mesh_t &m = meshes[mi.mesh_index];
+                    const transform_t &tr = transforms[mi.tr_index];
 
                     float tr_ro[3], tr_rd[3];
                     TransformRay(r_o, r_d, tr.inv_xform, tr_ro, tr_rd);
@@ -5034,6 +5046,8 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                              const Cpu::TexStorageBase *const textures[], hit_data_t<S> &inter) {
     simd_fvec<S> ro[3] = {r.o[0], r.o[1], r.o[2]};
 
+    const simd_uvec<S> ray_flags = simd_uvec<S>(1 << get_ray_type(r.depth));
+
     const simd_uvec<S> px_hash = hash(r.xy);
     const simd_uvec<S> rand_hash = hash_combine(px_hash, rand_seed);
 
@@ -5044,13 +5058,13 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
         const simd_fvec<S> t_val = inter.t;
 
         if (sc.wnodes) {
-            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, keep_going, sc.wnodes, root_index, sc.mesh_instances,
-                                                   sc.mi_indices, sc.meshes, sc.transforms, sc.mtris, sc.tri_indices,
-                                                   inter);
+            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.wnodes, root_index,
+                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.mtris,
+                                                   sc.tri_indices, inter);
         } else {
-            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, keep_going, sc.nodes, root_index, sc.mesh_instances,
-                                                   sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices,
-                                                   inter);
+            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.nodes, root_index,
+                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris,
+                                                   sc.tri_indices, inter);
         }
 
         keep_going &= inter.mask;

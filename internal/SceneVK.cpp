@@ -537,7 +537,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         to_khr_xform(transforms_[instance.tr_index].xform, new_instance.transform.matrix);
         new_instance.instanceCustomIndex = meshes_[instance.mesh_index].vert_index / 3;
         // blas.geo_index;
-        new_instance.mask = instance.ray_visibility;
+        new_instance.mask = (instance.ray_visibility & 0xff);
         new_instance.instanceShaderBindingTableRecordOffset = 0;
         new_instance.flags = 0;
         // VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR; //

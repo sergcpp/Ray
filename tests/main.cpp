@@ -19,6 +19,7 @@ void test_sparse_storage();
 void test_tex_storage();
 
 void test_aux_channels(const char *arch_list[], const char *preferred_device);
+void test_ray_flags(const char *arch_list[], const char *preferred_device);
 void test_oren_mat0(const char *arch_list[], const char *preferred_device);
 void test_oren_mat1(const char *arch_list[], const char *preferred_device);
 void test_oren_mat2(const char *arch_list[], const char *preferred_device);
@@ -210,8 +211,6 @@ int main(int argc, char *argv[]) {
     bool detailed_material_tests_needed = full_tests;
     bool tests_success_final = g_tests_success;
 
-    full_tests = true;
-
     const char **arch_list = ArchListDefault;
     if (preferred_arch[0]) {
         arch_list = preferred_arch;
@@ -234,6 +233,7 @@ int main(int argc, char *argv[]) {
         std::vector<std::future<void>> futures;
 
         futures.push_back(mt_run_pool.Enqueue(test_aux_channels, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_ray_flags, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat0, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat1, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat2, arch_list, device_name));
