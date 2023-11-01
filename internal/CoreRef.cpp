@@ -1798,7 +1798,8 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
 
             out_r.pdf = 1e6f;
             out_r.xy = (x << 16) | y;
-            out_r.depth = pack_depth(0, 0, 0, 0);
+            out_r.depth = pack_ray_type(RAY_TYPE_CAMERA);
+            out_r.depth |= pack_ray_depth(0, 0, 0, 0);
 
             hit_data_t &out_i = out_inters[i++];
             out_i = {};
@@ -1908,7 +1909,8 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
 
                     out_ray.cone_width = 0;
                     out_ray.cone_spread = 0;
-                    out_ray.depth = pack_depth(0, 0, 0, 0);
+                    out_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
+                    out_ray.depth |= pack_ray_depth(0, 0, 0, 0);
 
                     out_inter.mask = -1;
                     out_inter.prim_index = int(tri);
@@ -3471,7 +3473,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             inter.mask = 0;
             inter.t = t_val - inter.t;
 
-            r.depth += pack_depth(0, 0, 0, 1);
+            r.depth += pack_ray_depth(0, 0, 0, 1);
             rand_dim += RAND_DIM_BOUNCE_COUNT;
         }
 
@@ -4814,7 +4816,8 @@ void Ray::Ref::Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, 
     simd_fvec4 V;
     const simd_fvec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand, V);
 
-    new_ray.depth = ray.depth + pack_depth(1, 0, 0, 0);
+    new_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
+    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(1, 0, 0, 0);
 
     memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
     memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -4865,7 +4868,8 @@ void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, c
     const simd_fvec4 F =
         Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0f, spec_ior, spec_F0, base_color, rand, V);
 
-    new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
+    new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
     memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
     memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -4916,7 +4920,8 @@ void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &sur
     simd_fvec4 V;
     const simd_fvec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, roughness, eta, base_color, rand, V);
 
-    new_ray.depth = ray.depth + pack_depth(0, 0, 1, 0);
+    new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
+    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
 
     UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
     new_ray.pdf = F.get<3>();
@@ -5050,7 +5055,8 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 
             F *= (1.0f - metallic) * (1.0f - transmission);
 
-            new_ray.depth = ray.depth + 0x00000001;
+            new_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
+            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(1, 0, 0, 0);
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -5069,7 +5075,8 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
                                                    spec.F0, spec.tmp_col, rand, V);
             const float pdf = F.get<3>() * lobe_weights.specular;
 
-            new_ray.depth = ray.depth + 0x00000100;
+            new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
             UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
             new_ray.pdf = pdf;
@@ -5087,7 +5094,8 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
                                                            coat.F0, rand, V);
             const float pdf = F.get<3>() * lobe_weights.clearcoat;
 
-            new_ray.depth = ray.depth + 0x00000100;
+            new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
             UNROLLED_FOR(i, 3, { new_ray.c[i] = 0.25f * ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
             new_ray.pdf = pdf;
@@ -5112,13 +5120,15 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
                 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, 0.0f /* anisotropic */,
                                             1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f}, rand, V);
 
-                new_ray.depth = ray.depth + 0x00000100;
+                new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+                new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             } else {
                 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, trans.roughness, trans.eta, diff.base_color,
                                               rand, V);
 
-                new_ray.depth = ray.depth + 0x00010000;
+                new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
+                new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
 
                 if (!trans.backfacing) {

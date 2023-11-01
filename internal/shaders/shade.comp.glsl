@@ -1468,7 +1468,8 @@ void Sample_DiffuseNode(const ray_data_t ray, const surface_t surf, const vec3 b
     vec3 V;
     const vec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand, V);
 
-    new_ray.depth = ray.depth + pack_depth(1, 0, 0, 0);
+    new_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
+    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(1, 0, 0, 0);
 
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1528,7 +1529,8 @@ void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 ba
     vec3 V;
     const vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0, spec_ior, spec_F0, base_color, rand, V);
 
-    new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
+    new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1589,7 +1591,8 @@ void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec
     const vec3 V = _V.xyz;
     const float m = _V[3];
 
-    new_ray.depth = ray.depth + pack_depth(0, 0, 1, 0);
+    new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
+    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
 
     new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
     new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
@@ -1754,7 +1757,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             F.rgb *= (1.0 - metallic) * (1.0 - transmission);
             //F[3] *= lobe_weights.diffuse;
 
-            new_ray.depth = ray.depth + pack_depth(1, 0, 0, 0);
+            new_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
+            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(1, 0, 0, 0);
 
             const vec3 new_o = offset_ray(surf.P, surf.plane_N);
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1775,7 +1779,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                                              spec.ior, spec.F0, spec.tmp_col, rand, V);
             F[3] *= lobe_weights.specular;
 
-            new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
+            new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
             new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
             new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
@@ -1796,7 +1801,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                                                      coat.F0, rand, V);
             F[3] *= lobe_weights.clearcoat;
 
-            new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
+            new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
             new_ray.c[0] = 0.25 * ray.c[0] * F[0] * mix_weight / F[3];
             new_ray.c[1] = 0.25 * ray.c[1] * F[1] * mix_weight / F[3];
@@ -1822,7 +1828,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, 0.0 /* anisotropic */, 1.0 /* ior */,
                                             0.0 /* F0 */, vec3(1.0), rand, V);
 
-                new_ray.depth = ray.depth + pack_depth(0, 1, 0, 0);
+                new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
+                new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
                 const vec3 new_o = offset_ray(surf.P, surf.plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1832,7 +1839,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
                                               rand, _V);
                 V = _V.xyz;
 
-                new_ray.depth = ray.depth + pack_depth(0, 0, 1, 0);
+                new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
+                new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
 
                 const vec3 new_o = offset_ray(surf.P, -surf.plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];

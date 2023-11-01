@@ -54,7 +54,7 @@ struct ray_data_t {
     float cone_width, cone_spread;
     // 16-bit pixel coordinates of ray ((x << 16) | y)
     uint32_t xy;
-    // four 8-bit ray depth counters
+    // four 7-bit ray depth counters
     uint32_t depth;
 };
 static_assert(sizeof(ray_data_t) == 72, "!");
@@ -63,7 +63,7 @@ static_assert(sizeof(ray_data_t) == 72, "!");
 struct shadow_ray_t {
     // origin
     float o[3];
-    // four 8-bit ray depth counters
+    // four 7-bit ray depth counters
     int depth;
     // direction and distance
     float d[3], dist;
@@ -129,31 +129,33 @@ force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
     return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
 }
 
-force_inline uint32_t pack_depth(const int diff_depth, const int spec_depth, const int refr_depth,
-                                 const int transp_depth) {
-    assert(diff_depth < 0xff);
-    assert(spec_depth < 0xff);
-    assert(refr_depth < 0xff);
-    assert(transp_depth < 0xff);
-
+force_inline uint32_t mask_ray_depth(const uint32_t depth) { return depth & 0x0fffffff; }
+force_inline uint32_t pack_ray_type(const int ray_type) {
+    assert(ray_type < 0xf);
+    return uint32_t(ray_type << 28);
+}
+force_inline uint32_t pack_ray_depth(const int diff_depth, const int spec_depth, const int refr_depth,
+                                     const int transp_depth) {
+    assert(diff_depth < 0x7f && spec_depth < 0x7f && refr_depth < 0x7f && transp_depth < 0x7f);
     uint32_t ret = 0;
     ret |= (diff_depth << 0);
-    ret |= (spec_depth << 8);
-    ret |= (refr_depth << 16);
-    ret |= (transp_depth << 24);
+    ret |= (spec_depth << 7);
+    ret |= (refr_depth << 14);
+    ret |= (transp_depth << 21);
     return ret;
 }
-force_inline int get_diff_depth(const uint32_t depth) { return int(depth & 0x000000ff); }
-force_inline int get_spec_depth(const uint32_t depth) { return int(depth >> 8) & 0x000000ff; }
-force_inline int get_refr_depth(const uint32_t depth) { return int(depth >> 16) & 0x000000ff; }
-force_inline int get_transp_depth(const uint32_t depth) { return int(depth >> 24) & 0x000000ff; }
+force_inline int get_diff_depth(const uint32_t depth) { return int(depth & 0x7f); }
+force_inline int get_spec_depth(const uint32_t depth) { return int(depth >> 7) & 0x7f; }
+force_inline int get_refr_depth(const uint32_t depth) { return int(depth >> 14) & 0x7f; }
+force_inline int get_transp_depth(const uint32_t depth) { return int(depth >> 21) & 0x7f; }
 force_inline int get_total_depth(const uint32_t depth) {
     return get_diff_depth(depth) + get_spec_depth(depth) + get_refr_depth(depth) + get_transp_depth(depth);
 }
+force_inline int get_ray_type(const uint32_t depth) { return int(depth >> 28) & 0xf; }
 
 force_inline bool is_indirect(const ray_data_t &r) {
     // not only transparency ray
-    return (r.depth & 0x00ffffff) != 0;
+    return (r.depth & 0x001fffff) != 0;
 }
 
 // Generation of rays

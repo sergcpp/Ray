@@ -17,3 +17,9 @@ const int LIGHT_TYPE_RECT = 3;
 const int LIGHT_TYPE_DISK = 4;
 const int LIGHT_TYPE_TRI = 5;
 const int LIGHT_TYPE_ENV = 6;
+
+const int RAY_TYPE_CAMERA = 0;
+const int RAY_TYPE_DIFFUSE = 1;
+const int RAY_TYPE_SPECULAR = 2;
+const int RAY_TYPE_REFR = 3;
+const int RAY_TYPE_SHADOW = 4;

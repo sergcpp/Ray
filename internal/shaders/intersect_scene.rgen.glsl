@@ -177,7 +177,7 @@ void main() {
         inter.mask = 0;
         inter.t = t_val - inter.t;
 
-        g_rays[index].depth += pack_depth(0, 0, 0, 1);
+        g_rays[index].depth += pack_ray_depth(0, 0, 0, 1);
         rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 

@@ -131,32 +131,34 @@ template <int S> struct light_sample_t {
     force_inline light_sample_t() = default;
 };
 
+template <int S> force_inline simd_uvec<S> mask_ray_depth(const simd_uvec<S> depth) { return depth & 0x0fffffff; }
+force_inline uint32_t pack_ray_type(const int ray_type) {
+    assert(ray_type < 0xf);
+    return uint32_t(ray_type << 28);
+}
 template <int S>
 force_inline simd_uvec<S> pack_depth(const simd_ivec<S> &diff_depth, const simd_ivec<S> &spec_depth,
                                      const simd_ivec<S> &refr_depth, const simd_ivec<S> &transp_depth) {
-    assert((diff_depth >= 0xff).all_zeros());
-    assert((spec_depth >= 0xff).all_zeros());
-    assert((refr_depth >= 0xff).all_zeros());
-    assert((transp_depth >= 0xff).all_zeros());
-
+    assert((diff_depth >= 0x7f).all_zeros() && (spec_depth >= 0x7f).all_zeros() && (refr_depth >= 0x7f).all_zeros() &&
+           (transp_depth >= 0x7f).all_zeros());
     simd_uvec<S> ret = 0u;
     ret |= simd_uvec<S>(diff_depth) << 0;
-    ret |= simd_uvec<S>(spec_depth) << 8;
-    ret |= simd_uvec<S>(refr_depth) << 16;
-    ret |= simd_uvec<S>(transp_depth) << 24;
+    ret |= simd_uvec<S>(spec_depth) << 7;
+    ret |= simd_uvec<S>(refr_depth) << 14;
+    ret |= simd_uvec<S>(transp_depth) << 21;
     return ret;
 }
 template <int S> force_inline simd_ivec<S> get_diff_depth(const simd_uvec<S> &depth) {
-    return simd_ivec<S>(depth & 0x000000ff);
+    return simd_ivec<S>(depth & 0x7f);
 }
 template <int S> force_inline simd_ivec<S> get_spec_depth(const simd_uvec<S> &depth) {
-    return simd_ivec<S>(depth >> 8) & 0x000000ff;
+    return simd_ivec<S>(depth >> 7) & 0x7f;
 }
 template <int S> force_inline simd_ivec<S> get_refr_depth(const simd_uvec<S> &depth) {
-    return simd_ivec<S>(depth >> 16) & 0x000000ff;
+    return simd_ivec<S>(depth >> 14) & 0x7f;
 }
 template <int S> force_inline simd_ivec<S> get_transp_depth(const simd_uvec<S> &depth) {
-    return simd_ivec<S>(depth >> 24) & 0x000000ff;
+    return simd_ivec<S>(depth >> 21) & 0x7f;
 }
 template <int S> force_inline simd_ivec<S> get_total_depth(const simd_uvec<S> &depth) {
     return get_diff_depth(depth) + get_spec_depth(depth) + get_refr_depth(depth) + get_transp_depth(depth);
@@ -164,7 +166,7 @@ template <int S> force_inline simd_ivec<S> get_total_depth(const simd_uvec<S> &d
 
 template <int S> force_inline simd_ivec<S> is_indirect(const ray_data_t<S> &r) {
     // not only transparency ray
-    return simd_ivec<S>((r.depth & 0x00ffffff) != 0);
+    return simd_ivec<S>((r.depth & 0x001fffff) != 0);
 }
 
 // Generating rays
@@ -2916,7 +2918,8 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
             out_r.pdf = {1e6f};
             out_r.xy = simd_uvec<S>((ixx << 16) | iyy);
-            out_r.depth = pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
+            out_r.depth = pack_ray_type(RAY_TYPE_CAMERA);
+            out_r.depth |= pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
             hit_data_t<S> &out_i = out_inters[i++];
             out_i = {};
@@ -3052,7 +3055,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                     UNROLLED_FOR(i, 3, { where(fmask, out_ray.o[i]) = p[i] + n[i]; })
                     UNROLLED_FOR(i, 3, { where(fmask, out_ray.d[i]) = -n[i]; })
                     // where(fmask, out_ray.ior) = 1.0f;
-                    where(fmask, out_ray.depth) =
+                    where(fmask, out_ray.depth) = pack_ray_type(RAY_TYPE_DIFFUSE);
+                    where(fmask, out_ray.depth) |=
                         pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
                     out_inter.mask = (out_inter.mask | imask);
@@ -6615,8 +6619,9 @@ void Ray::NS::Sample_DiffuseNode(const ray_data_t<S> &ray, const simd_ivec<S> &m
     simd_fvec<S> V[3], F[4];
     Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, ray.d, roughness, base_color, rand_u, rand_v, V, F);
 
-    where(mask, new_ray.depth) =
-        ray.depth + pack_depth(simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
+    where(mask, new_ray.depth) = pack_ray_type(RAY_TYPE_DIFFUSE);
+    where(mask, new_ray.depth) |=
+        mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
     simd_fvec<S> P_biased[3];
     offset_ray(surf.P, surf.plane_N, P_biased);
@@ -6674,8 +6679,9 @@ void Ray::NS::Sample_GlossyNode(const ray_data_t<S> &ray, const simd_ivec<S> &ma
     Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, ray.d, roughness, simd_fvec<S>{0.0f}, spec_ior, spec_F0, base_color,
                             rand, V, F);
 
-    where(mask, new_ray.depth) =
-        ray.depth + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
+    where(mask, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
+    where(mask, new_ray.depth) |=
+        mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
     simd_fvec<S> P_biased[3];
     offset_ray(surf.P, surf.plane_N, P_biased);
@@ -6737,8 +6743,9 @@ void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const simd_ivec<S>
     simd_fvec<S> V[4], F[4];
     Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, ray.d, roughness, eta, base_color, rand, V, F);
 
-    where(mask, new_ray.depth) =
-        ray.depth + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0});
+    where(mask, new_ray.depth) = pack_ray_type(RAY_TYPE_REFR);
+    where(mask, new_ray.depth) |=
+        mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0});
 
     simd_fvec<S> P_biased[3];
     const simd_fvec<S> _plane_N[3] = {-surf.plane_N[0], -surf.plane_N[1], -surf.plane_N[2]};
@@ -6906,8 +6913,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         simd_fvec<S> new_p[3];
         offset_ray(surf.P, surf.plane_N, new_p);
 
-        where(sample_diff_lobe, new_ray.depth) =
-            ray.depth + pack_depth(simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
+        where(sample_diff_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_DIFFUSE);
+        where(sample_diff_lobe, new_ray.depth) |=
+            mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
         UNROLLED_FOR(i, 3, {
             where(sample_diff_lobe, new_ray.o[i]) = new_p[i];
@@ -6932,8 +6940,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         simd_fvec<S> new_p[3];
         offset_ray(surf.P, surf.plane_N, new_p);
 
-        where(sample_spec_lobe, new_ray.depth) =
-            ray.depth + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
+        where(sample_spec_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
+        where(sample_spec_lobe, new_ray.depth) |=
+            mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
         UNROLLED_FOR(i, 3, {
             where(sample_spec_lobe, new_ray.o[i]) = new_p[i];
@@ -6960,8 +6969,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         simd_fvec<S> new_p[3];
         offset_ray(surf.P, surf.plane_N, new_p);
 
-        where(sample_coat_lobe, new_ray.depth) =
-            ray.depth + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
+        where(sample_spec_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
+        where(sample_coat_lobe, new_ray.depth) |=
+            mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
         UNROLLED_FOR(i, 3, {
             where(sample_coat_lobe, new_ray.o[i]) = new_p[i];
@@ -6996,8 +7006,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
             simd_fvec<S> new_p[3];
             offset_ray(surf.P, surf.plane_N, new_p);
 
-            where(sample_trans_spec_lobe, new_ray.depth) =
-                ray.depth + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
+            where(sample_trans_spec_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
+            where(sample_trans_spec_lobe, new_ray.depth) |=
+                mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
             UNROLLED_FOR(i, 3, { where(sample_trans_spec_lobe, new_ray.o[i]) = new_p[i]; })
         }
@@ -7012,8 +7023,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
             simd_fvec<S> new_p[3];
             offset_ray(surf.P, _plane_N, new_p);
 
-            where(sample_trans_refr_lobe, new_ray.depth) =
-                ray.depth + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0});
+            where(sample_trans_refr_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_REFR);
+            where(sample_trans_refr_lobe, new_ray.depth) |=
+                mask_ray_depth(ray.depth) + pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{1}, simd_ivec<S>{0});
 
             UNROLLED_FOR(i, 4, { where(sample_trans_refr_lobe, F[i]) = temp_F[i]; })
             UNROLLED_FOR(i, 3, {
@@ -7518,7 +7530,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
     new_ray.xy = ray.xy;
-    new_ray.depth = pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
+    new_ray.depth = simd_uvec<S>{0u};
 
     shadow_ray_t<S> &sh_r = out_shadow_rays[*out_shadow_rays_count];
     sh_r = {};

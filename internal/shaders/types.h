@@ -95,12 +95,6 @@ const int FILTER_BLACKMAN_HARRIS = 2;
 
 const int FILTER_TABLE_SIZE = 1024;
 
-const int RAY_TYPE_CAMERA = 0;
-const int RAY_TYPE_DIFFUSE = 1;
-const int RAY_TYPE_SPECULAR = 2;
-const int RAY_TYPE_REFR = 3;
-const int RAY_TYPE_SHADOW = 4;
-
 struct ray_data_t {
 	float o[3], d[3], pdf;
 	float c[3];

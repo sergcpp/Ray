@@ -178,12 +178,6 @@ const int MATERIAL_INDEX_BITS = 0b0011111111111111;
 const uint32_t MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
 const uint32_t MAT_FLAG_MIX_ADD = (1u << 1u);
 
-const int RAY_TYPE_CAMERA = 0;
-const int RAY_TYPE_DIFFUSE = 1;
-const int RAY_TYPE_SPECULAR = 2;
-const int RAY_TYPE_REFR = 3;
-const int RAY_TYPE_SHADOW = 4;
-
 struct material_t {
     uint32_t textures[MAX_MATERIAL_TEXTURES];
     float base_color[3];
