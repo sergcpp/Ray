@@ -1,6 +1,8 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#if USE_FP16
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#endif
 #if USE_NV_COOP_MATRIX
 #extension GL_KHR_memory_scope_semantics : require
 #extension GL_NV_cooperative_matrix : require
