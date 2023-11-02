@@ -1757,7 +1757,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
         //
         // Diffuse lobe
         //
-        if (diff_depth < g_params.max_diff_depth && total_depth < g_params.max_total_depth) {
+        if (diff_depth < get_diff_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
             vec3 V;
             vec4 F = Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, I, diff.roughness,
                                                    diff.base_color, diff.sheen_color, false, rand, V);
@@ -1780,7 +1780,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
         //
         // Main specular lobe
         //
-        if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
+        if (spec_depth < get_spec_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
             vec3 V;
             vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, spec.anisotropy,
                                              spec.ior, spec.F0, spec.tmp_col, vec3(1.0), rand, V);
@@ -1802,7 +1802,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
         //
         // Clearcoat lobe (secondary specular)
         //
-        if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
+        if (spec_depth < get_spec_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
             vec3 V;
             vec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I, sqr(coat.roughness), coat.ior,
                                                      coat.F0, rand, V);
@@ -1826,8 +1826,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
         //
         mix_rand -= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat;
         mix_rand /= lobe_weights.refraction;
-        [[dont_flatten]] if (((mix_rand >= trans.fresnel && refr_depth < g_params.max_refr_depth) ||
-                                (mix_rand < trans.fresnel && spec_depth < g_params.max_spec_depth)) &&
+        [[dont_flatten]] if (((mix_rand >= trans.fresnel && refr_depth < get_refr_depth(g_params.max_ray_depth)) ||
+                                (mix_rand < trans.fresnel && spec_depth < get_spec_depth(g_params.max_ray_depth))) &&
                                 total_depth < g_params.max_total_depth) {
             vec4 F;
             vec3 V;
@@ -2111,7 +2111,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                                         (total_depth < g_params.max_total_depth), sh_r);
         }
 #endif
-        [[dont_flatten]] if (diff_depth < g_params.max_diff_depth && total_depth < g_params.max_total_depth) {
+        [[dont_flatten]] if (diff_depth < get_diff_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
             Sample_DiffuseNode(ray, surf, base_color, roughness, rand_bsdf_uv, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == GlossyNode) {
@@ -2126,7 +2126,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                                        spec_F0, mix_weight, (total_depth < g_params.max_total_depth), sh_r);
         }
 #endif
-        [[dont_flatten]] if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
+        [[dont_flatten]] if (spec_depth < get_spec_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
             Sample_GlossyNode(ray, surf, base_color, roughness, spec_ior, spec_F0, rand_bsdf_uv, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == RefractiveNode) {
@@ -2138,7 +2138,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                                            (total_depth < g_params.max_total_depth), sh_r);
         }
 #endif
-        [[dont_flatten]] if (refr_depth < g_params.max_refr_depth && total_depth < g_params.max_total_depth) {
+        [[dont_flatten]] if (refr_depth < get_refr_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
             Sample_RefractiveNode(ray, surf, base_color, roughness, is_backfacing, mat.ior, ext_ior, rand_bsdf_uv, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == EmissiveNode) {

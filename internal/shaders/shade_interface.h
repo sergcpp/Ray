@@ -12,11 +12,11 @@ struct Params {
     //
     int iteration;
     int li_count;
-    int max_diff_depth;
-    int max_spec_depth;
+    UINT_TYPE max_ray_depth;
+    int _unused0;
     //
-    int max_refr_depth;
-    int max_transp_depth;
+    int _unused1;
+    int _unused2;
     int max_total_depth;
     int min_total_depth;
     //

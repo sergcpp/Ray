@@ -2020,10 +2020,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
-    uniform_params.max_diff_depth = settings.max_diff_depth;
-    uniform_params.max_spec_depth = settings.max_spec_depth;
-    uniform_params.max_refr_depth = settings.max_refr_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.max_ray_depth = Ref::pack_ray_depth(settings.max_diff_depth, settings.max_spec_depth,
+                                                       settings.max_refr_depth, settings.max_transp_depth);
     uniform_params.max_total_depth = settings.max_total_depth;
     uniform_params.min_total_depth = settings.min_total_depth;
 
@@ -2107,10 +2105,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
-    uniform_params.max_diff_depth = settings.max_diff_depth;
-    uniform_params.max_spec_depth = settings.max_spec_depth;
-    uniform_params.max_refr_depth = settings.max_refr_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.max_ray_depth = Ref::pack_ray_depth(settings.max_diff_depth, settings.max_spec_depth,
+                                                       settings.max_refr_depth, settings.max_transp_depth);
     uniform_params.max_total_depth = settings.max_total_depth;
     uniform_params.min_total_depth = settings.min_total_depth;
 
