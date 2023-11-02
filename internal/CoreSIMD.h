@@ -5553,23 +5553,29 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             map_to_cone(r1, r2, surface_to_center, l.sph.radius, sampled_dir);
             const simd_fvec<S> disk_dist = normalize(sampled_dir);
 
-            const simd_fvec<S> ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
+            if (l.sph.radius > 0.0f) {
+                const simd_fvec<S> ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
 
-            const simd_fvec<S> light_surf_pos[3] = {P[0] + sampled_dir[0] * ls_dist, P[1] + sampled_dir[1] * ls_dist,
-                                                    P[2] + sampled_dir[2] * ls_dist};
-            simd_fvec<S> light_forward[3] = {light_surf_pos[0] - center[0], light_surf_pos[1] - center[1],
-                                             light_surf_pos[2] - center[2]};
-            normalize(light_forward);
+                const simd_fvec<S> light_surf_pos[3] = {
+                    P[0] + sampled_dir[0] * ls_dist, P[1] + sampled_dir[1] * ls_dist, P[2] + sampled_dir[2] * ls_dist};
+                simd_fvec<S> light_forward[3] = {light_surf_pos[0] - center[0], light_surf_pos[1] - center[1],
+                                                 light_surf_pos[2] - center[2]};
+                normalize(light_forward);
 
-            simd_fvec<S> lp_biased[3];
-            offset_ray(light_surf_pos, light_forward, lp_biased);
+                simd_fvec<S> lp_biased[3];
+                offset_ray(light_surf_pos, light_forward, lp_biased);
+
+                UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
+                where(ray_queue[index], ls.pdf) = safe_div_pos(disk_dist * disk_dist, PI * l.sph.radius * l.sph.radius);
+            } else {
+                UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = center[i]; })
+                where(ray_queue[index], ls.pdf) = (disk_dist * disk_dist) / PI;
+            }
 
             UNROLLED_FOR(i, 3, {
-                where(ray_queue[index], ls.lp[i]) = lp_biased[i];
                 where(ray_queue[index], ls.L[i]) = sampled_dir[i];
             })
             where(ray_queue[index], ls.area) = l.sph.area;
-            where(ray_queue[index], ls.pdf) = safe_div_pos(disk_dist * disk_dist, PI * l.sph.radius * l.sph.radius);
 
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;

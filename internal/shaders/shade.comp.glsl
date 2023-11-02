@@ -965,15 +965,21 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         float disk_dist;
         const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, surface_to_center, l.SPH_RADIUS), disk_dist);
 
-        const float ls_dist = sphere_intersection(l.SPH_POS, l.SPH_RADIUS, P, sampled_dir);
+        if (l.SPH_RADIUS > 0.0) {
+            const float ls_dist = sphere_intersection(l.SPH_POS, l.SPH_RADIUS, P, sampled_dir);
 
-        const vec3 light_surf_pos = P + sampled_dir * ls_dist;
-        const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
+            const vec3 light_surf_pos = P + sampled_dir * ls_dist;
+            const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
 
-        ls.lp = offset_ray(light_surf_pos, light_forward);
+            ls.lp = offset_ray(light_surf_pos, light_forward);
+            ls.pdf = (disk_dist * disk_dist) / (PI * l.SPH_RADIUS * l.SPH_RADIUS);
+        } else {
+            ls.lp = l.SPH_POS;
+            ls.pdf = (disk_dist * disk_dist) / PI;
+        }
+
         ls.L = sampled_dir;
         ls.area = l.SPH_AREA;
-        ls.pdf = (disk_dist * disk_dist) / (PI * l.SPH_RADIUS * l.SPH_RADIUS);
 
         if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
             ls.area = 0.0;

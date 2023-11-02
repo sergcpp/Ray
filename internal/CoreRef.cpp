@@ -3657,15 +3657,20 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         float disk_dist;
         const simd_fvec4 sampled_dir = normalize_len(map_to_cone(r1, r2, surface_to_center, l.sph.radius), disk_dist);
 
-        const float ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
+        if (l.sph.radius > 0.0f) {
+            const float ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
 
-        const simd_fvec4 light_surf_pos = P + sampled_dir * ls_dist;
-        const simd_fvec4 light_forward = normalize(light_surf_pos - center);
+            const simd_fvec4 light_surf_pos = P + sampled_dir * ls_dist;
+            const simd_fvec4 light_forward = normalize(light_surf_pos - center);
 
-        ls.lp = offset_ray(light_surf_pos, light_forward);
+            ls.lp = offset_ray(light_surf_pos, light_forward);
+            ls.pdf = (disk_dist * disk_dist) / (PI * l.sph.radius * l.sph.radius);
+        } else {
+            ls.lp = center;
+            ls.pdf = (disk_dist * disk_dist) / PI;
+        }
         ls.L = sampled_dir;
         ls.area = l.sph.area;
-        ls.pdf = (disk_dist * disk_dist) / (PI * l.sph.radius * l.sph.radius);
 
         if (!l.visible) {
             ls.area = 0.0f;
