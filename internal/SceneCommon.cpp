@@ -66,6 +66,7 @@ void Ray::SceneCommon::GetCamera(const CameraHandle i, camera_desc_t &c) const {
 
     c.min_samples = cam.pass_settings.min_samples;
     c.variance_threshold = cam.pass_settings.variance_threshold;
+    c.regularize_alpha = cam.pass_settings.regularize_alpha;
 }
 
 void Ray::SceneCommon::RemoveCamera(const CameraHandle i) {
@@ -133,4 +134,5 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
 
     cam.pass_settings.min_samples = c.min_samples;
     cam.pass_settings.variance_threshold = c.variance_threshold;
+    cam.pass_settings.regularize_alpha = c.regularize_alpha;
 }

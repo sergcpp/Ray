@@ -1523,7 +1523,7 @@ void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferre
 }
 
 void test_complex_mat5_unet_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 20;
+    const int SampleCount = 21;
     const int PixThres = 1147;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1911,7 +1911,7 @@ void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred
 void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 5;
     const double MinPSNR = 21.0;
-    const int PixThres = 8090;
+    const int PixThres = 8097;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR, PixThres,
@@ -1930,10 +1930,10 @@ void test_complex_mat7_principled(const char *arch_list[], const char *preferred
 
 void test_ray_flags(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 48;
-    const double MinPSNR = 23.0;
-    const int PixThres = 10918;
+    const double MinPSNR = 29.3;
+    const int PixThres = 2129;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "ray_flags", unused, SampleCount, MinPSNR, PixThres,
-                      eDenoiseMethod::None, false, nullptr, eTestScene::Ray_Flags);
+                      eDenoiseMethod::UNet, false, nullptr, eTestScene::Ray_Flags);
 }

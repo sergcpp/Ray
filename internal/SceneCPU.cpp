@@ -648,7 +648,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const sphere_light_desc_t &_l) {
 
     l.type = LIGHT_TYPE_SPHERE;
     l.cast_shadow = _l.cast_shadow;
-    l.visible = _l.visible;
+    l.visible = _l.visible && (_l.radius > 0.0f);
     l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));

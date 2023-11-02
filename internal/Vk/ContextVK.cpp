@@ -201,6 +201,14 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     }
     log_->Info("\tName\t\t: %s", device_properties_.deviceName);
 
+    log_->Info("Available Memory Heaps:");
+    for (uint32_t i = 0; i < mem_properties_.memoryHeapCount; ++i) {
+        const VkMemoryHeap &heap = mem_properties_.memoryHeaps[i];
+        const bool is_device_local = (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0;
+        log_->Info("\tHeap %i, size %.2f MB %s", i, double(heap.size) / (1024 * 1024),
+                   is_device_local ? "(device local)" : "");
+    }
+
     log_->Info("===========================================");
 
     VkPhysicalDeviceProperties device_properties = {};
@@ -245,13 +253,6 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 
         subgroup_supported_ = (subgroup_props.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
         subgroup_supported_ &= (subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT) != 0;
-    }
-
-    log_->Info("Memory Heaps:");
-    for (uint32_t i = 0; i < mem_properties_.memoryHeapCount; ++i) {
-        const VkMemoryHeap &heap = mem_properties_.memoryHeaps[i];
-        const bool is_device_local = (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0;
-        log_->Info("\tHeap %i, size %.2f MB %s", i, double(heap.size) / (1024 * 1024), is_device_local ? "(device local)" : "");
     }
 
     default_memory_allocs_ =

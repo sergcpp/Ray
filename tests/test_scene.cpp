@@ -261,6 +261,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         cam_desc.output_base_color = output_base_color;
         cam_desc.output_depth_normals = output_normals;
 
+        cam_desc.regularize_alpha = 0.0f; // disabled
+
         if (test_scene == eTestScene::Standard_DOF0) {
             cam_desc.sensor_height = 0.018f;
             cam_desc.focus_distance = 0.1f;
@@ -280,6 +282,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
             cam_desc.max_spec_depth = 8;
             cam_desc.max_refr_depth = 8;
             cam_desc.max_total_depth = 9;
+        } else if (test_scene == eTestScene::Ray_Flags) {
+            cam_desc.regularize_alpha = 0.1f;
         }
 
         cam_desc.min_total_depth = 4;
@@ -768,15 +772,13 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
     } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_SphereLight ||
                test_scene == eTestScene::Standard_SpotLight || test_scene == eTestScene::Standard_DOF0 ||
                test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
-               test_scene == eTestScene::Ray_Flags) {
+               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
         //
         // Use explicit lights sources
         //
         if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_DOF0 ||
             test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-            test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
-            test_scene == eTestScene::Ray_Flags) {
+            test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
@@ -891,6 +893,22 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         sun_desc.angle = 10.0f;
 
         scene.AddLight(sun_desc);
+    } else if (test_scene == eTestScene::Ray_Flags) {
+        Ray::sphere_light_desc_t new_light;
+
+        new_light.color[0] = 0.0253302939f;
+        new_light.color[1] = 0.0253302939f;
+        new_light.color[2] = 0.0253302939f;
+
+        new_light.position[0] = -0.05f;
+        new_light.position[1] = 0.2f;
+        new_light.position[2] = 0.075f;
+
+        new_light.radius = 0.0f;
+
+        new_light.visible = true;
+
+        scene.AddLight(new_light);
     } else if (test_scene == eTestScene::Standard_NoLight) {
         // nothing
     }

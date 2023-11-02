@@ -96,8 +96,9 @@ struct pass_settings_t {
     float clamp_direct = 0.0f, clamp_indirect = 0.0f;
     int min_samples = 128;
     float variance_threshold = 0.0f;
+    float regularize_alpha = 0.03f;
 };
-static_assert(sizeof(pass_settings_t) == 24, "!");
+static_assert(sizeof(pass_settings_t) == 28, "!");
 
 struct camera_t {
     eCamType type;

@@ -2019,6 +2019,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.iteration = iteration;
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
+    uniform_params.regularize_alpha = settings.regularize_alpha;
 
     uniform_params.max_ray_depth = Ref::pack_ray_depth(settings.max_diff_depth, settings.max_spec_depth,
                                                        settings.max_refr_depth, settings.max_transp_depth);
@@ -2104,6 +2105,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     uniform_params.iteration = iteration;
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
+    uniform_params.regularize_alpha = settings.regularize_alpha;
 
     uniform_params.max_ray_depth = Ref::pack_ray_depth(settings.max_diff_depth, settings.max_spec_depth,
                                                        settings.max_refr_depth, settings.max_transp_depth);

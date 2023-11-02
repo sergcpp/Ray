@@ -153,9 +153,9 @@ force_inline int get_total_depth(const uint32_t depth) {
 }
 force_inline int get_ray_type(const uint32_t depth) { return int(depth >> 28) & 0xf; }
 
-force_inline bool is_indirect(const ray_data_t &r) {
+force_inline bool is_indirect(const uint32_t depth) {
     // not only transparency ray
-    return (r.depth & 0x001fffff) != 0;
+    return (depth & 0x001fffff) != 0;
 }
 
 // Generation of rays
@@ -246,15 +246,14 @@ simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_dir_ts, const simd_f
                                      const simd_fvec4 &reflected_dir_ts, simd_fvec2 alpha, float spec_ior,
                                      float spec_F0, const simd_fvec4 &spec_col, const simd_fvec4 &spec_col_90);
 simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                   float roughness, float anisotropic, float spec_ior, float spec_F0,
-                                   const simd_fvec4 &spec_col, const simd_fvec4 &spec_col_90, simd_fvec2 rand,
-                                   simd_fvec4 &out_V);
+                                   simd_fvec2 alpha, float spec_ior, float spec_F0, const simd_fvec4 &spec_col,
+                                   const simd_fvec4 &spec_col_90, simd_fvec2 rand, simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
-                                       const simd_fvec4 &refr_dir_ts, float roughness2, float eta,
+                                       const simd_fvec4 &refr_dir_ts, simd_fvec2 slpha, float eta,
                                        const simd_fvec4 &refr_col);
 simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                     float roughness, float eta, const simd_fvec4 &refr_col, simd_fvec2 rand,
+                                     simd_fvec2 alpha, float eta, const simd_fvec4 &refr_col, simd_fvec2 rand,
                                      simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
@@ -334,17 +333,18 @@ void Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const simd
                         simd_fvec2 rand, float mix_weight, ray_data_t &new_ray);
 
 simd_fvec4 Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                               const simd_fvec4 &base_color, float roughness2, float spec_ior, float spec_F0,
-                               float mix_weight, bool use_mis, shadow_ray_t &sh_r);
+                               const simd_fvec4 &base_color, float roughness, float regularize_alpha, float spec_ior,
+                               float spec_F0, float mix_weight, bool use_mis, shadow_ray_t &sh_r);
 void Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                       float spec_ior, float spec_F0, simd_fvec2 rand, float mix_weight, ray_data_t &new_ray);
+                       float regularize_alpha, float spec_ior, float spec_F0, simd_fvec2 rand, float mix_weight,
+                       ray_data_t &new_ray);
 
 simd_fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                   const simd_fvec4 &base_color, float roughness2, float eta, float mix_weight,
-                                   bool use_mis, shadow_ray_t &sh_r);
+                                   const simd_fvec4 &base_color, float roughness, float regularize_alpha, float eta,
+                                   float mix_weight, bool use_mis, shadow_ray_t &sh_r);
 void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                           bool is_backfacing, float int_ior, float ext_ior, simd_fvec2 rand, float mix_weight,
-                           ray_data_t &new_ray);
+                           float regularize_alpha, bool is_backfacing, float int_ior, float ext_ior, simd_fvec2 rand,
+                           float mix_weight, ray_data_t &new_ray);
 
 struct diff_params_t {
     simd_fvec4 base_color;
@@ -382,11 +382,13 @@ simd_fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &r
                                    const lobe_weights_t &lobe_weights, const diff_params_t &diff,
                                    const spec_params_t &spec, const clearcoat_params_t &coat,
                                    const transmission_params_t &trans, float metallic, float transmission,
-                                   float N_dot_L, float mix_weight, bool use_mis, shadow_ray_t &sh_r);
+                                   float N_dot_L, float mix_weight, bool use_mis, float regularize_alpha,
+                                   shadow_ray_t &sh_r);
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
                            const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
                            const clearcoat_params_t &coat, const transmission_params_t &trans, float metallic,
-                           float transmission, simd_fvec2 rand, float mix_rand, float mix_weight, ray_data_t &new_ray);
+                           float transmission, simd_fvec2 rand, float mix_rand, float mix_weight,
+                           float regularize_alpha, ray_data_t &new_ray);
 
 // Shade
 color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,

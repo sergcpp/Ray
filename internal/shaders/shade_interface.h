@@ -13,7 +13,7 @@ struct Params {
     int iteration;
     int li_count;
     UINT_TYPE max_ray_depth;
-    int _unused0;
+    float regularize_alpha;
     //
     int _unused1;
     int _unused2;

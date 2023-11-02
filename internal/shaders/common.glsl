@@ -240,9 +240,9 @@ int get_total_depth(const uint depth) {
 }
 int get_ray_type(const uint depth) { return int(depth >> 28) & 0xf; }
 
-bool is_indirect(const ray_data_t r) {
+bool is_indirect(const uint depth) {
     // not only transparency ray
-    return (r.depth & 0x001fffff) != 0;
+    return (depth & 0x001fffff) != 0;
 }
 
 vec3 TonemapStandard(float inv_gamma, vec3 col) {
