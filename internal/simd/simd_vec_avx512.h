@@ -214,6 +214,8 @@ template <> class simd_vec<float, 16> {
     friend force_inline simd_vec<float, 16> vectorcall operator==(simd_vec<float, 16> v1, float v2);
     friend force_inline simd_vec<float, 16> vectorcall operator!=(simd_vec<float, 16> v1, float v2);
 
+    friend force_inline simd_vec<float, 16> vectorcall clamp(simd_vec<float, 16> v1, simd_vec<float, 16> min,
+                                                             simd_vec<float, 16> max);
     friend force_inline simd_vec<float, 16> vectorcall clamp(simd_vec<float, 16> v1, float min, float max);
     friend force_inline simd_vec<float, 16> vectorcall saturate(const simd_vec<float, 16> v1) {
         return clamp(v1, 0.0f, 1.0f);
@@ -482,6 +484,11 @@ template <> class simd_vec<int, 16> {
         simd_vec<int, 16> temp;
         temp.vec_ = _mm512_max_epi32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<int, 16> vectorcall clamp(const simd_vec<int, 16> v1, const simd_vec<int, 16> _min,
+                                                           const simd_vec<int, 16> _max) {
+        return max(_min, min(v1, _max));
     }
 
     friend force_inline simd_vec<int, 16> vectorcall clamp(const simd_vec<int, 16> v1, const int _min, const int _max) {
@@ -987,6 +994,12 @@ template <> class simd_vec<unsigned, 16> {
         simd_vec<unsigned, 16> temp;
         temp.vec_ = _mm512_max_epu32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 16> vectorcall clamp(const simd_vec<unsigned, 16> v1,
+                                                                const simd_vec<unsigned, 16> _min,
+                                                                const simd_vec<unsigned, 16> _max) {
+        return max(_min, min(v1, _max));
     }
 
     friend force_inline simd_vec<unsigned, 16> vectorcall clamp(const simd_vec<unsigned, 16> v1, const unsigned _min,
@@ -1510,6 +1523,13 @@ force_inline simd_vec<float, 16> vectorcall operator==(const simd_vec<float, 16>
 force_inline simd_vec<float, 16> vectorcall operator!=(const simd_vec<float, 16> v1, const float v2) {
     simd_vec<float, 16> ret;
     ret.vec_ = _mm512_cmp_ps(v1.vec_, _mm512_set1_ps(v2), _CMP_NEQ_OS);
+    return ret;
+}
+
+force_inline simd_vec<float, 16> vectorcall clamp(const simd_vec<float, 16> v1, const simd_vec<float, 16> min,
+                                                  const simd_vec<float, 16> max) {
+    simd_vec<float, 16> ret;
+    ret.vec_ = _mm512_max_ps(min.vec_, _mm512_min_ps(v1.vec_, max.vec_));
     return ret;
 }
 

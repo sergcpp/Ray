@@ -269,6 +269,8 @@ template <> class simd_vec<float, 8> {
     friend force_inline simd_vec<float, 8> vectorcall operator==(simd_vec<float, 8> v1, float v2);
     friend force_inline simd_vec<float, 8> vectorcall operator!=(simd_vec<float, 8> v1, float v2);
 
+    friend force_inline simd_vec<float, 8> vectorcall clamp(simd_vec<float, 8> v1, simd_vec<float, 8> min,
+                                                            simd_vec<float, 8> max);
     friend force_inline simd_vec<float, 8> vectorcall clamp(simd_vec<float, 8> v1, float min, float max);
     friend force_inline simd_vec<float, 8> vectorcall saturate(simd_vec<float, 8> v1) { return clamp(v1, 0.0f, 1.0f); }
     friend force_inline simd_vec<float, 8> vectorcall pow(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
@@ -1331,6 +1333,12 @@ template <> class simd_vec<unsigned, 8> {
         return max(simd_vec<unsigned, 8>{v1}, v2);
     }
 
+    friend force_inline simd_vec<unsigned, 8> vectorcall clamp(const simd_vec<unsigned, 8> v1,
+                                                               const simd_vec<unsigned, 8> _min,
+                                                               const simd_vec<unsigned, 8> _max) {
+        return max(_min, min(v1, _max));
+    }
+
     friend force_inline simd_vec<unsigned, 8> vectorcall clamp(const simd_vec<unsigned, 8> v1, const unsigned _min,
                                                                const unsigned _max) {
         return max(simd_vec<unsigned, 8>{_min}, min(v1, simd_vec<unsigned, 8>{_max}));
@@ -1772,6 +1780,13 @@ force_inline simd_vec<float, 8> vectorcall simd_vec<float, 8>::max(const float v
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_max_ps(_mm256_set1_ps(v1), v2.vec_);
     return temp;
+}
+
+force_inline simd_vec<float, 8> vectorcall clamp(const simd_vec<float, 8> v1, const simd_vec<float, 8> min,
+                                                 const simd_vec<float, 8> max) {
+    simd_vec<float, 8> ret;
+    ret.vec_ = _mm256_max_ps(min.vec_, _mm256_min_ps(v1.vec_, max.vec_));
+    return ret;
 }
 
 force_inline simd_vec<float, 8> vectorcall clamp(const simd_vec<float, 8> v1, const float min, const float max) {

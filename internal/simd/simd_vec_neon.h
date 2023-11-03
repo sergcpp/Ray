@@ -296,6 +296,11 @@ template <> class simd_vec<float, 4> {
         return temp;
     }
 
+    friend force_inline simd_vec<float, 4> vectorcall clamp(const simd_vec<float, 4> v1, const simd_vec<float, 4> _min,
+                                                            const simd_vec<float, 4> _max) {
+        return max(_min, min(v1, _max));
+    }
+
     friend force_inline simd_vec<float, 4> vectorcall clamp(const simd_vec<float, 4> v1, const float _min,
                                                             const float _max) {
         return max(simd_vec<float, 4>{_min}, min(v1, simd_vec<float, 4>{_max}));
@@ -800,6 +805,11 @@ template <> class simd_vec<int, 4> {
         simd_vec<int, 4> temp;
         temp.vec_ = vmaxq_s32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<int, 4> vectorcall clamp(const simd_vec<int, 4> v1, const simd_vec<int, 4> _min,
+                                                          const simd_vec<int, 4> _max) {
+        return max(_min, min(v1, _max));
     }
 
     friend force_inline simd_vec<int, 4> vectorcall clamp(const simd_vec<int, 4> v1, const int _min, const int _max) {
@@ -1350,6 +1360,12 @@ template <> class simd_vec<unsigned, 4> {
         simd_vec<unsigned, 4> temp;
         temp.vec_ = vmaxq_u32(v1.vec_, v2.vec_);
         return temp;
+    }
+
+    friend force_inline simd_vec<unsigned, 4> vectorcall clamp(const simd_vec<unsigned, 4> v1,
+                                                               const simd_vec<unsigned, 4> _min,
+                                                               const simd_vec<unsigned, 4> _max) {
+        return max(_min, min(v1, _max));
     }
 
     friend force_inline simd_vec<unsigned, 4> vectorcall clamp(const simd_vec<unsigned, 4> v1, const unsigned _min,

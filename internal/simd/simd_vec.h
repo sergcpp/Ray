@@ -706,6 +706,11 @@ template <typename T, int S> class simd_vec {
         return ret;
     }
 
+    friend force_inline simd_vec<T, S> clamp(const simd_vec<T, S> &v1, const simd_vec<T, S> &_min,
+                                             const simd_vec<T, S> &_max) {
+        return min(max(v1, _min), _max);
+    }
+
     friend force_inline simd_vec<T, S> saturate(const simd_vec<T, S> &v1) { return clamp(v1, T(0), T(1)); }
 
     friend force_inline simd_vec<T, S> pow(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {

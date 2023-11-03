@@ -479,6 +479,13 @@ template <> class simd_vec<float, 4> {
         return _mm_cvtss_f32(r1);
     }
 
+    friend force_inline simd_vec<float, 4> vectorcall clamp(const simd_vec<float, 4> v1, const simd_vec<float, 4> min,
+                                                            const simd_vec<float, 4> max) {
+        simd_vec<float, 4> ret;
+        ret.vec_ = _mm_max_ps(min.vec_, _mm_min_ps(v1.vec_, max.vec_));
+        return ret;
+    }
+
     friend force_inline simd_vec<float, 4> vectorcall clamp(const simd_vec<float, 4> v1, const float min,
                                                             const float max) {
         simd_vec<float, 4> ret;
