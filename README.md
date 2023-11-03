@@ -56,6 +56,9 @@ Features:
       <img src="images/scene2.jpg" width="29.9%" />
       <img src="images/scene15.jpg" width="59.5%" />
     </div>
+    <div float="left" >
+      <img src="images/scene17.jpg" width="89.8%" />
+    </div>
   </div>
 </details>
 
