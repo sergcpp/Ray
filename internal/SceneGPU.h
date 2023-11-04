@@ -1038,8 +1038,8 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
 
     std::pair<uint32_t, uint32_t> tris_index = {}, tri_indices_index = {}, nodes_index = {};
     if (!use_hwrt_) {
-        tris_index = tris_.Allocate(&new_tris[0], new_tris.size());
-        tri_indices_index = tri_indices_.Allocate(&new_tri_indices[0], new_tri_indices.size());
+        tris_index = tris_.Allocate(&new_tris[0], uint32_t(new_tris.size()));
+        tri_indices_index = tri_indices_.Allocate(&new_tri_indices[0], uint32_t(new_tri_indices.size()));
         assert(tri_indices_index.first == tris_index.first);
         assert(tri_indices_index.second == tris_index.second);
         assert(trimat_index.second == tris_index.second);
@@ -1105,9 +1105,11 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
         ComputeTangentBasis(0, 0, new_vertices, new_vtx_indices, _m.vtx_indices);
     }
 
-    const std::pair<uint32_t, uint32_t> vtx_index = vertices_.Allocate(new_vertices.data(), new_vertices.size());
+    const std::pair<uint32_t, uint32_t> vtx_index =
+        vertices_.Allocate(new_vertices.data(), uint32_t(new_vertices.size()));
 
-    const std::pair<uint32_t, uint32_t> vtx_indices_index = vtx_indices_.Allocate(nullptr, new_vtx_indices.size());
+    const std::pair<uint32_t, uint32_t> vtx_indices_index =
+        vtx_indices_.Allocate(nullptr, uint32_t(new_vtx_indices.size()));
     assert(trimat_index.second == vtx_indices_index.second);
     for (uint32_t &i : new_vtx_indices) {
         i += vtx_index.first;
@@ -1548,7 +1550,7 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
 
     PreprocessPrims_SAH(primitives, nullptr, 0, {}, bvh_nodes, mi_indices);
 
-    const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, bvh_nodes.size());
+    const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, uint32_t(bvh_nodes.size()));
     // offset nodes
     for (bvh_node_t &n : bvh_nodes) {
         if ((n.prim_index & LEAF_NODE_BIT) == 0) {

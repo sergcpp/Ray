@@ -319,7 +319,7 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
 #endif
 
     const uint32_t number_required_extensions = 0;
-    const uint32_t number_optional_extensions = desired_extensions.size() - number_required_extensions;
+    const uint32_t number_optional_extensions = uint32_t(desired_extensions.size()) - number_required_extensions;
 
     { // Find required extensions
         uint32_t ext_count = 0;

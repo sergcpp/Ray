@@ -406,7 +406,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         mtris_[mtris_index.first + i] = temp_mtris[i];
     }
 
-    const std::pair<uint32_t, uint32_t> trimat_index = tri_materials_.Allocate(_m.vtx_indices.size() / 3);
+    const std::pair<uint32_t, uint32_t> trimat_index = tri_materials_.Allocate(uint32_t(_m.vtx_indices.size() / 3));
     const std::pair<uint32_t, uint32_t> tri_indices_index = tri_indices_.Allocate(uint32_t(temp_tri_indices.size()));
     assert(tri_indices_index.first == tris_index.first);
     assert(tri_indices_index.second == tris_index.second);
@@ -503,7 +503,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         }
 
         for (size_t i = grp.vtx_start; i < grp.vtx_start + grp.vtx_count; i += 3) {
-            tri_mat_data_t &tri_mat = tri_materials_[trimat_index.first + (i / 3)];
+            tri_mat_data_t &tri_mat = tri_materials_[trimat_index.first + uint32_t(i / 3)];
 
             assert(grp.front_mat._index < (1 << 14) && "Not enough bits to reference material!");
             assert(grp.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
@@ -559,10 +559,10 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         ComputeTangentBasis(0, 0, new_vertices, new_vtx_indices, new_vtx_indices);
     }
 
-    const std::pair<uint32_t, uint32_t> vtx_index = vertices_.Allocate(new_vertices.size());
+    const std::pair<uint32_t, uint32_t> vtx_index = vertices_.Allocate(uint32_t(new_vertices.size()));
     memcpy(&vertices_[vtx_index.first], new_vertices.data(), new_vertices.size() * sizeof(vertex_t));
 
-    const std::pair<uint32_t, uint32_t> vtx_indices_index = vtx_indices_.Allocate(new_vtx_indices.size());
+    const std::pair<uint32_t, uint32_t> vtx_indices_index = vtx_indices_.Allocate(uint32_t(new_vtx_indices.size()));
     assert(trimat_index.second == vtx_indices_index.second);
     for (uint32_t i = 0; i < uint32_t(new_vtx_indices.size()); ++i) {
         vtx_indices_[vtx_indices_index.first + i] = vtx_index.first + new_vtx_indices[i];

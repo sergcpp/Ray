@@ -48,7 +48,7 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
     uniform_params.img_size[1] = h_;
     uniform_params.rand_seed = rand_seed;
 
-    const float temp = std::tan(0.5f * cam.fov * PI / 180.0f);
+    const float temp = std::tan(0.5f * cam.fov * float(PI) / 180.0f);
     uniform_params.spread_angle = std::atan(2.0f * temp / float(h_));
 
     memcpy(&uniform_params.cam_origin[0], cam.origin, 3 * sizeof(float));
