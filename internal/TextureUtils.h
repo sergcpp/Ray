@@ -83,7 +83,7 @@ template <int N> int GetBlockSize_BCn() {
         return BlockSize_BC1;
     } else if (N == 2) {
         return BlockSize_BC5;
-    } else if (N == 1) {
+    } else /*if (N == 1)*/ {
         return BlockSize_BC4;
     }
 }
@@ -95,7 +95,7 @@ template <int N> int GetRequiredMemory_BCn(const int w, const int h, const int p
         return GetRequiredMemory_BC1(w, h, pitch_align);
     } else if (N == 2) {
         return GetRequiredMemory_BC5(w, h, pitch_align);
-    } else if (N == 1) {
+    } else /*if (N == 1)*/ {
         return GetRequiredMemory_BC4(w, h, pitch_align);
     }
 }
