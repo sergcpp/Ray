@@ -4462,7 +4462,8 @@ void Ray::NS::Evaluate_GGXRefraction_BSDF(const simd_fvec<S> view_dir_ts[3], con
     // const float pdf = D * fmaxf(sampled_normal_ts[2], 0.0f) * jacobian;
     // const float pdf = safe_div(D * sampled_normal_ts[2] * fmaxf(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom);
 
-    const simd_fvec<S> is_valid = (refr_dir_ts[2] < 0.0f) & (view_dir_ts[2] > 0.0f);
+    const simd_fvec<S> is_valid =
+        (refr_dir_ts[2] < 0.0f) & (view_dir_ts[2] > 0.0f) & (alpha[0] >= 1e-7f) & (alpha[1] >= 1e-7f);
 
     UNROLLED_FOR(i, 3, { out_color[i] = select(is_valid, F * refr_col[i], simd_fvec<S>{0.0f}); })
     out_color[3] = select(is_valid, pdf, simd_fvec<S>{0.0f});
