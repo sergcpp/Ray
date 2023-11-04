@@ -320,9 +320,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         return;
     }
 
-    const camera_t &cam = s->cams_[s->current_cam()._index];
-
     std::shared_lock<std::shared_timed_mutex> scene_lock(s->mtx_);
+
+    const camera_t &cam = s->cams_[s->current_cam()._index];
 
     const scene_data_t sc_data = {s->env_,
                                   s->mesh_instances_.empty() ? nullptr : &s->mesh_instances_[0],
@@ -634,7 +634,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
             }
 #endif
 
-            if (simd_cast(variance >= variance_threshold_).not_all_zeros()) {
+            if (simd_cast(variance >= variance_threshold).not_all_zeros()) {
                 required_samples_[y * w_ + x] = region.iteration + 1;
             }
         }
