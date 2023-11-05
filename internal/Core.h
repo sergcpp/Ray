@@ -52,6 +52,8 @@ force_inline unsigned char _BitScanForward64(unsigned long *Index, unsigned __in
 #define unpack_unorm_16(x) (float(x) / 65535.0f)
 
 namespace Ray {
+#include "Constants.inl"
+
 enum eUninitialize { Uninitialize };
 
 struct alignas(16) tri_accel_t {
@@ -128,20 +130,6 @@ struct light_wbvh_node_t : public wbvh_node_t {
 };
 static_assert(sizeof(light_wbvh_node_t) == 416, "!");
 
-const int NUM_MIP_LEVELS = 12;
-const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
-const int MIN_ATLAS_TEXTURE_SIZE = 4;
-const int MAX_ATLAS_TEXTURE_SIZE = (MIN_ATLAS_TEXTURE_SIZE << MAX_MIP_LEVEL);
-
-const int TEXTURE_ATLAS_SIZE = 8192;
-
-const int ATLAS_TEX_SRGB_BIT = 0b1000000000000000;
-const int ATLAS_TEX_RECONSTRUCT_Z_BIT = 0b0100000000000000;
-const int ATLAS_TEX_WIDTH_BITS = 0b0011111111111111;
-const int ATLAS_TEX_MIPS_BIT = 0b1000000000000000;
-const int ATLAS_TEX_YCOCG_BIT = 0b0100000000000000;
-const int ATLAS_TEX_HEIGHT_BITS = 0b0011111111111111;
-
 struct atlas_texture_t {
     uint16_t width;
     uint16_t height;
@@ -155,25 +143,9 @@ const uint32_t TEX_SRGB_BIT = (0b00000001u << 24);
 const uint32_t TEX_RECONSTRUCT_Z_BIT = (0b00000010u << 24);
 const uint32_t TEX_YCOCG_BIT = (0b00000100u << 24);
 
-const int MAX_MATERIAL_TEXTURES = 5;
-
-const int NORMALS_TEXTURE = 0;
-const int BASE_TEXTURE = 1;
-const int ROUGH_TEXTURE = 2;
-const int METALLIC_TEXTURE = 3;
-const int SPECULAR_TEXTURE = 4;
-
-const int MIX_MAT1 = 3;
-const int MIX_MAT2 = 4;
-
-const int MAX_STACK_SIZE = 48;
-
 struct tri_mat_data_t {
     uint16_t front_mi, back_mi;
 };
-
-const int MATERIAL_SOLID_BIT = 0b1000000000000000;
-const int MATERIAL_INDEX_BITS = 0b0011111111111111;
 
 const uint32_t MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
 const uint32_t MAT_FLAG_MIX_ADD = (1u << 1u);
@@ -360,8 +332,6 @@ void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], cons
                           float out_bbox_max[3]);
 
 void InverseMatrix(const float mat[16], float out_mat[16]);
-
-#include "shaders/constants.h"
 
 extern const int __pmj02_sample_count;
 extern const int __pmj02_dims_count;

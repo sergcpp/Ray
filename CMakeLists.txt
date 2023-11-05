@@ -65,6 +65,7 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/BVHSplit.cpp
                           internal/CDFUtils.h
                           internal/CDFUtils.cpp
+                          internal/Constants.inl
                           internal/Convolution.h
                           internal/Core.h
                           internal/Core.cpp

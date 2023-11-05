@@ -5,12 +5,10 @@
 
 INTERFACE_START(Types)
 
-#include "constants.h"
+#include "../Constants.inl"
 
 const int RAND_SAMPLES_COUNT = 4096;
 const int RAND_DIMS_COUNT = 32;
-
-const int MAX_STACK_SIZE = 48;
 
 const UINT_TYPE LEAF_NODE_BIT = (1u << 31);
 const UINT_TYPE PRIM_INDEX_BITS = ~LEAF_NODE_BIT;
@@ -19,20 +17,6 @@ const UINT_TYPE LEFT_CHILD_BITS = ~LEAF_NODE_BIT;
 const UINT_TYPE SEP_AXIS_BITS = (3u << 30); // 0b11u
 const UINT_TYPE PRIM_COUNT_BITS = ~SEP_AXIS_BITS;
 const UINT_TYPE RIGHT_CHILD_BITS = ~SEP_AXIS_BITS;
-
-const int MAX_MATERIAL_TEXTURES = 5;
-
-const int NORMALS_TEXTURE = 0;
-const int BASE_TEXTURE = 1;
-const int ROUGH_TEXTURE = 2;
-const int METALLIC_TEXTURE = 3;
-const int SPECULAR_TEXTURE = 4;
-
-const int MIX_MAT1 = 3;
-const int MIX_MAT2 = 4;
-
-const int MATERIAL_SOLID_BIT = 32768; // 0b1000000000000000
-const int MATERIAL_INDEX_BITS = 16383; // 0b0011111111111111
 
 #define MAX_DIST 3.402823466e+30
 
@@ -65,20 +49,6 @@ const int PrincipledNode = 6;
 
 const UINT_TYPE MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
 const UINT_TYPE MAT_FLAG_MIX_ADD = (1u << 1u);
-
-const int NUM_MIP_LEVELS = 12;
-const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
-const int MIN_ATLAS_TEXTURE_SIZE = 4;
-const int MAX_ATLAS_TEXTURE_SIZE = (MIN_ATLAS_TEXTURE_SIZE << MAX_MIP_LEVEL);
-
-const int TEXTURE_ATLAS_SIZE = 8192;
-
-const int ATLAS_TEX_SRGB_BIT            = 32768; // 0b1000000000000000
-const int ATLAS_TEX_RECONSTRUCT_Z_BIT   = 16384; // 0b0100000000000000
-const int ATLAS_TEX_WIDTH_BITS          = 16383; // 0b0011111111111111
-const int ATLAS_TEX_MIPS_BIT            = 32768; // 0b1000000000000000
-const int ATLAS_TEX_YCOCG_BIT           = 16384; // 0b0100000000000000
-const int ATLAS_TEX_HEIGHT_BITS         = 16383; // 0b0011111111111111
 
 const UINT_TYPE TEX_SRGB_BIT          = (1u << 24); // 0b00000001
 const UINT_TYPE TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
