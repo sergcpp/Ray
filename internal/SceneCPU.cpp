@@ -6,7 +6,6 @@
 #include <functional>
 
 #include "../Log.h"
-#include "Atmosphere.h"
 #include "BVHSplit.h"
 #include "CoreRef.h"
 #include "TextureUtils.h"
@@ -40,6 +39,9 @@ Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_co
     : use_wide_bvh_(use_wide_bvh), use_tex_compression_(use_tex_compression) {
     SceneBase::log_ = log;
     SetEnvironment({});
+
+    AtmosphereParameters atmosphere_params = {}; // use default parameters for now
+    SceneCommon::UpdateSkyTransmitanceLUT(atmosphere_params);
 }
 
 Ray::Cpu::Scene::~Scene() {
@@ -971,7 +973,14 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     }
 }
 
+//extern "C" {
+//int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
+//            const char **err);
+//}
+
 void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
+    const uint64_t t1 = Ray::GetTimeMs();
+
     if (physical_sky_texture_ != InvalidTextureHandle) {
         tex_storages_[physical_sky_texture_._index >> 24]->Free(physical_sky_texture_._index & 0x00ffffff);
     }
@@ -991,6 +1000,14 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     //     }
     //     return;
     // }
+
+    AtmosphereParameters atmosphere_params = {}; // use default parameters for now
+
+    {
+        // const char *err = nullptr;
+        // SaveEXR(value_ptr(sky_transmitance_lut_[0]), TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H, 4, 1, "test.exr",
+        // &err);
+    }
 
     static const int SkyEnvRes[] = {512, 256};
     std::vector<color_rgba8_t> rgbe_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
@@ -1018,8 +1035,8 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
                 }
 
                 Ref::simd_fvec4 transmittance;
-                color +=
-                    IntegrateScattering(Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir, light_col, transmittance);
+                color += IntegrateScattering(atmosphere_params, Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir,
+                                             light_col, sky_transmitance_lut_, transmittance);
             }
 
             // rgb_pixels[y * SkyEnvRes[0] + x].v[0] = color.get<0>();
@@ -1035,6 +1052,11 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
         }
     }
 
+    {
+        // const char *err = nullptr;
+        // SaveEXR(&rgb_pixels[0].v[0], SkyEnvRes[0], SkyEnvRes[1], 3, 1, "test.exr", &err);
+    }
+
     const int storage = 0;
     const int index = tex_storage_rgba_.Allocate(rgbe_pixels, SkyEnvRes, false);
 
@@ -1044,6 +1066,8 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     if (env_.back_map == PhysicalSkyTexture._index) {
         env_.back_map = physical_sky_texture_._index;
     }
+
+    log_->Info("PrepareSkyEnvMap done in %lldms", GetTimeMs() - t1);
 }
 
 void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {

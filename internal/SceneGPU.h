@@ -4,7 +4,6 @@
 #include <climits>
 
 #include "../Log.h"
-#include "Atmosphere.h"
 #include "BVHSplit.h"
 #include "SceneCommon.h"
 #include "SparseStorageCPU.h"
@@ -216,6 +215,9 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_wnodes_(ctx, "Light WNodes") {
     SceneBase::log_ = ctx->log();
     SetEnvironment({});
+
+    AtmosphereParameters atmosphere_params = {}; // use default parameters for now
+    SceneCommon::UpdateSkyTransmitanceLUT(atmosphere_params);
 }
 
 inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) {
@@ -1549,6 +1551,8 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
     //     return;
     // }
 
+    AtmosphereParameters atmosphere_params = {};
+
     static const int SkyEnvRes[] = {512, 256};
     std::vector<uint8_t> rgbe_pixels(4 * SkyEnvRes[0] * SkyEnvRes[1]);
 
@@ -1574,8 +1578,8 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
                 }
 
                 Ref::simd_fvec4 transmittance;
-                color +=
-                    IntegrateScattering(Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir, light_col, transmittance);
+                color += IntegrateScattering(atmosphere_params, Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir,
+                                             light_col, sky_transmitance_lut_, transmittance);
             }
 
             color = rgb_to_rgbe(color);

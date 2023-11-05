@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../SceneBase.h"
+#include "Atmosphere.h"
 #include "SparseStorageCPU.h"
 
 namespace Ray {
@@ -17,7 +18,9 @@ class SceneCommon : public SceneBase {
     CameraHandle current_cam_ = InvalidCameraHandle;
 
     environment_t env_;
+    aligned_vector<Ref::simd_fvec4> sky_transmitance_lut_;
 
+    void UpdateSkyTransmitanceLUT(const AtmosphereParameters &params);
     void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 
   public:

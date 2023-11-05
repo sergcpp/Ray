@@ -160,3 +160,29 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
     cam.pass_settings.variance_threshold = c.variance_threshold;
     cam.pass_settings.regularize_alpha = c.regularize_alpha;
 }
+
+void Ray::SceneCommon::UpdateSkyTransmitanceLUT(const AtmosphereParameters &params) {
+    sky_transmitance_lut_.resize(TRANSMITTANCE_LUT_W * TRANSMITTANCE_LUT_H);
+    for (int y = 0; y < TRANSMITTANCE_LUT_H; ++y) {
+        const float v = float(y) / TRANSMITTANCE_LUT_H;
+        for (int x = 0; x < TRANSMITTANCE_LUT_W; ++x) {
+            const float u = float(x) / TRANSMITTANCE_LUT_W;
+
+            const Ref::simd_fvec2 uv = {u, v};
+
+            float view_height, view_zenith_cos_angle;
+            UvToLutTransmittanceParams(params, uv, view_height, view_zenith_cos_angle);
+
+            const Ref::simd_fvec2 uv_test = LutTransmittanceParamsToUv(params, view_height, view_zenith_cos_angle);
+
+            const Ref::simd_fvec4 world_pos = {0.0f, view_height - params.planet_radius, 0.0f, 0.0f};
+            const Ref::simd_fvec4 world_dir = {0.0f, view_zenith_cos_angle,
+                                               -sqrtf(1.0f - view_zenith_cos_angle * view_zenith_cos_angle), 0.0f};
+
+            const Ref::simd_fvec4 optical_depthlight = IntegrateOpticalDepth(params, world_pos, world_dir);
+            const Ref::simd_fvec4 transmittance = Absorb(params, optical_depthlight);
+
+            sky_transmitance_lut_[y * TRANSMITTANCE_LUT_W + x] = transmittance;
+        }
+    }
+}
