@@ -1688,13 +1688,6 @@ float SampleSphericalRectangle(const simd_fvec4 &P, const simd_fvec4 &light_pos,
 } // namespace Ref
 } // namespace Ray
 
-Ray::Ref::hit_data_t::hit_data_t() {
-    mask = 0;
-    obj_index = -1;
-    prim_index = -1;
-    t = MAX_DIST;
-}
-
 void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
                                    const uint32_t rand_seq[], const uint32_t rand_seed, const float filter_table[],
                                    const int iteration, const uint16_t required_samples[],

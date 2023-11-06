@@ -146,7 +146,7 @@ void main() {
     inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
     inter.t = MAX_DIST;
-    inter.u = inter.v = 0.0;
+    inter.u = inter.v = -1.0;
 
     [[dont_flatten]] if (x < 256) {
         Traverse_TLAS_WithStack(ro, rd, inv_d, g_params.node_index, inter);

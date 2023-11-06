@@ -86,7 +86,13 @@ struct hit_data_t {
     float t, u, v;
 
     explicit hit_data_t(eUninitialize) {}
-    hit_data_t();
+    hit_data_t() {
+        mask = 0;
+        obj_index = -1;
+        prim_index = -1;
+        t = MAX_DIST;
+        u = v = -1.0f;
+    }
 };
 
 // Surface at the hit point
