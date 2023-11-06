@@ -195,7 +195,7 @@ stages:
     - git clean -fx -e $BIN_DIR
     - echo "Running tests..."
     - cd tests
-    - ../$BIN_DIR/test_Ray-tsan --mt $TEST_ARGS $AUX_TEST_ARGS
+    - ../$BIN_DIR/test_Ray-tsan --mt $AUX_TEST_ARGS
     - cd ../
   after_script:
     - cp tests/test_data/material_*.tga ./
