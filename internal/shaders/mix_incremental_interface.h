@@ -6,7 +6,7 @@
 INTERFACE_START(MixIncremental)
 
 struct Params {
-    UVEC4_TYPE rect;
+    uvec4 rect;
     float main_mix_factor;
     float aux_mix_factor;
     int iteration;

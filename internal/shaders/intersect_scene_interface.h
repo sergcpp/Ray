@@ -6,16 +6,16 @@
 INTERFACE_START(IntersectScene)
 
 struct Params {
-    UVEC4_TYPE rect;
-    UINT_TYPE node_index;
+    uvec4 rect;
+    uint node_index;
     float clip_dist;
     int min_transp_depth;
     int max_transp_depth;
-    UINT_TYPE rand_seed;
+    uint rand_seed;
     int iteration;
     int _pad1;
     int _pad2;
-    VEC4_TYPE cam_fwd;
+    vec4 cam_fwd;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

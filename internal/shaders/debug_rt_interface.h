@@ -6,8 +6,8 @@
 INTERFACE_START(DebugRT)
 
 struct Params {
-    UVEC2_TYPE img_size;
-    UINT_TYPE node_index;
+    uvec2 img_size;
+    uint node_index;
     float random_val;
 };
 

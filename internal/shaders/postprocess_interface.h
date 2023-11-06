@@ -6,7 +6,7 @@
 INTERFACE_START(Postprocess)
 
 struct Params {
-    UVEC4_TYPE rect;
+    uvec4 rect;
     float exposure;
     float inv_gamma;
     float img0_weight;

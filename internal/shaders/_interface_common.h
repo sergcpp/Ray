@@ -3,45 +3,27 @@
 #define INTERFACE_COMMON_H
 
 #ifdef __cplusplus
-#define VEC2_TYPE std::array<float, 2>
-#define VEC3_TYPE std::array<float, 3>
-#define VEC4_TYPE std::array<float, 4>
+using vec2 = float[2];
+using vec3 = float[3];
+using vec4 = float[4];
 
-#define IVEC2_TYPE std::array<int32_t, 2>
-#define IVEC3_TYPE std::array<int32_t, 3>
-#define IVEC4_TYPE std::array<int32_t, 4>
+using ivec2 = int[2];
+using ivec3 = int[3];
+using ivec4 = int[4];
 
-#define UINT_TYPE uint32_t
-#define UVEC2_TYPE std::array<uint32_t, 2>
-#define UVEC3_TYPE std::array<uint32_t, 3>
-#define UVEC4_TYPE std::array<uint32_t, 4>
+using uint = uint32_t;
+using uvec2 = uint[2];
+using uvec3 = uint[3];
+using uvec4 = uint[4];
 
-#define MAT2_TYPE std::array<std::array<float, 2>, 2>
-#define MAT3_TYPE std::array<std::array<float, 3>, 3>
-#define MAT4_TYPE std::array<std::array<float, 4>, 4>
+using mat2 = float[2][2];
+using mat3 = float[3][3];
+using mat4 = float[4][4];
 
 #define INTERFACE_START(name) namespace name {
 #define INTERFACE_END }
 
-#define DEF_CONST_INT(name, index) const int name = index;
 #else // __cplusplus
-#define VEC2_TYPE vec2
-#define VEC3_TYPE vec3
-#define VEC4_TYPE vec4
-
-#define IVEC2_TYPE ivec2
-#define IVEC3_TYPE ivec3
-#define IVEC4_TYPE ivec4
-
-#define UINT_TYPE uint
-#define UVEC2_TYPE uvec2
-#define UVEC3_TYPE uvec3
-#define UVEC4_TYPE uvec4
-
-#define MAT2_TYPE mat2
-#define MAT3_TYPE mat3
-#define MAT4_TYPE mat4
-
 #define INTERFACE_START(name)
 #define INTERFACE_END
 

@@ -1576,7 +1576,7 @@ float SampleSphericalTriangle(const simd_fvec4 &P, const simd_fvec4 &p1, const s
     const float gamma = angle_between(BC, AC);
 
     const float area = alpha + beta + gamma - PI;
-    if (area <= SphericalAreaThreshold) {
+    if (area <= SPHERICAL_AREA_THRESHOLD) {
         return 0.0f;
     }
 
@@ -1655,7 +1655,7 @@ float SampleSphericalRectangle(const simd_fvec4 &P, const simd_fvec4 &light_pos,
     const float k = 2 * PI - g2 - g3;
     // compute solid angle from internal angles
     const float area = g0 + g1 - k;
-    if (area <= SphericalAreaThreshold) {
+    if (area <= SPHERICAL_AREA_THRESHOLD) {
         return 0.0f;
     }
 

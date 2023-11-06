@@ -6,12 +6,12 @@
 INTERFACE_START(IntersectSceneShadow)
 
 struct Params {
-    UINT_TYPE node_index;
+    uint node_index;
     int max_transp_depth;
-    UINT_TYPE lights_node_index;
+    uint lights_node_index;
     int blocker_lights_count;
     float clamp_val;
-    UINT_TYPE rand_seed;
+    uint rand_seed;
     int iteration;
 };
 

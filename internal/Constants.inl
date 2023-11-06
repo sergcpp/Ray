@@ -1,4 +1,27 @@
+//
+// Global constants
+//
 const int MAX_STACK_SIZE = 48;
+const int MAX_BOUNCES = 128;
+
+const float HIT_BIAS = 0.00001f;
+const float HIT_EPS = 0.000001f;
+const float FLT_EPS = 0.0000001f;
+
+const float MAX_DIST = 3.402823466e+30F; // 3.402823466e+38F
+
+const float SPHERICAL_AREA_THRESHOLD =
+    0.00005f; // non-zero minimal spherical area to sample using spherical method (avoids precision issues)
+
+const uint LEAF_NODE_BIT = (1u << 31);
+const uint PRIM_INDEX_BITS = ~LEAF_NODE_BIT;
+const uint LEFT_CHILD_BITS = ~LEAF_NODE_BIT;
+
+const uint SEP_AXIS_BITS = (3u << 30); // 0b11u
+const uint PRIM_COUNT_BITS = ~SEP_AXIS_BITS;
+const uint RIGHT_CHILD_BITS = ~SEP_AXIS_BITS;
+
+const float PI = 3.141592653589793238463f;
 
 //
 // Random sequence constants
@@ -50,6 +73,9 @@ const int MIX_MAT2 = 4;
 
 const int MATERIAL_SOLID_BIT = 32768;  // 0b1000000000000000
 const int MATERIAL_INDEX_BITS = 16383; // 0b0011111111111111
+
+const uint MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
+const uint MAT_FLAG_MIX_ADD = (1u << 1u);
 
 const int NUM_MIP_LEVELS = 12;
 const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;

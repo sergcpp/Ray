@@ -6,10 +6,10 @@
 INTERFACE_START(IntersectAreaLights)
 
 struct Params {
-    UVEC4_TYPE rect;
-    UVEC2_TYPE img_size;
-    UINT_TYPE node_index;
-    UINT_TYPE _pad;
+    uvec4 rect;
+    uvec2 img_size;
+    uint node_index;
+    uint _pad;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

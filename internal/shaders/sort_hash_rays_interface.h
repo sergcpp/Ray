@@ -6,8 +6,8 @@
 INTERFACE_START(SortHashRays)
 
 struct Params {
-    VEC4_TYPE root_min;
-    VEC4_TYPE cell_size;
+    vec4 root_min;
+    vec4 cell_size;
 };
 
 const int LOCAL_GROUP_SIZE_X = 64;

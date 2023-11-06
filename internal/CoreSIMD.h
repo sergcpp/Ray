@@ -1788,7 +1788,7 @@ simd_fvec<S> SampleSphericalTriangle(const simd_fvec<S> P[3], const simd_fvec<S>
     const simd_fvec<S> gamma = angle_between(BC, AC);
 
     const simd_fvec<S> area = alpha + beta + gamma - PI;
-    simd_ivec<S> mask = simd_cast(area > SphericalAreaThreshold);
+    simd_ivec<S> mask = simd_cast(area > SPHERICAL_AREA_THRESHOLD);
     if (mask.all_zeros()) {
         return 0.0f;
     }
@@ -1877,7 +1877,7 @@ simd_fvec<S> SampleSphericalRectangle(const simd_fvec<S> P[3], const simd_fvec<S
     const simd_fvec<S> k = 2 * PI - g2 - g3;
     // compute solid angle from internal angles
     const simd_fvec<S> area = g0 + g1 - k;
-    const simd_ivec<S> mask = simd_cast(area > SphericalAreaThreshold);
+    const simd_ivec<S> mask = simd_cast(area > SPHERICAL_AREA_THRESHOLD);
     if (mask.all_zeros()) {
         return 0.0f;
     }

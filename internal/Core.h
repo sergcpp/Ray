@@ -52,6 +52,7 @@ force_inline unsigned char _BitScanForward64(unsigned long *Index, unsigned __in
 #define unpack_unorm_16(x) (float(x) / 65535.0f)
 
 namespace Ray {
+using uint = uint32_t;
 #include "Constants.inl"
 
 enum eUninitialize { Uninitialize };
@@ -69,29 +70,6 @@ struct alignas(32) mtri_accel_t {
     float v_plane[4][8];
 };
 static_assert(sizeof(mtri_accel_t) == 384, "!");
-
-const float HIT_BIAS = 0.00001f;
-const float HIT_EPS = 0.000001f;
-const float FLT_EPS = 0.0000001f;
-
-const float SphericalAreaThreshold =
-    0.00005f; // non-zero minimal spherical area to sample using spherical method (avoids precision issues)
-
-const float PI = 3.141592653589793238463f;
-
-const float MAX_DIST = 3.402823466e+30F; // 3.402823466e+38F
-
-const int MAX_BOUNCES = 128;
-
-const float LIGHT_ATTEN_CUTOFF = 0.001f;
-
-const uint32_t LEAF_NODE_BIT = (1u << 31);
-const uint32_t PRIM_INDEX_BITS = ~LEAF_NODE_BIT;
-const uint32_t LEFT_CHILD_BITS = ~LEAF_NODE_BIT;
-
-const uint32_t SEP_AXIS_BITS = (0b11u << 30);
-const uint32_t PRIM_COUNT_BITS = ~SEP_AXIS_BITS;
-const uint32_t RIGHT_CHILD_BITS = ~SEP_AXIS_BITS;
 
 struct bvh_node_t {
     float bbox_min[3];
@@ -146,9 +124,6 @@ const uint32_t TEX_YCOCG_BIT = (0b00000100u << 24);
 struct tri_mat_data_t {
     uint16_t front_mi, back_mi;
 };
-
-const uint32_t MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
-const uint32_t MAT_FLAG_MIX_ADD = (1u << 1u);
 
 struct material_t {
     uint32_t textures[MAX_MATERIAL_TEXTURES];

@@ -6,13 +6,13 @@
 INTERFACE_START(Shade)
 
 struct Params {
-    UVEC4_TYPE rect;
-    VEC4_TYPE env_col;
-    VEC4_TYPE back_col;
+    uvec4 rect;
+    vec4 env_col;
+    vec4 back_col;
     //
     int iteration;
     int li_count;
-    UINT_TYPE max_ray_depth;
+    uint max_ray_depth;
     float regularize_alpha;
     //
     int _unused1;
@@ -20,15 +20,15 @@ struct Params {
     int max_total_depth;
     int min_total_depth;
     //
-    UINT_TYPE rand_seed;
+    uint rand_seed;
     int env_qtree_levels;
     float env_rotation;
     float back_rotation;
     //
     int env_light_index;
     float clamp_val;
-    UINT_TYPE env_map_res;
-    UINT_TYPE back_map_res;
+    uint env_map_res;
+    uint back_map_res;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

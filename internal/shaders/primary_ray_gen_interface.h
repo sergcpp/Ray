@@ -6,13 +6,13 @@
 INTERFACE_START(PrimaryRayGen)
 
 struct Params {
-    UVEC4_TYPE rect;
-    VEC4_TYPE cam_origin;   // w is fov factor
-    VEC4_TYPE cam_fwd;      // w is clip start
-    VEC4_TYPE cam_side;     // w is focus distance
-    VEC4_TYPE cam_up;       // w is sensor height
-    UVEC2_TYPE img_size;
-    UINT_TYPE rand_seed;
+    uvec4 rect;
+    vec4 cam_origin;   // w is fov factor
+    vec4 cam_fwd;      // w is clip start
+    vec4 cam_side;     // w is focus distance
+    vec4 cam_up;       // w is sensor height
+    uvec2 img_size;
+    uint rand_seed;
     float spread_angle;
     //
     float cam_fstop;

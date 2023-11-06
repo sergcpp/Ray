@@ -6,8 +6,8 @@
 INTERFACE_START(FilterVariance)
 
 struct Params {
-    UVEC4_TYPE rect;
-    VEC2_TYPE inv_img_size;
+    uvec4 rect;
+    vec2 inv_img_size;
     float variance_threshold;
     int iteration;
 };

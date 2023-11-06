@@ -10,34 +10,13 @@ INTERFACE_START(Types)
 const int RAND_SAMPLES_COUNT = 4096;
 const int RAND_DIMS_COUNT = 32;
 
-const UINT_TYPE LEAF_NODE_BIT = (1u << 31);
-const UINT_TYPE PRIM_INDEX_BITS = ~LEAF_NODE_BIT;
-const UINT_TYPE LEFT_CHILD_BITS = ~LEAF_NODE_BIT;
-
-const UINT_TYPE SEP_AXIS_BITS = (3u << 30); // 0b11u
-const UINT_TYPE PRIM_COUNT_BITS = ~SEP_AXIS_BITS;
-const UINT_TYPE RIGHT_CHILD_BITS = ~SEP_AXIS_BITS;
-
-#define MAX_DIST 3.402823466e+30
-
-#define HIT_EPS 0.000001
-
-#define FLT_EPS 0.0000001
 #ifndef FLT_MAX
 #define FLT_MAX 3.402823466e+38
 #endif
 
-#ifndef HIT_BIAS
-#define HIT_BIAS 0.00001
-#endif
 #ifndef FLT_MIN
 #define FLT_MIN 1.175494351e-38
 #endif
-#ifndef PI
-#define PI 3.141592653589793238463
-#endif
-
-#define SPHERICAL_AREA_THRESHOLD 0.00005 // non-zero minimal spherical area to sample using spherical method (avoids precision issues)
 
 const int DiffuseNode = 0;
 const int GlossyNode = 1;
@@ -47,17 +26,14 @@ const int MixNode = 4;
 const int TransparentNode = 5;
 const int PrincipledNode = 6;
 
-const UINT_TYPE MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
-const UINT_TYPE MAT_FLAG_MIX_ADD = (1u << 1u);
+const uint TEX_SRGB_BIT = (1u << 24);               // 0b00000001
+const uint TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
+const uint TEX_YCOCG_BIT = (4u << 24);              // 0b00000100
 
-const UINT_TYPE TEX_SRGB_BIT          = (1u << 24); // 0b00000001
-const UINT_TYPE TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
-const UINT_TYPE TEX_YCOCG_BIT         = (4u << 24); // 0b00000100
-
-const UINT_TYPE TEXTURES_SAMPLER_SLOT = 20;
-const UINT_TYPE TEXTURES_SIZE_SLOT = 21;
-const UINT_TYPE TEXTURES_BUF_SLOT = 22;
-const UINT_TYPE TEXTURE_ATLASES_SLOT = 23;
+const uint TEXTURES_SAMPLER_SLOT = 20;
+const uint TEXTURES_SIZE_SLOT = 21;
+const uint TEXTURES_BUF_SLOT = 22;
+const uint TEXTURE_ATLASES_SLOT = 23;
 
 const int FILTER_BOX = 0;
 const int FILTER_GAUSSIAN = 1;
@@ -70,27 +46,27 @@ struct ray_data_t {
 	float c[3];
     float ior[4];
 	float cone_width, cone_spread;
-	UINT_TYPE xy;
-	UINT_TYPE depth;
+	uint xy;
+        uint depth;
 };
 
 struct shadow_ray_t {
     // origin
     float o[3];
     // four 8-bit ray depth counters
-    UINT_TYPE depth;
+    uint depth;
     // direction and distance
     float d[3], dist;
     // throughput color of ray
     float c[3];
     // 16-bit pixel coordinates of ray ((x << 16) | y)
-    UINT_TYPE xy;
+    uint xy;
 };
 
 struct tri_accel_t {
-    VEC4_TYPE n_plane;
-    VEC4_TYPE u_plane;
-    VEC4_TYPE v_plane;
+    vec4 n_plane;
+    vec4 u_plane;
+    vec4 v_plane;
 };
 
 struct hit_data_t {
@@ -101,15 +77,15 @@ struct hit_data_t {
 };
 
 struct bvh_node_t {
-    VEC4_TYPE bbox_min; // w is prim_index/left_child
-    VEC4_TYPE bbox_max; // w is prim_count/right_child
+    vec4 bbox_min; // w is prim_index/left_child
+    vec4 bbox_max; // w is prim_count/right_child
 };
 
 struct light_bvh_node_t {
     float bbox_min[3];
-    UINT_TYPE left_child;
+    uint left_child;
     float bbox_max[3];
-    UINT_TYPE right_child;
+    uint right_child;
     float flux;
     float axis[3];
     float omega_n; // cone angle enclosing light normals
@@ -119,7 +95,7 @@ struct light_bvh_node_t {
 struct light_wbvh_node_t {
     float bbox_min[3][8];
     float bbox_max[3][8];
-    UINT_TYPE child[8];
+    uint child[8];
     float flux[8];
     float axis[3][8];
     float omega_n[8];
@@ -132,27 +108,27 @@ struct vertex_t {
 
 struct mesh_t {
     float bbox_min[3], bbox_max[3];
-    UINT_TYPE node_index, node_block;
-    UINT_TYPE tris_index, tris_block, tris_count;
-    UINT_TYPE vert_index, vert_block, vert_count;
-    UINT_TYPE vert_data_index, vert_data_block;
+    uint node_index, node_block;
+    uint tris_index, tris_block, tris_count;
+    uint vert_index, vert_block, vert_count;
+    uint vert_data_index, vert_data_block;
 };
 
 struct transform_t {
-    MAT4_TYPE xform, inv_xform;
+    mat4 xform, inv_xform;
 };
 
 struct mesh_instance_t {
-    VEC4_TYPE bbox_min; // w is tr_index
-    VEC4_TYPE bbox_max; // w is mesh_index
-    UVEC4_TYPE block_ndx; // xy - indexes of transform and mesh blocks, z - lights index, w - ray_visibility
+    vec4 bbox_min; // w is tr_index
+    vec4 bbox_max; // w is mesh_index
+    uvec4 block_ndx; // xy - indexes of transform and mesh blocks, z - lights index, w - ray_visibility
 };
 
 struct light_t {
-    UVEC4_TYPE type_and_param0;
-    VEC4_TYPE param1;
-    VEC4_TYPE param2;
-    VEC4_TYPE param3;
+    uvec4 type_and_param0;
+    vec4 param1;
+    vec4 param2;
+    vec4 param3;
 };
 
 #define SPH_POS param1.xyz
@@ -187,34 +163,34 @@ struct light_t {
 #define DIR_ANGLE param1.w
 
 struct material_t {
-    UINT_TYPE textures[MAX_MATERIAL_TEXTURES];
+    uint textures[MAX_MATERIAL_TEXTURES];
     float base_color[3];
-    UINT_TYPE flags;
-    UINT_TYPE type;
+    uint flags;
+    uint type;
     float tangent_rotation_or_strength;
-    UINT_TYPE roughness_and_anisotropic;
+    uint roughness_and_anisotropic;
     float ior;
-    UINT_TYPE sheen_and_sheen_tint;
-    UINT_TYPE tint_and_metallic;
-    UINT_TYPE transmission_and_transmission_roughness;
-    UINT_TYPE specular_and_specular_tint;
-    UINT_TYPE clearcoat_and_clearcoat_roughness;
-    UINT_TYPE normal_map_strength_unorm;
+    uint sheen_and_sheen_tint;
+    uint tint_and_metallic;
+    uint transmission_and_transmission_roughness;
+    uint specular_and_specular_tint;
+    uint clearcoat_and_clearcoat_roughness;
+    uint normal_map_strength_unorm;
 };
 
 struct atlas_texture_t {
-    UINT_TYPE size;
-    UINT_TYPE atlas;
-    UINT_TYPE page[(NUM_MIP_LEVELS + 3) / 4];
-    UINT_TYPE pos[NUM_MIP_LEVELS];
+    uint size;
+    uint atlas;
+    uint page[(NUM_MIP_LEVELS + 3) / 4];
+    uint pos[NUM_MIP_LEVELS];
 };
 
 struct ray_chunk_t {
-    UINT_TYPE hash, base, size;
+    uint hash, base, size;
 };
 
 struct ray_hash_t {
-    UINT_TYPE hash, index;
+    uint hash, index;
 };
 
 INTERFACE_END

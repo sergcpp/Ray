@@ -6,16 +6,16 @@
 INTERFACE_START(Convolution)
 
 struct Params {
-    UVEC4_TYPE rect;
-    VEC2_TYPE inv_img_size;
+    uvec4 rect;
+    vec2 inv_img_size;
     int input_stride1;
     int input_stride2;
     int output_stride;
     int tonemap_mode;
     float inv_gamma;
     int _pad2;
-    UVEC2_TYPE out_dims;
-    UVEC2_TYPE in_dims;
+    uvec2 out_dims;
+    uvec2 in_dims;
 };
 
 const int LOCAL_GROUP_SIZE_X = 2;
