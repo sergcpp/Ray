@@ -205,15 +205,15 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 
     while (dist > HIT_BIAS) {
         hit_data_t sh_inter;
-        sh_inter.mask = 0;
         sh_inter.t = dist;
+        sh_inter.v = -1.0;
 
         const bool solid_hit = Traverse_TLAS_WithStack(ro, rd, inv_d, g_params.node_index, sh_inter);
         if (solid_hit || depth > g_params.max_transp_depth) {
             return vec3(0.0);
         }
 
-        if (sh_inter.mask == 0) {
+        if (sh_inter.v < 0.0) {
             return rc;
         }
 

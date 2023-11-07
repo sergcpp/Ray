@@ -55,7 +55,6 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const tri_a
 
     const float rdet = (1.0f / det);
 
-    inter.mask = -1;
     inter.prim_index = (det < 0.0f) ? int(prim_index) : -int(prim_index) - 1;
     inter.t = dett * rdet;
     inter.u = detu * rdet;
@@ -128,7 +127,6 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_
     if (mask) {
         const long i = GetFirstBit(mask);
 
-        inter.mask = -1;
         inter.prim_index = _prim_index[i];
         inter.t = _t[i];
         inter.u = _u[i];
@@ -160,7 +158,6 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_
 
         const float rdet = (1.0f / det);
 
-        inter.mask = 0xffffffff;
         inter.prim_index = (det < 0.0f) ? int(prim_index + i) : -int(prim_index + i) - 1;
         inter.t = dett * rdet;
         inter.u = detu * rdet;
@@ -1830,7 +1827,7 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
 
             out_ray.xy = (x << 16) | y;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
-            out_inter.mask = 0;
+            out_inter.v = -1.0f;
         }
     }
 
@@ -1881,7 +1878,7 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                 ray_data_t &out_ray = out_rays[i];
                 hit_data_t &out_inter = out_inters[i];
 
-                if (out_inter.mask) {
+                if (out_inter.v >= 0.0f) {
                     continue;
                 }
 
@@ -1914,7 +1911,6 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                     out_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
                     out_ray.depth |= pack_ray_depth(0, 0, 0, 0);
 
-                    out_inter.mask = -1;
                     out_inter.prim_index = int(tri);
                     out_inter.obj_index = obj_index;
                     out_inter.t = 1.0f;
@@ -2061,96 +2057,92 @@ bool Ray::Ref::IntersectTris_ClosestHit(const float ro[3], const float rd[3], co
                                         const int tri_start, const int tri_end, const int obj_index,
                                         hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
-    inter.mask = 0;
     inter.obj_index = obj_index;
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (int i = tri_start; i < tri_end; ++i) {
         IntersectTri(ro, rd, tris[i], i, inter);
     }
 
-    out_inter.mask |= inter.mask;
-    out_inter.obj_index = inter.mask ? inter.obj_index : out_inter.obj_index;
-    out_inter.prim_index = inter.mask ? inter.prim_index : out_inter.prim_index;
+    out_inter.obj_index = inter.v >= 0.0f ? inter.obj_index : out_inter.obj_index;
+    out_inter.prim_index = inter.v >= 0.0f ? inter.prim_index : out_inter.prim_index;
     out_inter.t = inter.t; // already contains min value
-    out_inter.u = inter.mask ? inter.u : out_inter.u;
-    out_inter.v = inter.mask ? inter.v : out_inter.v;
+    out_inter.u = inter.v >= 0.0f ? inter.u : out_inter.u;
+    out_inter.v = inter.v >= 0.0f ? inter.v : out_inter.v;
 
-    return inter.mask != 0;
+    return inter.v >= 0.0f;
 }
 
 bool Ray::Ref::IntersectTris_ClosestHit(const float ro[3], const float rd[3], const mtri_accel_t *mtris,
                                         const int tri_start, const int tri_end, const int obj_index,
                                         hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
-    inter.mask = 0;
     inter.obj_index = obj_index;
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (int i = tri_start / 8; i < (tri_end + 7) / 8; ++i) {
         IntersectTri(ro, rd, mtris[i], i * 8, inter);
     }
 
-    out_inter.mask |= inter.mask;
-    out_inter.obj_index = inter.mask ? inter.obj_index : out_inter.obj_index;
-    out_inter.prim_index = inter.mask ? inter.prim_index : out_inter.prim_index;
+    out_inter.obj_index = inter.v >= 0.0f ? inter.obj_index : out_inter.obj_index;
+    out_inter.prim_index = inter.v >= 0.0f ? inter.prim_index : out_inter.prim_index;
     out_inter.t = inter.t; // already contains min value
-    out_inter.u = inter.mask ? inter.u : out_inter.u;
-    out_inter.v = inter.mask ? inter.v : out_inter.v;
+    out_inter.u = inter.v >= 0.0f ? inter.u : out_inter.u;
+    out_inter.v = inter.v >= 0.0f ? inter.v : out_inter.v;
 
-    return inter.mask != 0;
+    return inter.v >= 0.0f;
 }
 
 bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const tri_accel_t *tris,
                                     const tri_mat_data_t *materials, const uint32_t *indices, const int tri_start,
                                     const int tri_end, const int obj_index, hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
-    inter.mask = 0;
     inter.obj_index = obj_index;
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (int i = tri_start; i < tri_end; ++i) {
         IntersectTri(ro, rd, tris[i], i, inter);
-        if (inter.mask && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
-                           (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
+        if (inter.v >= 0.0f && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
+                                (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
             break;
         }
     }
 
-    out_inter.mask |= inter.mask;
-    out_inter.obj_index = inter.mask ? inter.obj_index : out_inter.obj_index;
-    out_inter.prim_index = inter.mask ? inter.prim_index : out_inter.prim_index;
+    out_inter.obj_index = inter.v >= 0.0f ? inter.obj_index : out_inter.obj_index;
+    out_inter.prim_index = inter.v >= 0.0f ? inter.prim_index : out_inter.prim_index;
     out_inter.t = inter.t; // already contains min value
-    out_inter.u = inter.mask ? inter.u : out_inter.u;
-    out_inter.v = inter.mask ? inter.v : out_inter.v;
+    out_inter.u = inter.v >= 0.0f ? inter.u : out_inter.u;
+    out_inter.v = inter.v >= 0.0f ? inter.v : out_inter.v;
 
-    return inter.mask != 0;
+    return inter.v >= 0.0f;
 }
 
 bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const mtri_accel_t *mtris,
                                     const tri_mat_data_t *materials, const uint32_t *indices, const int tri_start,
                                     const int tri_end, const int obj_index, hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
-    inter.mask = 0;
     inter.obj_index = obj_index;
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (int i = tri_start / 8; i < (tri_end + 7) / 8; ++i) {
         IntersectTri(ro, rd, mtris[i], i * 8, inter);
-        if (inter.mask && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
-                           (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
+        if (inter.v >= 0.0f && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
+                                (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
             break;
         }
     }
 
-    out_inter.mask |= inter.mask;
-    out_inter.obj_index = inter.mask ? inter.obj_index : out_inter.obj_index;
-    out_inter.prim_index = inter.mask ? inter.prim_index : out_inter.prim_index;
+    out_inter.obj_index = inter.v >= 0.0f ? inter.obj_index : out_inter.obj_index;
+    out_inter.prim_index = inter.v >= 0.0f ? inter.prim_index : out_inter.prim_index;
     out_inter.t = inter.t; // already contains min value
-    out_inter.u = inter.mask ? inter.u : out_inter.u;
-    out_inter.v = inter.mask ? inter.v : out_inter.v;
+    out_inter.u = inter.v >= 0.0f ? inter.u : out_inter.u;
+    out_inter.v = inter.v >= 0.0f ? inter.v : out_inter.v;
 
-    return inter.mask != 0;
+    return inter.v >= 0.0f;
 }
 
 bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
@@ -3461,7 +3453,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             ro += rd * t;
 
             // discard current intersection
-            inter.mask = 0;
+            inter.v = -1.0f;
             inter.t = t_val - inter.t;
 
             r.depth += pack_ray_depth(0, 0, 0, 1);
@@ -3506,7 +3498,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
             rc = 0.0f;
         }
 
-        if (solid_hit || depth > max_transp_depth || !inter.mask) {
+        if (solid_hit || depth > max_transp_depth || inter.v < 0.0f) {
             break;
         }
 
@@ -4019,7 +4011,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 if (!l.visible) {
                     continue;
                 }
-                if (l.sky_portal && inout_inter.mask != 0) {
+                if (l.sky_portal && inout_inter.v >= 0.0f) {
                     // Portal lights affect only missed rays
                     continue;
                 }
@@ -4045,13 +4037,13 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                                 }
                             }
                             if (accept) {
-                                inout_inter.mask = -1;
+                                inout_inter.v = 0.0f;
                                 inout_inter.obj_index = -int(light_index) - 1;
                                 inout_inter.t = t1;
                                 inout_inter.u = cur.factor;
                             }
                         } else if (t2 > HIT_EPS && (t2 < inout_inter.t || no_shadow)) {
-                            inout_inter.mask = -1;
+                            inout_inter.v = 0.0f;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t2;
                             inout_inter.u = cur.factor;
@@ -4060,8 +4052,8 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const simd_fvec4 light_dir = make_fvec3(l.dir.dir);
                     const float cos_theta = dot(rd, light_dir);
-                    if ((inout_inter.mask == 0 || no_shadow) && cos_theta > cosf(l.dir.angle)) {
-                        inout_inter.mask = -1;
+                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > cosf(l.dir.angle)) {
+                        inout_inter.v = 0.0f;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = 1.0f / cos_theta;
                         inout_inter.u = cur.factor;
@@ -4086,7 +4078,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         if (a1 >= -0.5f && a1 <= 0.5f) {
                             const float a2 = dot(light_v, vi);
                             if (a2 >= -0.5f && a2 <= 0.5f) {
-                                inout_inter.mask = -1;
+                                inout_inter.v = 0.0f;
                                 inout_inter.obj_index = -int(light_index) - 1;
                                 inout_inter.t = t;
                                 inout_inter.u = cur.factor;
@@ -4113,7 +4105,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         const float a2 = dot(light_v, vi);
 
                         if (sqrtf(a1 * a1 + a2 * a2) <= 0.5f) {
-                            inout_inter.mask = -1;
+                            inout_inter.v = 0.0f;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t;
                             inout_inter.u = cur.factor;
@@ -4139,13 +4131,13 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         const float t = fminf(t0, t1);
                         const simd_fvec4 p = _ro + t * _rd;
                         if (fabsf(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
-                            inout_inter.mask = -1;
+                            inout_inter.v = 0.0f;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t;
                             inout_inter.u = cur.factor;
                         }
                     }
-                } else if (l.type == LIGHT_TYPE_ENV && inout_inter.mask == 0) {
+                } else if (l.type == LIGHT_TYPE_ENV && inout_inter.v < 0.0f) {
                     // NOTE: mask remains empty
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.u = cur.factor;
@@ -4215,7 +4207,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 if (!l.visible) {
                     continue;
                 }
-                if (l.sky_portal && inout_inter.mask != 0) {
+                if (l.sky_portal && inout_inter.v >= 0.0f) {
                     // Portal lights affect only missed rays
                     continue;
                 }
@@ -4241,13 +4233,13 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                                 }
                             }
                             if (accept) {
-                                inout_inter.mask = -1;
+                                inout_inter.v = 0.0f;
                                 inout_inter.obj_index = -int(light_index) - 1;
                                 inout_inter.t = t1;
                                 inout_inter.u = cur_factor;
                             }
                         } else if (t2 > HIT_EPS && (t2 < inout_inter.t || no_shadow)) {
-                            inout_inter.mask = -1;
+                            inout_inter.v = 0.0f;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t2;
                             inout_inter.u = cur_factor;
@@ -4256,8 +4248,8 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const simd_fvec4 light_dir = make_fvec3(l.dir.dir);
                     const float cos_theta = dot(rd, light_dir);
-                    if ((inout_inter.mask == 0 || no_shadow) && cos_theta > cosf(l.dir.angle)) {
-                        inout_inter.mask = -1;
+                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > cosf(l.dir.angle)) {
+                        inout_inter.v = 0.0f;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = 1.0f / cos_theta;
                         inout_inter.u = cur_factor;
@@ -4282,7 +4274,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         if (a1 >= -0.5f && a1 <= 0.5f) {
                             const float a2 = dot(light_v, vi);
                             if (a2 >= -0.5f && a2 <= 0.5f) {
-                                inout_inter.mask = -1;
+                                inout_inter.v = 0.0f;
                                 inout_inter.obj_index = -int(light_index) - 1;
                                 inout_inter.t = t;
                                 inout_inter.u = cur_factor;
@@ -4309,7 +4301,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         const float a2 = dot(light_v, vi);
 
                         if (sqrtf(a1 * a1 + a2 * a2) <= 0.5f) {
-                            inout_inter.mask = -1;
+                            inout_inter.v = 0.0f;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t;
                             inout_inter.u = cur_factor;
@@ -4335,13 +4327,13 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         const float t = fminf(t0, t1);
                         const simd_fvec4 p = _ro + t * _rd;
                         if (fabsf(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
-                            inout_inter.mask = -1;
+                            inout_inter.v = 0.0f;
                             inout_inter.obj_index = -int(light_index) - 1;
                             inout_inter.t = t;
                             inout_inter.u = cur_factor;
                         }
                     }
-                } else if (l.type == LIGHT_TYPE_ENV && inout_inter.mask == 0) {
+                } else if (l.type == LIGHT_TYPE_ENV && inout_inter.v < 0.0f) {
                     // NOTE: mask remains empty
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.u = cur_factor;
@@ -5171,7 +5163,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
     const simd_fvec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
 
-    if (!inter.mask) {
+    if (inter.v < 0.0f) {
 #if USE_HIERARCHICAL_NEE
         const float pdf_factor =
             (get_total_depth(ray.depth) < ps.max_total_depth) ? safe_div_pos(1.0f, inter.u) : -1.0f;

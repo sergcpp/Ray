@@ -76,8 +76,6 @@ static_assert(sizeof(shadow_ray_t) == 48, "!");
 
 // Ray hit structure
 struct hit_data_t {
-    // indicates whether itersection was found or ray missed
-    int mask;
     // index of an object that was hit by ray
     int obj_index;
     // index of a primitive that was hit by ray
@@ -87,11 +85,11 @@ struct hit_data_t {
 
     explicit hit_data_t(eUninitialize) {}
     hit_data_t() {
-        mask = 0;
         obj_index = -1;
         prim_index = -1;
         t = MAX_DIST;
-        u = v = 0.0f;
+        u = 0.0f;
+        v = -1.0f; // negative v means 'no intersection'
     }
 };
 

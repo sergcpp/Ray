@@ -114,7 +114,7 @@ void main() {
                 // Skip invisible light
                 continue;
             }
-            [[dont_flatten]] if (inter.mask != 0 && (l.type_and_param0.x & (1 << 6)) != 0) {
+            [[dont_flatten]] if (inter.v >= 0.0 && (l.type_and_param0.x & (1 << 6)) != 0) {
                 // Portal lights affect only missed rays
                 continue;
             }
@@ -142,13 +142,13 @@ void main() {
                             }
                         }
                         if (accept) {
-                            inter.mask = -1;
+                            inter.v = 0.0;
                             inter.obj_index = -int(light_index) - 1;
                             inter.t = t1;
                             inter.u = cur_factor;
                         }
                     } else if (t2 > HIT_EPS && (t2 < inter.t || no_shadow)) {
-                        inter.mask = -1;
+                        inter.v = 0.0;
                         inter.obj_index = -int(light_index) - 1;
                         inter.t = t2;
                         inter.u = cur_factor;
@@ -156,8 +156,8 @@ void main() {
                 }
             } else if (light_type == LIGHT_TYPE_DIR) {
                 const float cos_theta = dot(rd, l.DIR_DIR);
-                if ((inter.mask == 0 || no_shadow) && cos_theta > cos(l.DIR_ANGLE)) {
-                    inter.mask = -1;
+                if ((inter.v < 0.0 || no_shadow) && cos_theta > cos(l.DIR_ANGLE)) {
+                    inter.v = 0.0;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = 1.0 / cos_theta;
                     inter.u = cur_factor;
@@ -183,7 +183,7 @@ void main() {
                     if (a1 >= -0.5 && a1 <= 0.5) {
                         float a2 = dot(light_v, vi);
                         if (a2 >= -0.5 && a2 <= 0.5) {
-                            inter.mask = -1;
+                            inter.v = 0.0;
                             inter.obj_index = -int(light_index) - 1;
                             inter.t = t;
                             inter.u = cur_factor;
@@ -211,7 +211,7 @@ void main() {
                     float a2 = dot(light_v, vi);
 
                     if (sqrt(a1 * a1 + a2 * a2) <= 0.5) {
-                        inter.mask = -1;
+                        inter.v = 0.0;
                         inter.obj_index = -int(light_index) - 1;
                         inter.t = t;
                         inter.u = cur_factor;
@@ -237,13 +237,13 @@ void main() {
                     const float t = min(t0, t1);
                     const vec3 p = _ro + t * _rd;
                     if (abs(p[0]) < 0.5 * l.LINE_HEIGHT && (t < inter.t || no_shadow)) {
-                        inter.mask = -1;
+                        inter.v = 0.0;
                         inter.obj_index = -int(light_index) - 1;
                         inter.t = t;
                         inter.u = cur_factor;
                     }
                 }
-            } else if (light_type == LIGHT_TYPE_ENV && inter.mask == 0) {
+            } else if (light_type == LIGHT_TYPE_ENV && inter.v < 0.0) {
                 // NOTE: mask remains empty
                 inter.obj_index = -int(light_index) - 1;
                 inter.u = cur_factor;

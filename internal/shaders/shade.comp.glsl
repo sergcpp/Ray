@@ -1897,7 +1897,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
     const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
 
-    [[dont_flatten]] if (inter.mask == 0) {
+    [[dont_flatten]] if (inter.v < 0.0) {
 #if USE_HIERARCHICAL_NEE
         const float pdf_factor = (total_depth < g_params.max_total_depth) ? (1.0 / inter.u) : -1.0;
 #else

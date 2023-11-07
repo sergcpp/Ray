@@ -100,18 +100,17 @@ template <int S> struct shadow_ray_t {
 };
 
 template <int S> struct hit_data_t {
-    simd_ivec<S> mask;
     simd_ivec<S> obj_index;
     simd_ivec<S> prim_index;
     simd_fvec<S> t, u, v;
 
     explicit hit_data_t(eUninitialize) {}
     force_inline hit_data_t() {
-        mask = {0};
         obj_index = {-1};
         prim_index = {-1};
         t = MAX_DIST;
-        u = v = 0.0f;
+        u = 0.0f;
+        v = -1.0f; // negative v means 'no intersection'
     }
 };
 
@@ -819,8 +818,6 @@ force_inline simd_ivec<S> IntersectTri(const simd_fvec<S> ro[3], const simd_fvec
 
     const simd_fvec<S> &fmask = simd_cast(imask);
 
-    inter.mask = inter.mask | imask;
-
     where(imask, inter.prim_index) = simd_ivec<S>{reinterpret_cast<const int &>(prim_index)};
     where(fmask, inter.t) = t;
     where(fmask, inter.u) = bar_u;
@@ -859,7 +856,6 @@ force_inline bool IntersectTri(const float o[3], const float d[3], int i, const 
     const float t = dett * rdet;
 
     if (t > 0.0f && t < inter.t[i]) {
-        inter.mask[i] = 0xffffffff;
         inter.prim_index[i] = (det < 0.0f) ? int(prim_index) : -int(prim_index) - 1;
         inter.t[i] = t;
         inter.u[i] = detu * rdet;
@@ -2982,7 +2978,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
             out_ray.cone_width = 0.0f;
             out_ray.cone_spread = 0.0f;
-            out_inter.mask = 0;
+            out_inter.v = -1.0f;
         }
     }
 
@@ -3083,7 +3079,6 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                     where(fmask, out_ray.depth) |=
                         pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0});
 
-                    out_inter.mask = (out_inter.mask | imask);
                     where(imask, out_inter.prim_index) = tri;
                     where(imask, out_inter.obj_index) = obj_index;
                     where(fmask, out_inter.t) = 1.0f;
@@ -3305,25 +3300,25 @@ bool Ray::NS::IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec
                                        const tri_accel_t *tris, uint32_t num_tris, int obj_index,
                                        hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
-    inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (uint32_t i = 0; i < num_tris; i++) {
         _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
-    out_inter.mask |= inter.mask;
+    const simd_ivec<S> inter_mask = simd_cast(inter.v >= 0.0f);
 
-    where(inter.mask, out_inter.obj_index) = inter.obj_index;
-    where(inter.mask, out_inter.prim_index) = inter.prim_index;
+    where(inter_mask, out_inter.obj_index) = inter.obj_index;
+    where(inter_mask, out_inter.prim_index) = inter.prim_index;
 
     out_inter.t = inter.t; // already contains min value
 
-    where(inter.mask, out_inter.u) = inter.u;
-    where(inter.mask, out_inter.v) = inter.v;
+    where(inter_mask, out_inter.u) = inter.u;
+    where(inter_mask, out_inter.v) = inter.v;
 
-    return inter.mask.not_all_zeros();
+    return inter_mask.not_all_zeros();
 }
 
 template <int S>
@@ -3331,25 +3326,25 @@ bool Ray::NS::IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec
                                        const tri_accel_t *tris, const int tri_start, const int tri_end,
                                        const int obj_index, hit_data_t<S> &out_inter) {
     hit_data_t<S> inter{Uninitialize};
-    inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (int i = tri_start; i < tri_end; ++i) {
         IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
-    out_inter.mask |= inter.mask;
+    const simd_ivec<S> inter_mask = simd_cast(inter.v >= 0.0f);
 
-    where(inter.mask, out_inter.obj_index) = inter.obj_index;
-    where(inter.mask, out_inter.prim_index) = inter.prim_index;
+    where(inter_mask, out_inter.obj_index) = inter.obj_index;
+    where(inter_mask, out_inter.prim_index) = inter.prim_index;
 
     out_inter.t = inter.t; // already contains min value
 
-    where(inter.mask, out_inter.u) = inter.u;
-    where(inter.mask, out_inter.v) = inter.v;
+    where(inter_mask, out_inter.u) = inter.u;
+    where(inter_mask, out_inter.v) = inter.v;
 
-    return inter.mask.not_all_zeros();
+    return inter_mask.not_all_zeros();
 }
 
 template <int S>
@@ -3387,25 +3382,25 @@ bool Ray::NS::IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> 
                                    const tri_accel_t *tris, uint32_t num_tris, int obj_index,
                                    hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
-    inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (uint32_t i = 0; i < num_tris; i++) {
         _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
-    out_inter.mask |= inter.mask;
+    const simd_ivec<S> inter_mask = simd_cast(inter.v >= 0.0f);
 
-    where(inter.mask, out_inter.obj_index) = inter.obj_index;
-    where(inter.mask, out_inter.prim_index) = inter.prim_index;
+    where(inter_mask, out_inter.obj_index) = inter.obj_index;
+    where(inter_mask, out_inter.prim_index) = inter.prim_index;
 
     out_inter.t = inter.t; // already contains min value
 
-    where(inter.mask, out_inter.u) = inter.u;
-    where(inter.mask, out_inter.v) = inter.v;
+    where(inter_mask, out_inter.u) = inter.u;
+    where(inter_mask, out_inter.v) = inter.v;
 
-    return inter.mask.not_all_zeros();
+    return inter_mask.not_all_zeros();
 }
 
 template <int S>
@@ -3413,25 +3408,25 @@ bool Ray::NS::IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> 
                                    const tri_accel_t *tris, const int tri_start, const int tri_end, const int obj_index,
                                    hit_data_t<S> &out_inter) {
     hit_data_t<S> inter{Uninitialize};
-    inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
+    inter.v = -1.0f;
 
     for (int i = tri_start; i < tri_end; ++i) {
         IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
-    out_inter.mask |= inter.mask;
+    const simd_ivec<S> inter_mask = simd_cast(inter.v >= 0.0f);
 
-    where(inter.mask, out_inter.obj_index) = inter.obj_index;
-    where(inter.mask, out_inter.prim_index) = inter.prim_index;
+    where(inter_mask, out_inter.obj_index) = inter.obj_index;
+    where(inter_mask, out_inter.prim_index) = inter.prim_index;
 
     out_inter.t = inter.t; // already contains min value
 
-    where(inter.mask, out_inter.u) = inter.u;
-    where(inter.mask, out_inter.v) = inter.v;
+    where(inter_mask, out_inter.u) = inter.u;
+    where(inter_mask, out_inter.v) = inter.v;
 
-    return inter.mask.not_all_zeros();
+    return inter_mask.not_all_zeros();
 }
 
 template <int S>
@@ -3567,10 +3562,9 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
     rd[1].store_to(_rd[1], simd_mem_aligned);
     rd[2].store_to(_rd[2], simd_mem_aligned);
 
-    alignas(S * 4) int ray_masks[S], inter_mask[S], inter_prim_index[S], inter_obj_index[S];
+    alignas(S * 4) int ray_masks[S], inter_prim_index[S], inter_obj_index[S];
     alignas(S * 4) float inter_t[S], inter_u[S], inter_v[S];
     ray_mask.store_to(ray_masks, simd_mem_aligned);
-    inter.mask.store_to(inter_mask, simd_mem_aligned);
     inter.prim_index.store_to(inter_prim_index, simd_mem_aligned);
     inter.obj_index.store_to(inter_obj_index, simd_mem_aligned);
     inter.t.store_to(inter_t, simd_mem_aligned);
@@ -3679,7 +3673,6 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                                                                             tri_indices, inter_prim_index[ri],
                                                                             inter_t[ri], inter_u[ri], inter_v[ri]);
                     if (lres) {
-                        inter_mask[ri] = -1;
                         inter_obj_index[ri] = int(mi_indices[j]);
                     }
                     res |= lres;
@@ -3688,7 +3681,6 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
         }
     }
 
-    inter.mask = simd_ivec<S>{inter_mask, simd_mem_aligned};
     inter.prim_index = simd_ivec<S>{inter_prim_index, simd_mem_aligned};
     inter.obj_index = simd_ivec<S>{inter_obj_index, simd_mem_aligned};
     inter.t = simd_fvec<S>{inter_t, simd_mem_aligned};
@@ -3911,7 +3903,6 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
                                                                            materials, tri_indices, inter_prim_index[ri],
                                                                            inter_t[ri], inter_u[ri], inter_v[ri]);
                     if (hit_type) {
-                        inter.mask.set(ri, -1);
                         inter.obj_index.set(ri, int(mi_indices[j]));
                     }
                     if (hit_type == 2) {
@@ -5070,7 +5061,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                                                    inter);
         }
 
-        keep_going &= inter.mask;
+        keep_going &= simd_cast(inter.v >= 0.0f);
         if (keep_going.all_zeros()) {
             break;
         }
@@ -5229,7 +5220,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
         UNROLLED_FOR(i, 3, { where(keep_going, ro[i]) += r.d[i] * t; })
 
         // discard current intersection
-        where(keep_going, inter.mask) = 0;
+        where(keep_going, inter.v) = -1.0f;
         where(keep_going, inter.t) = t_val - inter.t;
 
         where(keep_going, r.depth) += pack_depth(simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{0}, simd_ivec<S>{1});
@@ -5325,7 +5316,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
         const simd_ivec<S> terminate_mask = solid_hit | (depth > max_transp_depth);
         UNROLLED_FOR(i, 3, { where(terminate_mask, rc[i]) = 0.0f; })
 
-        keep_going &= inter.mask & ~terminate_mask;
+        keep_going &= simd_cast(inter.v >= 0.0f) & ~terminate_mask;
         if (keep_going.all_zeros()) {
             break;
         }
@@ -5363,13 +5354,13 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
 
         where(~is_backfacing, mat_index) = mat_index & 0xffff; // use front material index
         where(is_backfacing, mat_index) = mat_index >> 16;     // use back material index
-        where(~inter.mask, mat_index) = 0xffff;
+        where(inter.v < 0.0f, mat_index) = 0xffff;
 
         { // resolve material
             simd_ivec<S> ray_queue[S];
             int index = 0, num = 1;
 
-            ray_queue[0] = inter.mask;
+            ray_queue[0] = simd_cast(inter.v >= 0.0f);
 
             while (index != num) {
                 const int mask = ray_queue[index].movemask();
@@ -6038,7 +6029,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                 // TODO: actually process multiple rays
                 simd_ivec<S> ray_mask = 0;
                 ray_mask.set(ri, -1);
-                ray_mask &= ~(simd_ivec<S>{l.sky_portal ? -1 : 0} & inout_inter.mask);
+                ray_mask &= ~(simd_ivec<S>{l.sky_portal ? -1 : 0} & simd_cast(inout_inter.v >= 0.0f));
                 if (ray_mask.all_zeros()) {
                     continue;
                 }
@@ -6074,8 +6065,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                             }
                         }
 
-                        inout_inter.mask |= simd_cast(mask1 | mask2);
-
+                        where(mask1 | mask2, inout_inter.v) = 0.0f;
                         where(mask1 | mask2, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                         where(mask1, inout_inter.t) = t1;
                         where(mask2, inout_inter.t) = t2;
@@ -6085,8 +6075,8 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const simd_fvec<S> cos_theta = dot3(r.d, l.dir.dir);
                     const simd_ivec<S> imask = simd_cast(cos_theta > cosf(l.dir.angle)) & ray_mask &
-                                               (~inout_inter.mask | simd_cast(no_shadow));
-                    inout_inter.mask |= imask;
+                                               (simd_cast(inout_inter.v < 0.0f) | simd_cast(no_shadow));
+                    where(imask, inout_inter.v) = 0.0f;
                     where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                     where(imask, inout_inter.t) = safe_div_pos(1.0f, cos_theta);
                     where(imask, inout_inter.u) = cur.factor;
@@ -6117,7 +6107,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                         const simd_fvec<S> final_mask =
                             (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) & simd_cast(imask);
 
-                        inout_inter.mask |= simd_cast(final_mask);
+                        where(final_mask, inout_inter.v) = 0.0f;
                         where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                         where(final_mask, inout_inter.t) = t;
                         where(final_mask, inout_inter.u) = cur.factor;
@@ -6148,7 +6138,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
                         const simd_fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & simd_cast(imask);
 
-                        inout_inter.mask |= simd_cast(final_mask);
+                        where(final_mask, inout_inter.v) = 0.0f;
                         where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                         where(final_mask, inout_inter.t) = t;
                         where(final_mask, inout_inter.u) = cur.factor;
@@ -6178,15 +6168,15 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast((t < inout_inter.t) | no_shadow) &
                              ray_mask;
 
-                    inout_inter.mask |= imask;
+                    where(imask, inout_inter.v) = 0.0f;
                     where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                     where(imask, inout_inter.t) = t;
                     where(imask, inout_inter.u) = cur.factor;
                     inout_inter.t.store_to(inter_t, simd_mem_aligned);
                 } else if (l.type == LIGHT_TYPE_ENV) {
                     // NOTE: mask remains empty
-                    where(~inout_inter.mask & ray_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
-                    where(~inout_inter.mask & ray_mask, inout_inter.u) = cur.factor;
+                    where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                    where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.u) = cur.factor;
                 }
             }
         }
@@ -7122,7 +7112,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     simd_fvec<S> tex_rand[2];
     get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq, tex_rand);
 
-    const simd_ivec<S> ino_hit = ~inter.mask;
+    const simd_ivec<S> ino_hit = simd_cast(inter.v < 0.0f);
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
         const simd_fvec<S> pdf_factor = select(total_depth < ps.max_total_depth,
@@ -7139,7 +7129,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
         where(ino_hit, out_rgba[3]) = env_col[3];
     }
 
-    simd_ivec<S> is_active_lane = inter.mask;
+    simd_ivec<S> is_active_lane = simd_cast(inter.v >= 0.0f);
     if (is_active_lane.all_zeros()) {
         return;
     }
@@ -7147,7 +7137,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     const simd_fvec<S> *I = ray.d;
 
     surface_t<S> surf;
-    UNROLLED_FOR(i, 3, { where(inter.mask, surf.P[i]) = fmadd(inter.t, ray.d[i], ray.o[i]); })
+    UNROLLED_FOR(i, 3, { where(inter.v >= 0.0f, surf.P[i]) = fmadd(inter.t, ray.d[i], ray.o[i]); })
 
     const simd_ivec<S> is_light_hit = is_active_lane & (inter.obj_index < 0); // Area light intersection
     if (is_light_hit.not_all_zeros()) {

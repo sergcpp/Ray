@@ -10,7 +10,6 @@ layout(location = 0) rayPayloadInEXT hit_data_t g_pld;
 hitAttributeEXT vec2 bary_coord;
 
 void main() {
-    g_pld.mask = -1;
     g_pld.obj_index = gl_InstanceID;
     int prim_index = gl_InstanceCustomIndexEXT + gl_PrimitiveID;
     if (gl_HitKindEXT == gl_HitKindBackFacingTriangleEXT) {

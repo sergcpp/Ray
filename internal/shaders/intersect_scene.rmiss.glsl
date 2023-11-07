@@ -8,5 +8,5 @@
 layout(location = 0) rayPayloadInEXT hit_data_t g_pld;
 
 void main() {
-    g_pld.mask = 0;
+    g_pld.v = -1.0;
 }

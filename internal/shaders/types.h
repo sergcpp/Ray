@@ -70,7 +70,6 @@ struct tri_accel_t {
 };
 
 struct hit_data_t {
-    int mask;
     int obj_index;
     int prim_index;
     float t, u, v;

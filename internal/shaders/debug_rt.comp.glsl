@@ -137,10 +137,10 @@ void main() {
     vec3 inv_d = safe_invert(rd);
 
     hit_data_t inter;
-    inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
     inter.t = MAX_DIST;
-    inter.u = inter.v = -1.0;
+    inter.u = 0.0;
+    inter.v = -1.0;
 
     [[dont_flatten]] if (x < 256) {
         Traverse_TLAS_WithStack(ro, rd, inv_d, g_params.node_index, inter);
@@ -194,7 +194,6 @@ void main() {
         if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
             const int primitive_offset = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true);
 
-            inter.mask = -1;
             inter.obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, true);
             inter.prim_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
             [[flatten]] if (!rayQueryGetIntersectionFrontFaceEXT(rq, true)) {

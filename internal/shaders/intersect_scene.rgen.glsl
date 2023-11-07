@@ -76,9 +76,9 @@ void main() {
     uint rand_dim = RAND_DIM_BASE_COUNT + get_total_depth(g_rays[index].depth) * RAND_DIM_BOUNCE_COUNT;
 
     hit_data_t inter;
-    inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
-    inter.u = inter.v = -1.0;
+    inter.u = 0.0;
+    inter.v = -1.0; // negative v means 'no intersection'
     if (g_params.clip_dist >= 0.0) {
         inter.t = g_params.clip_dist / dot(rd, g_params.cam_fwd.xyz);
     } else {
@@ -101,7 +101,7 @@ void main() {
                     );
 
         inter = g_pld;
-        if (inter.mask == 0) {
+        if (inter.v < 0.0) {
             break;
         }
 
@@ -174,7 +174,7 @@ void main() {
         ro += rd * t;
 
         // discard current intersection
-        inter.mask = 0;
+        inter.v = -1.0;
         inter.t = t_val - inter.t;
 
         g_rays[index].depth += pack_ray_depth(0, 0, 0, 1);

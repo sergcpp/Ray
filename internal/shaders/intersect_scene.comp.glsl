@@ -189,9 +189,9 @@ void main() {
     vec3 inv_d = safe_invert(rd);
 
     hit_data_t inter;
-    inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
-    inter.u = inter.v = 0.0;
+    inter.u = 0.0;
+    inter.v = -1.0; // negative v means 'no intersection'
     if (g_params.clip_dist >= 0.0) {
         inter.t = g_params.clip_dist / dot(rd, g_params.cam_fwd.xyz);
     } else {
@@ -231,7 +231,6 @@ void main() {
         if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
             const int primitive_offset = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true);
 
-            inter.mask = -1;
             inter.obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, true);
             inter.prim_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
             [[flatten]] if (rayQueryGetIntersectionFrontFaceEXT(rq, true) == false) {
@@ -243,7 +242,7 @@ void main() {
             inter.t = rayQueryGetIntersectionTEXT(rq, true);
         }
 #endif
-        if (inter.mask == 0) {
+        if (inter.v < 0.0) {
             break;
         }
 
@@ -316,7 +315,7 @@ void main() {
         ro += rd * t;
 
         // discard current intersection
-        inter.mask = 0;
+        inter.v = -1.0;
         inter.t = t_val - inter.t;
 
         g_rays[index].depth += pack_ray_depth(0, 0, 0, 1);
