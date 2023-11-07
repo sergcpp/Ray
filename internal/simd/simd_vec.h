@@ -545,142 +545,39 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
-    friend simd_vec<T, S> operator&(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
-        const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
-
-        simd_vec<T, S> ret;
-
-        auto *dst = reinterpret_cast<uint8_t *>(&ret.comp_[0]);
-
-        for (int i = 0; i < S * sizeof(T); i++) {
-            dst[i] = src1[i] & src2[i];
-        }
-
-        return ret;
+#define DEFINE_BITS_OPERATOR(OP)                                                                                       \
+    friend simd_vec<T, S> operator OP(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {                           \
+        const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);                                            \
+        const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);                                            \
+        simd_vec<T, S> ret;                                                                                            \
+        auto *dst = reinterpret_cast<uint8_t *>(&ret.comp_[0]);                                                        \
+        for (int i = 0; i < S * sizeof(T); i++) {                                                                      \
+            dst[i] = src1[i] OP src2[i];                                                                               \
+        }                                                                                                              \
+        return ret;                                                                                                    \
     }
 
-    friend simd_vec<T, S> operator|(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
-        const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
+    DEFINE_BITS_OPERATOR(&)
+    DEFINE_BITS_OPERATOR(|)
+    DEFINE_BITS_OPERATOR(^)
 
-        simd_vec<T, S> ret;
+#undef DEFINE_BITS_OPERATOR
 
-        auto *dst = reinterpret_cast<uint8_t *>(&ret.comp_[0]);
-
-        for (int i = 0; i < S * sizeof(T); i++) {
-            dst[i] = src1[i] | src2[i];
-        }
-
-        return ret;
+#define DEFINE_ARITHMETIC_OPERATOR(OP)                                                                                 \
+    friend force_inline simd_vec<T, S> operator OP(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {              \
+        simd_vec<T, S> ret;                                                                                            \
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] OP v2.comp_[i]; })                                           \
+        return ret;                                                                                                    \
     }
 
-    friend simd_vec<T, S> operator^(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
-        const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
+    DEFINE_ARITHMETIC_OPERATOR(+)
+    DEFINE_ARITHMETIC_OPERATOR(-)
+    DEFINE_ARITHMETIC_OPERATOR(*)
+    DEFINE_ARITHMETIC_OPERATOR(/)
+    DEFINE_ARITHMETIC_OPERATOR(>>)
+    DEFINE_ARITHMETIC_OPERATOR(<<)
 
-        simd_vec<T, S> ret;
-
-        auto *dst = reinterpret_cast<uint8_t *>(&ret.comp_[0]);
-
-        for (int i = 0; i < S * sizeof(T); i++) {
-            dst[i] = src1[i] ^ src2[i];
-        }
-
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator+(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator-(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator*(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator/(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] / v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator+(const simd_vec<T, S> &v1, T v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] + v2; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator-(const simd_vec<T, S> &v1, T v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] - v2; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator*(const simd_vec<T, S> &v1, T v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] * v2; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator/(const simd_vec<T, S> &v1, T v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] / v2; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator+(T v1, const simd_vec<T, S> &v2) { return operator+(v2, v1); }
-
-    friend force_inline simd_vec<T, S> operator-(T v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1 - v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator*(T v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1 * v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator/(T v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1 / v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, T v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] >> v2; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator<<(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
-        return ret;
-    }
-
-    friend force_inline simd_vec<T, S> operator<<(const simd_vec<T, S> &v1, T v2) {
-        simd_vec<T, S> ret;
-        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] << v2; })
-        return ret;
-    }
+#undef DEFINE_ARITHMETIC_OPERATOR
 
     friend force_inline simd_vec<T, S> srai(const simd_vec<T, S> &v1, int v2) {
         simd_vec<T, S> ret;
