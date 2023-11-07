@@ -1311,7 +1311,7 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const float pdf_factor, const vec2 tex_ra
     }
 
 #if USE_NEE
-    if (g_params.env_light_index != 0xffffffff && pdf_factor >= 0.0) {
+    if (g_params.env_light_index != 0xffffffff && pdf_factor >= 0.0 && is_indirect(ray.depth)) {
         if (g_params.env_qtree_levels > 0) {
             const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd) / pdf_factor;
             const float bsdf_pdf = ray.pdf;

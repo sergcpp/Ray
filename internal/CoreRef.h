@@ -91,7 +91,7 @@ struct hit_data_t {
         obj_index = -1;
         prim_index = -1;
         t = MAX_DIST;
-        u = v = -1.0f;
+        u = v = 0.0f;
     }
 };
 

@@ -4654,7 +4654,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
     }
 
 #if USE_NEE
-    if (env.light_index != 0xffffffff && pdf_factor >= 0.0f) {
+    if (env.light_index != 0xffffffff && pdf_factor >= 0.0f && is_indirect(ray.depth)) {
         if (env.qtree_levels) {
             const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 

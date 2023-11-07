@@ -196,7 +196,7 @@ void main() {
     hit_data_t inter;
     inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
-    inter.u = inter.v = -1.0;
+    inter.u = inter.v = 0.0;
     if (g_params.clip_dist >= 0.0) {
         inter.t = g_params.clip_dist / dot(rd, g_params.cam_fwd.xyz);
     } else {

@@ -111,7 +111,7 @@ template <int S> struct hit_data_t {
         obj_index = {-1};
         prim_index = {-1};
         t = MAX_DIST;
-        u = v = -1.0f;
+        u = v = 0.0f;
     }
 };
 
@@ -6447,7 +6447,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
         }
 #if USE_NEE
         const simd_ivec<S> mis_mask =
-            simd_ivec<S>((env.light_index != 0xffffffff) ? -1 : 0) & simd_cast(pdf_factor >= 0.0f);
+            simd_ivec<S>((env.light_index != 0xffffffff) ? -1 : 0) & simd_cast(pdf_factor >= 0.0f) & env_map_mask;
         if (mis_mask.not_all_zeros()) {
             if (env.qtree_levels) {
                 const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
