@@ -676,6 +676,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
     VkPhysicalDevicePortabilitySubsetFeaturesKHR subset_features = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR};
     subset_features.mutableComparisonSamplers = VK_TRUE;
+    subset_features.imageViewFormatSwizzle = VK_TRUE;
     (*pp_next) = &subset_features;
     pp_next = &subset_features.pNext;
 #endif
