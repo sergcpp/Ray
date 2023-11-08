@@ -11,7 +11,6 @@ struct scene_data_t {
     const Buffer &mesh_instances;
     const Buffer &mi_indices;
     const Buffer &meshes;
-    const Buffer &transforms;
     const Buffer &vtx_indices;
     const Buffer &vertices;
     const Buffer &nodes;

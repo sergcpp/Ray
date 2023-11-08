@@ -60,7 +60,6 @@ class Scene : public SceneCommon {
     SparseStorage<tri_accel_t, false /* Replicate */> tris_;
     SparseStorage<uint32_t, false /* Replicate */> tri_indices_;
     SparseStorage<tri_mat_data_t> tri_materials_;
-    SparseStorage<transform_t> transforms_;
     SparseStorage<mesh_t> meshes_;
     SparseStorage<mesh_instance_t> mesh_instances_;
     Vector<uint32_t> mi_indices_;
@@ -206,9 +205,9 @@ int round_up(int v, int align);
 inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless, const bool use_tex_compression)
     : ctx_(ctx), use_hwrt_(use_hwrt), use_bindless_(use_bindless), use_tex_compression_(use_tex_compression),
       nodes_(ctx, "Nodes"), tris_(ctx, "Tris"), tri_indices_(ctx, "Tri Indices"), tri_materials_(ctx, "Tri Materials"),
-      transforms_(ctx, "Transforms"), meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"),
-      mi_indices_(ctx, "MI Indices"), vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"),
-      materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
+      meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx, "MI Indices"),
+      vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"), materials_(ctx, "Materials"),
+      atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
       tex_atlases_{
           {ctx, "Atlas RGBA", eTexFormat::RawRGBA8888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas RGB", eTexFormat::RawRGB888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
@@ -1324,12 +1323,8 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, co
 inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instance_desc_t &mi_desc) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const std::pair<uint32_t, uint32_t> tr_index = transforms_.emplace();
-
     mesh_instance_t mi = {};
     mi.mesh_index = mi_desc.mesh._index;
-    mi.tr_index = tr_index.first;
-    mi.tr_block = tr_index.second;
     mi.lights_index = 0xffffffff;
     mi.ray_visibility = 0x000000ff;
 
@@ -1348,6 +1343,8 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
     if (!mi_desc.shadow_visibility) {
         mi.ray_visibility &= ~(1u << RAY_TYPE_SHADOW);
     }
+
+    const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.emplace();
 
     { // find emissive triangles and add them as light emitters
         std::vector<light_t> new_lights;
@@ -1398,7 +1395,7 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
                 new_light.sky_portal = 0;
                 new_light.blocking = 0;
                 new_light.tri.tri_index = tri;
-                new_light.tri.xform_index = mi.tr_index;
+                new_light.tri.mi_index = mi_index.first;
                 new_light.tri.tex_index = mat.textures[BASE_TEXTURE];
                 new_light.col[0] = mat.base_color[0] * mat.strength;
                 new_light.col[1] = mat.base_color[1] * mat.strength;
@@ -1415,7 +1412,7 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
         }
     }
 
-    const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.push(mi);
+    mesh_instances_.Set(mi_index.first, mi);
 
     auto ret = MeshInstanceHandle{mi_index.first, mi_index.second};
 
@@ -1425,18 +1422,15 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
 }
 
 inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
-    transform_t tr = {};
-
-    memcpy(tr.xform, xform, 16 * sizeof(float));
-    InverseMatrix(tr.xform, tr.inv_xform);
-
     mesh_instance_t mi = mesh_instances_[mi_handle._index];
+
+    memcpy(mi.xform, xform, 16 * sizeof(float));
+    InverseMatrix(mi.xform, mi.inv_xform);
 
     const mesh_t &m = meshes_[mi.mesh_index];
     TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 
     mesh_instances_.Set(mi_handle._index, mi);
-    transforms_.Set(mi.tr_index, tr);
 
     RebuildTLAS_nolock();
 }
@@ -1444,7 +1438,6 @@ inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHa
 inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
     const mesh_instance_t &mi = mesh_instances_[i._index];
 
-    transforms_.Erase(mi.tr_block);
     if (mi.lights_index != 0xffffffff) {
         const uint32_t light_block = (mi.ray_visibility >> 8);
         lights_.Erase(light_block);
@@ -1986,7 +1979,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_TRI: {
-            const transform_t &ltr = transforms_[l.tri.xform_index];
+            const mesh_instance_t &lmi = mesh_instances_[l.tri.mi_index];
             const uint32_t ltri_index = l.tri.tri_index;
 
             const vertex_t &v1 = vertices_[vtx_indices_[ltri_index * 3 + 0]];
@@ -1997,9 +1990,9 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
                  p2 = Ref::simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
                  p3 = Ref::simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
 
-            p1 = TransformPoint(p1, ltr.xform);
-            p2 = TransformPoint(p2, ltr.xform);
-            p3 = TransformPoint(p3, ltr.xform);
+            p1 = TransformPoint(p1, lmi.xform);
+            p2 = TransformPoint(p2, lmi.xform);
+            p3 = TransformPoint(p3, lmi.xform);
 
             bbox_min = min(p1, min(p2, p3));
             bbox_max = max(p1, max(p2, p3));

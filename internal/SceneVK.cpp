@@ -534,7 +534,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
         tlas_instances.emplace_back();
         auto &new_instance = tlas_instances.back();
-        to_khr_xform(transforms_[instance.tr_index].xform, new_instance.transform.matrix);
+        to_khr_xform(instance.xform, new_instance.transform.matrix);
         new_instance.instanceCustomIndex = meshes_[instance.mesh_index].vert_index / 3;
         // blas.geo_index;
         new_instance.mask = (instance.ray_visibility & 0xff);

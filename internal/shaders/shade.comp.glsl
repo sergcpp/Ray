@@ -41,10 +41,6 @@ layout(std430, binding = MATERIALS_BUF_SLOT) readonly buffer Materials {
     material_t g_materials[];
 };
 
-layout(std430, binding = TRANSFORMS_BUF_SLOT) readonly buffer Transforms {
-    transform_t g_transforms[];
-};
-
 layout(std430, binding = MESH_INSTANCES_BUF_SLOT) readonly buffer MeshInstances {
     mesh_instance_t g_mesh_instances[];
 };
@@ -1146,15 +1142,15 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_TRI) {
         const uint ltri_index = floatBitsToUint(l.TRI_TRI_INDEX);
-        const transform_t ltr = g_transforms[floatBitsToUint(l.TRI_XFORM_INDEX)];
+        const mesh_instance_t lmi = g_mesh_instances[floatBitsToUint(l.TRI_MI_INDEX)];
 
         const vertex_t v1 = g_vertices[g_vtx_indices[ltri_index * 3 + 0]];
         const vertex_t v2 = g_vertices[g_vtx_indices[ltri_index * 3 + 1]];
         const vertex_t v3 = g_vertices[g_vtx_indices[ltri_index * 3 + 2]];
 
-        const vec3 p1 = (ltr.xform * vec4(v1.p[0], v1.p[1], v1.p[2], 1.0)).xyz,
-                   p2 = (ltr.xform * vec4(v2.p[0], v2.p[1], v2.p[2], 1.0)).xyz,
-                   p3 = (ltr.xform * vec4(v3.p[0], v3.p[1], v3.p[2], 1.0)).xyz;
+        const vec3 p1 = (lmi.xform * vec4(v1.p[0], v1.p[1], v1.p[2], 1.0)).xyz,
+                   p2 = (lmi.xform * vec4(v2.p[0], v2.p[1], v2.p[2], 1.0)).xyz,
+                   p3 = (lmi.xform * vec4(v3.p[0], v3.p[1], v3.p[2], 1.0)).xyz;
         const vec2 uv1 = vec2(v1.t[0], v1.t[1]),
                    uv2 = vec2(v2.t[0], v2.t[1]),
                    uv3 = vec2(v3.t[0], v3.t[1]);
@@ -1927,7 +1923,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
     material_t mat = g_materials[g_tri_materials[tri_index] & MATERIAL_INDEX_BITS];
 
-    const transform_t tr = g_transforms[floatBitsToUint(g_mesh_instances[inter.obj_index].bbox_min.w)];
+    const mesh_instance_t mi = g_mesh_instances[inter.obj_index];
 
     const vertex_t v1 = g_vertices[g_vtx_indices[tri_index * 3 + 0]];
     const vertex_t v2 = g_vertices[g_vtx_indices[tri_index * 3 + 1]];
@@ -1965,10 +1961,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         }
     }
 
-    surf.plane_N = TransformNormal(surf.plane_N, tr.inv_xform);
-    surf.N = TransformNormal(surf.N, tr.inv_xform);
-    surf.B = TransformNormal(surf.B, tr.inv_xform);
-    surf.T = TransformNormal(surf.T, tr.inv_xform);
+    surf.plane_N = TransformNormal(surf.plane_N, mi.inv_xform);
+    surf.N = TransformNormal(surf.N, mi.inv_xform);
+    surf.B = TransformNormal(surf.B, mi.inv_xform);
+    surf.T = TransformNormal(surf.T, mi.inv_xform);
 
     // normalize vectors (scaling might have been applied)
     surf.plane_N = normalize(surf.plane_N);
@@ -2049,9 +2045,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     const vec3 P_ls = p1 * w + p2 * inter.u + p3 * inter.v;
     // rotate around Y axis by 90 degrees in 2d
     vec3 tangent = vec3(-P_ls[2], 0.0, P_ls[0]);
-    tangent = TransformNormal(tangent, tr.inv_xform);
+    tangent = TransformNormal(tangent, mi.inv_xform);
     if (length2(cross(tangent, surf.N)) == 0.0) {
-        tangent = TransformNormal(P_ls, tr.inv_xform);
+        tangent = TransformNormal(P_ls, mi.inv_xform);
     }
     if (mat.tangent_rotation_or_strength != 0.0) {
         tangent = rotate_around_axis(tangent, surf.N, mat.tangent_rotation_or_strength);
@@ -2171,14 +2167,14 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                        p3 = vec3(v3.p[0], v3.p[1], v3.p[2]);
 
             float light_forward_len;
-            vec3 light_forward = normalize_len((tr.xform * vec4(cross(p2 - p1, p3 - p1), 0.0)).xyz, light_forward_len);
+            vec3 light_forward = normalize_len((mi.xform * vec4(cross(p2 - p1, p3 - p1), 0.0)).xyz, light_forward_len);
             const float tri_area = 0.5 * light_forward_len;
 
             const float cos_theta = abs(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0) {
                 float light_pdf;
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-                const vec3 P = (tr.inv_xform * vec4(ro, 1.0)).xyz;
+                const vec3 P = (mi.inv_xform * vec4(ro, 1.0)).xyz;
 
                 vec3 _unused;
                 light_pdf = SampleSphericalTriangle(P, p1, p2, p3, vec2(0.0), _unused) / pdf_factor;

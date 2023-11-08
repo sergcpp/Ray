@@ -780,13 +780,10 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.emplace();
-    const std::pair<uint32_t, uint32_t> tr_index = transforms_.emplace();
 
     mesh_instance_t &mi = mesh_instances_.at(mi_index.first);
     mi.mesh_index = mi_desc.mesh._index;
     mi.mesh_block = mi_desc.mesh._block;
-    mi.tr_index = tr_index.first;
-    mi.tr_block = tr_index.second;
     mi.lights_index = 0xffffffff;
     mi.ray_visibility = 0x000000ff;
 
@@ -856,7 +853,7 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
                 new_light.sky_portal = 0;
                 new_light.blocking = 0;
                 new_light.tri.tri_index = tri;
-                new_light.tri.xform_index = mi.tr_index;
+                new_light.tri.mi_index = mi_index.first;
                 new_light.tri.tex_index = mat.textures[BASE_TEXTURE];
                 new_light.col[0] = mat.base_color[0] * mat.strength;
                 new_light.col[1] = mat.base_color[1] * mat.strength;
@@ -885,10 +882,9 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
 
 void Ray::Cpu::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
     mesh_instance_t &mi = mesh_instances_[mi_handle._index];
-    transform_t &tr = transforms_[mi.tr_index];
 
-    memcpy(tr.xform, xform, 16 * sizeof(float));
-    InverseMatrix(tr.xform, tr.inv_xform);
+    memcpy(mi.xform, xform, 16 * sizeof(float));
+    InverseMatrix(mi.xform, mi.inv_xform);
 
     const mesh_t &m = meshes_[mi.mesh_index];
     TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
@@ -899,7 +895,6 @@ void Ray::Cpu::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle m
 void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
     mesh_instance_t &mi = mesh_instances_[i._index];
 
-    transforms_.Erase(mi.tr_block);
     if (mi.lights_index != 0xffffffff) {
         const uint32_t light_block = (mi.ray_visibility >> 8);
         lights_.Erase(light_block);
@@ -1329,7 +1324,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_TRI: {
-            const transform_t &ltr = transforms_[l.tri.xform_index];
+            const mesh_instance_t &lmi = mesh_instances_[l.tri.mi_index];
             const uint32_t ltri_index = l.tri.tri_index;
 
             const vertex_t &v1 = vertices_[vtx_indices_[ltri_index * 3 + 0]];
@@ -1340,9 +1335,9 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
                  p2 = Ref::simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
                  p3 = Ref::simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
 
-            p1 = TransformPoint(p1, ltr.xform);
-            p2 = TransformPoint(p2, ltr.xform);
-            p3 = TransformPoint(p3, ltr.xform);
+            p1 = TransformPoint(p1, lmi.xform);
+            p2 = TransformPoint(p2, lmi.xform);
+            p3 = TransformPoint(p3, lmi.xform);
 
             bbox_min = min(p1, min(p2, p3));
             bbox_max = max(p1, max(p2, p3));

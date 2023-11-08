@@ -114,14 +114,11 @@ struct mesh_t {
     uint vert_data_index, vert_data_block;
 };
 
-struct transform_t {
-    mat4 xform, inv_xform;
-};
-
 struct mesh_instance_t {
     vec4 bbox_min; // w is tr_index
     vec4 bbox_max; // w is mesh_index
     uvec4 block_ndx; // xy - indexes of transform and mesh blocks, z - lights index, w - ray_visibility
+    mat4 xform, inv_xform;
 };
 
 struct light_t {
@@ -156,7 +153,7 @@ struct light_t {
 #define LINE_HEIGHT param3.w
 
 #define TRI_TRI_INDEX param1.x
-#define TRI_XFORM_INDEX param1.y
+#define TRI_MI_INDEX param1.y
 #define TRI_TEX_INDEX param1.z
 
 #define DIR_DIR param1.xyz

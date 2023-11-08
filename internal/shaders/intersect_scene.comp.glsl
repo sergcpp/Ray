@@ -38,10 +38,6 @@ layout(std430, binding = MESH_INSTANCES_BUF_SLOT) readonly buffer MeshInstances 
 layout(std430, binding = MI_INDICES_BUF_SLOT) readonly buffer MiIndices {
     uint g_mi_indices[];
 };
-
-layout(std430, binding = TRANSFORMS_BUF_SLOT) readonly buffer Transforms {
-    transform_t g_transforms[];
-};
 #endif // HWRT
 
 layout(std430, binding = TRI_MATERIALS_BUF_SLOT) readonly buffer TriMaterials {
@@ -153,14 +149,13 @@ void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, uint ray_flags, vec3 or
                 }
 
                 mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
-                transform_t tr = g_transforms[floatBitsToUint(mi.bbox_min.w)];
 
-                vec3 ro = (tr.inv_xform * vec4(orig_ro, 1.0)).xyz;
-                vec3 rd = (tr.inv_xform * vec4(orig_rd, 0.0)).xyz;
+                vec3 ro = (mi.inv_xform * vec4(orig_ro, 1.0)).xyz;
+                vec3 rd = (mi.inv_xform * vec4(orig_rd, 0.0)).xyz;
                 vec3 inv_d = safe_invert(rd);
 
                 Traverse_BLAS_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index,
-                                             stack_size, inter);
+                                        stack_size, inter);
             }
         }
     }

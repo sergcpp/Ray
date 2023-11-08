@@ -184,7 +184,7 @@ struct light_t {
         } line;
         struct {
             uint32_t tri_index;
-            uint32_t xform_index;
+            uint32_t mi_index;
             uint32_t tex_index;
             float _unused[9];
         } tri;
@@ -329,22 +329,18 @@ struct mesh_t {
 };
 static_assert(sizeof(mesh_t) == 64, "!");
 
-struct transform_t {
-    float xform[16], inv_xform[16];
-};
-static_assert(sizeof(transform_t) == 128, "!");
-
 struct mesh_instance_t {
     float bbox_min[3];
-    uint32_t tr_index;
+    uint32_t _unused;
     float bbox_max[3];
     uint32_t mesh_index;
-    uint32_t tr_block;
+    uint32_t _unused2;
     uint32_t mesh_block;
     uint32_t lights_index;
     uint32_t ray_visibility; // upper 24 bits identify lights_block
+    float xform[16], inv_xform[16];
 };
-static_assert(sizeof(mesh_instance_t) == 48, "!");
+static_assert(sizeof(mesh_instance_t) == 176, "!");
 
 struct environment_t {
     float env_col[3];
@@ -429,7 +425,6 @@ struct scene_data_t {
     const mesh_instance_t *mesh_instances;
     const uint32_t *mi_indices;
     const mesh_t *meshes;
-    const transform_t *transforms;
     const uint32_t *vtx_indices;
     const vertex_t *vertices;
     const bvh_node_t *nodes;

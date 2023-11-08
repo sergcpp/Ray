@@ -41,11 +41,11 @@ class SIMDPolicy {
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
-                                                      const transform_t &tr, const uint32_t *vtx_indices,
+                                                      const mesh_instance_t &mi, const uint32_t *vtx_indices,
                                                       const vertex_t *vertices, const rect_t &r, int w, int h,
                                                       const uint32_t rand_seq[], aligned_vector<ray_data_t> &out_rays,
                                                       aligned_vector<hit_data_t> &out_inters) {
-        Ref::SampleMeshInTextureSpace(iteration, obj_index, uv_layer, mesh, tr, vtx_indices, vertices, r, w, h,
+        Ref::SampleMeshInTextureSpace(iteration, obj_index, uv_layer, mesh, mi, vtx_indices, vertices, r, w, h,
                                       rand_seq, out_rays, out_inters);
     }
 
@@ -81,12 +81,12 @@ class SIMDPolicy {
     }
 
     static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters,
-                                          Span<const ray_data_t> rays, const uint32_t rand_seq[], const uint32_t rand_seed,
-                                          const int iteration, const scene_data_t &sc, uint32_t node_index,
-                                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                          int *out_shadow_rays_count, int img_w, float mix_factor,
-                                          color_rgba_t *out_color, color_rgba_t *out_base_color,
+                                          Span<const ray_data_t> rays, const uint32_t rand_seq[],
+                                          const uint32_t rand_seed, const int iteration, const scene_data_t &sc,
+                                          uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                                          ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
+                                          shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                                          float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
                                           color_rgba_t *out_depth_normal) {
         Ref::ShadePrimary(ps, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
                           out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
@@ -328,7 +328,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
                                   s->mesh_instances_.empty() ? nullptr : &s->mesh_instances_[0],
                                   s->mi_indices_.empty() ? nullptr : &s->mi_indices_[0],
                                   s->meshes_.empty() ? nullptr : &s->meshes_[0],
-                                  s->transforms_.empty() ? nullptr : &s->transforms_[0],
                                   s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0],
                                   s->vertices_.empty() ? nullptr : &s->vertices_[0],
                                   s->nodes_.empty() ? nullptr : &s->nodes_[0],
@@ -446,9 +445,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     } else {
         const mesh_instance_t &mi = sc_data.mesh_instances[cam.mi_index];
         SIMDPolicy::SampleMeshInTextureSpace(region.iteration, int(cam.mi_index), int(cam.uv_index),
-                                             sc_data.meshes[mi.mesh_index], sc_data.transforms[mi.tr_index],
-                                             sc_data.vtx_indices, sc_data.vertices, rect, w_, h_, rand_seq,
-                                             p.primary_rays, p.intersections);
+                                             sc_data.meshes[mi.mesh_index], mi, sc_data.vtx_indices, sc_data.vertices,
+                                             rect, w_, h_, rand_seq, p.primary_rays, p.intersections);
 
         time_after_ray_gen = high_resolution_clock::now();
     }

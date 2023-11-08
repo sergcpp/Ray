@@ -179,7 +179,7 @@ void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, con
                          const uint16_t required_samples[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                          aligned_vector<hit_data_t<DimX * DimY>> &out_inters);
 template <int DimX, int DimY>
-void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
+void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const mesh_instance_t &mi,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
                               const uint32_t rand_seq[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                               aligned_vector<hit_data_t<DimX * DimY>> &out_inters);
@@ -228,29 +228,29 @@ bool Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fve
                                         const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
                                         const bvh_node_t *nodes, uint32_t node_index,
                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                        const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
-                                        const uint32_t *tri_indices, hit_data_t<S> &inter);
+                                        const mesh_t *meshes, const tri_accel_t *tris, const uint32_t *tri_indices,
+                                        hit_data_t<S> &inter);
 template <int S>
 bool Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
                                         const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
                                         const wbvh_node_t *nodes, uint32_t node_index,
                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                        const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris,
-                                        const uint32_t *tri_indices, hit_data_t<S> &inter);
+                                        const mesh_t *meshes, const mtri_accel_t *mtris, const uint32_t *tri_indices,
+                                        hit_data_t<S> &inter);
 template <int S>
 simd_ivec<S> Traverse_TLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type,
                                             const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                            const mesh_t *meshes, const transform_t *transforms,
-                                            const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                            const uint32_t *tri_indices, hit_data_t<S> &inter);
+                                            const mesh_t *meshes, const tri_accel_t *tris,
+                                            const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                            hit_data_t<S> &inter);
 template <int S>
 simd_ivec<S> Traverse_TLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type,
                                             const simd_ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
                                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                            const mesh_t *meshes, const transform_t *transforms,
-                                            const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-                                            const uint32_t *tri_indices, hit_data_t<S> &inter);
+                                            const mesh_t *meshes, const mtri_accel_t *mtris,
+                                            const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                            hit_data_t<S> &inter);
 // traditional bvh traversal with stack for inner nodes
 template <int S>
 bool Traverse_BLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
@@ -571,11 +571,11 @@ class SIMDPolicyBase {
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
-                                                      const transform_t &tr, const uint32_t *vtx_indices,
+                                                      const mesh_instance_t &mi, const uint32_t *vtx_indices,
                                                       const vertex_t *vertices, const rect_t &r, int w, int h,
                                                       const uint32_t rand_seq[], aligned_vector<RayDataType> &out_rays,
                                                       aligned_vector<HitDataType> &out_inters) {
-        NS::SampleMeshInTextureSpace<RPDimX, RPDimY>(iteration, obj_index, uv_layer, mesh, tr, vtx_indices, vertices, r,
+        NS::SampleMeshInTextureSpace<RPDimX, RPDimY>(iteration, obj_index, uv_layer, mesh, mi, vtx_indices, vertices, r,
                                                      w, h, rand_seq, out_rays, out_inters);
     }
 
@@ -2148,18 +2148,18 @@ simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &heig
 template <int S> force_inline simd_fvec<S> conv_unorm_16(const simd_ivec<S> &v) { return simd_fvec<S>(v) / 65535.0f; }
 
 template <int S>
-void FetchTransformAndRecalcBasis(const transform_t *sc_transforms, const simd_ivec<S> &tr_index,
+void FetchTransformAndRecalcBasis(const mesh_instance_t *sc_mesh_instances, const simd_ivec<S> &mi_index,
                                   const simd_fvec<S> P_ls[3], simd_fvec<S> inout_plane_N[3], simd_fvec<S> inout_N[3],
                                   simd_fvec<S> inout_B[3], simd_fvec<S> inout_T[3], simd_fvec<S> inout_tangent[3],
                                   simd_fvec<S> inout_ro_ls[3], simd_fvec<S> out_transform[16]) {
-    const float *transforms = &sc_transforms[0].xform[0];
-    const float *inv_transforms = &sc_transforms[0].inv_xform[0];
-    const int TransformsStride = sizeof(transform_t) / sizeof(float);
+    const float *transforms = &sc_mesh_instances[0].xform[0];
+    const float *inv_transforms = &sc_mesh_instances[0].inv_xform[0];
+    const int MeshInstancesStride = sizeof(mesh_instance_t) / sizeof(float);
 
     simd_fvec<S> inv_transform[16];
     UNROLLED_FOR(i, 16, {
-        out_transform[i] = gather(transforms + i, tr_index * TransformsStride);
-        inv_transform[i] = gather(inv_transforms + i, tr_index * TransformsStride);
+        out_transform[i] = gather(transforms + i, mi_index * MeshInstancesStride);
+        inv_transform[i] = gather(inv_transforms + i, mi_index * MeshInstancesStride);
     })
 
     simd_fvec<S> temp[3];
@@ -2957,7 +2957,7 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
 template <int DimX, int DimY>
 void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
-                                       const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
+                                       const mesh_instance_t &mi, const uint32_t *vtx_indices, const vertex_t *vertices,
                                        const rect_t &r, int width, int height, const uint32_t rand_seq[],
                                        aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                                        aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
@@ -3073,8 +3073,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
 
                     simd_fvec<S> p[3], n[3];
 
-                    TransformPoint(_p, tr.xform, p);
-                    TransformNormal(_n, tr.inv_xform, n);
+                    TransformPoint(_p, mi.xform, p);
+                    TransformNormal(_n, mi.inv_xform, n);
 
                     UNROLLED_FOR(i, 3, { where(fmask, out_ray.o[i]) = p[i] + n[i]; })
                     UNROLLED_FOR(i, 3, { where(fmask, out_ray.d[i]) = -n[i]; })
@@ -3478,9 +3478,8 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                                                  const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
                                                  const bvh_node_t *nodes, uint32_t node_index,
                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                 const mesh_t *meshes, const transform_t *transforms,
-                                                 const tri_accel_t *tris, const uint32_t *tri_indices,
-                                                 hit_data_t<S> &inter) {
+                                                 const mesh_t *meshes, const tri_accel_t *tris,
+                                                 const uint32_t *tri_indices, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
@@ -3519,7 +3518,6 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                 for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
                     const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
                     const mesh_t &m = meshes[mi.mesh_index];
-                    const transform_t &tr = transforms[mi.tr_index];
 
                     simd_ivec<S> bbox_mask = simd_ivec<S>((mi.ray_visibility & ray_flags) != 0) &
                                              bbox_test_fma(inv_d, inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) &
@@ -3529,7 +3527,7 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                     }
 
                     simd_fvec<S> _ro[3], _rd[3];
-                    TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+                    TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
                     res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, bbox_mask, nodes, m.node_index, tris,
                                                               tri_indices, int(mi_indices[i]), inter);
@@ -3554,9 +3552,8 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                                                  const simd_uvec<S> &ray_flags, const simd_ivec<S> &ray_mask,
                                                  const wbvh_node_t *nodes, uint32_t node_index,
                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                 const mesh_t *meshes, const transform_t *transforms,
-                                                 const mtri_accel_t *mtris, const uint32_t *tri_indices,
-                                                 hit_data_t<S> &inter) {
+                                                 const mesh_t *meshes, const mtri_accel_t *mtris,
+                                                 const uint32_t *tri_indices, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
@@ -3674,10 +3671,9 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                     }
 
                     const mesh_t &m = meshes[mi.mesh_index];
-                    const transform_t &tr = transforms[mi.tr_index];
 
                     float tr_ro[3], tr_rd[3];
-                    TransformRay(r_o, r_d, tr.inv_xform, tr_ro, tr_rd);
+                    TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
 
                     const bool lres = Traverse_BLAS_WithStack_ClosestHit<S>(tr_ro, tr_rd, nodes, m.node_index, mtris,
                                                                             tri_indices, inter_prim_index[ri],
@@ -3712,11 +3708,12 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
 }
 
 template <int S>
-Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
-    const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type, const simd_ivec<S> &ray_mask,
-    const bvh_node_t *nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-    const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris, const tri_mat_data_t *materials,
-    const uint32_t *tri_indices, hit_data_t<S> &inter) {
+Ray::NS::simd_ivec<S>
+Ray::NS::Traverse_TLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type,
+                                        const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                        const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                        const mesh_t *meshes, const tri_accel_t *tris, const tri_mat_data_t *materials,
+                                        const uint32_t *tri_indices, hit_data_t<S> &inter) {
     const int ray_vismask = (1u << ray_type);
 
     simd_ivec<S> solid_hit_mask = {0};
@@ -3761,7 +3758,6 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
                     }
 
                     const mesh_t &m = meshes[mi.mesh_index];
-                    const transform_t &tr = transforms[mi.tr_index];
 
                     const simd_ivec<S> bbox_mask =
                         bbox_test_fma(inv_d, inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
@@ -3770,7 +3766,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
                     }
 
                     simd_fvec<S> _ro[3], _rd[3];
-                    TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+                    TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
                     solid_hit_mask |= Traverse_BLAS_WithStack_AnyHit(_ro, _rd, bbox_mask, nodes, m.node_index, tris,
                                                                      materials, tri_indices, int(mi_indices[i]), inter);
@@ -3796,8 +3792,8 @@ template <int S>
 Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
     const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type, const simd_ivec<S> &ray_mask,
     const wbvh_node_t *nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-    const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-    const uint32_t *tri_indices, hit_data_t<S> &inter) {
+    const mesh_t *meshes, const mtri_accel_t *mtris, const tri_mat_data_t *materials, const uint32_t *tri_indices,
+    hit_data_t<S> &inter) {
     const int ray_vismask = (1u << ray_type);
 
     simd_ivec<S> solid_hit_mask = {0};
@@ -3903,14 +3899,13 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
                     }
 
                     const mesh_t &m = meshes[mi.mesh_index];
-                    const transform_t &tr = transforms[mi.tr_index];
 
                     if (!bbox_test(_inv_d, _inv_d_o, inter_t[ri], mi.bbox_min, mi.bbox_max)) {
                         continue;
                     }
 
                     float tr_ro[3], tr_rd[3];
-                    TransformRay(r_o, r_d, tr.inv_xform, tr_ro, tr_rd);
+                    TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
 
                     const int hit_type = Traverse_BLAS_WithStack_AnyHit<S>(tr_ro, tr_rd, nodes, m.node_index, mtris,
                                                                            materials, tri_indices, inter_prim_index[ri],
@@ -5067,12 +5062,12 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
 
         if (sc.wnodes) {
             NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.wnodes, root_index,
-                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.mtris,
+                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.mtris,
                                                    sc.tri_indices, inter);
         } else {
             NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.nodes, root_index,
-                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris,
-                                                   sc.tri_indices, inter);
+                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.tris, sc.tri_indices,
+                                                   inter);
         }
 
         keep_going &= inter.mask;
@@ -5319,12 +5314,12 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
         simd_ivec<S> solid_hit;
         if (sc.wnodes) {
             solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.wnodes, node_index,
-                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                       sc.mtris, sc.tri_materials, sc.tri_indices, inter);
+                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.mtris,
+                                                       sc.tri_materials, sc.tri_indices, inter);
         } else {
             solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.nodes, node_index,
-                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                       sc.tris, sc.tri_materials, sc.tri_indices, inter);
+                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.tris,
+                                                       sc.tri_materials, sc.tri_indices, inter);
         }
 
         const simd_ivec<S> terminate_mask = solid_hit | (depth > max_transp_depth);
@@ -5777,7 +5772,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 where(ray_queue[index], ls.area) = 0.0f;
             }
         } else if (l.type == LIGHT_TYPE_TRI) {
-            const transform_t &ltr = sc.transforms[l.tri.xform_index];
+            const mesh_instance_t &lmi = sc.mesh_instances[l.tri.mi_index];
             const uint32_t ltri_index = l.tri.tri_index;
 
             const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]],
@@ -5785,9 +5780,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                            &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
 
             float p1[3], p2[3], p3[3];
-            TransformPoint(v1.p, ltr.xform, p1);
-            TransformPoint(v2.p, ltr.xform, p2);
-            TransformPoint(v3.p, ltr.xform, p3);
+            TransformPoint(v1.p, lmi.xform, p1);
+            TransformPoint(v2.p, lmi.xform, p2);
+            TransformPoint(v3.p, lmi.xform, p3);
 
             const simd_fvec<S> vp1[3] = {p1[0], p1[1], p1[2]}, vp2[3] = {p2[0], p2[1], p2[2]},
                                vp3[3] = {p3[0], p3[1], p3[2]};
@@ -7178,11 +7173,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     simd_ivec<S> mat_index = gather(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
                              simd_ivec<S>((MATERIAL_INDEX_BITS << 16) | MATERIAL_INDEX_BITS);
 
-    const int *tr_indices = reinterpret_cast<const int *>(&sc.mesh_instances[0].tr_index);
-    const int TrIndicesStride = sizeof(mesh_instance_t) / sizeof(int);
-
-    const simd_ivec<S> tr_index = gather(tr_indices, obj_index * TrIndicesStride);
-
     const simd_ivec<S> vtx_indices[3] = {gather(reinterpret_cast<const int *>(sc.vtx_indices + 0), tri_index * 3),
                                          gather(reinterpret_cast<const int *>(sc.vtx_indices + 1), tri_index * 3),
                                          gather(reinterpret_cast<const int *>(sc.vtx_indices + 2), tri_index * 3)};
@@ -7257,8 +7247,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
 
     simd_fvec<S> transform[16], ro_ls[3] = {ray.o[0], ray.o[1], ray.o[2]};
-    FetchTransformAndRecalcBasis(sc.transforms, tr_index, P_ls, surf.plane_N, surf.N, surf.B, surf.T, tangent, ro_ls,
-                                 transform);
+    FetchTransformAndRecalcBasis(sc.mesh_instances, obj_index, P_ls, surf.plane_N, surf.N, surf.B, surf.T, tangent,
+                                 ro_ls, transform);
 
     // normalize vectors (scaling might have been applied)
     safe_normalize(surf.plane_N);

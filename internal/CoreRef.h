@@ -169,7 +169,7 @@ void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, con
                          uint32_t rand_seed, const float filter_table[], int iteration,
                          const uint16_t required_samples[], aligned_vector<ray_data_t> &out_rays,
                          aligned_vector<hit_data_t> &out_inters);
-void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
+void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const mesh_instance_t &mi,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
                               const uint32_t rand_seq[], aligned_vector<ray_data_t> &out_rays,
                               aligned_vector<hit_data_t> &out_inters);
@@ -197,24 +197,22 @@ bool IntersectTris_AnyHit(const float ro[3], const float rd[3], const mtri_accel
 bool Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], uint32_t ray_flags,
                                         const bvh_node_t *nodes, uint32_t root_index,
                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                        const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
-                                        const uint32_t *tri_indices, hit_data_t &inter);
+                                        const mesh_t *meshes, const tri_accel_t *tris, const uint32_t *tri_indices,
+                                        hit_data_t &inter);
 bool Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], uint32_t ray_flags,
                                         const wbvh_node_t *oct_nodes, uint32_t root_index,
                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                        const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris,
-                                        const uint32_t *tri_indices, hit_data_t &inter);
+                                        const mesh_t *meshes, const mtri_accel_t *mtris, const uint32_t *tri_indices,
+                                        hit_data_t &inter);
 // returns whether hit was solid
 bool Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type, const bvh_node_t *nodes,
                                     uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                    const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                    const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-                                    const uint32_t *tri_indices, hit_data_t &inter);
+                                    const uint32_t *mi_indices, const mesh_t *meshes, const mtri_accel_t *mtris,
+                                    const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t &inter);
 bool Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type, const wbvh_node_t *nodes,
                                     uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                    const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                    const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                    const uint32_t *tri_indices, hit_data_t &inter);
+                                    const uint32_t *mi_indices, const mesh_t *meshes, const tri_accel_t *tris,
+                                    const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t &inter);
 // traditional bvh traversal with stack for inner nodes
 bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
                                         const bvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,

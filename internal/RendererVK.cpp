@@ -33,7 +33,6 @@ static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t), 
 static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t), "!");
 static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t), "!");
 static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t), "!");
-static_assert(sizeof(Types::transform_t) == sizeof(Ray::transform_t), "!");
 static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t), "!");
 static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t), "!");
 static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t), "!");
@@ -636,7 +635,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                   s->mesh_instances_.gpu_buf(),
                                   s->mi_indices_.buf(),
                                   s->meshes_.gpu_buf(),
-                                  s->transforms_.gpu_buf(),
                                   s->vtx_indices_.gpu_buf(),
                                   s->vertices_.gpu_buf(),
                                   s->nodes_.gpu_buf(),
@@ -729,9 +727,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         }
         if (sc_data.meshes && sc_data.meshes.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.meshes, eResState::ShaderResource);
-        }
-        if (sc_data.transforms && sc_data.transforms.resource_state != eResState::ShaderResource) {
-            res_transitions.emplace_back(&sc_data.transforms, eResState::ShaderResource);
         }
         if (sc_data.vtx_indices && sc_data.vtx_indices.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.vtx_indices, eResState::ShaderResource);
@@ -1788,7 +1783,6 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESHES_BUF_SLOT, sc_data.meshes);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MI_INDICES_BUF_SLOT, sc_data.mi_indices);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms);
     }
 
     IntersectScene::Params uniform_params = {};
@@ -1906,7 +1900,6 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESHES_BUF_SLOT, sc_data.meshes);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MI_INDICES_BUF_SLOT, sc_data.mi_indices);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms);
     }
 
     IntersectScene::Params uniform_params = {};
@@ -1992,7 +1985,6 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                                          {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
                                          {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
                                          {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
-                                         {eBindTarget::SBufRO, Shade::TRANSFORMS_BUF_SLOT, sc_data.transforms},
                                          {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
@@ -2089,7 +2081,6 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
                                          {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
                                          {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
                                          {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
-                                         {eBindTarget::SBufRO, Shade::TRANSFORMS_BUF_SLOT, sc_data.transforms},
                                          {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
@@ -2165,7 +2156,6 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::MESHES_BUF_SLOT, sc_data.meshes},
         {eBindTarget::SBufRO, IntersectSceneShadow::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
         {eBindTarget::SBufRO, IntersectSceneShadow::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
-        {eBindTarget::SBufRO, IntersectSceneShadow::TRANSFORMS_BUF_SLOT, sc_data.transforms},
         {eBindTarget::SBufRO, IntersectSceneShadow::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBufRO, IntersectSceneShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, IntersectSceneShadow::SH_RAYS_BUF_SLOT, sh_rays},
@@ -2218,7 +2208,6 @@ void Ray::Vk::Renderer::kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t
                                 {eBindTarget::SBufRO, DebugRT::MESHES_BUF_SLOT, sc_data.meshes},
                                 {eBindTarget::SBufRO, DebugRT::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
                                 {eBindTarget::SBufRO, DebugRT::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
-                                {eBindTarget::SBufRO, DebugRT::TRANSFORMS_BUF_SLOT, sc_data.transforms},
                                 {eBindTarget::AccStruct, DebugRT::TLAS_SLOT, sc_data.rt_tlas},
                                 {eBindTarget::SBufRO, DebugRT::RAYS_BUF_SLOT, rays},
                                 {eBindTarget::Image, DebugRT::OUT_IMG_SLOT, out_pixels}};

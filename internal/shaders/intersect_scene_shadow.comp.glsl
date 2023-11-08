@@ -45,10 +45,6 @@ layout(std430, binding = MI_INDICES_BUF_SLOT) readonly buffer MiIndices {
     uint g_mi_indices[];
 };
 
-layout(std430, binding = TRANSFORMS_BUF_SLOT) readonly buffer Transforms {
-    transform_t g_transforms[];
-};
-
 layout(std430, binding = VERTICES_BUF_SLOT) readonly buffer Vertices {
     vertex_t g_vertices[];
 };
@@ -172,14 +168,13 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
                 }
 
                 mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
-                transform_t tr = g_transforms[floatBitsToUint(mi.bbox_min.w)];
 
                 if (!_bbox_test_fma(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
                     continue;
                 }
 
-                const vec3 ro = (tr.inv_xform * vec4(orig_ro, 1.0)).xyz;
-                const vec3 rd = (tr.inv_xform * vec4(orig_rd, 0.0)).xyz;
+                const vec3 ro = (mi.inv_xform * vec4(orig_ro, 1.0)).xyz;
+                const vec3 rd = (mi.inv_xform * vec4(orig_rd, 0.0)).xyz;
                 const vec3 inv_d = safe_invert(rd);
 
                 const bool solid_hit_found = Traverse_BLAS_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index, stack_size, inter);

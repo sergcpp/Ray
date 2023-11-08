@@ -1814,7 +1814,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
 }
 
 void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index, const int uv_layer,
-                                        const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices,
+                                        const mesh_t &mesh, const mesh_instance_t &mi, const uint32_t *vtx_indices,
                                         const vertex_t *vertices, const rect_t &r, const int width, const int height,
                                         const uint32_t rand_seq[], aligned_vector<ray_data_t> &out_rays,
                                         aligned_vector<hit_data_t> &out_inters) {
@@ -1901,8 +1901,8 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                     v *= inv_area;
                     w *= inv_area;
 
-                    const simd_fvec4 p = TransformPoint(p0 * v + p1 * w + p2 * u, tr.xform),
-                                     n = TransformNormal(n0 * v + n1 * w + n2 * u, tr.inv_xform);
+                    const simd_fvec4 p = TransformPoint(p0 * v + p1 * w + p2 * u, mi.xform),
+                                     n = TransformNormal(n0 * v + n1 * w + n2 * u, mi.inv_xform);
 
                     const simd_fvec4 o = p + n, d = -n;
 
@@ -2156,9 +2156,8 @@ bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const 
 bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
                                                   const bvh_node_t *nodes, uint32_t root_index,
                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                  const mesh_t *meshes, const transform_t *transforms,
-                                                  const tri_accel_t *tris, const uint32_t *tri_indices,
-                                                  hit_data_t &inter) {
+                                                  const mesh_t *meshes, const tri_accel_t *tris,
+                                                  const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -2188,10 +2187,9 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
                 }
 
                 const mesh_t &m = meshes[mi.mesh_index];
-                const transform_t &tr = transforms[mi.tr_index];
 
                 float _ro[3], _rd[3];
-                TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
@@ -2214,9 +2212,8 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
 bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
                                                   const wbvh_node_t *nodes, uint32_t root_index,
                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                  const mesh_t *meshes, const transform_t *transforms,
-                                                  const mtri_accel_t *mtris, const uint32_t *tri_indices,
-                                                  hit_data_t &inter) {
+                                                  const mesh_t *meshes, const mtri_accel_t *mtris,
+                                                  const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -2301,10 +2298,9 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
                 }
 
                 const mesh_t &m = meshes[mi.mesh_index];
-                const transform_t &tr = transforms[mi.tr_index];
 
                 float _ro[3], _rd[3];
-                TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
@@ -2327,9 +2323,9 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
 bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const int ray_type,
                                               const bvh_node_t *nodes, const uint32_t root_index,
                                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                              const mesh_t *meshes, const transform_t *transforms,
-                                              const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-                                              const uint32_t *tri_indices, hit_data_t &inter) {
+                                              const mesh_t *meshes, const mtri_accel_t *mtris,
+                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                              hit_data_t &inter) {
     const uint32_t ray_vismask = (1u << ray_type);
 
     float inv_d[3];
@@ -2359,14 +2355,13 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
                 }
 
                 const mesh_t &m = meshes[mi.mesh_index];
-                const transform_t &tr = transforms[mi.tr_index];
 
                 if (!bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
                     continue;
                 }
 
                 float _ro[3], _rd[3];
-                TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
@@ -2393,9 +2388,9 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
 bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const int ray_type,
                                               const wbvh_node_t *nodes, const uint32_t root_index,
                                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                              const mesh_t *meshes, const transform_t *transforms,
-                                              const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                              const uint32_t *tri_indices, hit_data_t &inter) {
+                                              const mesh_t *meshes, const tri_accel_t *tris,
+                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                              hit_data_t &inter) {
     const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
     const uint32_t ray_vismask = (1u << ray_type);
 
@@ -2484,14 +2479,13 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
                 }
 
                 const mesh_t &m = meshes[mi.mesh_index];
-                const transform_t &tr = transforms[mi.tr_index];
 
                 if (!bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
                     continue;
                 }
 
                 float _ro[3], _rd[3];
-                TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
@@ -3378,11 +3372,11 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             if (sc.wnodes) {
                 hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.wnodes,
                                                                root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                               sc.transforms, sc.mtris, sc.tri_indices, inter);
+                                                               sc.mtris, sc.tri_indices, inter);
             } else {
                 hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.nodes,
                                                                root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                               sc.transforms, sc.tris, sc.tri_indices, inter);
+                                                               sc.tris, sc.tri_indices, inter);
             }
 
             if (!hit_found) {
@@ -3500,12 +3494,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         bool solid_hit = false;
         if (sc.wnodes) {
             solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.wnodes,
-                                                       root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                       sc.transforms, sc.tris, sc.tri_materials, sc.tri_indices, inter);
+                                                       root_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.tris,
+                                                       sc.tri_materials, sc.tri_indices, inter);
         } else {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(
-                value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.nodes, root_index, sc.mesh_instances, sc.mi_indices,
-                sc.meshes, sc.transforms, sc.mtris, sc.tri_materials, sc.tri_indices, inter);
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.nodes,
+                                                       root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
+                                                       sc.mtris, sc.tri_materials, sc.tri_indices, inter);
         }
 
         if (solid_hit || depth > max_transp_depth) {
@@ -3809,16 +3803,16 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             ls.area = 0.0f;
         }
     } else if (l.type == LIGHT_TYPE_TRI) {
-        const transform_t &ltr = sc.transforms[l.tri.xform_index];
+        const mesh_instance_t &lmi = sc.mesh_instances[l.tri.mi_index];
         const uint32_t ltri_index = l.tri.tri_index;
 
         const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]],
                        &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]],
                        &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
 
-        const simd_fvec4 p1 = TransformPoint(simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f), ltr.xform),
-                         p2 = TransformPoint(simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f), ltr.xform),
-                         p3 = TransformPoint(simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f), ltr.xform);
+        const simd_fvec4 p1 = TransformPoint(simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f), lmi.xform),
+                         p2 = TransformPoint(simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f), lmi.xform),
+                         p3 = TransformPoint(simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f), lmi.xform);
         const simd_fvec2 uv1 = simd_fvec2(v1.t), uv2 = simd_fvec2(v2.t), uv3 = simd_fvec2(v3.t);
 
         const simd_fvec4 e1 = p2 - p1, e2 = p3 - p1;
@@ -5205,8 +5199,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     const uint32_t tri_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
     const material_t *mat = &sc.materials[sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS];
-
-    const transform_t *tr = &sc.transforms[sc.mesh_instances[inter.obj_index].tr_index];
+    const mesh_instance_t *mi = &sc.mesh_instances[inter.obj_index];
 
     const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
     const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
@@ -5234,10 +5227,10 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         }
     }
 
-    surf.plane_N = TransformNormal(surf.plane_N, tr->inv_xform);
-    surf.N = TransformNormal(surf.N, tr->inv_xform);
-    surf.B = TransformNormal(surf.B, tr->inv_xform);
-    surf.T = TransformNormal(surf.T, tr->inv_xform);
+    surf.plane_N = TransformNormal(surf.plane_N, mi->inv_xform);
+    surf.N = TransformNormal(surf.N, mi->inv_xform);
+    surf.B = TransformNormal(surf.B, mi->inv_xform);
+    surf.T = TransformNormal(surf.T, mi->inv_xform);
 
     // normalize vectors (scaling might have been applied)
     surf.plane_N = safe_normalize(surf.plane_N);
@@ -5325,9 +5318,9 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     const simd_fvec4 P_ls = make_fvec3(v1.p) * w + make_fvec3(v2.p) * inter.u + make_fvec3(v3.p) * inter.v;
     // rotate around Y axis by 90 degrees in 2d
     simd_fvec4 tangent = {-P_ls.get<2>(), 0.0f, P_ls.get<0>(), 0.0f};
-    tangent = TransformNormal(tangent, tr->inv_xform);
+    tangent = TransformNormal(tangent, mi->inv_xform);
     if (length2(cross(tangent, surf.N)) == 0.0f) {
-        tangent = TransformNormal(P_ls, tr->inv_xform);
+        tangent = TransformNormal(P_ls, mi->inv_xform);
     }
     if (mat->tangent_rotation != 0.0f) {
         tangent = rotate_around_axis(tangent, surf.N, mat->tangent_rotation);
@@ -5465,14 +5458,14 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
             float light_forward_len;
             simd_fvec4 light_forward =
-                normalize_len(TransformDirection(cross(p2 - p1, p3 - p1), tr->xform), light_forward_len);
+                normalize_len(TransformDirection(cross(p2 - p1, p3 - p1), mi->xform), light_forward_len);
             const float tri_area = 0.5f * light_forward_len;
 
             const float cos_theta = fabsf(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0f) {
                 float light_pdf;
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-                const simd_fvec4 P = TransformPoint(ro, tr->inv_xform);
+                const simd_fvec4 P = TransformPoint(ro, mi->inv_xform);
                 light_pdf = SampleSphericalTriangle(P, p1, p2, p3, {}, nullptr) / pdf_factor;
                 if (light_pdf == 0.0f)
 #endif

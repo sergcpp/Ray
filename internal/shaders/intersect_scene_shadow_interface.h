@@ -26,15 +26,14 @@ const int NODES_BUF_SLOT = 5;
 const int MESHES_BUF_SLOT = 6;
 const int MESH_INSTANCES_BUF_SLOT = 7;
 const int MI_INDICES_BUF_SLOT = 8;
-const int TRANSFORMS_BUF_SLOT = 9;
-const int VERTICES_BUF_SLOT = 10;
-const int VTX_INDICES_BUF_SLOT = 11;
-const int SH_RAYS_BUF_SLOT = 12;
-const int COUNTERS_BUF_SLOT = 13;
-const int LIGHTS_BUF_SLOT = 14;
-const int LIGHT_WNODES_BUF_SLOT = 15;
-const int RANDOM_SEQ_BUF_SLOT = 16;
-const int TLAS_SLOT = 17;
+const int VERTICES_BUF_SLOT = 9;
+const int VTX_INDICES_BUF_SLOT = 10;
+const int SH_RAYS_BUF_SLOT = 11;
+const int COUNTERS_BUF_SLOT = 12;
+const int LIGHTS_BUF_SLOT = 13;
+const int LIGHT_WNODES_BUF_SLOT = 14;
+const int RANDOM_SEQ_BUF_SLOT = 15;
+const int TLAS_SLOT = 16;
 
 const int INOUT_IMG_SLOT = 0;
 

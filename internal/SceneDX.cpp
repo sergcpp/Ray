@@ -366,7 +366,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
 
         tlas_instances.emplace_back();
         auto &new_instance = tlas_instances.back();
-        to_dxr_xform(transforms_[instance.tr_index].xform, new_instance.Transform);
+        to_dxr_xform(instance.xform, new_instance.Transform);
         new_instance.InstanceID = meshes_[instance.mesh_index].vert_index / 3;
         new_instance.InstanceMask = (instance.ray_visibility & 0xff);
         new_instance.InstanceContributionToHitGroupIndex = 0;

@@ -55,7 +55,6 @@ class Scene : public SceneCommon {
     SparseStorage<uint32_t> tri_indices_;
     SparseStorage<mtri_accel_t> mtris_;
     SparseStorage<tri_mat_data_t> tri_materials_;
-    SparseStorage<transform_t> transforms_;
     SparseStorage<mesh_t> meshes_;
     SparseStorage<mesh_instance_t> mesh_instances_;
     std::vector<uint32_t> mi_indices_;
