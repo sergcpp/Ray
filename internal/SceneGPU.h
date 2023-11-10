@@ -79,7 +79,6 @@ class Scene : public SceneCommon {
     uint32_t visible_lights_count_ = 0, blocker_lights_count_ = 0;
     Vector<light_wbvh_node_t> light_wnodes_;
 
-    environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;
     struct {
@@ -126,9 +125,6 @@ class Scene : public SceneCommon {
   public:
     Scene(Context *ctx, bool use_hwrt, bool use_bindless, bool use_tex_compression);
     ~Scene() override;
-
-    void GetEnvironment(environment_desc_t &env) override;
-    void SetEnvironment(const environment_desc_t &env) override;
 
     TextureHandle AddTexture(const tex_desc_t &t) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
@@ -220,30 +216,6 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_wnodes_(ctx, "Light WNodes") {
     SceneBase::log_ = ctx->log();
     SetEnvironment({});
-}
-
-inline void Ray::NS::Scene::GetEnvironment(environment_desc_t &env) {
-    std::shared_lock<std::shared_timed_mutex> lock(mtx_);
-
-    memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
-    env.env_map = TextureHandle{env_.env_map};
-    memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
-    env.back_map = TextureHandle{env_.back_map};
-    env.env_map_rotation = env_.env_map_rotation;
-    env.back_map_rotation = env_.back_map_rotation;
-    env.multiple_importance = env_.multiple_importance;
-}
-
-inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
-    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-
-    memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
-    env_.env_map = env.env_map._index;
-    memcpy(env_.back_col, env.back_col, 3 * sizeof(float));
-    env_.back_map = env.back_map._index;
-    env_.env_map_rotation = env.env_map_rotation;
-    env_.back_map_rotation = env.back_map_rotation;
-    env_.multiple_importance = env.multiple_importance;
 }
 
 inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) {

@@ -66,30 +66,6 @@ Ray::Cpu::Scene::~Scene() {
     }
 }
 
-void Ray::Cpu::Scene::GetEnvironment(environment_desc_t &env) {
-    std::shared_lock<std::shared_timed_mutex> lock(mtx_);
-
-    memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
-    env.env_map = TextureHandle{env_.env_map};
-    memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
-    env.back_map = TextureHandle{env_.back_map};
-    env.env_map_rotation = env_.env_map_rotation;
-    env.back_map_rotation = env_.back_map_rotation;
-    env.multiple_importance = env_.multiple_importance;
-}
-
-void Ray::Cpu::Scene::SetEnvironment(const environment_desc_t &env) {
-    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-
-    memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
-    env_.env_map = env.env_map._index;
-    memcpy(env_.back_col, env.back_col, 3 * sizeof(float));
-    env_.back_map = env.back_map._index;
-    env_.env_map_rotation = env.env_map_rotation;
-    env_.back_map_rotation = env.back_map_rotation;
-    env_.multiple_importance = env.multiple_importance;
-}
-
 Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 

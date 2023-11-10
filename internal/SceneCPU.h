@@ -82,7 +82,6 @@ class Scene : public SceneCommon {
     std::vector<light_bvh_node_t> light_nodes_;
     aligned_vector<light_wbvh_node_t> light_wnodes_;
 
-    environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;
     struct {
@@ -107,9 +106,6 @@ class Scene : public SceneCommon {
   public:
     Scene(ILog *log, bool use_wide_bvh, bool use_tex_compression);
     ~Scene() override;
-
-    void GetEnvironment(environment_desc_t &env) override;
-    void SetEnvironment(const environment_desc_t &env) override;
 
     TextureHandle AddTexture(const tex_desc_t &t) override;
     void RemoveTexture(const TextureHandle t) override {

@@ -16,9 +16,14 @@ class SceneCommon : public SceneBase {
 
     CameraHandle current_cam_ = InvalidCameraHandle;
 
+    environment_t env_;
+
     void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 
   public:
+    void GetEnvironment(environment_desc_t &env) override;
+    void SetEnvironment(const environment_desc_t &env) override;
+
     CameraHandle current_cam() const override {
         std::shared_lock<std::shared_timed_mutex> lock(mtx_);
         return current_cam_;
