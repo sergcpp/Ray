@@ -465,8 +465,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t base_mesh_desc;
         base_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        base_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        base_mesh_desc.vtx_attrs = base_attrs;
+        base_mesh_desc.vtx_positions = {base_attrs, 0, 8};
+        base_mesh_desc.vtx_normals = {base_attrs, 3, 8};
+        base_mesh_desc.vtx_uvs = {base_attrs, 6, 8};
         base_mesh_desc.vtx_indices = base_indices;
 
         const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, base_groups[0], base_groups[1]}};
@@ -487,8 +488,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t model_mesh_desc;
         model_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        model_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        model_mesh_desc.vtx_attrs = model_attrs;
+        model_mesh_desc.vtx_positions = {model_attrs, 0, 8};
+        model_mesh_desc.vtx_normals = {model_attrs, 3, 8};
+        model_mesh_desc.vtx_uvs = {model_attrs, 6, 8};
         model_mesh_desc.vtx_indices = model_indices;
 
         const Ray::mat_group_desc_t groups[] = {{main_mat, main_mat, model_groups[0], model_groups[1]}};
@@ -505,8 +507,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t core_mesh_desc;
         core_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        core_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        core_mesh_desc.vtx_attrs = core_attrs;
+        core_mesh_desc.vtx_positions = {core_attrs, 0, 8};
+        core_mesh_desc.vtx_normals = {core_attrs, 3, 8};
+        core_mesh_desc.vtx_uvs = {core_attrs, 6, 8};
         core_mesh_desc.vtx_indices = core_indices;
 
         const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, core_groups[0], core_groups[1]}};
@@ -524,8 +527,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t subsurf_bar_mesh_desc;
         subsurf_bar_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        subsurf_bar_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        subsurf_bar_mesh_desc.vtx_attrs = subsurf_bar_attrs;
+        subsurf_bar_mesh_desc.vtx_positions = {subsurf_bar_attrs, 0, 8};
+        subsurf_bar_mesh_desc.vtx_normals = {subsurf_bar_attrs, 3, 8};
+        subsurf_bar_mesh_desc.vtx_uvs = {subsurf_bar_attrs, 6, 8};
         subsurf_bar_mesh_desc.vtx_indices = subsurf_bar_indices;
 
         const Ray::mat_group_desc_t groups[] = {
@@ -544,8 +548,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t text_mesh_desc;
         text_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        text_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        text_mesh_desc.vtx_attrs = text_attrs;
+        text_mesh_desc.vtx_positions = {text_attrs, 0, 8};
+        text_mesh_desc.vtx_normals = {text_attrs, 3, 8};
+        text_mesh_desc.vtx_uvs = {text_attrs, 6, 8};
         text_mesh_desc.vtx_indices = text_indices;
 
         const Ray::mat_group_desc_t groups[] = {{white_mat, white_mat, text_groups[0], text_groups[1]}};
@@ -570,8 +575,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t env_mesh_desc;
         env_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        env_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        env_mesh_desc.vtx_attrs = env_attrs;
+        env_mesh_desc.vtx_positions = {env_attrs, 0, 8};
+        env_mesh_desc.vtx_normals = {env_attrs, 3, 8};
+        env_mesh_desc.vtx_uvs = {env_attrs, 6, 8};
         env_mesh_desc.vtx_indices = env_indices;
 
         std::vector<Ray::mat_group_desc_t> groups;
@@ -604,8 +610,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t square_light_mesh_desc;
         square_light_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        square_light_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        square_light_mesh_desc.vtx_attrs = square_light_attrs;
+        square_light_mesh_desc.vtx_positions = {square_light_attrs, 0, 8};
+        square_light_mesh_desc.vtx_normals = {square_light_attrs, 3, 8};
+        square_light_mesh_desc.vtx_uvs = {square_light_attrs, 6, 8};
         square_light_mesh_desc.vtx_indices = square_light_indices;
 
         const Ray::mat_group_desc_t groups[] = {
@@ -629,8 +636,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t disc_light_mesh_desc;
         disc_light_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        disc_light_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        disc_light_mesh_desc.vtx_attrs = disc_light_attrs;
+        disc_light_mesh_desc.vtx_positions = {disc_light_attrs, 0, 8};
+        disc_light_mesh_desc.vtx_normals = {disc_light_attrs, 3, 8};
+        disc_light_mesh_desc.vtx_uvs = {disc_light_attrs, 6, 8};
         disc_light_mesh_desc.vtx_indices = disc_light_indices;
 
         const Ray::mat_group_desc_t groups[] = {
@@ -650,8 +658,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t glassball_mesh_desc;
         glassball_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        glassball_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        glassball_mesh_desc.vtx_attrs = glassball_attrs;
+        glassball_mesh_desc.vtx_positions = {glassball_attrs, 0, 8};
+        glassball_mesh_desc.vtx_normals = {glassball_attrs, 3, 8};
+        glassball_mesh_desc.vtx_uvs = {glassball_attrs, 6, 8};
         glassball_mesh_desc.vtx_indices = glassball_indices;
 
         const Ray::mat_group_desc_t groups[] = {
@@ -670,8 +679,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::mesh_desc_t box_mesh_desc;
         box_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-        box_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        box_mesh_desc.vtx_attrs = box_attrs;
+        box_mesh_desc.vtx_positions = {box_attrs, 0, 8};
+        box_mesh_desc.vtx_normals = {box_attrs, 3, 8};
+        box_mesh_desc.vtx_uvs = {box_attrs, 6, 8};
         box_mesh_desc.vtx_indices = box_indices;
 
         const Ray::mat_group_desc_t groups[] = {{glossy_red, glossy_red, box_groups[0], box_groups[1]}};
@@ -739,7 +749,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         // second row
         mi.mesh = box3_mesh;
-        
+
         box_xform[12] = -0.05f;
         box_xform[14] = -0.05f;
         mi.camera_visibility = false;

@@ -37,29 +37,6 @@ enum class ePrimType {
     TriangleList, ///< indexed triangle list
 };
 
-/** Vertex attribute layout.
-    P - vertex position
-    N - vertex normal
-    B - vertex binormal (oriented to vertical texture axis)
-    T - vertex texture coordinates
-*/
-enum class eVertexLayout {
-    PxyzNxyzTuv = 0,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, T.y ]
-    PxyzNxyzTuvTuv,     ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, T.y, T.x, T.y ]
-    PxyzNxyzBxyzTuv,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, B.x, B.y, B.z, T.x, T.y ]
-    PxyzNxyzBxyzTuvTuv, ///< [ P.x, P.y, P.z, N.x, N.y, N.z, B.x, B.y, B.z, T.x, T.y, T.x, T.y ]
-};
-
-/** Vertex attribute stride value.
-    Represented in number of floats
-*/
-const size_t AttrStrides[] = {
-    8,  ///< PxyzNxyzTuv
-    10, ///< PxyzNxyzTuvTuv
-    11, ///< PxyzNxyzBxyzTuv
-    13, ///< PxyzNxyzBxyzTuvTuv
-};
-
 /// Mesh region material type
 enum class eShadingNode : uint32_t { Diffuse, Glossy, Refractive, Emissive, Mix, Transparent, Principled };
 
@@ -131,12 +108,20 @@ struct mat_group_desc_t {
         : front_mat(_front_material), back_mat(_front_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 };
 
+struct vtx_attribute_t {
+    Span<const float> data; ///< Float array of data
+    int offset = 0;         ///< Offset to attribute expressed in sizeof(float)
+    int stride = 0;         ///< Stride between vertices expressed in sizeof(float)
+};
+
 /// Mesh description
 struct mesh_desc_t {
     const char *name = nullptr;          ///< Mesh name (for debugging)
     ePrimType prim_type;                 ///< Primitive type
-    eVertexLayout layout;                ///< Vertex attribute layout
-    Span<const float> vtx_attrs;         ///< Vertex attributes
+    vtx_attribute_t vtx_positions;       ///< Vertex positions
+    vtx_attribute_t vtx_normals;         ///< Vertex normals
+    vtx_attribute_t vtx_binormals;       ///< Vertex binormals (optional)
+    vtx_attribute_t vtx_uvs;             ///< Vertex texture coordinates
     Span<const uint32_t> vtx_indices;    ///< Vertex indices, defining primitives
     int base_vertex = 0;                 ///< Shift applied to indices
     Span<const mat_group_desc_t> groups; ///< Shapes of a mesh

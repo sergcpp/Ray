@@ -383,8 +383,8 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     aligned_vector<mtri_accel_t> temp_mtris;
     std::vector<uint32_t> temp_tri_indices;
 
-    PreprocessMesh(_m.vtx_attrs.data(), _m.vtx_indices, _m.layout, _m.base_vertex, s, temp_nodes, temp_tris,
-                   temp_tri_indices, temp_mtris);
+    PreprocessMesh(_m.vtx_positions, _m.vtx_indices, _m.base_vertex, s, temp_nodes, temp_tris, temp_tri_indices,
+                   temp_mtris);
 
     log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", _m.name ? _m.name : "(unknown)", (Ray::GetTimeMs() - t1));
 
@@ -520,41 +520,28 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     }
 
-    const size_t stride = AttrStrides[int(_m.layout)];
-
-    std::vector<vertex_t> new_vertices(_m.vtx_attrs.size() / stride);
+    std::vector<vertex_t> new_vertices(_m.vtx_positions.data.size() / _m.vtx_positions.stride);
     std::vector<uint32_t> new_vtx_indices(_m.vtx_indices.size());
     for (int i = 0; i < _m.vtx_indices.size(); ++i) {
         new_vtx_indices[i] = _m.vtx_indices[i] + _m.base_vertex;
     }
 
     // add attributes
-    for (int i = 0; i < _m.vtx_attrs.size() / stride; ++i) {
+    for (int i = 0; i < int(new_vertices.size()); ++i) {
         vertex_t &v = new_vertices[i];
 
-        memcpy(&v.p[0], (_m.vtx_attrs.data() + i * stride), 3 * sizeof(float));
-        memcpy(&v.n[0], (_m.vtx_attrs.data() + i * stride + 3), 3 * sizeof(float));
+        memcpy(&v.p[0], &_m.vtx_positions.data[_m.vtx_positions.offset + i * _m.vtx_positions.stride],
+               3 * sizeof(float));
+        memcpy(&v.n[0], &_m.vtx_normals.data[_m.vtx_normals.offset + i * _m.vtx_normals.stride], 3 * sizeof(float));
+        memcpy(&v.t[0], &_m.vtx_uvs.data[_m.vtx_uvs.offset + i * _m.vtx_uvs.stride], 2 * sizeof(float));
 
-        if (_m.layout == eVertexLayout::PxyzNxyzTuv) {
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 6), 2 * sizeof(float));
-            // v.t[1][0] = v.t[1][1] = 0.0f;
-            v.b[0] = v.b[1] = v.b[2] = 0.0f;
-        } else if (_m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 6), 2 * sizeof(float));
-            // memcpy(&v.t[1][0], (_m.vtx_attrs.data() + i * stride + 8), 2 * sizeof(float));
-            v.b[0] = v.b[1] = v.b[2] = 0.0f;
-        } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuv) {
-            memcpy(&v.b[0], (_m.vtx_attrs.data() + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 9), 2 * sizeof(float));
-            // v.t[1][0] = v.t[1][1] = 0.0f;
-        } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuvTuv) {
-            memcpy(&v.b[0], (_m.vtx_attrs.data() + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 9), 2 * sizeof(float));
-            // memcpy(&v.t[1][0], (_m.vtx_attrs.data() + i * stride + 11), 2 * sizeof(float));
+        if (!_m.vtx_binormals.data.empty()) {
+            memcpy(&v.b[0], &_m.vtx_binormals.data[_m.vtx_binormals.offset + i * _m.vtx_binormals.stride],
+                   3 * sizeof(float));
         }
     }
 
-    if (_m.layout == eVertexLayout::PxyzNxyzTuv || _m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
+    if (_m.vtx_binormals.data.empty()) {
         // NOTE: this may add some vertices and indices
         ComputeTangentBasis(0, 0, new_vertices, new_vtx_indices, new_vtx_indices);
     }
@@ -964,7 +951,7 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     }
 
     std::vector<bvh_node_t> temp_nodes;
-    PreprocessPrims_SAH(primitives, nullptr, 0, {}, temp_nodes, mi_indices_);
+    PreprocessPrims_SAH(primitives, {}, {}, temp_nodes, mi_indices_);
 
     if (use_wide_bvh_) {
         aligned_vector<wbvh_node_t> temp_wnodes;
@@ -1382,7 +1369,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = false;
     s.min_primitives_in_leaf = 1;
-    PreprocessPrims_SAH(primitives, nullptr, 0, s, temp_nodes, li_indices);
+    PreprocessPrims_SAH(primitives, {}, s, temp_nodes, li_indices);
 
     light_nodes_.resize(temp_nodes.size(), light_bvh_node_t{});
     for (uint32_t i = 0; i < temp_nodes.size(); ++i) {

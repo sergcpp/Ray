@@ -257,7 +257,7 @@ force_inline long ClearBit(long mask, long index) {
 bool PreprocessTri(const float *p, int stride, tri_accel_t *out_acc);
 
 // Builds BVH for mesh and precomputes triangle data
-uint32_t PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, eVertexLayout layout, int base_vertex,
+uint32_t PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32_t> vtx_indices, int base_vertex,
                         const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
                         aligned_vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices,
                         aligned_vector<mtri_accel_t> &out_tris2);
@@ -270,7 +270,7 @@ uint32_t EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint32_t *
                   uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes);
 
 // Builds SAH-based BVH for a set of primitives, slow
-uint32_t PreprocessPrims_SAH(Span<const prim_t> prims, const float *positions, size_t stride, const bvh_settings_t &s,
+uint32_t PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_t &positions, const bvh_settings_t &s,
                              std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices);
 
 // Builds linear BVH for a set of primitives, fast

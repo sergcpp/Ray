@@ -228,8 +228,8 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *out_acc) {
     return true;
 }
 
-uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, const eVertexLayout layout,
-                             const int base_vertex, const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
+uint32_t Ray::PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32_t> vtx_indices, const int base_vertex,
+                             const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
                              aligned_vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices,
                              aligned_vector<mtri_accel_t> &out_tris2) {
     assert(!vtx_indices.empty() && vtx_indices.size() % 3 == 0);
@@ -242,18 +242,15 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
     triangles.reserve(vtx_indices.size() / 3);
     real_indices.reserve(vtx_indices.size() / 3);
 
-    const float *positions = attrs;
-    const size_t attr_stride = AttrStrides[int(layout)];
-
     for (int j = 0; j < int(vtx_indices.size()); j += 3) {
         Ref::simd_fvec4 p[3] = {{0.0f}, {0.0f}, {0.0f}};
 
         const uint32_t i0 = vtx_indices[j + 0] + base_vertex, i1 = vtx_indices[j + 1] + base_vertex,
                        i2 = vtx_indices[j + 2] + base_vertex;
 
-        memcpy(value_ptr(p[0]), &positions[i0 * attr_stride], 3 * sizeof(float));
-        memcpy(value_ptr(p[1]), &positions[i1 * attr_stride], 3 * sizeof(float));
-        memcpy(value_ptr(p[2]), &positions[i2 * attr_stride], 3 * sizeof(float));
+        memcpy(value_ptr(p[0]), &positions.data[positions.offset + i0 * positions.stride], 3 * sizeof(float));
+        memcpy(value_ptr(p[1]), &positions.data[positions.offset + i1 * positions.stride], 3 * sizeof(float));
+        memcpy(value_ptr(p[2]), &positions.data[positions.offset + i2 * positions.stride], 3 * sizeof(float));
 
         tri_accel_t tri = {};
         if (PreprocessTri(value_ptr(p[0]), 4, &tri)) {
@@ -271,7 +268,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
     const size_t indices_start = out_tri_indices.size();
     uint32_t num_out_nodes;
     if (!s.use_fast_bvh_build) {
-        num_out_nodes = PreprocessPrims_SAH(primitives, positions, attr_stride, s, out_nodes, out_tri_indices);
+        num_out_nodes = PreprocessPrims_SAH(primitives, positions, s, out_nodes, out_tri_indices);
     } else {
         num_out_nodes = PreprocessPrims_HLBVH(primitives, out_nodes, out_tri_indices);
     }
@@ -464,9 +461,8 @@ uint32_t Ray::EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint3
     return root_node_index;
 }
 
-uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positions, const size_t stride,
-                                  const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
-                                  std::vector<uint32_t> &out_indices) {
+uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_t &positions, const bvh_settings_t &s,
+                                  std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
         Ref::simd_fvec4 min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
@@ -491,7 +487,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
 
     while (!prim_lists.empty()) {
         split_data_t split_data =
-            SplitPrimitives_SAH(prims.data(), prim_lists.back().indices, positions, stride, prim_lists.back().min,
+            SplitPrimitives_SAH(prims.data(), prim_lists.back().indices, positions, prim_lists.back().min,
                                 prim_lists.back().max, root_min, root_max, s);
         prim_lists.pop_back();
 
@@ -626,7 +622,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     // Build top level hierarchy using SAH
     const uint32_t new_nodes_count =
-        PreprocessPrims_SAH({&top_prims[0], top_prims.size()}, nullptr, 0, s, out_nodes, top_indices);
+        PreprocessPrims_SAH({&top_prims[0], top_prims.size()}, {}, s, out_nodes, top_indices);
     unused(new_nodes_count);
 
     auto bottom_nodes_start = uint32_t(out_nodes.size());

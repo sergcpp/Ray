@@ -134,7 +134,7 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
 } // namespace Ray
 
 Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
-                                           const float *positions, const size_t stride, const Ref::simd_fvec4 &bbox_min,
+                                           const vtx_attribute_t &positions, const Ref::simd_fvec4 &bbox_min,
                                            const Ref::simd_fvec4 &bbox_max, const Ref::simd_fvec4 &root_min,
                                            const Ref::simd_fvec4 &root_max, const bvh_settings_t &s) {
     const int num_prims = int(prim_indices.size());
@@ -142,14 +142,15 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
 
     std::vector<bbox_t> modified_prim_bounds;
 
-    if (s.allow_spatial_splits && positions) {
+    if (s.allow_spatial_splits && !positions.data.empty()) {
         modified_prim_bounds.resize(num_prims);
 
         for (int i = 0; i < num_prims; i++) {
             const prim_t &p = primitives[prim_indices[i]];
 
-            const auto v0 = Ref::simd_fvec3{&positions[p.i0 * stride]}, v1 = Ref::simd_fvec3{&positions[p.i1 * stride]},
-                       v2 = Ref::simd_fvec3{&positions[p.i2 * stride]};
+            const auto v0 = Ref::simd_fvec3{&positions.data[positions.offset + p.i0 * positions.stride]},
+                       v1 = Ref::simd_fvec3{&positions.data[positions.offset + p.i1 * positions.stride]},
+                       v2 = Ref::simd_fvec3{&positions.data[positions.offset + p.i2 * positions.stride]};
 
             modified_prim_bounds[i] = GetClippedAABB(v0, v1, v2, whole_box);
         }
@@ -377,10 +378,10 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                         bins[enter_index].enter_counter++;
                         bins[exit_index].exit_counter++;
 
-                        if (positions) {
-                            auto v0 = Ref::simd_fvec3{&positions[p.i0 * stride]},
-                                 v1 = Ref::simd_fvec3{&positions[p.i1 * stride]},
-                                 v2 = Ref::simd_fvec3{&positions[p.i2 * stride]};
+                        if (!positions.data.empty()) {
+                            auto v0 = Ref::simd_fvec3{&positions.data[positions.offset + p.i0 * positions.stride]},
+                                 v1 = Ref::simd_fvec3{&positions.data[positions.offset + p.i1 * positions.stride]},
+                                 v2 = Ref::simd_fvec3{&positions.data[positions.offset + p.i2 * positions.stride]};
 
                             for (int j = enter_index; j <= exit_index; j++) {
                                 bbox_t box = GetClippedAABB(v0, v1, v2, bins[j].limits);

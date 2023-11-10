@@ -944,24 +944,26 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
 
     simd_fvec4 bbox_min{FLT_MAX}, bbox_max{-FLT_MAX};
 
-    const size_t attr_stride = AttrStrides[int(_m.layout)];
     if (use_hwrt_) {
         for (int j = 0; j < int(_m.vtx_indices.size()); j += 3) {
             simd_fvec4 p[3];
 
             const uint32_t i0 = _m.vtx_indices[j + 0], i1 = _m.vtx_indices[j + 1], i2 = _m.vtx_indices[j + 2];
 
-            memcpy(value_ptr(p[0]), &_m.vtx_attrs[i0 * attr_stride], 3 * sizeof(float));
-            memcpy(value_ptr(p[1]), &_m.vtx_attrs[i1 * attr_stride], 3 * sizeof(float));
-            memcpy(value_ptr(p[2]), &_m.vtx_attrs[i2 * attr_stride], 3 * sizeof(float));
+            memcpy(value_ptr(p[0]), &_m.vtx_positions.data[_m.vtx_positions.offset + i0 * _m.vtx_positions.stride],
+                   3 * sizeof(float));
+            memcpy(value_ptr(p[1]), &_m.vtx_positions.data[_m.vtx_positions.offset + i1 * _m.vtx_positions.stride],
+                   3 * sizeof(float));
+            memcpy(value_ptr(p[2]), &_m.vtx_positions.data[_m.vtx_positions.offset + i2 * _m.vtx_positions.stride],
+                   3 * sizeof(float));
 
             bbox_min = min(bbox_min, min(p[0], min(p[1], p[2])));
             bbox_max = max(bbox_max, max(p[0], max(p[1], p[2])));
         }
     } else {
         aligned_vector<mtri_accel_t> _unused;
-        PreprocessMesh(_m.vtx_attrs.data(), _m.vtx_indices, _m.layout, _m.base_vertex, s, new_nodes, new_tris,
-                       new_tri_indices, _unused);
+        PreprocessMesh(_m.vtx_positions, _m.vtx_indices, _m.base_vertex, s, new_nodes, new_tris, new_tri_indices,
+                       _unused);
 
         memcpy(value_ptr(bbox_min), new_nodes[0].bbox_min, 3 * sizeof(float));
         memcpy(value_ptr(bbox_max), new_nodes[0].bbox_max, 3 * sizeof(float));
@@ -1071,36 +1073,23 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     m.tris_block = tris_index.second;
     m.tris_count = uint32_t(new_tris.size());
 
-    const size_t stride = AttrStrides[int(_m.layout)];
-
     // add attributes
-    std::vector<vertex_t> new_vertices(_m.vtx_attrs.size() / stride);
-    for (int i = 0; i < _m.vtx_attrs.size() / stride; ++i) {
+    std::vector<vertex_t> new_vertices(_m.vtx_positions.data.size() / _m.vtx_positions.stride);
+    for (int i = 0; i < int(new_vertices.size()); ++i) {
         vertex_t &v = new_vertices[i];
 
-        memcpy(&v.p[0], (_m.vtx_attrs.data() + i * stride), 3 * sizeof(float));
-        memcpy(&v.n[0], (_m.vtx_attrs.data() + i * stride + 3), 3 * sizeof(float));
+        memcpy(&v.p[0], &_m.vtx_positions.data[_m.vtx_positions.offset + i * _m.vtx_positions.stride],
+               3 * sizeof(float));
+        memcpy(&v.n[0], &_m.vtx_normals.data[_m.vtx_normals.offset + i * _m.vtx_normals.stride], 3 * sizeof(float));
+        memcpy(&v.t[0], &_m.vtx_uvs.data[_m.vtx_uvs.offset + i * _m.vtx_uvs.stride], 2 * sizeof(float));
 
-        if (_m.layout == eVertexLayout::PxyzNxyzTuv) {
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 6), 2 * sizeof(float));
-            // v.t[1][0] = v.t[1][1] = 0.0f;
-            v.b[0] = v.b[1] = v.b[2] = 0.0f;
-        } else if (_m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 6), 2 * sizeof(float));
-            // memcpy(&v.t[1][0], (_m.vtx_attrs.data() + i * stride + 8), 2 * sizeof(float));
-            v.b[0] = v.b[1] = v.b[2] = 0.0f;
-        } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuv) {
-            memcpy(&v.b[0], (_m.vtx_attrs.data() + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 9), 2 * sizeof(float));
-            // v.t[1][0] = v.t[1][1] = 0.0f;
-        } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuvTuv) {
-            memcpy(&v.b[0], (_m.vtx_attrs.data() + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 9), 2 * sizeof(float));
-            // memcpy(&v.t[1][0], (_m.vtx_attrs.data() + i * stride + 11), 2 * sizeof(float));
+        if (!_m.vtx_binormals.data.empty()) {
+            memcpy(&v.b[0], &_m.vtx_binormals.data[_m.vtx_binormals.offset + i * _m.vtx_binormals.stride],
+                   3 * sizeof(float));
         }
     }
 
-    if (_m.layout == eVertexLayout::PxyzNxyzTuv || _m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
+    if (_m.vtx_binormals.data.empty()) {
         ComputeTangentBasis(0, 0, new_vertices, new_vtx_indices, _m.vtx_indices);
     }
 
@@ -1541,7 +1530,7 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
     std::vector<bvh_node_t> bvh_nodes;
     std::vector<uint32_t> mi_indices;
 
-    PreprocessPrims_SAH(primitives, nullptr, 0, {}, bvh_nodes, mi_indices);
+    PreprocessPrims_SAH(primitives, {}, {}, bvh_nodes, mi_indices);
 
     const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, uint32_t(bvh_nodes.size()));
     // offset nodes
@@ -2038,7 +2027,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = false;
     s.min_primitives_in_leaf = 1;
-    PreprocessPrims_SAH(primitives, nullptr, 0, s, temp_nodes, li_indices);
+    PreprocessPrims_SAH(primitives, {}, s, temp_nodes, li_indices);
 
     std::vector<light_bvh_node_t> temp_lnodes(temp_nodes.size(), light_bvh_node_t{});
     for (uint32_t i = 0; i < temp_nodes.size(); ++i) {
