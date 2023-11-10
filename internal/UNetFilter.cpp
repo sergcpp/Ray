@@ -140,36 +140,36 @@ int Ray::SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_fil
                          SmallVector<int, 2> alias_dependencies[]) {
     struct resource_t {
         const char *name;
-        int offset;
         int resolution_div;
         int depth;
-        int size;
-        int lifetime[2] = {99999, -1};
+        mutable int offset;
+        mutable int size;
+        mutable int lifetime[2] = {99999, -1};
     };
 
-    resource_t resources[] = {
-        {"encConv0", 0, 1, 32},   //
-        {"pool1", 0, 2, 32},      //
-        {"pool2", 0, 4, 48},      //
-        {"pool3", 0, 8, 64},      //
-        {"pool4", 0, 16, 80},     //
-        {"encConv5a", 0, 16, 96}, //
-        {"upsample4", 0, 16, 96}, //
-        {"decConv4a", 0, 8, 112}, //
-        {"upsample3", 0, 8, 112}, //
-        {"decConv3a", 0, 4, 96},  //
-        {"upsample2", 0, 4, 96},  //
-        {"decConv2a", 0, 2, 64},  //
-        {"upsample1", 0, 2, 64},  //
-        {"decConv1a", 0, 1, 64},  //
-        {"decConv1b", 0, 1, 32}   //
+    const resource_t resources[] = {
+        {"encConv0", 1, 32},   //
+        {"pool1", 2, 32},      //
+        {"pool2", 4, 48},      //
+        {"pool3", 8, 64},      //
+        {"pool4", 16, 80},     //
+        {"encConv5a", 16, 96}, //
+        {"upsample4", 16, 96}, //
+        {"decConv4a", 8, 112}, //
+        {"upsample3", 8, 112}, //
+        {"decConv3a", 4, 96},  //
+        {"upsample2", 4, 96},  //
+        {"decConv2a", 2, 64},  //
+        {"upsample1", 2, 64},  //
+        {"decConv1a", 1, 64},  //
+        {"decConv1b", 1, 32}   //
     };
     const int resource_count = sizeof(resources) / sizeof(resource_t);
 
     const int w_rounded = 16 * ((w + 15) / 16);
     const int h_rounded = 16 * ((h + 15) / 16);
 
-    for (resource_t &r : resources) {
+    for (const resource_t &r : resources) {
         assert((w_rounded % r.resolution_div) == 0);
         r.size = (w_rounded / r.resolution_div) + 1;
         if (round_w) {
@@ -239,7 +239,7 @@ int Ray::SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_fil
         std::vector<int> heap_tops(UNetFilterPasses, 0);
 
         for (int i = 0; i < resource_count; ++i) {
-            resource_t &r = resources[placement_order[i]];
+            const resource_t &r = resources[placement_order[i]];
 
             int heap_top = 0;
             for (int j = r.lifetime[0]; j <= r.lifetime[1]; ++j) {
@@ -292,7 +292,7 @@ int Ray::SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_fil
             }
         }
     } else {
-        for (resource_t &res : resources) {
+        for (const resource_t &res : resources) {
             res.offset = required_memory;
             required_memory += res.size;
         }
