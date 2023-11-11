@@ -1578,8 +1578,8 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
                 }
 
                 Ref::simd_fvec4 transmittance;
-                color += IntegrateScattering(atmosphere_params, Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir,
-                                             light_col, sky_transmitance_lut_, transmittance);
+                color += IntegrateScattering(atmosphere_params, Ref::simd_fvec4{0.0f, 700.0f, 0.0f, 0.0f}, ray_dir,
+                                             MAX_DIST, light_dir, light_col, sky_transmitance_lut_, transmittance);
             }
 
             color = rgb_to_rgbe(color);

@@ -973,10 +973,13 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     }
 }
 
-//extern "C" {
-//int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
-//            const char **err);
-//}
+//#define DUMP_SKY_ENV
+#ifdef DUMP_SKY_ENV
+extern "C" {
+int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
+            const char **err);
+}
+#endif
 
 void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     const uint64_t t1 = Ray::GetTimeMs();
@@ -1003,16 +1006,12 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
 
     AtmosphereParameters atmosphere_params = {}; // use default parameters for now
 
-    {
-        // const char *err = nullptr;
-        // SaveEXR(value_ptr(sky_transmitance_lut_[0]), TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H, 4, 1, "test.exr",
-        // &err);
-    }
-
     static const int SkyEnvRes[] = {512, 256};
     std::vector<color_rgba8_t> rgbe_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
 
-    // std::vector<color_rgb_t> rgb_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
+#ifdef DUMP_SKY_ENV
+    std::vector<color_rgb_t> rgb_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
+#endif
 
     for (int y = 0; y < SkyEnvRes[1]; ++y) {
         const float theta = PI * float(y) / float(SkyEnvRes[1]);
@@ -1035,13 +1034,15 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
                 }
 
                 Ref::simd_fvec4 transmittance;
-                color += IntegrateScattering(atmosphere_params, Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir,
-                                             light_col, sky_transmitance_lut_, transmittance);
+                color += IntegrateScattering(atmosphere_params, Ref::simd_fvec4{0.0f, 700.0f, 0.0f, 0.0f}, ray_dir,
+                                             MAX_DIST, light_dir, light_col, sky_transmitance_lut_, transmittance);
             }
 
-            // rgb_pixels[y * SkyEnvRes[0] + x].v[0] = color.get<0>();
-            // rgb_pixels[y * SkyEnvRes[0] + x].v[1] = color.get<1>();
-            // rgb_pixels[y * SkyEnvRes[0] + x].v[2] = color.get<2>();
+#ifdef DUMP_SKY_ENV
+            rgb_pixels[y * SkyEnvRes[0] + x].v[0] = color.get<0>();
+            rgb_pixels[y * SkyEnvRes[0] + x].v[1] = color.get<1>();
+            rgb_pixels[y * SkyEnvRes[0] + x].v[2] = color.get<2>();
+#endif
 
             color = rgb_to_rgbe(color);
 
@@ -1052,10 +1053,10 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
         }
     }
 
-    {
-        // const char *err = nullptr;
-        // SaveEXR(&rgb_pixels[0].v[0], SkyEnvRes[0], SkyEnvRes[1], 3, 1, "test.exr", &err);
-    }
+#ifdef DUMP_SKY_ENV
+    const char *err = nullptr;
+    SaveEXR(&rgb_pixels[0].v[0], SkyEnvRes[0], SkyEnvRes[1], 3, 1, "test.exr", &err);
+#endif
 
     const int storage = 0;
     const int index = tex_storage_rgba_.Allocate(rgbe_pixels, SkyEnvRes, false);

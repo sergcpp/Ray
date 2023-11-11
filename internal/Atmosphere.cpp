@@ -112,30 +112,35 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
     const float sample_distribution_exponent =
         1.0f + saturate(1.0f - ray_height / params.atmosphere_height) * 8.0f; // Slightly arbitrary max exponent of 9
 
-    const Ref::simd_fvec2 intersection = AtmosphereIntersection(params, ray_start, ray_dir);
-    ray_length = fminf(ray_length, intersection.get<1>());
-    if (intersection.get<0>() > 0) {
+    const Ref::simd_fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
+    ray_length = fminf(ray_length, atm_intersection.get<1>());
+    if (atm_intersection.get<0>() > 0) {
         // Advance ray to the atmosphere entry point
-        ray_start += ray_dir * intersection.get<0>();
-        ray_length -= intersection.get<0>();
+        ray_start += ray_dir * atm_intersection.get<0>();
+        ray_length -= atm_intersection.get<0>();
     }
 
-    const float costh = dot(ray_dir, light_dir);
-    const float phase_r = PhaseRayleigh(costh);
-    const float phase_m = PhaseMie(costh);
+    const Ref::simd_fvec2 planet_intersection = PlanetIntersection(params, ray_start, ray_dir);
+    if (planet_intersection.get<0>() > 0) {
+        ray_length = fminf(ray_length, planet_intersection.get<0>());
+    }
+
+    if (ray_length <= 0.0f) {
+        return Ref::simd_fvec4{0.0f};
+    }
+
+    const float costh = dot(ray_dir, light_dir), phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh);
 
     const int SampleCount = 64;
 
-    Ref::simd_fvec4 optical_depth = 0.0f;
-    Ref::simd_fvec4 rayleigh = 0.0f;
-    Ref::simd_fvec4 mie = 0.0f;
+    Ref::simd_fvec4 optical_depth = 0.0f, rayleigh = 0.0f, mie = 0.0f;
 
     float prev_ray_time = 0;
 
     for (int i = 0; i < SampleCount; i++) {
-        float ray_time = powf(float(i) / SampleCount, sample_distribution_exponent) * ray_length;
+        const float ray_time = powf(float(i) / SampleCount, sample_distribution_exponent) * ray_length;
         // Because we are distributing the samples exponentially, we have to calculate the step size per sample.
-        float step_size = (ray_time - prev_ray_time);
+        const float step_size = (ray_time - prev_ray_time);
 
         const Ref::simd_fvec4 local_position = ray_start + ray_dir * ray_time;
         Ref::simd_fvec4 up_vector;
@@ -144,7 +149,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
 
         optical_depth += local_density * step_size;
 
-        // The atmospheric transmittance from rayStart to localPosition
+        // The atmospheric transmittance from ray_start to localPosition
         const Ref::simd_fvec4 view_transmittance = Absorb(params, optical_depth);
 
         Ref::simd_fvec4 light_transmittance;
@@ -170,7 +175,33 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
 
     transmittance = Absorb(params, optical_depth);
 
-    return (rayleigh * params.rayleigh_scattering + mie * params.mie_scattering) * light_color;
+    Ref::simd_fvec4 ground_color = 0.0f;
+    if (planet_intersection.get<0>() > 0) { // planet ground
+        const Ref::simd_fvec4 local_position = ray_start + ray_dir * ray_length;
+        Ref::simd_fvec4 up_vector;
+        const float local_height = AtmosphereHeight(params, local_position, up_vector);
+
+        const Ref::simd_fvec4 view_transmittance = Absorb(params, optical_depth);
+
+        Ref::simd_fvec4 light_transmittance;
+        if (transmittance_lut.empty()) {
+            const Ref::simd_fvec4 optical_depthlight = IntegrateOpticalDepth(params, local_position, light_dir);
+            // The atmospheric transmittance of light reaching localPosition
+            light_transmittance = Absorb(params, optical_depthlight);
+        } else {
+            const float view_zenith_cos_angle = dot(light_dir, up_vector);
+            const Ref::simd_fvec2 uv =
+                LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
+            auto iuv = Ref::simd_ivec2(uv * Ref::simd_fvec2(TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H));
+            iuv = clamp(iuv, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
+
+            light_transmittance = transmittance_lut[iuv.get<1>() * TRANSMITTANCE_LUT_W + iuv.get<0>()];
+        }
+        ground_color =
+            params.ground_albedo * saturate(dot(up_vector, light_dir)) * view_transmittance * light_transmittance;
+    }
+
+    return (ground_color + rayleigh * params.rayleigh_scattering + mie * params.mie_scattering) * light_color;
 }
 
 void Ray::UvToLutTransmittanceParams(const AtmosphereParameters &params, Ref::simd_fvec2 uv, float &view_height,

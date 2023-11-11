@@ -16,6 +16,7 @@ struct AtmosphereParameters {
     Ref::simd_fvec4 mie_scattering = Ref::simd_fvec4{3.996f, 3.996f, 3.996f, 0.0f} * 1e-6f;
     Ref::simd_fvec4 ozone_absorbtion = Ref::simd_fvec4{0.650f, 1.881f, 0.085f, 0.0f} * 1e-6f;
     float atmosphere_density = 1.0f;
+    Ref::simd_fvec4 ground_albedo = {0.05f, 0.05f, 0.05f, 0.0f};
 };
 
 const int TRANSMITTANCE_LUT_W = 256, TRANSMITTANCE_LUT_H = 64;
