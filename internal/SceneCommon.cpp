@@ -173,8 +173,6 @@ void Ray::SceneCommon::UpdateSkyTransmitanceLUT(const AtmosphereParameters &para
             float view_height, view_zenith_cos_angle;
             UvToLutTransmittanceParams(params, uv, view_height, view_zenith_cos_angle);
 
-            const Ref::simd_fvec2 uv_test = LutTransmittanceParamsToUv(params, view_height, view_zenith_cos_angle);
-
             const Ref::simd_fvec4 world_pos = {0.0f, view_height - params.planet_radius, 0.0f, 0.0f};
             const Ref::simd_fvec4 world_dir = {0.0f, view_zenith_cos_angle,
                                                -sqrtf(1.0f - view_zenith_cos_angle * view_zenith_cos_angle), 0.0f};
