@@ -13,18 +13,6 @@
 
 namespace Ray {
 namespace Cpu {
-Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
-    float max_component = fmaxf(fmaxf(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
-    if (max_component < 1e-32) {
-        return Ref::simd_fvec4{0.0f};
-    }
-
-    int exponent;
-    const float factor = frexpf(max_component, &exponent) * 256.0f / max_component;
-
-    return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
-}
-
 template <typename T> T clamp(T val, T min, T max) { return (val < min ? min : (val > max ? max : val)); }
 
 Ref::simd_fvec4 cross(const Ref::simd_fvec4 &v1, const Ref::simd_fvec4 &v2) {
@@ -973,14 +961,6 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     }
 }
 
-//#define DUMP_SKY_ENV
-#ifdef DUMP_SKY_ENV
-extern "C" {
-int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
-            const char **err);
-}
-#endif
-
 void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     const uint64_t t1 = Ray::GetTimeMs();
 
@@ -1007,56 +987,8 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     AtmosphereParameters atmosphere_params = {}; // use default parameters for now
 
     static const int SkyEnvRes[] = {512, 256};
-    std::vector<color_rgba8_t> rgbe_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
-
-#ifdef DUMP_SKY_ENV
-    std::vector<color_rgb_t> rgb_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
-#endif
-
-    for (int y = 0; y < SkyEnvRes[1]; ++y) {
-        const float theta = PI * float(y) / float(SkyEnvRes[1]);
-        for (int x = 0; x < SkyEnvRes[0]; ++x) {
-            const float phi = 2.0f * PI * float(x) / float(SkyEnvRes[0]);
-
-            auto ray_dir = Ref::simd_fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
-
-            Ref::simd_fvec4 color = 0.0f;
-
-            // Evaluate light sources
-            for (const uint32_t li_index : dir_lights) {
-                const light_t &l = lights_[li_index];
-
-                const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
-                Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
-                if (l.dir.angle != 0.0f) {
-                    const float radius = tanf(l.dir.angle);
-                    light_col *= (PI * radius * radius);
-                }
-
-                Ref::simd_fvec4 transmittance;
-                color += IntegrateScattering(atmosphere_params, Ref::simd_fvec4{0.0f, 700.0f, 0.0f, 0.0f}, ray_dir,
-                                             MAX_DIST, light_dir, light_col, sky_transmitance_lut_, transmittance);
-            }
-
-#ifdef DUMP_SKY_ENV
-            rgb_pixels[y * SkyEnvRes[0] + x].v[0] = color.get<0>();
-            rgb_pixels[y * SkyEnvRes[0] + x].v[1] = color.get<1>();
-            rgb_pixels[y * SkyEnvRes[0] + x].v[2] = color.get<2>();
-#endif
-
-            color = rgb_to_rgbe(color);
-
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[0] = uint8_t(color.get<0>());
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[1] = uint8_t(color.get<1>());
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[2] = uint8_t(color.get<2>());
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[3] = uint8_t(color.get<3>());
-        }
-    }
-
-#ifdef DUMP_SKY_ENV
-    const char *err = nullptr;
-    SaveEXR(&rgb_pixels[0].v[0], SkyEnvRes[0], SkyEnvRes[1], 3, 1, "test.exr", &err);
-#endif
+    const std::vector<color_rgba8_t> rgbe_pixels =
+        CalcSkyEnvTexture(atmosphere_params, SkyEnvRes, lights_.data(), dir_lights);
 
     const int storage = 0;
     const int index = tex_storage_rgba_.Allocate(rgbe_pixels, SkyEnvRes, false);

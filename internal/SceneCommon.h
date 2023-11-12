@@ -21,6 +21,8 @@ class SceneCommon : public SceneBase {
     aligned_vector<Ref::simd_fvec4> sky_transmitance_lut_;
 
     void UpdateSkyTransmitanceLUT(const AtmosphereParameters &params);
+    std::vector<color_rgba8_t> CalcSkyEnvTexture(const AtmosphereParameters &params, const int res[2],
+                                                 const light_t lights[], Span<const uint32_t> dir_lights);
     void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 
   public:
