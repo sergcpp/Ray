@@ -355,6 +355,8 @@ struct environment_t {
     uint32_t light_index;
     uint32_t env_map_res;  // 16-bit
     uint32_t back_map_res; // 16-bit
+    int envmap_resolution;
+    atmosphere_params_t atmosphere;
 };
 
 force_inline float to_norm_float(uint8_t v) {

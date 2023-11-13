@@ -27,9 +27,6 @@ Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_co
     : use_wide_bvh_(use_wide_bvh), use_tex_compression_(use_tex_compression) {
     SceneBase::log_ = log;
     SetEnvironment({});
-
-    AtmosphereParameters atmosphere_params = {}; // use default parameters for now
-    SceneCommon::UpdateSkyTransmitanceLUT(atmosphere_params);
 }
 
 Ray::Cpu::Scene::~Scene() {
@@ -984,11 +981,9 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     //     return;
     // }
 
-    AtmosphereParameters atmosphere_params = {}; // use default parameters for now
-
-    static const int SkyEnvRes[] = {512, 256};
+    const int SkyEnvRes[] = {env_.envmap_resolution, env_.envmap_resolution / 2};
     const std::vector<color_rgba8_t> rgbe_pixels =
-        CalcSkyEnvTexture(atmosphere_params, SkyEnvRes, lights_.data(), dir_lights);
+        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights);
 
     const int storage = 0;
     const int index = tex_storage_rgba_.Allocate(rgbe_pixels, SkyEnvRes, false);
@@ -1000,7 +995,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
         env_.back_map = physical_sky_texture_._index;
     }
 
-    log_->Info("PrepareSkyEnvMap done in %lldms", GetTimeMs() - t1);
+    log_->Info("PrepareSkyEnvMap (%ix%i) done in %lldms", SkyEnvRes[0], SkyEnvRes[1], GetTimeMs() - t1);
 }
 
 void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
@@ -1158,6 +1153,10 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
     for (auto it = lights_.cbegin(); it != lights_.cend(); ++it) {
         const light_t &l = *it;
+        if (l.type == LIGHT_TYPE_DIR && physical_sky_texture_ != InvalidTextureHandle) {
+            // Directional lights are already 'baked' into sky texture
+            continue;
+        }
 
         Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
         float area = 1.0f, omega_n = 0.0f, omega_e = 0.0f;

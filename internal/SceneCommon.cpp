@@ -1,5 +1,6 @@
 #include "SceneCommon.h"
 
+#include "Atmosphere.h"
 #include "Core.h"
 
 namespace Ray {
@@ -26,6 +27,8 @@ void Ray::SceneCommon::GetEnvironment(environment_desc_t &env) {
     env.env_map_rotation = env_.env_map_rotation;
     env.back_map_rotation = env_.back_map_rotation;
     env.multiple_importance = env_.multiple_importance;
+    env.envmap_resolution = env_.envmap_resolution;
+    env.atmosphere = env_.atmosphere;
 }
 
 void Ray::SceneCommon::SetEnvironment(const environment_desc_t &env) {
@@ -38,6 +41,10 @@ void Ray::SceneCommon::SetEnvironment(const environment_desc_t &env) {
     env_.env_map_rotation = env.env_map_rotation;
     env_.back_map_rotation = env.back_map_rotation;
     env_.multiple_importance = env.multiple_importance;
+    env_.envmap_resolution = env.envmap_resolution;
+    env_.atmosphere = env.atmosphere;
+
+    UpdateSkyTransmittanceLUT(env_.atmosphere);
 }
 
 Ray::CameraHandle Ray::SceneCommon::AddCamera(const camera_desc_t &c) {
@@ -175,8 +182,8 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
     cam.pass_settings.regularize_alpha = c.regularize_alpha;
 }
 
-void Ray::SceneCommon::UpdateSkyTransmitanceLUT(const AtmosphereParameters &params) {
-    sky_transmitance_lut_.resize(TRANSMITTANCE_LUT_W * TRANSMITTANCE_LUT_H);
+void Ray::SceneCommon::UpdateSkyTransmittanceLUT(const atmosphere_params_t &params) {
+    sky_transmittance_lut_.resize(4 * TRANSMITTANCE_LUT_W * TRANSMITTANCE_LUT_H);
     for (int y = 0; y < TRANSMITTANCE_LUT_H; ++y) {
         const float v = float(y) / TRANSMITTANCE_LUT_H;
         for (int x = 0; x < TRANSMITTANCE_LUT_W; ++x) {
@@ -194,12 +201,12 @@ void Ray::SceneCommon::UpdateSkyTransmitanceLUT(const AtmosphereParameters &para
             const Ref::simd_fvec4 optical_depthlight = IntegrateOpticalDepth(params, world_pos, world_dir);
             const Ref::simd_fvec4 transmittance = Absorb(params, optical_depthlight);
 
-            sky_transmitance_lut_[y * TRANSMITTANCE_LUT_W + x] = transmittance;
+            transmittance.store_to(&sky_transmittance_lut_[4 * (y * TRANSMITTANCE_LUT_W + x)], Ref::simd_mem_aligned);
         }
     }
 }
 
-// #define DUMP_SKY_ENV
+//#define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
 int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
@@ -207,18 +214,21 @@ int SaveEXR(const float *data, int width, int height, int components, const int 
 }
 #endif
 
-std::vector<Ray::color_rgba8_t> Ray::SceneCommon::CalcSkyEnvTexture(const AtmosphereParameters &params,
-                                                                    const int res[2], const light_t lights[],
+std::vector<Ray::color_rgba8_t> Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int res[2],
+                                                                    const light_t lights[],
                                                                     Span<const uint32_t> dir_lights) {
     std::vector<color_rgba8_t> rgbe_pixels(res[0] * res[1]);
 #ifdef DUMP_SKY_ENV
     std::vector<color_rgb_t> rgb_pixels(res[0] * res[1]);
 #endif
 
+    // #pragma omp parallel for
     for (int y = 0; y < res[1]; ++y) {
-        const float theta = PI * float(y) / float(res[1]);
+        const double theta = PI * float(y) / float(res[1]);
         for (int x = 0; x < res[0]; ++x) {
-            const float phi = 2.0f * PI * float(x) / float(res[0]);
+            const uint32_t px_hash = Ref::hash(y * res[0] + x);
+
+            const double phi = 2.0f * PI * (x + 0.5f) / float(res[0]);
 
             auto ray_dir = Ref::simd_fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
 
@@ -236,8 +246,9 @@ std::vector<Ray::color_rgba8_t> Ray::SceneCommon::CalcSkyEnvTexture(const Atmosp
                 }
 
                 Ref::simd_fvec4 transmittance;
-                color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, 700.0f, 0.0f, 0.0f}, ray_dir, MAX_DIST,
-                                             light_dir, light_col, sky_transmitance_lut_, transmittance);
+                color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
+                                             ray_dir, MAX_DIST, light_dir, l.dir.angle, light_col,
+                                             sky_transmittance_lut_, px_hash, transmittance);
             }
 
 #ifdef DUMP_SKY_ENV

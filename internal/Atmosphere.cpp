@@ -3,11 +3,35 @@
 #include <cmath>
 
 namespace Ray {
+#include "precomputed/__3d_noise_tex.inl"
+#include "precomputed/__weather_tex.inl"
+
 force_inline float clamp(const float val, const float min, const float max) {
     return val < min ? min : (val > max ? max : val);
 }
 
 force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
+
+force_inline float remap(float value, float original_min) {
+    return saturate((value - original_min) / (1.000001 - original_min));
+}
+
+force_inline float mix(float x, float y, float a) { return x * (1.0f - a) + y * a; }
+
+// GPU PRO 7 - Real-time Volumetric Cloudscapes
+// https://www.guerrilla-games.com/read/the-real-time-volumetric-cloudscapes-of-horizon-zero-dawn
+// https://github.com/sebh/TileableVolumeNoise
+force_inline float remap(float value, float original_min, float original_max, float new_min, float new_max) {
+    return new_min +
+           (saturate((value - original_min) / (0.0000001f + original_max - original_min)) * (new_max - new_min));
+}
+
+force_inline float linstep(float smin, float smax, float x) { return saturate((x - smin) / (smax - smin)); }
+
+force_inline float smoothstep(float edge0, float edge1, float x) {
+    const float t = clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
 
 // Math
 Ref::simd_fvec2 SphereIntersection(Ref::simd_fvec4 ray_start, const Ref::simd_fvec4 &ray_dir,
@@ -25,15 +49,26 @@ Ref::simd_fvec2 SphereIntersection(Ref::simd_fvec4 ray_start, const Ref::simd_fv
     }
 }
 
-Ref::simd_fvec2 PlanetIntersection(const AtmosphereParameters &params, const Ref::simd_fvec4 &ray_start,
+Ref::simd_fvec2 PlanetIntersection(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
                                    const Ref::simd_fvec4 &ray_dir) {
     const Ref::simd_fvec4 planet_center = Ref::simd_fvec4(0, -params.planet_radius, 0, 0);
     return SphereIntersection(ray_start, ray_dir, planet_center, params.planet_radius);
 }
-Ref::simd_fvec2 AtmosphereIntersection(const AtmosphereParameters &params, const Ref::simd_fvec4 &ray_start,
+
+Ref::simd_fvec2 AtmosphereIntersection(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
                                        const Ref::simd_fvec4 &ray_dir) {
     const Ref::simd_fvec4 planet_center = Ref::simd_fvec4(0, -params.planet_radius, 0, 0);
     return SphereIntersection(ray_start, ray_dir, planet_center, params.planet_radius + params.atmosphere_height);
+}
+
+Ref::simd_fvec4 CloudsIntersection(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
+                                   const Ref::simd_fvec4 &ray_dir) {
+    const Ref::simd_fvec4 planet_center = Ref::simd_fvec4(0, -params.planet_radius, 0, 0);
+    const Ref::simd_fvec2 beg =
+        SphereIntersection(ray_start, ray_dir, planet_center, params.planet_radius + params.clouds_height_beg);
+    const Ref::simd_fvec2 end =
+        SphereIntersection(ray_start, ray_dir, planet_center, params.planet_radius + params.clouds_height_end);
+    return {beg.get<0>(), beg.get<1>(), end.get<0>(), end.get<1>()};
 }
 
 // Phase functions
@@ -45,8 +80,39 @@ float PhaseMie(float costh, float g = 0.85f) {
     return (1 - k * k) / ((4 * PI) * (1 - kcosth) * (1 - kcosth));
 }
 
+const float WrenningePhaseScale = 0.9f;
+const Ref::simd_fvec2 WrenningePhaseParameters = Ref::simd_fvec2(-0.2f, 0.8f);
+
+force_inline float HenyeyGreenstein(const float mu, const float inG) {
+    return (1.0f - inG * inG) / (powf(1.0f + inG * inG - 2.0f * inG * mu, 1.5f) * 4.0f * PI);
+}
+
+force_inline float CloudPhaseFunction(const float mu) {
+    return mix(HenyeyGreenstein(mu, WrenningePhaseParameters.get<0>()),
+               HenyeyGreenstein(mu, WrenningePhaseParameters.get<1>()), 0.7f);
+}
+
+Ref::simd_fvec4 PhaseWrenninge(float mu) {
+    Ref::simd_fvec4 phase = 0.0f;
+    // Wrenninge multiscatter approximation
+    phase.set<0>(CloudPhaseFunction(mu));
+    phase.set<1>(CloudPhaseFunction(mu * WrenningePhaseScale));
+    phase.set<2>(CloudPhaseFunction(mu * WrenningePhaseScale * WrenningePhaseScale));
+    return phase;
+}
+
+// dl is the density sampled along the light ray for the given sample position.
+// dC is the low lod sample of density at the given sample position.
+float getLightEnergy(float dl, float dC, const Ref::simd_fvec4 &phase_probability) {
+    // Wrenninge multi scatter approximation
+    Ref::simd_fvec4 expScale = Ref::simd_fvec4(0.8f, 0.1f, 0.002f, 0.0f);
+    Ref::simd_fvec4 totalScale = Ref::simd_fvec4(2.0f, 0.8f, 0.4f, 0.0f);
+    Ref::simd_fvec4 intensity_curve = exp(-dl * expScale);
+    return dot(totalScale * phase_probability, intensity_curve);
+}
+
 // Atmosphere
-float AtmosphereHeight(const AtmosphereParameters &params, const Ref::simd_fvec4 &position_ws,
+float AtmosphereHeight(const atmosphere_params_t &params, const Ref::simd_fvec4 &position_ws,
                        Ref::simd_fvec4 &up_vector) {
     const Ref::simd_fvec4 planet_center = Ref::simd_fvec4(0, -params.planet_radius, 0, 0);
     up_vector = (position_ws - planet_center);
@@ -55,7 +121,7 @@ float AtmosphereHeight(const AtmosphereParameters &params, const Ref::simd_fvec4
     return height - params.planet_radius;
 }
 
-force_inline Ref::simd_fvec4 AtmosphereDensity(const AtmosphereParameters &params, const float h) {
+force_inline Ref::simd_fvec4 AtmosphereDensity(const atmosphere_params_t &params, const float h) {
 #if 1 // expf bug workaround (fp exception on unused simd lanes)
     const Ref::simd_fvec4 density_rayleigh = exp(Ref::simd_fvec4{-fmaxf(0.0f, h / params.rayleigh_height)});
     const Ref::simd_fvec4 density_mie = exp(Ref::simd_fvec4{-fmaxf(0.0f, h / params.mie_height)});
@@ -68,17 +134,20 @@ force_inline Ref::simd_fvec4 AtmosphereDensity(const AtmosphereParameters &param
     return Ref::simd_fvec4{density_rayleigh.get<0>(), density_mie.get<0>(), density_ozone, 0.0f};
 }
 
-Ref::simd_fvec4 SampleTransmittanceLUT(Span<const Ref::simd_fvec4> transmittance_lut, Ref::simd_fvec2 uv) {
-    uv = uv * Ref::simd_fvec2(TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H) - 0.5f;
+Ref::simd_fvec4 SampleTransmittanceLUT(Span<const float> transmittance_lut, Ref::simd_fvec2 uv) {
+    uv = uv * Ref::simd_fvec2(TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H);
     auto iuv0 = Ref::simd_ivec2(uv);
     iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
-    const Ref::simd_ivec2 iuv1 =
-        min(iuv0 + Ref::simd_ivec2{1, 1}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
+    const Ref::simd_ivec2 iuv1 = min(iuv0 + 1, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
 
-    const Ref::simd_fvec4 tr00 = transmittance_lut[iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>()],
-                          tr01 = transmittance_lut[iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>()],
-                          tr10 = transmittance_lut[iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>()],
-                          tr11 = transmittance_lut[iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>()];
+    const auto tr00 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
+                                      Ref::simd_mem_aligned),
+               tr01 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
+                                      Ref::simd_mem_aligned),
+               tr10 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
+                                      Ref::simd_mem_aligned),
+               tr11 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
+                                      Ref::simd_mem_aligned);
 
     const Ref::simd_fvec2 k = fract(uv);
 
@@ -87,9 +156,137 @@ Ref::simd_fvec4 SampleTransmittanceLUT(Span<const Ref::simd_fvec4> transmittance
 
     return (tr1 * k.get<1>() + tr0 * (1.0f - k.get<1>()));
 }
+
+force_inline Ref::simd_fvec4 FetchWeatherTex(const int x, const int y) {
+    return Ref::simd_fvec4{
+        float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 0]), float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 1]),
+        float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 2]), float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 3])};
+}
+
+Ref::simd_fvec4 SampleWeatherTex(Ref::simd_fvec2 uv) {
+    uv = uv * Ref::simd_fvec2(WEATHER_TEX_W, WEATHER_TEX_H);
+    auto iuv0 = Ref::simd_ivec2{uv};
+    iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{WEATHER_TEX_W - 1, WEATHER_TEX_H - 1});
+    const Ref::simd_ivec2 iuv1 = (iuv0 + 1) & Ref::simd_ivec2{WEATHER_TEX_W - 1, WEATHER_TEX_H - 1};
+
+    const Ref::simd_fvec4 w00 = FetchWeatherTex(iuv0.get<0>(), iuv0.get<1>()),
+                          w01 = FetchWeatherTex(iuv1.get<0>(), iuv0.get<1>()),
+                          w10 = FetchWeatherTex(iuv0.get<0>(), iuv1.get<1>()),
+                          w11 = FetchWeatherTex(iuv1.get<0>(), iuv1.get<1>());
+
+    const Ref::simd_fvec2 k = fract(uv);
+
+    const Ref::simd_fvec4 w0 = w01 * k.get<0>() + w00 * (1.0f - k.get<0>()),
+                          w1 = w11 * k.get<0>() + w10 * (1.0f - k.get<0>());
+
+    return (w1 * k.get<1>() + w0 * (1.0f - k.get<1>())) * (1.0f / 255.0f);
+}
+
+// Taken from https://github.com/armory3d/armory_ci/blob/master/build_untitled/compiled/Shaders/world_pass.frag.glsl
+float GetDensityHeightGradientForPoint(float height, float cloud_type) {
+    const auto stratusGrad = Ref::simd_fvec4(0.02f, 0.05f, 0.09f, 0.11f);
+    const auto stratocumulusGrad = Ref::simd_fvec4(0.02f, 0.2f, 0.48f, 0.625f);
+    const auto cumulusGrad = Ref::simd_fvec4(0.01f, 0.0625f, 0.78f, 1.0f);
+    float stratus = 1.0f - clamp(cloud_type * 2.0f, 0, 1);
+    float stratocumulus = 1.0f - abs(cloud_type - 0.5f) * 2.0f;
+    float cumulus = clamp(cloud_type - 0.5f, 0, 1) * 2.0f;
+    Ref::simd_fvec4 cloudGradient = stratusGrad * stratus + stratocumulusGrad * stratocumulus + cumulusGrad * cumulus;
+    return smoothstep(cloudGradient.get<0>(), cloudGradient.get<1>(), height) -
+           smoothstep(cloudGradient.get<2>(), cloudGradient.get<3>(), height);
+}
+
+force_inline float Fetch3dNoiseTex(const int x, const int y, const int z) {
+    return __3d_noise_tex[z * NOISE_3D_RES * NOISE_3D_RES + y * NOISE_3D_RES + x] / 255.0f;
+}
+
+float Sample3dNoiseTex(const Ref::simd_fvec4 &uvw) {
+    Ref::simd_ivec4 iuvw0 = Ref::simd_ivec4(uvw);
+    iuvw0 = clamp(iuvw0, Ref::simd_ivec4{0}, Ref::simd_ivec4{NOISE_3D_RES - 1});
+    const Ref::simd_ivec4 iuvw1 = (iuvw0 + 1) & Ref::simd_ivec4{NOISE_3D_RES - 1};
+
+    const float n000 = Fetch3dNoiseTex(iuvw0.get<0>(), iuvw0.get<1>(), iuvw0.get<2>()),
+                n001 = Fetch3dNoiseTex(iuvw1.get<0>(), iuvw0.get<1>(), iuvw0.get<2>()),
+                n010 = Fetch3dNoiseTex(iuvw0.get<0>(), iuvw1.get<1>(), iuvw0.get<2>()),
+                n011 = Fetch3dNoiseTex(iuvw1.get<0>(), iuvw1.get<1>(), iuvw0.get<2>()),
+                n100 = Fetch3dNoiseTex(iuvw0.get<0>(), iuvw0.get<1>(), iuvw1.get<2>()),
+                n101 = Fetch3dNoiseTex(iuvw1.get<0>(), iuvw0.get<1>(), iuvw1.get<2>()),
+                n110 = Fetch3dNoiseTex(iuvw0.get<0>(), iuvw1.get<1>(), iuvw1.get<2>()),
+                n111 = Fetch3dNoiseTex(iuvw1.get<0>(), iuvw1.get<1>(), iuvw1.get<2>());
+
+    const Ref::simd_fvec4 k = fract(uvw);
+
+    const float n00x = (1.0f - k.get<0>()) * n000 + k.get<0>() * n001,
+                n01x = (1.0f - k.get<0>()) * n010 + k.get<0>() * n011,
+                n10x = (1.0f - k.get<0>()) * n100 + k.get<0>() * n101,
+                n11x = (1.0f - k.get<0>()) * n110 + k.get<0>() * n111;
+
+    const float n0xx = (1.0f - k.get<1>()) * n00x + k.get<1>() * n01x,
+                n1xx = (1.0f - k.get<1>()) * n10x + k.get<1>() * n11x;
+
+    return (1.0f - k.get<2>()) * n0xx + k.get<2>() * n1xx;
+}
+
+float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_position, float &out_local_height,
+                      Ref::simd_fvec4 &out_up_vector) {
+    out_local_height = AtmosphereHeight(params, local_position, out_up_vector);
+
+    Ref::simd_fvec2 weather_uv = {local_position.get<0>() + params.clouds_offset_x,
+                                  local_position.get<2>() + params.clouds_offset_z};
+    weather_uv = fract(weather_uv * 0.00007f);
+
+    Ref::simd_fvec4 weather_sample = SampleWeatherTex(weather_uv);
+    // weather_sample = srgb_to_rgb(weather_sample);
+
+    const float height_fraction =
+        (out_local_height - params.clouds_height_beg) / (params.clouds_height_end - params.clouds_height_beg);
+
+    float cloud_coverage = mix(weather_sample.get<2>(), weather_sample.get<1>(), params.clouds_variety);
+    cloud_coverage = remap(cloud_coverage, saturate(1.0f - params.clouds_density + 0.5f * height_fraction));
+
+    float cloud_type = weather_sample.get<0>();
+    cloud_coverage *= GetDensityHeightGradientForPoint(height_fraction, cloud_type);
+
+    if (height_fraction > 1.0f || cloud_coverage < 0.01f) {
+        return 0.0f;
+    }
+
+    local_position /= 1.5f * (params.clouds_height_end - params.clouds_height_beg);
+
+    local_position = fract(local_position);
+    local_position *= NOISE_3D_RES;
+
+    const float noise_read = 1.0f - Sample3dNoiseTex(local_position);
+
+    return remap(cloud_coverage, 0.6f * noise_read);
+    return 0.12f * mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, height_fraction) *
+           powf(5.0f * remap(cloud_coverage, 0.6f * noise_read), 1.0f - height_fraction);
+}
+
+float TraceCloudShadow(const atmosphere_params_t &params, const uint32_t rand_hash, Ref::simd_fvec4 ray_start,
+                       const Ref::simd_fvec4 &ray_dir) {
+    const Ref::simd_fvec4 clouds_intersection = CloudsIntersection(params, ray_start, ray_dir);
+    if (clouds_intersection.get<3>() > 0) {
+        const int SampleCount = 24;
+        const float StepSize = 16.0f;
+
+        Ref::simd_fvec4 pos = ray_start + Ref::construct_float(rand_hash) * StepSize;
+
+        float ret = 0.0f;
+        for (int i = 0; i < SampleCount; ++i) {
+            float local_height;
+            Ref::simd_fvec4 up_vector;
+            const float local_density = GetCloudsDensity(params, pos, local_height, up_vector);
+            ret += local_density;
+            pos += ray_dir * StepSize;
+        }
+
+        return ret * StepSize;
+    }
+    return 1.0f;
+}
 } // namespace Ray
 
-Ray::Ref::simd_fvec4 Ray::IntegrateOpticalDepth(const AtmosphereParameters &params, const Ref::simd_fvec4 &ray_start,
+Ray::Ref::simd_fvec4 Ray::IntegrateOpticalDepth(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
                                                 const Ref::simd_fvec4 &ray_dir) {
     Ref::simd_fvec2 intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     float ray_length = intersection[1];
@@ -111,19 +308,19 @@ Ray::Ref::simd_fvec4 Ray::IntegrateOpticalDepth(const AtmosphereParameters &para
 }
 
 // Calculate a luminance transmittance value from optical depth.
-Ray::Ref::simd_fvec4 Ray::Absorb(const AtmosphereParameters &params, const Ref::simd_fvec4 &opticalDepth) {
+Ray::Ref::simd_fvec4 Ray::Absorb(const atmosphere_params_t &params, const Ref::simd_fvec4 &opticalDepth) {
     // Note that Mie results in slightly more light absorption than scattering, about 10%
-    return exp(-(opticalDepth.get<0>() * params.rayleigh_scattering +
-                 opticalDepth.get<1>() * params.mie_scattering * 1.1f +
-                 opticalDepth.get<2>() * params.ozone_absorbtion) *
+    return exp(-(opticalDepth.get<0>() * Ref::simd_fvec4{params.rayleigh_scattering, Ref::simd_mem_aligned} +
+                 opticalDepth.get<1>() * Ref::simd_fvec4{params.mie_scattering, Ref::simd_mem_aligned} * 1.1f +
+                 opticalDepth.get<2>() * Ref::simd_fvec4{params.ozone_absorbtion, Ref::simd_mem_aligned}) *
                params.atmosphere_density);
 }
 
-Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params, Ref::simd_fvec4 ray_start,
+Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref::simd_fvec4 ray_start,
                                               const Ref::simd_fvec4 &ray_dir, float ray_length,
-                                              const Ref::simd_fvec4 &light_dir, const Ref::simd_fvec4 &light_color,
-                                              Span<const Ref::simd_fvec4> transmittance_lut,
-                                              Ref::simd_fvec4 &transmittance) {
+                                              const Ref::simd_fvec4 &light_dir, const float light_angle,
+                                              const Ref::simd_fvec4 &light_color, Span<const float> transmittance_lut,
+                                              uint32_t rand_hash, Ref::simd_fvec4 &transmittance) {
     // We can reduce the number of atmospheric samples required to converge by spacing them exponentially closer to the
     // camera. This breaks space view however, so let's compensate for that with an exponent that "fades" to 1 as we
     // leave the atmosphere.
@@ -149,33 +346,38 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
         return Ref::simd_fvec4{0.0f};
     }
 
-    const float costh = dot(ray_dir, light_dir), phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh);
+    const float costh = dot(ray_dir, light_dir);
+    const float phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh);
 
-    const int SampleCount = 64;
+    const int SampleCount = 32;
 
     Ref::simd_fvec4 optical_depth = 0.0f, rayleigh = 0.0f, mie = 0.0f;
 
-    float prev_ray_time = 0;
+    const float rand_offset = Ref::construct_float(rand_hash);
+    rand_hash = Ref::hash(rand_hash);
 
-    for (int i = 0; i < SampleCount; i++) {
+    //
+    // Main atmosphere
+    //
+    float prev_ray_time = 0;
+    for (int i = 1; i <= SampleCount; i++) {
         const float ray_time = powf(float(i) / SampleCount, sample_distribution_exponent) * ray_length;
-        // Because we are distributing the samples exponentially, we have to calculate the step size per sample.
         const float step_size = (ray_time - prev_ray_time);
 
-        const Ref::simd_fvec4 local_position = ray_start + ray_dir * ray_time;
+        const Ref::simd_fvec4 local_position = ray_start + ray_dir * (ray_time - 0.1f * rand_offset * step_size);
         Ref::simd_fvec4 up_vector;
         const float local_height = AtmosphereHeight(params, local_position, up_vector);
         const Ref::simd_fvec4 local_density = AtmosphereDensity(params, local_height);
 
         optical_depth += local_density * step_size;
 
-        // The atmospheric transmittance from ray_start to localPosition
+        // The atmospheric transmittance from ray_start to local_osition
         const Ref::simd_fvec4 view_transmittance = Absorb(params, optical_depth);
 
         Ref::simd_fvec4 light_transmittance;
         if (transmittance_lut.empty()) {
             const Ref::simd_fvec4 optical_depthlight = IntegrateOpticalDepth(params, local_position, light_dir);
-            // The atmospheric transmittance of light reaching localPosition
+            // The atmospheric transmittance of light reaching local_osition
             light_transmittance = Absorb(params, optical_depthlight);
         } else {
             const float view_zenith_cos_angle = dot(light_dir, up_vector);
@@ -192,8 +394,75 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
 
     transmittance = Absorb(params, optical_depth);
 
+    //
+    // Main clouds
+    //
+    Ref::simd_fvec4 clouds = 0.0f;
+
+    const Ref::simd_fvec4 clouds_intersection = CloudsIntersection(params, ray_start, ray_dir);
+    if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.clouds_density > 0.0f) {
+        ray_length = fminf(ray_length, clouds_intersection.get<3>());
+        ray_start += ray_dir * clouds_intersection.get<1>();
+        ray_length -= clouds_intersection.get<1>();
+
+        if (ray_length > 0.0f) {
+            const int SampleCount = 128;
+            const float step_size = ray_length / float(SampleCount);
+
+            const Ref::simd_fvec4 phase_w = PhaseWrenninge(costh);
+
+            // NOTE: this is incorrect, must use transmittance before clouds, but it's ok
+            Ref::simd_fvec4 view_transmittance = transmittance;
+
+            Ref::simd_fvec4 local_position = ray_start + Ref::construct_float(rand_hash) * step_size;
+            rand_hash = Ref::hash(rand_hash);
+
+            for (int i = 0; i < SampleCount; ++i) {
+                float local_height;
+                Ref::simd_fvec4 up_vector;
+                const float local_density = GetCloudsDensity(params, local_position, local_height, up_vector);
+                if (local_density > 0.0f) {
+                    const float local_transmittance = expf(-local_density * step_size);
+
+                    Ref::simd_fvec4 light_transmittance;
+                    if (transmittance_lut.empty()) {
+                        const Ref::simd_fvec4 optical_depthlight =
+                            IntegrateOpticalDepth(params, local_position, light_dir);
+                        // The atmospheric transmittance of light reaching localPosition
+                        light_transmittance = Absorb(params, optical_depthlight);
+                    } else {
+                        const float view_zenith_cos_angle = dot(light_dir, up_vector);
+                        const Ref::simd_fvec2 uv = LutTransmittanceParamsToUv(
+                            params, local_height + params.planet_radius, view_zenith_cos_angle);
+                        light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+                    }
+
+                    const float shadow = TraceCloudShadow(params, rand_hash, local_position, light_dir);
+
+                    clouds += view_transmittance * getLightEnergy(shadow, local_density, phase_w) *
+                              (1.0f - local_transmittance) * light_transmittance;
+
+                    view_transmittance *= local_transmittance;
+                }
+                local_position += ray_dir * step_size;
+            }
+
+            clouds *= step_size;
+            transmittance = view_transmittance;
+        }
+
+        // NOTE: totally arbitrary cloud blending
+        float cloud_blend = fmaxf(0.15f, ray_dir.get<1>());
+        clouds *= 0.5f * cloud_blend * cloud_blend;
+    }
+
+    // return clouds * light_color;
+
+    //
+    // Ground 'floor'
+    //
     Ref::simd_fvec4 ground_color = 0.0f;
-    if (planet_intersection.get<0>() > 0) { // planet ground
+    if (planet_intersection.get<0>() > 0) {
         const Ref::simd_fvec4 local_position = ray_start + ray_dir * ray_length;
         Ref::simd_fvec4 up_vector;
         const float local_height = AtmosphereHeight(params, local_position, up_vector);
@@ -211,14 +480,30 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
                 LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
             light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
         }
-        ground_color =
-            params.ground_albedo * saturate(dot(up_vector, light_dir)) * view_transmittance * light_transmittance;
+        ground_color = Ref::simd_fvec4{params.ground_albedo, Ref::simd_mem_aligned} *
+                       saturate(dot(up_vector, light_dir)) * view_transmittance * light_transmittance;
     }
 
-    return (ground_color + rayleigh * params.rayleigh_scattering + mie * params.mie_scattering) * light_color;
+    //
+    // Sun disk (bake directional light into the texture)
+    //
+    Ref::simd_fvec4 sun_disk = 0.0f;
+    if (light_angle > 0.0f) {
+        const float cos_theta = cosf(light_angle);
+        const float BlendVal = 0.000005f;
+        sun_disk = transmittance * smoothstep(cos_theta - BlendVal, cos_theta + BlendVal, costh);
+        // 'de-multiply' by disk area (to get original brightness)
+        const float radius = tanf(light_angle);
+        sun_disk /= (PI * radius * radius);
+    }
+
+    return (sun_disk + clouds + ground_color +
+            rayleigh * Ref::simd_fvec4{params.rayleigh_scattering, Ref::simd_mem_aligned} +
+            mie * Ref::simd_fvec4{params.mie_scattering, Ref::simd_mem_aligned}) *
+           light_color;
 }
 
-void Ray::UvToLutTransmittanceParams(const AtmosphereParameters &params, Ref::simd_fvec2 uv, float &view_height,
+void Ray::UvToLutTransmittanceParams(const atmosphere_params_t &params, Ref::simd_fvec2 uv, float &view_height,
                                      float &view_zenith_cos_angle) {
     const float top_radius = params.planet_radius + params.atmosphere_height;
 
@@ -235,7 +520,7 @@ void Ray::UvToLutTransmittanceParams(const AtmosphereParameters &params, Ref::si
     view_zenith_cos_angle = clamp(view_zenith_cos_angle, -1.0f, 1.0f);
 }
 
-Ray::Ref::simd_fvec2 Ray::LutTransmittanceParamsToUv(const AtmosphereParameters &params, const float view_height,
+Ray::Ref::simd_fvec2 Ray::LutTransmittanceParamsToUv(const atmosphere_params_t &params, const float view_height,
                                                      const float view_zenith_cos_angle) {
     const float top_radius = params.planet_radius + params.atmosphere_height;
 

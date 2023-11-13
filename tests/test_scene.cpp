@@ -894,7 +894,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
                 scene.AddLight(new_light);
             }
         }
-    } else if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight) {
+    } else if (test_scene == eTestScene::Standard_DirLight) {
         Ray::directional_light_desc_t sun_desc;
 
         sun_desc.direction[0] = 0.541675210f;
@@ -903,6 +903,17 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         sun_desc.color[0] = sun_desc.color[1] = sun_desc.color[2] = 12.0f;
         sun_desc.angle = 10.0f;
+
+        scene.AddLight(sun_desc);
+    } else if (test_scene == eTestScene::Standard_SunLight) {
+        Ray::directional_light_desc_t sun_desc;
+
+        sun_desc.direction[0] = 0.454519480f;
+        sun_desc.direction[1] = -0.454519480f;
+        sun_desc.direction[2] = -0.766044438f;
+
+        sun_desc.color[0] = sun_desc.color[1] = sun_desc.color[2] = 12.0f;
+        sun_desc.angle = 4.0f;
 
         scene.AddLight(sun_desc);
     } else if (test_scene == eTestScene::Ray_Flags) {

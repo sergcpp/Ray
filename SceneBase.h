@@ -291,6 +291,28 @@ struct camera_desc_t {
     float regularize_alpha = 0.03f;  ///< Maximum squared material roughness to apply path regularization
 };
 
+/// Atmosphere description
+struct atmosphere_params_t {
+    float planet_radius = 6371000.0f;                   ///< Planet radius (default is Earth)
+    float viewpoint_height = 700.0f;                    ///< Height of the viewpoint to bake environment from
+    float atmosphere_height = 100000.0f;                ///< Height of the atmosphere
+    float rayleigh_height = atmosphere_height * 0.08f;  ///< Rayleigh layer height
+    float mie_height = atmosphere_height * 0.012f;      ///< MIE layer height
+    float clouds_height_beg = 2000.0f;                  ///< Height where clouds start
+    float clouds_height_end = 2500.0f;                  ///< Height where clouds end
+    float clouds_variety = 0.5f;                        ///< Clouds variety
+    float clouds_density = 0.5f;                        ///< Clouds density
+    float clouds_offset_x = 0.0f;                       ///< Clouds offset by x axis
+    float clouds_offset_z = 0.0f;                       ///< Clouds offset by z axis
+    float ozone_height_center = 25000.0f;               ///< Height of the ozone layer (center of tent function)
+    float ozone_half_width = 15000.0f;                  ///< Half of the width of the ozone layer
+    float atmosphere_density = 1.0f;                    ///< Atmosphere density multiplier
+    alignas(16) float rayleigh_scattering[4] = {5.802f * 1e-6f, 13.558f * 1e-6f, 33.100f * 1e-6f, 0.0f};
+    alignas(16) float mie_scattering[4] = {3.996f * 1e-6f, 3.996f * 1e-6f, 3.996f * 1e-6f, 0.0f};
+    alignas(16) float ozone_absorbtion[4] = {0.650f * 1e-6f, 1.881f * 1e-6f, 0.085f * 1e-6f, 0.0f};
+    alignas(16) float ground_albedo[4] = {0.05f, 0.05f, 0.05f, 0.0f};
+};
+
 /// Environment description
 struct environment_desc_t {
     float env_col[3] = {};                         ///< Environment color
@@ -299,7 +321,9 @@ struct environment_desc_t {
     TextureHandle back_map = InvalidTextureHandle; ///< Background texture
     float env_map_rotation = 0.0f;                 ///< Environment map rotation in radians
     float back_map_rotation = 0.0f;                ///< Background map rotation in radians
+    int envmap_resolution = 1024;                  ///< Resolution of the generated env texture
     bool multiple_importance = true;               ///< Enable explicit env map sampling
+    atmosphere_params_t atmosphere;                ///< Atmosphere parameters
 };
 
 class ILog;

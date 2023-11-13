@@ -1675,9 +1675,9 @@ void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 8;
+    const int SampleCount = 20;
     const double MinPSNR = 23.0;
-    const int PixThres = 6041;
+    const int PixThres = 6075;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1915,9 +1915,9 @@ void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 31;
+    const int SampleCount = 27;
     const double MinPSNR = 19.0;
-    const int PixThres = 9668;
+    const int PixThres = 12246;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

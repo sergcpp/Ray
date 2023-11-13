@@ -8,6 +8,7 @@
 #include "SceneCommon.h"
 #include "SparseStorageCPU.h"
 #include "TextureUtils.h"
+#include "Time_.h"
 
 namespace Ray {
 namespace NS {
@@ -203,9 +204,6 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_wnodes_(ctx, "Light WNodes") {
     SceneBase::log_ = ctx->log();
     SetEnvironment({});
-
-    AtmosphereParameters atmosphere_params = {}; // use default parameters for now
-    SceneCommon::UpdateSkyTransmitanceLUT(atmosphere_params);
 }
 
 inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) {
@@ -1514,6 +1512,8 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
 }
 
 inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
+    const uint64_t t1 = Ray::GetTimeMs();
+
     if (physical_sky_texture_ != InvalidTextureHandle) {
         if (use_bindless_) {
             bindless_textures_.Erase(physical_sky_texture_._block);
@@ -1539,11 +1539,9 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
     //     return;
     // }
 
-    AtmosphereParameters atmosphere_params = {};
-
-    static const int SkyEnvRes[] = {512, 256};
+    const int SkyEnvRes[] = {env_.envmap_resolution, env_.envmap_resolution / 2};
     const std::vector<color_rgba8_t> rgbe_pixels =
-        CalcSkyEnvTexture(atmosphere_params, SkyEnvRes, lights_.data(), dir_lights);
+        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights);
 
     tex_desc_t desc = {};
     desc.format = eTextureFormat::RGBA8888;
@@ -1564,6 +1562,8 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
     if (env_.back_map == PhysicalSkyTexture._index) {
         env_.back_map = physical_sky_texture_._index;
     }
+
+    log_->Info("PrepareSkyEnvMap (%ix%i) done in %lldms", SkyEnvRes[0], SkyEnvRes[1], GetTimeMs() - t1);
 }
 
 inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
@@ -1813,6 +1813,11 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
 
     for (auto it = lights_.cbegin(); it != lights_.cend(); ++it) {
         const light_t &l = *it;
+        if (l.type == LIGHT_TYPE_DIR && physical_sky_texture_ != InvalidTextureHandle) {
+            // Directional lights are already 'baked' into sky texture
+            continue;
+        }
+
         Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
         float area = 1.0f, omega_n = 0.0f, omega_e = 0.0f;
         float lum = l.col[0] + l.col[1] + l.col[2];

@@ -128,6 +128,20 @@ force_inline constexpr uint32_t hash(uint32_t x) {
     return x;
 }
 
+force_inline float construct_float(uint32_t m) {
+    static const uint32_t ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+    static const uint32_t ieeeOne = 0x3F800000u;      // 1.0 in IEEE binary32
+
+    m &= ieeeMantissa; // Keep only mantissa bits (fractional part)
+    m |= ieeeOne;      // Add fractional part to 1.0
+
+    union {
+        uint32_t i;
+        float f;
+    } ret = {m};         // Range [1:2]
+    return ret.f - 1.0f; // Range [0:1]
+}
+
 force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
     const float f = exp2f(float(rgbe.v[3]) - 128.0f);
     return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};

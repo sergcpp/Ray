@@ -565,20 +565,6 @@ force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *
     _radix_sort_lsb(begin, end, begin1, 24);
 }
 
-force_inline float construct_float(uint32_t m) {
-    static const uint32_t ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
-    static const uint32_t ieeeOne = 0x3F800000u;      // 1.0 in IEEE binary32
-
-    m &= ieeeMantissa; // Keep only mantissa bits (fractional part)
-    m |= ieeeOne;      // Add fractional part to 1.0
-
-    union {
-        uint32_t i;
-        float f;
-    } ret = {m};         // Range [1:2]
-    return ret.f - 1.0f; // Range [0:1]
-}
-
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
     simd_fvec4 ret;
     UNROLLED_FOR(i, 3, {
@@ -6028,22 +6014,15 @@ Ray::Ref::simd_fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform vie
     const int jx = xyz_next.get<0>(), jy = xyz_next.get<1>(), jz = xyz_next.get<2>();
     const float fx = f.get<0>(), fy = f.get<1>(), fz = f.get<2>();
 
-    const simd_fvec4 c000 = FetchLUT(view_transform, ix, iy, iz);
-    const simd_fvec4 c001 = FetchLUT(view_transform, jx, iy, iz);
-    const simd_fvec4 c010 = FetchLUT(view_transform, ix, jy, iz);
-    const simd_fvec4 c011 = FetchLUT(view_transform, jx, jy, iz);
-    const simd_fvec4 c100 = FetchLUT(view_transform, ix, iy, jz);
-    const simd_fvec4 c101 = FetchLUT(view_transform, jx, iy, jz);
-    const simd_fvec4 c110 = FetchLUT(view_transform, ix, jy, jz);
-    const simd_fvec4 c111 = FetchLUT(view_transform, jx, jy, jz);
+    const simd_fvec4 c000 = FetchLUT(view_transform, ix, iy, iz), c001 = FetchLUT(view_transform, jx, iy, iz),
+                     c010 = FetchLUT(view_transform, ix, jy, iz), c011 = FetchLUT(view_transform, jx, jy, iz),
+                     c100 = FetchLUT(view_transform, ix, iy, jz), c101 = FetchLUT(view_transform, jx, iy, jz),
+                     c110 = FetchLUT(view_transform, ix, jy, jz), c111 = FetchLUT(view_transform, jx, jy, jz);
 
-    const simd_fvec4 c00x = (1.0f - fx) * c000 + fx * c001;
-    const simd_fvec4 c01x = (1.0f - fx) * c010 + fx * c011;
-    const simd_fvec4 c10x = (1.0f - fx) * c100 + fx * c101;
-    const simd_fvec4 c11x = (1.0f - fx) * c110 + fx * c111;
+    const simd_fvec4 c00x = (1.0f - fx) * c000 + fx * c001, c01x = (1.0f - fx) * c010 + fx * c011,
+                     c10x = (1.0f - fx) * c100 + fx * c101, c11x = (1.0f - fx) * c110 + fx * c111;
 
-    const simd_fvec4 c0xx = (1.0f - fy) * c00x + fy * c01x;
-    const simd_fvec4 c1xx = (1.0f - fy) * c10x + fy * c11x;
+    const simd_fvec4 c0xx = (1.0f - fy) * c00x + fy * c01x, c1xx = (1.0f - fy) * c10x + fy * c11x;
 
     simd_fvec4 cxxx = (1.0f - fz) * c0xx + fz * c1xx;
     cxxx.set<3>(color.get<3>());

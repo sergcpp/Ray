@@ -5,10 +5,10 @@
 #include <vector>
 
 #include "../SceneBase.h"
-#include "Atmosphere.h"
 #include "SparseStorageCPU.h"
 
 namespace Ray {
+struct atmosphere_params_t;
 class SceneCommon : public SceneBase {
   protected:
     mutable std::shared_timed_mutex mtx_;
@@ -18,10 +18,10 @@ class SceneCommon : public SceneBase {
     CameraHandle current_cam_ = InvalidCameraHandle;
 
     environment_t env_;
-    aligned_vector<Ref::simd_fvec4> sky_transmitance_lut_;
+    aligned_vector<float, 16> sky_transmittance_lut_;
 
-    void UpdateSkyTransmitanceLUT(const AtmosphereParameters &params);
-    std::vector<color_rgba8_t> CalcSkyEnvTexture(const AtmosphereParameters &params, const int res[2],
+    void UpdateSkyTransmittanceLUT(const atmosphere_params_t &params);
+    std::vector<color_rgba8_t> CalcSkyEnvTexture(const atmosphere_params_t &params, const int res[2],
                                                  const light_t lights[], Span<const uint32_t> dir_lights);
     void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 
