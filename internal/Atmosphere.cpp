@@ -67,6 +67,26 @@ force_inline Ref::simd_fvec4 AtmosphereDensity(const AtmosphereParameters &param
 
     return Ref::simd_fvec4{density_rayleigh.get<0>(), density_mie.get<0>(), density_ozone, 0.0f};
 }
+
+Ref::simd_fvec4 SampleTransmittanceLUT(Span<const Ref::simd_fvec4> transmittance_lut, Ref::simd_fvec2 uv) {
+    uv = uv * Ref::simd_fvec2(TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H) - 0.5f;
+    auto iuv0 = Ref::simd_ivec2(uv);
+    iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
+    const Ref::simd_ivec2 iuv1 =
+        min(iuv0 + Ref::simd_ivec2{1, 1}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
+
+    const Ref::simd_fvec4 tr00 = transmittance_lut[iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>()],
+                          tr01 = transmittance_lut[iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>()],
+                          tr10 = transmittance_lut[iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>()],
+                          tr11 = transmittance_lut[iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>()];
+
+    const Ref::simd_fvec2 k = fract(uv);
+
+    const Ref::simd_fvec4 tr0 = tr01 * k.get<0>() + tr00 * (1.0f - k.get<0>()),
+                          tr1 = tr11 * k.get<0>() + tr10 * (1.0f - k.get<0>());
+
+    return (tr1 * k.get<1>() + tr0 * (1.0f - k.get<1>()));
+}
 } // namespace Ray
 
 Ray::Ref::simd_fvec4 Ray::IntegrateOpticalDepth(const AtmosphereParameters &params, const Ref::simd_fvec4 &ray_start,
@@ -161,10 +181,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
             const float view_zenith_cos_angle = dot(light_dir, up_vector);
             const Ref::simd_fvec2 uv =
                 LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
-            auto iuv = Ref::simd_ivec2(uv * Ref::simd_fvec2(TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H));
-            iuv = clamp(iuv, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
-
-            light_transmittance = transmittance_lut[iuv.get<1>() * TRANSMITTANCE_LUT_W + iuv.get<0>()];
+            light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
         }
 
         rayleigh += view_transmittance * light_transmittance * phase_r * local_density.get<0>() * step_size;
@@ -192,10 +209,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const AtmosphereParameters &params
             const float view_zenith_cos_angle = dot(light_dir, up_vector);
             const Ref::simd_fvec2 uv =
                 LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
-            auto iuv = Ref::simd_ivec2(uv * Ref::simd_fvec2(TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H));
-            iuv = clamp(iuv, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
-
-            light_transmittance = transmittance_lut[iuv.get<1>() * TRANSMITTANCE_LUT_W + iuv.get<0>()];
+            light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
         }
         ground_color =
             params.ground_albedo * saturate(dot(up_vector, light_dir)) * view_transmittance * light_transmittance;
