@@ -652,6 +652,11 @@ template <> class simd_vec<int, 8> {
         return max(simd_vec<int, 8>{_min}, min(v1, simd_vec<int, 8>{_max}));
     }
 
+    friend force_inline simd_vec<int, 8> vectorcall clamp(const simd_vec<int, 8> v1, const simd_vec<int, 8> _min,
+                                                          const simd_vec<int, 8> _max) {
+        return max(_min, min(v1, _max));
+    }
+
     force_inline static simd_vec<int, 8> vectorcall and_not(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> temp;
         temp.vec_ = _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
