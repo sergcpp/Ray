@@ -2043,8 +2043,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     for (uint32_t i = 0; i < leaf_indices.size(); ++i) {
         light_bvh_node_t &n = temp_lnodes[leaf_indices[i]];
         assert((n.prim_index & LEAF_NODE_BIT) != 0);
-        uint32_t li_index = prim_indices[n.prim_index & PRIM_INDEX_BITS];
-        li_indices_.Get(li_index, li_index);
+        const uint32_t li_index = new_li_indices[prim_indices[n.prim_index & PRIM_INDEX_BITS]];
         n.prim_index &= ~PRIM_INDEX_BITS;
         n.prim_index |= li_index;
     }
