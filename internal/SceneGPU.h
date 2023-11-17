@@ -1950,24 +1950,24 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
 
     std::vector<bvh_node_t> temp_nodes;
 
-    std::vector<uint32_t> li_indices;
-    li_indices.reserve(primitives.size());
+    std::vector<uint32_t> prim_indices;
+    prim_indices.reserve(primitives.size());
 
     bvh_settings_t s;
     s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = false;
     s.min_primitives_in_leaf = 1;
-    PreprocessPrims_SAH(primitives, {}, s, temp_nodes, li_indices);
+    PreprocessPrims_SAH(primitives, {}, s, temp_nodes, prim_indices);
 
     std::vector<light_bvh_node_t> temp_lnodes(temp_nodes.size(), light_bvh_node_t{});
     for (uint32_t i = 0; i < temp_nodes.size(); ++i) {
         static_cast<bvh_node_t &>(temp_lnodes[i]) = temp_nodes[i];
         if ((temp_nodes[i].prim_index & LEAF_NODE_BIT) != 0) {
-            const uint32_t li_index = li_indices[temp_nodes[i].prim_index & PRIM_INDEX_BITS];
-            memcpy(temp_lnodes[i].axis, value_ptr(additional_data[li_index].axis), 3 * sizeof(float));
-            temp_lnodes[i].flux = additional_data[li_index].flux;
-            temp_lnodes[i].omega_n = additional_data[li_index].omega_n;
-            temp_lnodes[i].omega_e = additional_data[li_index].omega_e;
+            const uint32_t prim_index = prim_indices[temp_nodes[i].prim_index & PRIM_INDEX_BITS];
+            memcpy(temp_lnodes[i].axis, value_ptr(additional_data[prim_index].axis), 3 * sizeof(float));
+            temp_lnodes[i].flux = additional_data[prim_index].flux;
+            temp_lnodes[i].omega_n = additional_data[prim_index].omega_n;
+            temp_lnodes[i].omega_e = additional_data[prim_index].omega_e;
         }
     }
 
@@ -2043,11 +2043,10 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     for (uint32_t i = 0; i < leaf_indices.size(); ++i) {
         light_bvh_node_t &n = temp_lnodes[leaf_indices[i]];
         assert((n.prim_index & LEAF_NODE_BIT) != 0);
-        {
-            const uint32_t li_index = li_indices[n.prim_index & PRIM_INDEX_BITS];
-            n.prim_index &= ~PRIM_INDEX_BITS;
-            n.prim_index |= li_index;
-        }
+        uint32_t li_index = prim_indices[n.prim_index & PRIM_INDEX_BITS];
+        li_indices_.Get(li_index, li_index);
+        n.prim_index &= ~PRIM_INDEX_BITS;
+        n.prim_index |= li_index;
     }
 
     aligned_vector<light_wbvh_node_t> temp_light_wnodes;

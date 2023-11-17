@@ -1293,8 +1293,8 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
         return;
     }
 
-    std::vector<uint32_t> li_indices;
-    li_indices.reserve(primitives.size());
+    std::vector<uint32_t> prim_indices;
+    prim_indices.reserve(primitives.size());
 
     std::vector<bvh_node_t> temp_nodes;
 
@@ -1302,17 +1302,17 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = false;
     s.min_primitives_in_leaf = 1;
-    PreprocessPrims_SAH(primitives, {}, s, temp_nodes, li_indices);
+    PreprocessPrims_SAH(primitives, {}, s, temp_nodes, prim_indices);
 
     light_nodes_.resize(temp_nodes.size(), light_bvh_node_t{});
     for (uint32_t i = 0; i < temp_nodes.size(); ++i) {
         static_cast<bvh_node_t &>(light_nodes_[i]) = temp_nodes[i];
         if ((temp_nodes[i].prim_index & LEAF_NODE_BIT) != 0) {
-            const uint32_t li_index = li_indices[temp_nodes[i].prim_index & PRIM_INDEX_BITS];
-            memcpy(light_nodes_[i].axis, value_ptr(additional_data[li_index].axis), 3 * sizeof(float));
-            light_nodes_[i].flux = additional_data[li_index].flux;
-            light_nodes_[i].omega_n = additional_data[li_index].omega_n;
-            light_nodes_[i].omega_e = additional_data[li_index].omega_e;
+            const uint32_t prim_index = prim_indices[temp_nodes[i].prim_index & PRIM_INDEX_BITS];
+            memcpy(light_nodes_[i].axis, value_ptr(additional_data[prim_index].axis), 3 * sizeof(float));
+            light_nodes_[i].flux = additional_data[prim_index].flux;
+            light_nodes_[i].omega_n = additional_data[prim_index].omega_n;
+            light_nodes_[i].omega_e = additional_data[prim_index].omega_e;
         }
     }
 
@@ -1388,11 +1388,9 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     for (uint32_t i = 0; i < leaf_indices.size(); ++i) {
         light_bvh_node_t &n = light_nodes_[leaf_indices[i]];
         assert((n.prim_index & LEAF_NODE_BIT) != 0);
-        {
-            const uint32_t li_index = li_indices[n.prim_index & PRIM_INDEX_BITS];
-            n.prim_index &= ~PRIM_INDEX_BITS;
-            n.prim_index |= li_index;
-        }
+        const uint32_t li_index = li_indices_[prim_indices[n.prim_index & PRIM_INDEX_BITS]];
+        n.prim_index &= ~PRIM_INDEX_BITS;
+        n.prim_index |= li_index;
     }
 
     if (use_wide_bvh_) {
