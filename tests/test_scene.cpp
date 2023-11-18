@@ -239,7 +239,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::camera_desc_t cam_desc;
         cam_desc.type = Ray::eCamType::Persp;
         cam_desc.filter = Ray::ePixelFilter::Box;
-        if (test_scene == eTestScene::Standard_SunLight) {
+        if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight) {
             cam_desc.view_transform = Ray::eViewTransform::Filmic_HighContrast;
         } else {
             cam_desc.view_transform = Ray::eViewTransform::Standard;
@@ -567,7 +567,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
     {
         std::vector<float> env_attrs;
         std::vector<uint32_t> env_indices, env_groups;
-        if (test_scene == eTestScene::Standard_SunLight || test_scene == eTestScene::Standard_HDRLight) {
+        if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight ||
+            test_scene == eTestScene::Standard_HDRLight) {
             std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env_floor.bin");
         } else {
             std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env.bin");
@@ -581,7 +582,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         env_mesh_desc.vtx_indices = env_indices;
 
         std::vector<Ray::mat_group_desc_t> groups;
-        if (test_scene == eTestScene::Standard_SunLight || test_scene == eTestScene::Standard_HDRLight) {
+        if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight ||
+            test_scene == eTestScene::Standard_HDRLight) {
             groups.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
             groups.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]);
             groups.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]);
@@ -892,7 +894,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
                 scene.AddLight(new_light);
             }
         }
-    } else if (test_scene == eTestScene::Standard_SunLight) {
+    } else if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight) {
         Ray::directional_light_desc_t sun_desc;
 
         sun_desc.direction[0] = 0.541675210f;

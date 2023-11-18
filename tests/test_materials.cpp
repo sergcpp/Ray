@@ -214,7 +214,8 @@ void assemble_material_test_images(const char *arch_list[]) {
         {"complex_mat5_nlm_filter", "complex_mat5_nlm_filter_b", "complex_mat5_unet_filter",
          "complex_mat5_unet_filter_b", "complex_mat5_unet_filter_bn"},
         {"complex_mat6_nlm_filter", "complex_mat6_nlm_filter_b", "complex_mat6_unet_filter_b",
-         "complex_mat6_unet_filter_bn"}};
+         "complex_mat6_unet_filter_bn"},
+        {"complex_mat5_dir_light", "complex_mat6_dir_light"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1651,6 +1652,28 @@ void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SpotLight);
 }
 
+void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 28;
+    const double MinPSNR = 23.0;
+    const int PixThres = 5016;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = Ray::TextureHandle{0};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
+    metal_mat_desc.normal_map = Ray::TextureHandle{1};
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_dir_light", metal_mat_desc, SampleCount, MinPSNR,
+                      PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_DirLight);
+}
+
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 8;
     const double MinPSNR = 23.0;
@@ -1872,6 +1895,23 @@ void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred
 
     run_material_test(arch_list, preferred_device, "complex_mat6_spot_light", olive_mat_desc, SampleCount, FastMinPSNR,
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_SpotLight);
+}
+
+void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 87;
+    const double MinPSNR = 18.0;
+    const int PixThres = 9339;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test(arch_list, preferred_device, "complex_mat6_dir_light", olive_mat_desc, SampleCount, MinPSNR,
+                      PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_DirLight);
 }
 
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {
