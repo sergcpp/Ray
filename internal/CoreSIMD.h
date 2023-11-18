@@ -5253,11 +5253,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
                               const scene_data_t &sc, const uint32_t root_index, const uint32_t rand_seq[],
                               const uint32_t rand_seed, const int iteration,
                               const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
-    simd_fvec<S> clamp_val = _clamp_val;
-    if (_clamp_val == 0.0f) {
-        clamp_val = FLT_MAX;
-    }
-
+    const float limit = (_clamp_val != 0.0f) ? 3.0f * _clamp_val : FLT_MAX;
     for (int i = 0; i < rays.size(); ++i) {
         const shadow_ray_t<S> &sh_r = rays[i];
 
@@ -5267,7 +5263,8 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
             const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
             UNROLLED_FOR(j, 3, { rc[j] *= k; })
         }
-        UNROLLED_FOR(j, 3, { rc[j] = min(rc[j], clamp_val); })
+        const simd_fvec<S> sum = rc[0] + rc[1] + rc[2];
+        UNROLLED_FOR(j, 3, { where(sum > limit, rc[j]) = safe_div_pos(rc[j]  * limit, sum); })
 
         const simd_uvec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
@@ -6175,7 +6172,8 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     inout_inter.t.store_to(inter_t, simd_mem_aligned);
                 } else if (l.type == LIGHT_TYPE_ENV) {
                     // NOTE: mask remains empty
-                    where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                    where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.obj_index) =
+                        -simd_ivec<S>(light_index) - 1;
                     where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.u) = cur.factor;
                 }
             }
@@ -7838,20 +7836,16 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
                            int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
                            int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
                            color_rgba_t *out_depth_normals) {
-    simd_fvec<S> clamp_direct = ps.clamp_direct;
-    if (ps.clamp_direct == 0.0f) {
-        clamp_direct = FLT_MAX;
-    }
-
+    const float limit = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
     for (int i = 0; i < inters.size(); ++i) {
         const ray_data_t<S> &r = rays[i];
         const hit_data_t<S> &inter = inters[i];
 
-        simd_fvec<S> out_rgba[4] = {}, base_color[3] = {}, depth_normal[4] = {};
-        ShadeSurface(ps, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, out_rgba,
-                     out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, base_color,
-                     depth_normal);
-        UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_direct); })
+        simd_fvec<S> col[4] = {}, base_color[3] = {}, depth_normal[4] = {};
+        ShadeSurface(ps, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col, out_secondary_rays,
+                     out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, base_color, depth_normal);
+        const simd_fvec<S> sum = col[0] + col[1] + col[2];
+        UNROLLED_FOR(j, 3, { where(sum > limit, col[j]) = safe_div_pos(col[j] * limit, sum); })
 
         const simd_uvec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
@@ -7859,7 +7853,7 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
         UNROLLED_FOR_S(j, S, {
             if (r.mask.template get<j>()) {
                 UNROLLED_FOR(k, 4, {
-                    out_color[y.template get<j>() * img_w + x.template get<j>()].v[k] = out_rgba[k].template get<j>();
+                    out_color[y.template get<j>() * img_w + x.template get<j>()].v[k] = col[k].template get<j>();
                 })
                 if (ps.flags & ePassFlags::OutputBaseColor) {
                     auto old_val = simd_fvec4(out_base_color[y.template get<j>() * img_w + x.template get<j>()].v,
@@ -7893,20 +7887,17 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<co
                              const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
                              int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays,
                              int *out_shadow_rays_count, int img_w, color_rgba_t *out_color) {
-    simd_fvec<S> clamp_indirect = FLT_MAX;
-    if (clamp_val != 0.0f) {
-        clamp_indirect = clamp_val;
-    }
-
+    const float limit = (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX;
     for (int i = 0; i < inters.size(); ++i) {
         const ray_data_t<S> &r = rays[i];
         const hit_data_t<S> &inter = inters[i];
 
-        simd_fvec<S> out_rgba[4] = {0.0f};
-        Ray::NS::ShadeSurface(ps, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, out_rgba,
+        simd_fvec<S> col[4] = {0.0f};
+        Ray::NS::ShadeSurface(ps, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col,
                               out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
                               (simd_fvec<S> *)nullptr, (simd_fvec<S> *)nullptr);
-        UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_indirect); })
+        const simd_fvec<S> sum = col[0] + col[1] + col[2];
+        UNROLLED_FOR(j, 3, { where(sum > limit, col[j]) = safe_div_pos(col[j]  * limit, sum); })
 
         const simd_uvec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
@@ -7915,8 +7906,8 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<co
             if (r.mask.template get<j>()) {
                 auto old_val =
                     simd_fvec4(out_color[y.template get<j>() * img_w + x.template get<j>()].v, simd_mem_aligned);
-                old_val += simd_fvec4(out_rgba[0].template get<j>(), out_rgba[1].template get<j>(),
-                                      out_rgba[2].template get<j>(), 0.0f);
+                old_val +=
+                    simd_fvec4(col[0].template get<j>(), col[1].template get<j>(), col[2].template get<j>(), 0.0f);
                 old_val.store_to(out_color[y.template get<j>() * img_w + x.template get<j>()].v, simd_mem_aligned);
             }
         })

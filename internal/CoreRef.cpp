@@ -4602,13 +4602,7 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
                                const scene_data_t &sc, uint32_t node_index, const uint32_t rand_seq[],
                                const uint32_t rand_seed, const int iteration,
                                const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
-    simd_fvec4 clamp_val = simd_fvec4{FLT_MAX};
-    if (_clamp_val) {
-        clamp_val.set<0>(_clamp_val);
-        clamp_val.set<1>(_clamp_val);
-        clamp_val.set<2>(_clamp_val);
-    }
-
+    const float limit = (_clamp_val != 0.0f) ? 3.0f * _clamp_val : FLT_MAX;
     for (int i = 0; i < int(rays.size()); ++i) {
         const shadow_ray_t &sh_r = rays[i];
 
@@ -4620,9 +4614,15 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
         if (sc.blocker_lights_count) {
             rc *= IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
         }
+        rc.set<3>(0.0f);
+
+        const float sum = hsum(rc);
+        if (sum > limit) {
+            rc *= (limit / sum);
+        }
 
         auto old_val = simd_fvec4{out_color[y * img_w + x].v, simd_mem_aligned};
-        old_val += min(rc, clamp_val);
+        old_val += rc;
         old_val.store_to(out_color[y * img_w + x].v, simd_mem_aligned);
     }
 }
@@ -5585,13 +5585,7 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
                             ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                             shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w, float mix_factor,
                             color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
-    auto clamp_direct = simd_fvec4{FLT_MAX};
-    if (ps.clamp_direct != 0.0f) {
-        clamp_direct.set<0>(ps.clamp_direct);
-        clamp_direct.set<1>(ps.clamp_direct);
-        clamp_direct.set<2>(ps.clamp_direct);
-    }
-
+    const float limit = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
     for (int i = 0; i < int(inters.size()); ++i) {
         const ray_data_t &r = rays[i];
         const hit_data_t &inter = inters[i];
@@ -5604,7 +5598,12 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
             ShadeSurface(ps, inter, r, rand_seq, rand_seed, iteration, sc, node_index, textures, out_secondary_rays,
                          out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, &base_color, &depth_normal);
 
-        const Ref::simd_fvec4 vcol = min(Ref::simd_fvec4{col.v}, clamp_direct);
+        auto vcol = Ref::simd_fvec4{col.v[0], col.v[1], col.v[2], 0.0f};
+        const float sum = hsum(vcol);
+        if (sum > limit) {
+            vcol *= (limit / sum);
+        }
+        vcol.set<3>(col.v[3]);
         vcol.store_to(out_color[y * img_w + x].v, Ref::simd_mem_aligned);
         if (ps.flags & ePassFlags::OutputBaseColor) {
             auto old_val = Ref::simd_fvec4{out_base_color[y * img_w + x].v, Ref::simd_mem_aligned};
@@ -5625,13 +5624,7 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<c
                               ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                               shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                               color_rgba_t *out_color) {
-    auto clamp_indirect = simd_fvec4{FLT_MAX};
-    if (clamp_val != 0.0f) {
-        clamp_indirect.set<0>(clamp_val);
-        clamp_indirect.set<1>(clamp_val);
-        clamp_indirect.set<2>(clamp_val);
-    }
-
+    const float limit = (clamp_val != 0.0f) ? 3.0f * clamp_val : FLT_MAX;
     for (int i = 0; i < int(inters.size()); ++i) {
         const ray_data_t &r = rays[i];
         const hit_data_t &inter = inters[i];
@@ -5644,8 +5637,14 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<c
                          out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, nullptr, nullptr);
         col.v[3] = 0.0f;
 
+        auto vcol = Ref::simd_fvec4{col.v};
+        const float sum = hsum(vcol);
+        if (sum > limit) {
+            vcol *= (limit / sum);
+        }
+
         auto old_val = Ref::simd_fvec4{out_color[y * img_w + x].v, Ref::simd_mem_aligned};
-        old_val += min(Ref::simd_fvec4{col.v}, clamp_indirect);
+        old_val += vcol;
         old_val.store_to(out_color[y * img_w + x].v, Ref::simd_mem_aligned);
     }
 }

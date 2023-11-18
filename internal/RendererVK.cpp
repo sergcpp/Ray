@@ -2032,7 +2032,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_light_index = sc_data.env->light_index;
 
-    uniform_params.clamp_val = (settings.clamp_direct != 0.0f) ? settings.clamp_direct : FLT_MAX;
+    uniform_params.clamp_val = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
 
     Pipeline *pi = &pi_shade_primary_;
     if (out_base_color.ready()) {
@@ -2117,7 +2117,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_light_index = sc_data.env->light_index;
 
-    uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : FLT_MAX;
+    uniform_params.clamp_val = (clamp_val != 0.0f) ? 3.0f * clamp_val : FLT_MAX;
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
@@ -2187,7 +2187,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.lights_node_index = 0; // tree root
     uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
-    uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : FLT_MAX;
+    uniform_params.clamp_val = (clamp_val != 0.0f) ? 3.0f * clamp_val : FLT_MAX;
     uniform_params.rand_seed = rand_seed;
     uniform_params.iteration = iteration;
 

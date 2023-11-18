@@ -478,12 +478,16 @@ void main() {
     if (g_params.blocker_lights_count != 0) {
         rc *= IntersectAreaLightsShadow(sh_ray);
     }
+    const float sum = rc.r + rc.g + rc.b;
+    if (sum > g_params.clamp_val) {
+        rc *= (g_params.clamp_val / sum);
+    }
     if (lum(rc) > 0.0) {
         const int x = int((sh_ray.xy >> 16) & 0xffff);
         const int y = int(sh_ray.xy & 0xffff);
 
         vec4 col = imageLoad(g_inout_img, ivec2(x, y));
-        col.xyz += min(rc, vec3(g_params.clamp_val));
+        col.xyz += rc;
         imageStore(g_inout_img, ivec2(x, y), col);
     }
 }

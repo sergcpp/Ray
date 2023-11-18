@@ -2321,7 +2321,10 @@ void main() {
 
     vec3 base_color = vec3(0.0), normals = vec3(0.0);
     vec3 col = ShadeSurface(inter, ray, base_color, normals);
-    col = min(col, vec3(g_params.clamp_val));
+    const float sum = col.r + col.g + col.b;
+    if (sum > g_params.clamp_val) {
+        col *= (g_params.clamp_val / sum);
+    }
 #if !PRIMARY
     col += imageLoad(g_out_img, ivec2(x, y)).rgb;
 #endif
