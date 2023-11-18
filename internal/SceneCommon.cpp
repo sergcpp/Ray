@@ -222,7 +222,7 @@ std::vector<Ray::color_rgba8_t> Ray::SceneCommon::CalcSkyEnvTexture(const atmosp
     std::vector<color_rgb_t> rgb_pixels(res[0] * res[1]);
 #endif
 
-    // #pragma omp parallel for
+#pragma omp parallel for
     for (int y = 0; y < res[1]; ++y) {
         const double theta = PI * float(y) / float(res[1]);
         for (int x = 0; x < res[0]; ++x) {
@@ -268,7 +268,7 @@ std::vector<Ray::color_rgba8_t> Ray::SceneCommon::CalcSkyEnvTexture(const atmosp
 
 #ifdef DUMP_SKY_ENV
     const char *err = nullptr;
-    SaveEXR(&rgb_pixels[0].v[0], res[0], res[1], 3, 1, "sky.exr", &err);
+    SaveEXR(&rgb_pixels[0].v[0], res[0], res[1], 3, 0, "sky.exr", &err);
 #endif
 
     return rgbe_pixels;
