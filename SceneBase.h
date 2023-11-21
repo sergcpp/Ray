@@ -309,6 +309,10 @@ struct atmosphere_params_t {
     float ozone_height_center = 25000.0f;              ///< Height of the ozone layer (center of tent function)
     float ozone_half_width = 15000.0f;                 ///< Half of the width of the ozone layer
     float atmosphere_density = 1.0f;                   ///< Atmosphere density multiplier
+    float stars_brightness = 1.0f;                     ///< Brightness of the stars in the sky (set to 0.0 to disable)
+    float moon_radius = 1737400.0f;                    ///< Moon radius (set to 0.0 to disable)
+    float moon_distance = 100000000.0f;//363100000.0f; ///< Distance from Earth to the Moon
+    alignas(16) float moon_dir[4] = {0.707f, 0.707f, 0.0f, 0.0f};
     alignas(16) float rayleigh_scattering[4] = {5.802f * 1e-6f, 13.558f * 1e-6f, 33.100f * 1e-6f, 0.0f};
     alignas(16) float mie_scattering[4] = {3.996f * 1e-6f, 3.996f * 1e-6f, 3.996f * 1e-6f, 0.0f};
     alignas(16) float ozone_absorbtion[4] = {0.650f * 1e-6f, 1.881f * 1e-6f, 0.085f * 1e-6f, 0.0f};
@@ -330,9 +334,9 @@ struct environment_desc_t {
 
 class ILog;
 
-using UnaryFunction = std::function<void(int)>;
+using ParallelForFunction = std::function<void(int)>;
 
-inline void parallel_for_serial(const int from, const int to, UnaryFunction &&f) {
+inline void parallel_for_serial(const int from, const int to, ParallelForFunction &&f) {
     for (int i = from; i < to; ++i) {
         f(i);
     }
@@ -445,7 +449,7 @@ class SceneBase {
     virtual void RemoveMeshInstance(MeshInstanceHandle mi) = 0;
 
     virtual void
-    Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for = parallel_for_serial) = 0;
+    Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for = parallel_for_serial) = 0;
 
     /** @brief Adds camera to a scene
         @param c camera description

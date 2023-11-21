@@ -854,7 +854,7 @@ void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
     RebuildTLAS_nolock();
 }
 
-void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
+void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     if (env_map_light_ != InvalidLightHandle) {
@@ -958,7 +958,7 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     }
 }
 
-void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
+void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     const uint64_t t1 = Ray::GetTimeMs();
 
     if (physical_sky_texture_ != InvalidTextureHandle) {

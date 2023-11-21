@@ -97,7 +97,7 @@ class Scene : public SceneCommon {
     void RebuildTLAS_nolock();
     void RebuildLightTree_nolock();
 
-    void PrepareSkyEnvMap_nolock(const std::function<void(int, int, UnaryFunction &&)> &parallel_for);
+    void PrepareSkyEnvMap_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
     void PrepareEnvMapQTree_nolock();
     void GenerateTextureMips_nolock();
     void PrepareBindlessTextures_nolock();
@@ -168,7 +168,7 @@ class Scene : public SceneCommon {
         RemoveMeshInstance_nolock(mi);
     }
 
-    void Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) override;
+    void Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
 
     uint32_t triangle_count() const override {
         std::shared_lock<std::shared_timed_mutex> lock(mtx_);
@@ -1396,7 +1396,7 @@ inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i
     RebuildTLAS_nolock();
 }
 
-inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
+inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     if (env_map_light_ != InvalidLightHandle) {
@@ -1512,7 +1512,7 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
 }
 
 inline void
-Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
+Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     const uint64_t t1 = Ray::GetTimeMs();
 
     if (physical_sky_texture_ != InvalidTextureHandle) {

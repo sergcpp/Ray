@@ -142,6 +142,25 @@ force_inline float construct_float(uint32_t m) {
     return ret.f - 1.0f; // Range [0:1]
 }
 
+force_inline float fract(const float v) {
+    float _unused;
+    return modff(v, &_unused);
+}
+
+force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
+    simd_fvec4 ret;
+    UNROLLED_FOR(i, 3, {
+        if (col.get<i>() > 0.04045f) {
+            ret.set<i>(powf((col.get<i>() + 0.055f) / 1.055f, 2.4f));
+        } else {
+            ret.set<i>(col.get<i>() / 12.92f);
+        }
+    })
+    ret.set<3>(col[3]);
+
+    return ret;
+}
+
 force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
     const float f = exp2f(float(rgbe.v[3]) - 128.0f);
     return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};

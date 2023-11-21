@@ -239,7 +239,8 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
         Ray::camera_desc_t cam_desc;
         cam_desc.type = Ray::eCamType::Persp;
         cam_desc.filter = Ray::ePixelFilter::Box;
-        if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight) {
+        if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight ||
+            test_scene == eTestScene::Standard_MoonLight) {
             cam_desc.view_transform = Ray::eViewTransform::Filmic_HighContrast;
         } else {
             cam_desc.view_transform = Ray::eViewTransform::Standard;
@@ -284,6 +285,10 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
             cam_desc.max_total_depth = 9;
         } else if (test_scene == eTestScene::Ray_Flags) {
             cam_desc.regularize_alpha = 0.1f;
+        } else if (test_scene == eTestScene::Standard_SunLight) {
+            cam_desc.exposure = -3.0f;
+        } else if (test_scene == eTestScene::Standard_MoonLight) {
+            cam_desc.exposure = 6.0f;
         }
 
         cam_desc.min_total_depth = 4;
@@ -568,7 +573,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
         std::vector<float> env_attrs;
         std::vector<uint32_t> env_indices, env_groups;
         if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight ||
-            test_scene == eTestScene::Standard_HDRLight) {
+            test_scene == eTestScene::Standard_MoonLight || test_scene == eTestScene::Standard_HDRLight) {
             std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env_floor.bin");
         } else {
             std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env.bin");
@@ -583,7 +588,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
 
         std::vector<Ray::mat_group_desc_t> groups;
         if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight ||
-            test_scene == eTestScene::Standard_HDRLight) {
+            test_scene == eTestScene::Standard_MoonLight || test_scene == eTestScene::Standard_HDRLight) {
             groups.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
             groups.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]);
             groups.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]);
@@ -912,7 +917,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
         sun_desc.direction[1] = -0.454519480f;
         sun_desc.direction[2] = -0.766044438f;
 
-        sun_desc.color[0] = sun_desc.color[1] = sun_desc.color[2] = 12.0f;
+        sun_desc.color[0] = sun_desc.color[1] = sun_desc.color[2] = 100.0f;
         sun_desc.angle = 4.0f;
 
         scene.AddLight(sun_desc);
@@ -932,7 +937,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
         new_light.visible = true;
 
         scene.AddLight(new_light);
-    } else if (test_scene == eTestScene::Standard_NoLight) {
+    } else if (test_scene == eTestScene::Standard_MoonLight || test_scene == eTestScene::Standard_NoLight) {
         // nothing
     }
 
@@ -957,7 +962,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
         if (test_scene == eTestScene::Standard_HDRLight) {
             env_desc.env_map_rotation = env_desc.back_map_rotation = 2.35619449019f;
         }
-    } else if (test_scene == eTestScene::Standard_SunLight) {
+    } else if (test_scene == eTestScene::Standard_SunLight || test_scene == eTestScene::Standard_MoonLight) {
         env_desc.env_col[0] = env_desc.env_col[1] = env_desc.env_col[2] = 1.0f;
         env_desc.back_col[0] = env_desc.back_col[1] = env_desc.back_col[2] = 1.0f;
 
@@ -971,7 +976,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
     }
 
     using namespace std::placeholders;
-    scene.Finalize(std::bind(&ThreadPool::ParallelFor<Ray::UnaryFunction>, &threads, _1, _2, _3));
+    scene.Finalize(std::bind(&ThreadPool::ParallelFor<Ray::ParallelForFunction>, &threads, _1, _2, _3));
 }
 
 template void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, bool output_base_color, bool output_normals,

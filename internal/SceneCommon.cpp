@@ -206,7 +206,7 @@ void Ray::SceneCommon::UpdateSkyTransmittanceLUT(const atmosphere_params_t &para
     }
 }
 
-// #define DUMP_SKY_ENV
+//#define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
 int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
@@ -217,7 +217,7 @@ int SaveEXR(const float *data, int width, int height, int components, const int 
 std::vector<Ray::color_rgba8_t>
 Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int res[2], const light_t lights[],
                                     Span<const uint32_t> dir_lights,
-                                    const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
+                                    const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     std::vector<color_rgba8_t> rgbe_pixels(res[0] * res[1]);
 #ifdef DUMP_SKY_ENV
     std::vector<color_rgb_t> rgb_pixels(res[0] * res[1]);
@@ -234,20 +234,30 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
             Ref::simd_fvec4 color = 0.0f;
 
             // Evaluate light sources
-            for (const uint32_t li_index : dir_lights) {
-                const light_t &l = lights[li_index];
+            if (!dir_lights.empty()) {
+                for (const uint32_t li_index : dir_lights) {
+                    const light_t &l = lights[li_index];
 
-                const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
-                Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
-                if (l.dir.angle != 0.0f) {
-                    const float radius = tanf(l.dir.angle);
-                    light_col *= (PI * radius * radius);
+                    const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
+                    Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                    if (l.dir.angle != 0.0f) {
+                        const float radius = tanf(l.dir.angle);
+                        light_col *= (PI * radius * radius);
+                    }
+
+                    Ref::simd_fvec4 transmittance;
+                    color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
+                                                 ray_dir, MAX_DIST, light_dir, l.dir.angle, light_col,
+                                                 sky_transmittance_lut_, px_hash, transmittance);
                 }
+            } else if (params.stars_brightness > 0.0f) {
+                // Use fake lightsource (to light up the moon)
+                const Ref::simd_fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f}, light_col = {100.0f, 100.0f, 100.0f, 0.0f};
 
                 Ref::simd_fvec4 transmittance;
                 color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
-                                             ray_dir, MAX_DIST, light_dir, l.dir.angle, light_col,
-                                             sky_transmittance_lut_, px_hash, transmittance);
+                                             ray_dir, MAX_DIST, light_dir, 0.0f, light_col, sky_transmittance_lut_,
+                                             px_hash, transmittance);
             }
 
 #ifdef DUMP_SKY_ENV
@@ -264,52 +274,6 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
             rgbe_pixels[y * res[0] + x].v[3] = uint8_t(color.get<3>());
         }
     });
-
-#if 0
-#pragma omp parallel for
-    for (int y = 0; y < res[1]; ++y) {
-        const double theta = PI * float(y) / float(res[1]);
-        for (int x = 0; x < res[0]; ++x) {
-            const uint32_t px_hash = Ref::hash(y * res[0] + x);
-
-            const double phi = 2.0f * PI * (x + 0.5f) / float(res[0]);
-
-            auto ray_dir = Ref::simd_fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
-
-            Ref::simd_fvec4 color = 0.0f;
-
-            // Evaluate light sources
-            for (const uint32_t li_index : dir_lights) {
-                const light_t &l = lights[li_index];
-
-                const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
-                Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
-                if (l.dir.angle != 0.0f) {
-                    const float radius = tanf(l.dir.angle);
-                    light_col *= (PI * radius * radius);
-                }
-
-                Ref::simd_fvec4 transmittance;
-                color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
-                                             ray_dir, MAX_DIST, light_dir, l.dir.angle, light_col,
-                                             sky_transmittance_lut_, px_hash, transmittance);
-            }
-
-#ifdef DUMP_SKY_ENV
-            rgb_pixels[y * res[0] + x].v[0] = color.get<0>();
-            rgb_pixels[y * res[0] + x].v[1] = color.get<1>();
-            rgb_pixels[y * res[0] + x].v[2] = color.get<2>();
-#endif
-
-            color = rgb_to_rgbe(color);
-
-            rgbe_pixels[y * res[0] + x].v[0] = uint8_t(color.get<0>());
-            rgbe_pixels[y * res[0] + x].v[1] = uint8_t(color.get<1>());
-            rgbe_pixels[y * res[0] + x].v[2] = uint8_t(color.get<2>());
-            rgbe_pixels[y * res[0] + x].v[3] = uint8_t(color.get<3>());
-        }
-    }
-#endif
 
 #ifdef DUMP_SKY_ENV
     const char *err = nullptr;

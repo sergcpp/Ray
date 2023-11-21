@@ -565,20 +565,6 @@ force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *
     _radix_sort_lsb(begin, end, begin1, 24);
 }
 
-force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
-    simd_fvec4 ret;
-    UNROLLED_FOR(i, 3, {
-        if (col.get<i>() > 0.04045f) {
-            ret.set<i>(powf((col.get<i>() + 0.055f) / 1.055f, 2.4f));
-        } else {
-            ret.set<i>(col.get<i>() / 12.92f);
-        }
-    })
-    ret.set<3>(col[3]);
-
-    return ret;
-}
-
 force_inline simd_fvec4 YCoCg_to_RGB(const simd_fvec4 &col) {
     const float scale = (col.get<2>() * (255.0f / 8.0f)) + 1.0f;
     const float Y = col.get<3>();
@@ -1186,11 +1172,6 @@ force_inline simd_fvec4 world_from_tangent(const simd_fvec4 &T, const simd_fvec4
 force_inline simd_fvec4 tangent_from_world(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
                                            const simd_fvec4 &V) {
     return simd_fvec4{dot(V, T), dot(V, B), dot(V, N), 0.0f};
-}
-
-force_inline float fract(const float v) {
-    float _unused;
-    return modff(v, &_unused);
 }
 
 force_inline bool quadratic(float a, float b, float c, float &t0, float &t1) {

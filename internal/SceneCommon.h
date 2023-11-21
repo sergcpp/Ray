@@ -23,7 +23,7 @@ class SceneCommon : public SceneBase {
     void UpdateSkyTransmittanceLUT(const atmosphere_params_t &params);
     std::vector<color_rgba8_t> CalcSkyEnvTexture(const atmosphere_params_t &params, const int res[2],
                                                  const light_t lights[], Span<const uint32_t> dir_lights,
-                                                 const std::function<void(int, int, UnaryFunction &&)> &parallel_for);
+                                                 const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
     void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 
   public:

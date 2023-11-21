@@ -218,7 +218,7 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat5_unet_filter_b", "complex_mat5_unet_filter_bn"},
         {"complex_mat6_nlm_filter", "complex_mat6_nlm_filter_b", "complex_mat6_unet_filter_b",
          "complex_mat6_unet_filter_bn"},
-        {"complex_mat5_dir_light", "complex_mat6_dir_light"}};
+        {"complex_mat5_dir_light", "complex_mat6_dir_light", "complex_mat5_moon_light", "complex_mat6_moon_light"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1678,9 +1678,9 @@ void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 20;
+    const int SampleCount = 21;
     const double MinPSNR = 23.0;
-    const int PixThres = 6075;
+    const int PixThres = 6049;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1697,6 +1697,28 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 
     run_material_test(arch_list, preferred_device, "complex_mat5_sun_light", metal_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SunLight);
+}
+
+void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 20;
+    const double MinPSNR = 34.0;
+    const int PixThres = 534;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = Ray::TextureHandle{0};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
+    metal_mat_desc.normal_map = Ray::TextureHandle{1};
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_moon_light", metal_mat_desc, SampleCount, MinPSNR,
+                      PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_MoonLight);
 }
 
 void test_complex_mat5_hdri_light(const char *arch_list[], const char *preferred_device) {
@@ -1918,9 +1940,9 @@ void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 27;
+    const int SampleCount = 30;
     const double MinPSNR = 19.0;
-    const int PixThres = 12246;
+    const int PixThres = 11967;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1932,6 +1954,23 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
 
     run_material_test(arch_list, preferred_device, "complex_mat6_sun_light", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_SunLight);
+}
+
+void test_complex_mat6_moon_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 10;
+    const double MinPSNR = 34.0;
+    const int PixThres = 219;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test(arch_list, preferred_device, "complex_mat6_moon_light", olive_mat_desc, SampleCount, MinPSNR,
+                      PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MoonLight);
 }
 
 void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred_device) {
