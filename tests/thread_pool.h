@@ -23,6 +23,8 @@ class ThreadPool {
     template <class F, class... Args>
     std::future<typename std::result_of<F(Args...)>::type> Enqueue(F &&f, Args &&... args);
 
+    template <class UnaryFunction> void ParallelFor(int from, int to, UnaryFunction &&f);
+
     size_t workers_count() const { return workers_.size(); }
 
   private:
@@ -81,6 +83,18 @@ std::future<typename std::result_of<F(Args...)>::type> ThreadPool::Enqueue(F &&f
     condition_.notify_one();
 
     return res;
+}
+
+template <class UnaryFunction> inline void ThreadPool::ParallelFor(const int from, const int to, UnaryFunction &&f) {
+    std::vector<std::future<void>> futures(to - from);
+
+    for (int i = from; i < to; ++i) {
+        futures[i - from] = Enqueue(f, i);
+    }
+
+    for (int i = 0; i < (to - from); ++i) {
+        futures[i].wait();
+    }
 }
 
 // the destructor joins all threads

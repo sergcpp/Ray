@@ -47,6 +47,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
     s.h = test_img_h;
     s.preferred_device = preferred_device;
 
+    ThreadPool threads(std::thread::hardware_concurrency());
+
     const int DiffThres = 32;
 
     for (const char **arch = arch_list; *arch; ++arch) {
@@ -81,11 +83,12 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     (denoise == eDenoiseMethod::NLM_b || denoise == eDenoiseMethod::NLM_bn ||
                      denoise == eDenoiseMethod::UNet_b || denoise == eDenoiseMethod::UNet_bn);
                 const bool output_normals = (denoise == eDenoiseMethod::NLM_bn || denoise == eDenoiseMethod::UNet_bn);
-                setup_test_scene(*scene, output_base_color, output_normals, min_sample_count, variance_threshold,
-                                 mat_desc, textures, test_scene);
+                setup_test_scene(threads, *scene, output_base_color, output_normals, min_sample_count,
+                                 variance_threshold, mat_desc, textures, test_scene);
 
                 snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
-                schedule_render_jobs(*renderer, scene.get(), s, current_sample_count, denoise, partial, name_buf);
+                schedule_render_jobs(threads, *renderer, scene.get(), s, current_sample_count, denoise, partial,
+                                     name_buf);
 
                 const Ray::color_data_rgba_t pixels = renderer->get_pixels_ref();
 

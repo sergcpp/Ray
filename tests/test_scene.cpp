@@ -226,9 +226,9 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 }
 
 template <typename MatDesc>
-void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const bool output_normals,
-                      const int min_samples, const float variance_threshold, const MatDesc &main_mat_desc,
-                      const char *textures[], const eTestScene test_scene) {
+void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool output_base_color,
+                      const bool output_normals, const int min_samples, const float variance_threshold,
+                      const MatDesc &main_mat_desc, const char *textures[], const eTestScene test_scene) {
     { // setup camera
         static const float view_origin_standard[] = {0.16149f, 0.294997f, 0.332965f};
         static const float view_dir_standard[] = {-0.364128768f, -0.555621922f, -0.747458696f};
@@ -970,19 +970,21 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         scene.RemoveMesh(mesh);
     }
 
-    scene.Finalize();
+    using namespace std::placeholders;
+    scene.Finalize(std::bind(&ThreadPool::ParallelFor<Ray::UnaryFunction>, &threads, _1, _2, _3));
 }
 
-template void setup_test_scene(Ray::SceneBase &scene, bool output_base_color, bool output_normals, int min_samples,
-                               float variance_threshold, const Ray::shading_node_desc_t &main_mat_desc,
+template void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, bool output_base_color, bool output_normals,
+                               int min_samples, float variance_threshold, const Ray::shading_node_desc_t &main_mat_desc,
                                const char *textures[], eTestScene test_scene);
-template void setup_test_scene(Ray::SceneBase &scene, bool output_base_color, bool output_normals, int min_samples,
-                               float variance_threshold, const Ray::principled_mat_desc_t &main_mat_desc,
-                               const char *textures[], eTestScene test_scene);
+template void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, bool output_base_color, bool output_normals,
+                               int min_samples, float variance_threshold,
+                               const Ray::principled_mat_desc_t &main_mat_desc, const char *textures[],
+                               eTestScene test_scene);
 
-void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
-                          const int max_samples, const eDenoiseMethod denoise, const bool partial,
-                          const char *log_str) {
+void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, const Ray::SceneBase *scene,
+                          const Ray::settings_t &settings, const int max_samples, const eDenoiseMethod denoise,
+                          const bool partial, const char *log_str) {
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
@@ -1005,8 +1007,6 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
                 region_contexts.emplace_back(rect);
             }
         }
-
-        ThreadPool threads(std::thread::hardware_concurrency());
 
         auto render_job = [&](const int j, const int portion) {
 #if defined(_WIN32)

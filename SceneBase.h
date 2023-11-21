@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <functional>
+
 #include "Span.h"
 #include "Types.h"
 
@@ -293,20 +295,20 @@ struct camera_desc_t {
 
 /// Atmosphere description
 struct atmosphere_params_t {
-    float planet_radius = 6371000.0f;                   ///< Planet radius (default is Earth)
-    float viewpoint_height = 700.0f;                    ///< Height of the viewpoint to bake environment from
-    float atmosphere_height = 100000.0f;                ///< Height of the atmosphere
-    float rayleigh_height = atmosphere_height * 0.08f;  ///< Rayleigh layer height
-    float mie_height = atmosphere_height * 0.012f;      ///< MIE layer height
-    float clouds_height_beg = 2000.0f;                  ///< Height where clouds start
-    float clouds_height_end = 2500.0f;                  ///< Height where clouds end
-    float clouds_variety = 0.5f;                        ///< Clouds variety
-    float clouds_density = 0.5f;                        ///< Clouds density
-    float clouds_offset_x = 0.0f;                       ///< Clouds offset by x axis
-    float clouds_offset_z = 0.0f;                       ///< Clouds offset by z axis
-    float ozone_height_center = 25000.0f;               ///< Height of the ozone layer (center of tent function)
-    float ozone_half_width = 15000.0f;                  ///< Half of the width of the ozone layer
-    float atmosphere_density = 1.0f;                    ///< Atmosphere density multiplier
+    float planet_radius = 6371000.0f;                  ///< Planet radius (default is Earth)
+    float viewpoint_height = 700.0f;                   ///< Height of the viewpoint to bake environment from
+    float atmosphere_height = 100000.0f;               ///< Height of the atmosphere
+    float rayleigh_height = atmosphere_height * 0.08f; ///< Rayleigh layer height
+    float mie_height = atmosphere_height * 0.012f;     ///< MIE layer height
+    float clouds_height_beg = 2000.0f;                 ///< Height where clouds start
+    float clouds_height_end = 2500.0f;                 ///< Height where clouds end
+    float clouds_variety = 0.5f;                       ///< Clouds variety
+    float clouds_density = 0.5f;                       ///< Clouds density
+    float clouds_offset_x = 0.0f;                      ///< Clouds offset by x axis
+    float clouds_offset_z = 0.0f;                      ///< Clouds offset by z axis
+    float ozone_height_center = 25000.0f;              ///< Height of the ozone layer (center of tent function)
+    float ozone_half_width = 15000.0f;                 ///< Half of the width of the ozone layer
+    float atmosphere_density = 1.0f;                   ///< Atmosphere density multiplier
     alignas(16) float rayleigh_scattering[4] = {5.802f * 1e-6f, 13.558f * 1e-6f, 33.100f * 1e-6f, 0.0f};
     alignas(16) float mie_scattering[4] = {3.996f * 1e-6f, 3.996f * 1e-6f, 3.996f * 1e-6f, 0.0f};
     alignas(16) float ozone_absorbtion[4] = {0.650f * 1e-6f, 1.881f * 1e-6f, 0.085f * 1e-6f, 0.0f};
@@ -327,6 +329,14 @@ struct environment_desc_t {
 };
 
 class ILog;
+
+using UnaryFunction = std::function<void(int)>;
+
+inline void parallel_for_serial(const int from, const int to, UnaryFunction &&f) {
+    for (int i = from; i < to; ++i) {
+        f(i);
+    }
+}
 
 /** Base Scene class,
     cpu and gpu backends have different implementation of SceneBase
@@ -434,7 +444,8 @@ class SceneBase {
     */
     virtual void RemoveMeshInstance(MeshInstanceHandle mi) = 0;
 
-    virtual void Finalize() = 0;
+    virtual void
+    Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for = parallel_for_serial) = 0;
 
     /** @brief Adds camera to a scene
         @param c camera description

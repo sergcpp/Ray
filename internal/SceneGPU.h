@@ -97,7 +97,7 @@ class Scene : public SceneCommon {
     void RebuildTLAS_nolock();
     void RebuildLightTree_nolock();
 
-    void PrepareSkyEnvMap_nolock();
+    void PrepareSkyEnvMap_nolock(const std::function<void(int, int, UnaryFunction &&)> &parallel_for);
     void PrepareEnvMapQTree_nolock();
     void GenerateTextureMips_nolock();
     void PrepareBindlessTextures_nolock();
@@ -168,7 +168,7 @@ class Scene : public SceneCommon {
         RemoveMeshInstance_nolock(mi);
     }
 
-    void Finalize() override;
+    void Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) override;
 
     uint32_t triangle_count() const override {
         std::shared_lock<std::shared_timed_mutex> lock(mtx_);
@@ -1396,7 +1396,7 @@ inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i
     RebuildTLAS_nolock();
 }
 
-inline void Ray::NS::Scene::Finalize() {
+inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     if (env_map_light_ != InvalidLightHandle) {
@@ -1408,7 +1408,7 @@ inline void Ray::NS::Scene::Finalize() {
 
     if (env_.env_map != InvalidTextureHandle._index &&
         (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
-        PrepareSkyEnvMap_nolock();
+        PrepareSkyEnvMap_nolock(parallel_for);
     }
 
     if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
@@ -1511,7 +1511,8 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
     tlas_root_node_ = bvh_nodes[0];
 }
 
-inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
+inline void
+Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
     const uint64_t t1 = Ray::GetTimeMs();
 
     if (physical_sky_texture_ != InvalidTextureHandle) {
@@ -1541,7 +1542,7 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
 
     const int SkyEnvRes[] = {env_.envmap_resolution, env_.envmap_resolution / 2};
     const std::vector<color_rgba8_t> rgbe_pixels =
-        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights);
+        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights, parallel_for);
 
     tex_desc_t desc = {};
     desc.format = eTextureFormat::RGBA8888;

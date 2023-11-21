@@ -97,7 +97,7 @@ class Scene : public SceneCommon {
     void RebuildTLAS_nolock();
     void RebuildLightTree_nolock();
 
-    void PrepareSkyEnvMap_nolock();
+    void PrepareSkyEnvMap_nolock(const std::function<void(int, int, UnaryFunction &&)> &parallel_for);
     void PrepareEnvMapQTree_nolock();
 
     MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);
@@ -150,7 +150,7 @@ class Scene : public SceneCommon {
         RemoveMeshInstance_nolock(mi);
     }
 
-    void Finalize() override;
+    void Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) override;
 
     uint32_t triangle_count() const override {
         std::shared_lock<std::shared_timed_mutex> lock(mtx_);

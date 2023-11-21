@@ -854,7 +854,7 @@ void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
     RebuildTLAS_nolock();
 }
 
-void Ray::Cpu::Scene::Finalize() {
+void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     if (env_map_light_ != InvalidLightHandle) {
@@ -866,7 +866,7 @@ void Ray::Cpu::Scene::Finalize() {
 
     if (env_.env_map != InvalidTextureHandle._index &&
         (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
-        PrepareSkyEnvMap_nolock();
+        PrepareSkyEnvMap_nolock(parallel_for);
     }
 
     if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
@@ -958,7 +958,7 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     }
 }
 
-void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
+void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, UnaryFunction &&)> &parallel_for) {
     const uint64_t t1 = Ray::GetTimeMs();
 
     if (physical_sky_texture_ != InvalidTextureHandle) {
@@ -983,7 +983,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
 
     const int SkyEnvRes[] = {env_.envmap_resolution, env_.envmap_resolution / 2};
     const std::vector<color_rgba8_t> rgbe_pixels =
-        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights);
+        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights, parallel_for);
 
     const int storage = 0;
     const int index = tex_storage_rgba_.Allocate(rgbe_pixels, SkyEnvRes, false);

@@ -8,6 +8,7 @@
 #include "../internal/TextureUtils.h"
 
 #include "test_scene.h"
+#include "thread_pool.h"
 #include "utils.h"
 
 extern bool g_minimal_output;
@@ -59,6 +60,8 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     s.h = test_img_h;
     s.preferred_device = preferred_device;
 
+    ThreadPool threads(std::thread::hardware_concurrency());
+
     const int SampleCount = 14;
     const double BaseColor_MinPSNR = 28.44, Normals_MinPSNR = 38.34, Depth_MinPSNR = 43.3;
 
@@ -86,11 +89,12 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
             auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
-            setup_test_scene(*scene, true, true, -1, 0.0f, mat_desc, textures, eTestScene::Standard);
+            setup_test_scene(threads, *scene, true, true, -1, 0.0f, mat_desc, textures, eTestScene::Standard);
 
             char name_buf[1024];
             snprintf(name_buf, sizeof(name_buf), "Test %s", TestName);
-            schedule_render_jobs(*renderer, scene.get(), s, SampleCount, eDenoiseMethod::None, false, name_buf);
+            schedule_render_jobs(threads, *renderer, scene.get(), s, SampleCount, eDenoiseMethod::None, false,
+                                 name_buf);
 
             const auto base_color_pixels = renderer->get_aux_pixels_ref(Ray::eAUXBuffer::BaseColor);
             const auto depth_normals_pixels = renderer->get_aux_pixels_ref(Ray::eAUXBuffer::DepthNormals);
