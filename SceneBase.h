@@ -192,8 +192,8 @@ enum eLightType { SphereLight, SpotLight, DirectionalLight, LineLight, RectLight
 
 /// Directional lightsource description
 struct directional_light_desc_t {
-    float color[3];
-    float direction[3], angle;
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float direction[3] = {0.0f, -1.0f, 0.0f}, angle = 0.0f;
     bool visible = true; // visibility only affects secondary bounces
     bool cast_shadow = true;
 };
