@@ -14,7 +14,7 @@ force_inline float clamp(const float val, const float min, const float max) {
 force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
 
 force_inline float remap(float value, float original_min) {
-    return saturate((value - original_min) / (1.000001 - original_min));
+    return saturate((value - original_min) / (1.000001f - original_min));
 }
 
 force_inline float mix(float x, float y, float a) { return x * (1.0f - a) + y * a; }
@@ -676,7 +676,7 @@ Ray::Ref::simd_fvec2 Ray::LutTransmittanceParamsToUv(const atmosphere_params_t &
     const float rho = sqrtf(fmaxf(0.0f, view_height * view_height - params.planet_radius * params.planet_radius));
 
     const float discriminant =
-        view_height * view_height * (view_zenith_cos_angle * view_zenith_cos_angle - 1.0) + top_radius * top_radius;
+        view_height * view_height * (view_zenith_cos_angle * view_zenith_cos_angle - 1.0f) + top_radius * top_radius;
     const float d =
         fmaxf(0.0f, (-view_height * view_zenith_cos_angle + sqrtf(discriminant))); // Distance to atmosphere boundary
 
