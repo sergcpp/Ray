@@ -306,6 +306,8 @@ struct atmosphere_params_t {
     float clouds_density = 0.5f;                       ///< Clouds density
     float clouds_offset_x = 0.0f;                      ///< Clouds offset by x axis
     float clouds_offset_z = 0.0f;                      ///< Clouds offset by z axis
+    float cirrus_clouds_amount = 0.5f;                 ///< Amount of the distant clouds
+    float cirrus_clouds_height = 6000.0f;              ///< Height of the distant clouds
     float ozone_height_center = 25000.0f;              ///< Height of the ozone layer (center of tent function)
     float ozone_half_width = 15000.0f;                 ///< Half of the width of the ozone layer
     float atmosphere_density = 1.0f;                   ///< Atmosphere density multiplier

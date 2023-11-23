@@ -161,6 +161,18 @@ force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
     return ret;
 }
 
+force_inline simd_fvec2 srgb_to_rgb(const simd_fvec2 &col) {
+    simd_fvec2 ret;
+    UNROLLED_FOR(i, 2, {
+        if (col.get<i>() > 0.04045f) {
+            ret.set<i>(powf((col.get<i>() + 0.055f) / 1.055f, 2.4f));
+        } else {
+            ret.set<i>(col.get<i>() / 12.92f);
+        }
+    })
+    return ret;
+}
+
 force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
     const float f = exp2f(float(rgbe.v[3]) - 128.0f);
     return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};

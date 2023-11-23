@@ -4,6 +4,7 @@
 
 namespace Ray {
 #include "precomputed/__3d_noise_tex.inl"
+#include "precomputed/__cirrus_tex.inl"
 #include "precomputed/__moon_tex.inl"
 #include "precomputed/__weather_tex.inl"
 
@@ -30,7 +31,7 @@ force_inline float remap(float value, float original_min, float original_max, fl
 force_inline float linstep(float smin, float smax, float x) { return saturate((x - smin) / (smax - smin)); }
 
 force_inline float smoothstep(float edge0, float edge1, float x) {
-    const float t = clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+    const float t = saturate((x - edge0) / (edge1 - edge0));
     return t * t * (3.0f - 2.0f * t);
 }
 
@@ -204,10 +205,11 @@ float GetDensityHeightGradientForPoint(float height, float cloud_type) {
 }
 
 force_inline float Fetch3dNoiseTex(const int x, const int y, const int z) {
-    return __3d_noise_tex[z * NOISE_3D_RES * NOISE_3D_RES + y * NOISE_3D_RES + x] / 255.0f;
+    return __3d_noise_tex[z * NOISE_3D_RES * NOISE_3D_RES + y * NOISE_3D_RES + x];
 }
 
-float Sample3dNoiseTex(const Ref::simd_fvec4 &uvw) {
+float Sample3dNoiseTex(Ref::simd_fvec4 uvw) {
+    uvw *= NOISE_3D_RES;
     Ref::simd_ivec4 iuvw0 = Ref::simd_ivec4(uvw);
     iuvw0 = clamp(iuvw0, Ref::simd_ivec4{0}, Ref::simd_ivec4{NOISE_3D_RES - 1});
     const Ref::simd_ivec4 iuvw1 = (iuvw0 + 1) & Ref::simd_ivec4{NOISE_3D_RES - 1};
@@ -231,7 +233,7 @@ float Sample3dNoiseTex(const Ref::simd_fvec4 &uvw) {
     const float n0xx = (1.0f - k.get<1>()) * n00x + k.get<1>() * n01x,
                 n1xx = (1.0f - k.get<1>()) * n10x + k.get<1>() * n11x;
 
-    return (1.0f - k.get<2>()) * n0xx + k.get<2>() * n1xx;
+    return ((1.0f - k.get<2>()) * n0xx + k.get<2>() * n1xx) / 255.0f;
 }
 
 float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_position, float &out_local_height,
@@ -261,7 +263,6 @@ float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_
     local_position /= 1.5f * (params.clouds_height_end - params.clouds_height_beg);
 
     local_position = fract(local_position);
-    local_position *= NOISE_3D_RES;
 
     const float noise_read = 1.0f - Sample3dNoiseTex(local_position);
 
@@ -362,6 +363,30 @@ Ref::simd_fvec4 SampleMoonTex(Ref::simd_fvec2 uv) {
     return srgb_to_rgb((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
 }
 
+force_inline Ref::simd_fvec2 FetchCirrusTex(const int x, const int y) {
+    return Ref::simd_fvec2{float(__cirrus_tex[2 * (y * CIRRUS_TEX_W + x) + 0]),
+                           float(__cirrus_tex[2 * (y * CIRRUS_TEX_W + x) + 1])};
+}
+
+Ref::simd_fvec2 SampleCirrusTex(Ref::simd_fvec2 uv) {
+    uv = uv * Ref::simd_fvec2(CIRRUS_TEX_W, CIRRUS_TEX_H);
+    auto iuv0 = Ref::simd_ivec2{uv};
+    iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{CIRRUS_TEX_W - 1, CIRRUS_TEX_H - 1});
+    const Ref::simd_ivec2 iuv1 = (iuv0 + 1) & Ref::simd_ivec2{CIRRUS_TEX_W - 1, CIRRUS_TEX_H - 1};
+
+    const Ref::simd_fvec2 m00 = FetchCirrusTex(iuv0.get<0>(), iuv0.get<1>()),
+                          m01 = FetchCirrusTex(iuv1.get<0>(), iuv0.get<1>()),
+                          m10 = FetchCirrusTex(iuv0.get<0>(), iuv1.get<1>()),
+                          m11 = FetchCirrusTex(iuv1.get<0>(), iuv1.get<1>());
+
+    const Ref::simd_fvec2 k = fract(uv);
+
+    const Ref::simd_fvec2 m0 = m01 * k.get<0>() + m00 * (1.0f - k.get<0>()),
+                          m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
+
+    return srgb_to_rgb((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
+}
+
 } // namespace Ray
 
 Ray::Ref::simd_fvec4 Ray::IntegrateOpticalDepth(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
@@ -431,9 +456,11 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
 
     const float costh = dot(ray_dir, light_dir);
     const float phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh);
+    const Ref::simd_fvec4 phase_w = PhaseWrenninge(costh);
 
     const float moon_costh = dot(ray_dir, moon_dir);
     const float moon_phase_r = PhaseRayleigh(moon_costh), moon_phase_m = PhaseMie(moon_costh);
+    const Ref::simd_fvec4 moon_phase_w = PhaseWrenninge(moon_costh);
 
     const int PreAtmosphereSampleCount = 8, MainAtmosphereSampleCount = 24, CloudsSampleCount = 128;
 
@@ -467,7 +494,8 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
             // The atmospheric transmittance from ray_start to local_osition
             const Ref::simd_fvec4 local_transmittance = Absorb(params, local_density * step_size);
 
-            { // main light contribution
+            if (light_dir.get<1>() > -0.025f) {
+                // main light contribution
                 const float view_zenith_cos_angle = dot(light_dir, up_vector);
                 const Ref::simd_fvec2 uv =
                     LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
@@ -514,8 +542,6 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
         if (clouds_ray_length > 0.0f) {
             const float step_size = clouds_ray_length / float(CloudsSampleCount);
 
-            const Ref::simd_fvec4 phase_w = PhaseWrenninge(costh), moon_phase_w = PhaseWrenninge(moon_costh);
-
             Ref::simd_fvec4 local_position = clouds_ray_start + ray_dir * Ref::construct_float(rand_hash) * step_size;
             rand_hash = Ref::hash(rand_hash);
 
@@ -549,7 +575,8 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
                 if (local_density > 0.0f) {
                     const float local_transmittance = expf(-local_density * step_size);
 
-                    { // main light contribution
+                    if (light_dir.get<1>() > -0.025f) {
+                        // main light contribution
                         const Ref::simd_fvec2 planet_intersection =
                             PlanetIntersection(params, local_position, light_dir);
                         const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
@@ -559,9 +586,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
                         clouds += planet_shadow * total_transmittance *
                                   GetLightEnergy(cloud_shadow, local_density, phase_w) * (1.0f - local_transmittance) *
                                   light_transmittance;
-                    }
-
-                    if (params.moon_radius > 0.0f) {
+                    } else if (params.moon_radius > 0.0f) {
                         // moon reflection contribution (totally fake)
                         const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, moon_dir);
 
@@ -580,8 +605,64 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
             cloud_blend = 1.0f - powf(cloud_blend, 5.0f);
 
             total_radiance += cloud_blend * clouds * light_color;
-            total_transmittance = mix(transmittance_before, total_transmittance, cloud_blend);
+            mix(transmittance_before, total_transmittance, cloud_blend);
         }
+    }
+
+    //
+    // Cirrus clouds
+    //
+    if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.clouds_density > 0.0f &&
+        light_brightness > 0.0f) {
+        Ref::simd_fvec2 cirrus_coords =
+            3e-4 * Ref::simd_fvec2{params.clouds_offset_z, params.clouds_offset_x} +
+            0.8f * (Ref::simd_fvec2{ray_dir.get<2>(), ray_dir.get<0>()}) / (fabsf(ray_dir.get<1>()) + 0.02f);
+        cirrus_coords.set<1>(cirrus_coords.get<1>() + 1.75f);
+
+        float noise_read = Sample3dNoiseTex(
+            fract(Ref::simd_fvec4{0.0f, cirrus_coords.get<0>() * 0.03f, cirrus_coords.get<1>() * 0.03f, 0.0f}));
+        noise_read =
+            saturate(noise_read - 1.0f + params.cirrus_clouds_amount * 0.6f) / (params.cirrus_clouds_amount + 1e-9f);
+
+        float dC = 1.2f * smoothstep(0.0f, 1.0f, noise_read) * SampleCirrusTex(fract(cirrus_coords * 0.5f)).get<0>();
+
+        //
+        cirrus_coords.set<0>(cirrus_coords.get<0>() + 0.25f);
+        noise_read = Sample3dNoiseTex(
+            fract(Ref::simd_fvec4{0.7f, cirrus_coords.get<0>() * 0.02f, cirrus_coords.get<1>() * 0.02f, 0.0f}));
+        noise_read =
+            saturate(noise_read - 1.0f + params.cirrus_clouds_amount * 0.7f) / (params.cirrus_clouds_amount + 1e-9f);
+
+        dC += 0.6f * smoothstep(0.0f, 1.0f, noise_read) * SampleCirrusTex(fract(cirrus_coords * 0.25f)).get<1>();
+
+        Ref::simd_fvec4 local_position = ray_start + ray_dir * params.cirrus_clouds_height;
+
+        Ref::simd_fvec4 light_transmittance, moon_transmittance;
+        {
+            Ref::simd_fvec4 up_vector;
+            const float local_height = AtmosphereHeight(params, local_position, up_vector);
+            {
+                const float view_zenith_cos_angle = dot(light_dir, up_vector);
+                const Ref::simd_fvec2 uv =
+                    LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
+                light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+            }
+            {
+                const float view_zenith_cos_angle = dot(moon_dir, up_vector);
+                const Ref::simd_fvec2 uv =
+                    LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
+                moon_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+            }
+        }
+
+        if (light_dir.get<1>() > -0.025f) {
+            total_radiance +=
+                total_transmittance * GetLightEnergy(0.002f, dC, phase_w) * light_transmittance * dC * light_color;
+        } else if (params.moon_radius > 0.0f) {
+            total_radiance += 0.0001f * total_transmittance * GetLightEnergy(0.002f, dC, moon_phase_w) *
+                              moon_transmittance * dC * light_color;
+        }
+        total_transmittance *= expf(-dC * 0.002f * 1000.0f);
     }
 
     //
@@ -643,13 +724,6 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     total_radiance += (rayleigh * Ref::simd_fvec4{params.rayleigh_scattering, Ref::simd_mem_aligned} +
                        mie * Ref::simd_fvec4{params.mie_scattering, Ref::simd_mem_aligned}) *
                       light_color;
-
-    //
-    // Cirrus clouds
-    //
-    if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.clouds_density > 0.0f &&
-        light_brightness > 0.0f) {
-    }
 
     //
     // Ground 'floor'
