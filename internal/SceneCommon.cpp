@@ -245,19 +245,17 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
                         light_col *= (PI * radius * radius);
                     }
 
-                    Ref::simd_fvec4 transmittance;
                     color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
                                                  ray_dir, MAX_DIST, light_dir, l.dir.angle, light_col,
-                                                 sky_transmittance_lut_, px_hash, transmittance);
+                                                 sky_transmittance_lut_, px_hash);
                 }
             } else if (params.stars_brightness > 0.0f) {
                 // Use fake lightsource (to light up the moon)
                 const Ref::simd_fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f}, light_col = {100.0f, 100.0f, 100.0f, 0.0f};
 
-                Ref::simd_fvec4 transmittance;
-                color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
-                                             ray_dir, MAX_DIST, light_dir, 0.0f, light_col, sky_transmittance_lut_,
-                                             px_hash, transmittance);
+                color +=
+                    IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f}, ray_dir,
+                                        MAX_DIST, light_dir, 0.0f, light_col, sky_transmittance_lut_, px_hash);
             }
 
 #ifdef DUMP_SKY_ENV
