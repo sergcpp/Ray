@@ -317,6 +317,8 @@ struct atmosphere_params_t {
     alignas(16) float moon_dir[4] = {0.707f, 0.707f, 0.0f, 0.0f};
     alignas(16) float rayleigh_scattering[4] = {5.802f * 1e-6f, 13.558f * 1e-6f, 33.100f * 1e-6f, 0.0f};
     alignas(16) float mie_scattering[4] = {3.996f * 1e-6f, 3.996f * 1e-6f, 3.996f * 1e-6f, 0.0f};
+    alignas(16) float mie_extinction[4] = {4.440f * 1e-6f, 4.440f * 1e-6f, 4.440f * 1e-6f, 0.0f};
+    alignas(16) float mie_absorption[4] = {0.444f * 1e-6f, 0.444f * 1e-6f, 0.444f * 1e-6f, 0.0f};
     alignas(16) float ozone_absorbtion[4] = {0.650f * 1e-6f, 1.881f * 1e-6f, 0.085f * 1e-6f, 0.0f};
     alignas(16) float ground_albedo[4] = {0.05f, 0.05f, 0.05f, 0.0f};
 };

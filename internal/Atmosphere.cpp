@@ -140,7 +140,51 @@ force_inline Ref::simd_fvec4 AtmosphereDensity(const atmosphere_params_t &params
 #endif
     const float density_ozone = fmaxf(0.0f, 1.0f - fabsf(h - params.ozone_height_center) / params.ozone_half_width);
 
-    return Ref::simd_fvec4{density_rayleigh.get<0>(), density_mie.get<0>(), density_ozone, 0.0f};
+    return params.atmosphere_density *
+           Ref::simd_fvec4{density_rayleigh.get<0>(), density_mie.get<0>(), density_ozone, 0.0f};
+}
+
+struct atmosphere_medium_t {
+    Ref::simd_fvec4 scattering;
+    Ref::simd_fvec4 absorption;
+    Ref::simd_fvec4 extinction;
+
+    Ref::simd_fvec4 scattering_mie;
+    Ref::simd_fvec4 absorption_mie;
+    Ref::simd_fvec4 extinction_mie;
+
+    Ref::simd_fvec4 scattering_ray;
+    Ref::simd_fvec4 absorption_ray;
+    Ref::simd_fvec4 extinction_ray;
+
+    Ref::simd_fvec4 scattering_ozo;
+    Ref::simd_fvec4 absorption_ozo;
+    Ref::simd_fvec4 extinction_ozo;
+};
+
+force_inline atmosphere_medium_t SampleAtmosphereMedium(const atmosphere_params_t &params, const float h) {
+    const Ref::simd_fvec4 local_density = AtmosphereDensity(params, h);
+
+    atmosphere_medium_t s;
+
+    s.scattering_mie = local_density.get<1>() * Ref::simd_fvec4{params.mie_scattering, Ref::simd_mem_aligned};
+    s.absorption_mie = local_density.get<1>() * Ref::simd_fvec4{params.mie_absorption, Ref::simd_mem_aligned};
+    s.extinction_mie = local_density.get<1>() * Ref::simd_fvec4{params.mie_extinction, Ref::simd_mem_aligned};
+
+    s.scattering_ray = local_density.get<0>() * Ref::simd_fvec4{params.rayleigh_scattering, Ref::simd_mem_aligned};
+    s.absorption_ray = 0.0f;
+    s.extinction_ray = s.scattering_ray + s.absorption_ray;
+
+    s.scattering_ozo = 0.0;
+    s.absorption_ozo = local_density.get<2>() * Ref::simd_fvec4{params.ozone_absorbtion, Ref::simd_mem_aligned};
+    s.extinction_ozo = s.scattering_ozo + s.absorption_ozo;
+
+    s.scattering = s.scattering_mie + s.scattering_ray + s.scattering_ozo;
+    s.absorption = s.absorption_mie + s.absorption_ray + s.absorption_ozo;
+    s.extinction = s.extinction_mie + s.extinction_ray + s.extinction_ozo;
+    s.extinction.set<3>(1.0f); // make it safe divisor
+
+    return s;
 }
 
 Ref::simd_fvec4 SampleTransmittanceLUT(Span<const float> transmittance_lut, Ref::simd_fvec2 uv) {
@@ -395,43 +439,116 @@ Ray::Ref::simd_fvec4 Ray::IntegrateOpticalDepth(const atmosphere_params_t &param
     float ray_length = intersection[1];
 
     const int SampleCount = 64;
-    float stepSize = ray_length / SampleCount;
+    float step_size = ray_length / SampleCount;
 
     Ref::simd_fvec4 optical_depth = 0.0f;
 
     for (int i = 0; i < SampleCount; i++) {
-        Ref::simd_fvec4 local_pos = ray_start + ray_dir * (i + 0.5f) * stepSize, up_vector;
+        Ref::simd_fvec4 local_pos = ray_start + ray_dir * (i + 0.5f) * step_size, up_vector;
         const float local_height = AtmosphereHeight(params, local_pos, up_vector);
-        const Ref::simd_fvec4 local_density = AtmosphereDensity(params, local_height);
-
-        optical_depth += local_density * stepSize;
+        const atmosphere_medium_t medium = SampleAtmosphereMedium(params, local_height);
+        optical_depth += medium.extinction * step_size;
     }
 
     return optical_depth;
 }
 
-// Calculate a luminance transmittance value from optical depth.
-Ray::Ref::simd_fvec4 Ray::Absorb(const atmosphere_params_t &params, const Ref::simd_fvec4 &opticalDepth) {
-    // Note that Mie results in slightly more light absorption than scattering, about 10%
-    return exp(-(opticalDepth.get<0>() * Ref::simd_fvec4{params.rayleigh_scattering, Ref::simd_mem_aligned} +
-                 opticalDepth.get<1>() * Ref::simd_fvec4{params.mie_scattering, Ref::simd_mem_aligned} * 1.1f +
-                 opticalDepth.get<2>() * Ref::simd_fvec4{params.ozone_absorbtion, Ref::simd_mem_aligned}) *
-               params.atmosphere_density);
+template <bool ExpSampleDistribution>
+Ray::Ref::simd_fvec4 Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
+                                                  const Ref::simd_fvec4 &ray_dir, const float ray_length,
+                                                  const Ref::simd_fvec4 &light_dir, const Ref::simd_fvec4 &moon_dir,
+                                                  const Ref::simd_fvec4 &light_color,
+                                                  Span<const float> transmittance_lut, const float rand_offset,
+                                                  const int sample_count, Ref::simd_fvec4 &inout_transmittance) {
+    Ref::simd_fvec4 _unused;
+    const float ray_height = AtmosphereHeight(params, ray_start, _unused);
+    const float sample_distribution_exponent = 1.0f + saturate(1.0f - ray_height / params.atmosphere_height) * 8.0f;
+
+    const float costh = dot(ray_dir, light_dir);
+    const float phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh);
+
+    const float moon_costh = dot(ray_dir, moon_dir);
+    const float moon_phase_r = PhaseRayleigh(moon_costh), moon_phase_m = PhaseMie(moon_costh);
+
+    Ref::simd_fvec4 total_radiance = 0.0f;
+
+    float prev_ray_time = 0;
+    for (int i = 0; i < sample_count; ++i) {
+        float ray_time;
+        if (ExpSampleDistribution) {
+            ray_time = powf(float(i) / sample_count, sample_distribution_exponent) * ray_length;
+        } else {
+            ray_time = (float(i) / sample_count) * ray_length;
+        }
+        const float step_size = (ray_time - prev_ray_time);
+
+        const Ref::simd_fvec4 local_position = ray_start + ray_dir * (ray_time - 0.1f * rand_offset * step_size);
+        Ref::simd_fvec4 up_vector;
+        const float local_height = AtmosphereHeight(params, local_position, up_vector);
+        const atmosphere_medium_t medium = SampleAtmosphereMedium(params, local_height);
+        const Ref::simd_fvec4 optical_depth = medium.extinction * step_size;
+        const Ref::simd_fvec4 local_transmittance = exp(-optical_depth);
+
+        Ref::simd_fvec4 S = 0.0f;
+
+        if (light_dir.get<1>() > -0.025f) {
+            // main light contribution
+            const float view_zenith_cos_angle = dot(light_dir, up_vector);
+            const Ref::simd_fvec2 uv =
+                LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
+            const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+
+            const Ref::simd_fvec2 planet_intersection = PlanetIntersection(params, local_position, light_dir);
+            const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
+
+            const Ref::simd_fvec4 phase_times_scattering =
+                medium.scattering_ray * phase_r + medium.scattering_mie * phase_m;
+            S += planet_shadow * light_transmittance * phase_times_scattering * light_color;
+        } else if (params.moon_radius > 0.0f) {
+            // moon reflection contribution  (totally fake)
+            const float view_zenith_cos_angle = dot(moon_dir, up_vector);
+            const Ref::simd_fvec2 uv =
+                LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
+            const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+
+            const Ref::simd_fvec4 phase_times_scattering =
+                medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
+            S += 0.0001f * light_transmittance * phase_times_scattering * light_color;
+        }
+
+#if 0
+        total_radiance += inout_transmittance * S * step_size;
+#else
+        const Ref::simd_fvec4 S_int =
+            (S - S * local_transmittance) / medium.extinction; // integrate along the current step segment
+        total_radiance += inout_transmittance * S_int;
+#endif
+        inout_transmittance *= local_transmittance;
+
+        prev_ray_time = ray_time;
+    }
+
+    return total_radiance;
 }
+
+template Ray::Ref::simd_fvec4
+Ray::IntegrateScatteringMain<false>(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
+                                    const Ref::simd_fvec4 &ray_dir, float ray_length, const Ref::simd_fvec4 &light_dir,
+                                    const Ref::simd_fvec4 &moon_dir, const Ref::simd_fvec4 &light_color,
+                                    Span<const float> transmittance_lut, float rand_offset, int sample_count,
+                                    Ref::simd_fvec4 &inout_transmittance);
+template Ray::Ref::simd_fvec4
+Ray::IntegrateScatteringMain<true>(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
+                                   const Ref::simd_fvec4 &ray_dir, float ray_length, const Ref::simd_fvec4 &light_dir,
+                                   const Ref::simd_fvec4 &moon_dir, const Ref::simd_fvec4 &light_color,
+                                   Span<const float> transmittance_lut, float rand_offset, int sample_count,
+                                   Ref::simd_fvec4 &inout_transmittance);
 
 Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref::simd_fvec4 ray_start,
                                               const Ref::simd_fvec4 &ray_dir, float ray_length,
                                               const Ref::simd_fvec4 &light_dir, const float light_angle,
                                               const Ref::simd_fvec4 &light_color, Span<const float> transmittance_lut,
                                               uint32_t rand_hash) {
-    // We can reduce the number of atmospheric samples required to converge by spacing them exponentially closer to the
-    // camera. This breaks space view however, so let's compensate for that with an exponent that "fades" to 1 as we
-    // leave the atmosphere.
-    Ref::simd_fvec4 _unused;
-    const float ray_height = AtmosphereHeight(params, ray_start, _unused);
-    const float sample_distribution_exponent =
-        1.0f + saturate(1.0f - ray_height / params.atmosphere_height) * 8.0f; // Slightly arbitrary max exponent of 9
-
     const Ref::simd_fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     if (atm_intersection.get<0>() > 0) {
@@ -455,11 +572,9 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     moon_dir = normalize(moon_point);
 
     const float costh = dot(ray_dir, light_dir);
-    const float phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh);
     const Ref::simd_fvec4 phase_w = PhaseWrenninge(costh);
 
     const float moon_costh = dot(ray_dir, moon_dir);
-    const float moon_phase_r = PhaseRayleigh(moon_costh), moon_phase_m = PhaseMie(moon_costh);
     const Ref::simd_fvec4 moon_phase_w = PhaseWrenninge(moon_costh);
 
     const int PreAtmosphereSampleCount = 8, MainAtmosphereSampleCount = 24, CloudsSampleCount = 128;
@@ -471,8 +586,6 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
 
     Ref::simd_fvec4 total_radiance = 0.0f, total_transmittance = 1.0f;
 
-    Ref::simd_fvec4 rayleigh = 0.0f, mie = 0.0f;
-
     const Ref::simd_fvec4 clouds_intersection = CloudsIntersection(params, ray_start, ray_dir);
 
     //
@@ -481,51 +594,9 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     if (clouds_intersection.get<1>() > 0 && light_brightness > 0.0f) {
         const float pre_atmosphere_ray_length = fminf(ray_length, clouds_intersection.get<1>());
 
-        float prev_ray_time = 0;
-        for (int i = 0; i < PreAtmosphereSampleCount; ++i) {
-            const float ray_time = (float(i) / PreAtmosphereSampleCount) * pre_atmosphere_ray_length;
-            const float step_size = (ray_time - prev_ray_time);
-
-            const Ref::simd_fvec4 local_position = ray_start + ray_dir * (ray_time - 0.1f * rand_offset * step_size);
-            Ref::simd_fvec4 up_vector;
-            const float local_height = AtmosphereHeight(params, local_position, up_vector);
-            const Ref::simd_fvec4 local_density = AtmosphereDensity(params, local_height);
-
-            // The atmospheric transmittance from ray_start to local_osition
-            const Ref::simd_fvec4 local_transmittance = Absorb(params, local_density * step_size);
-
-            if (light_dir.get<1>() > -0.025f) {
-                // main light contribution
-                const float view_zenith_cos_angle = dot(light_dir, up_vector);
-                const Ref::simd_fvec2 uv =
-                    LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
-                const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
-
-                const Ref::simd_fvec2 planet_intersection = PlanetIntersection(params, local_position, light_dir);
-                const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
-
-                rayleigh += planet_shadow * total_transmittance * light_transmittance * phase_r *
-                            local_density.get<0>() * step_size;
-                mie += planet_shadow * total_transmittance * light_transmittance * phase_m * local_density.get<1>() *
-                       step_size;
-            }
-
-            if (params.moon_radius > 0.0f) {
-                // moon reflection contribution  (totally fake)
-                const float view_zenith_cos_angle = dot(moon_dir, up_vector);
-                const Ref::simd_fvec2 uv =
-                    LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
-                const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
-
-                rayleigh += 0.0001f * total_transmittance * light_transmittance * moon_phase_r *
-                            local_density.get<0>() * step_size;
-                mie += 0.0001f * total_transmittance * light_transmittance * moon_phase_m * local_density.get<1>() *
-                       step_size;
-            }
-
-            prev_ray_time = ray_time;
-            total_transmittance *= local_transmittance;
-        }
+        total_radiance += IntegrateScatteringMain<false>(params, ray_start, ray_dir, pre_atmosphere_ray_length,
+                                                         light_dir, moon_dir, light_color, transmittance_lut,
+                                                         rand_offset, PreAtmosphereSampleCount, total_transmittance);
     }
 
     //
@@ -668,62 +739,15 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     //
     // Main atmosphere
     //
-    if (planet_intersection.get<0>() < 0) {
+    if (planet_intersection.get<0>() < 0 && light_brightness > 0.0f) {
         float main_ray_length = ray_length;
         Ref::simd_fvec4 main_ray_start = ray_start + ray_dir * clouds_intersection.get<3>();
         main_ray_length -= clouds_intersection.get<1>();
 
-        float prev_ray_time = 0;
-        for (int i = 0; i < MainAtmosphereSampleCount && light_brightness > 0.0f; ++i) {
-            const float ray_time =
-                powf(float(i) / MainAtmosphereSampleCount, sample_distribution_exponent) * main_ray_length;
-            const float step_size = (ray_time - prev_ray_time);
-
-            const Ref::simd_fvec4 local_position =
-                main_ray_start + ray_dir * (ray_time - 0.1f * rand_offset * step_size);
-            Ref::simd_fvec4 up_vector;
-            const float local_height = AtmosphereHeight(params, local_position, up_vector);
-            const Ref::simd_fvec4 local_density = AtmosphereDensity(params, local_height);
-
-            // The atmospheric transmittance from ray_start to local_osition
-            const Ref::simd_fvec4 local_transmittance = Absorb(params, local_density * step_size);
-
-            { // main light contribution
-                const float view_zenith_cos_angle = dot(light_dir, up_vector);
-                const Ref::simd_fvec2 uv =
-                    LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
-                const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
-
-                const Ref::simd_fvec2 planet_intersection = PlanetIntersection(params, local_position, light_dir);
-                const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
-
-                rayleigh += planet_shadow * total_transmittance * light_transmittance * phase_r *
-                            local_density.get<0>() * step_size;
-                mie += planet_shadow * total_transmittance * light_transmittance * phase_m * local_density.get<1>() *
-                       step_size;
-            }
-
-            if (params.moon_radius > 0.0f) {
-                // moon reflection contribution  (totally fake)
-                const float view_zenith_cos_angle = dot(moon_dir, up_vector);
-                const Ref::simd_fvec2 uv =
-                    LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
-                const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
-
-                rayleigh += 0.0001f * total_transmittance * light_transmittance * moon_phase_r *
-                            local_density.get<0>() * step_size;
-                mie += 0.0001f * total_transmittance * light_transmittance * moon_phase_m * local_density.get<1>() *
-                       step_size;
-            }
-
-            prev_ray_time = ray_time;
-            total_transmittance *= local_transmittance;
-        }
+        total_radiance +=
+            IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir, light_color,
+                                    transmittance_lut, rand_offset, MainAtmosphereSampleCount, total_transmittance);
     }
-
-    total_radiance += (rayleigh * Ref::simd_fvec4{params.rayleigh_scattering, Ref::simd_mem_aligned} +
-                       mie * Ref::simd_fvec4{params.mie_scattering, Ref::simd_mem_aligned}) *
-                      light_color;
 
     //
     // Ground 'floor'

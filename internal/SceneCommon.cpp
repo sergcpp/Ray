@@ -199,7 +199,7 @@ void Ray::SceneCommon::UpdateSkyTransmittanceLUT(const atmosphere_params_t &para
                                                -sqrtf(1.0f - view_zenith_cos_angle * view_zenith_cos_angle), 0.0f};
 
             const Ref::simd_fvec4 optical_depthlight = IntegrateOpticalDepth(params, world_pos, world_dir);
-            const Ref::simd_fvec4 transmittance = Absorb(params, optical_depthlight);
+            const Ref::simd_fvec4 transmittance = exp(-optical_depthlight);
 
             transmittance.store_to(&sky_transmittance_lut_[4 * (y * TRANSMITTANCE_LUT_W + x)], Ref::simd_mem_aligned);
         }
