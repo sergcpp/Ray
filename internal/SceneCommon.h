@@ -18,12 +18,14 @@ class SceneCommon : public SceneBase {
     CameraHandle current_cam_ = InvalidCameraHandle;
 
     environment_t env_;
-    aligned_vector<float, 16> sky_transmittance_lut_;
+    aligned_vector<float, 16> sky_transmittance_lut_, sky_multiscatter_lut_;
 
     void UpdateSkyTransmittanceLUT(const atmosphere_params_t &params);
-    std::vector<color_rgba8_t> CalcSkyEnvTexture(const atmosphere_params_t &params, const int res[2],
-                                                 const light_t lights[], Span<const uint32_t> dir_lights,
-                                                 const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
+    void UpdateMultiscatterLUT(const atmosphere_params_t &params);
+    std::vector<color_rgba8_t>
+    CalcSkyEnvTexture(const atmosphere_params_t &params, const int res[2], const light_t lights[],
+                      Span<const uint32_t> dir_lights,
+                      const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
     void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 
   public:

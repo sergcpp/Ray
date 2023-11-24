@@ -444,4 +444,10 @@ struct scene_data_t {
     Span<const light_wbvh_node_t> light_wnodes;
 };
 
+force_inline float clamp(const float val, const float min, const float max) {
+    return val < min ? min : (val > max ? max : val);
+}
+
+force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
+
 } // namespace Ray

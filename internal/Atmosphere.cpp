@@ -2,17 +2,13 @@
 
 #include <cmath>
 
+// Based on: https://github.com/sebh/UnrealEngineSkyAtmosphere
+
 namespace Ray {
 #include "precomputed/__3d_noise_tex.inl"
 #include "precomputed/__cirrus_tex.inl"
 #include "precomputed/__moon_tex.inl"
 #include "precomputed/__weather_tex.inl"
-
-force_inline float clamp(const float val, const float min, const float max) {
-    return val < min ? min : (val > max ? max : val);
-}
-
-force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
 
 force_inline float remap(float value, float original_min) {
     return saturate((value - original_min) / (1.000001f - original_min));
@@ -187,19 +183,19 @@ force_inline atmosphere_medium_t SampleAtmosphereMedium(const atmosphere_params_
     return s;
 }
 
-Ref::simd_fvec4 SampleTransmittanceLUT(Span<const float> transmittance_lut, Ref::simd_fvec2 uv) {
+Ref::simd_fvec4 SampleTransmittanceLUT(Span<const float> lut, Ref::simd_fvec2 uv) {
     uv = uv * Ref::simd_fvec2(TRANSMITTANCE_LUT_W, TRANSMITTANCE_LUT_H);
     auto iuv0 = Ref::simd_ivec2(uv);
     iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
     const Ref::simd_ivec2 iuv1 = min(iuv0 + 1, Ref::simd_ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
 
-    const auto tr00 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
+    const auto tr00 = Ref::simd_fvec4(&lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
                                       Ref::simd_mem_aligned),
-               tr01 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
+               tr01 = Ref::simd_fvec4(&lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
                                       Ref::simd_mem_aligned),
-               tr10 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
+               tr10 = Ref::simd_fvec4(&lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
                                       Ref::simd_mem_aligned),
-               tr11 = Ref::simd_fvec4(&transmittance_lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
+               tr11 = Ref::simd_fvec4(&lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
                                       Ref::simd_mem_aligned);
 
     const Ref::simd_fvec2 k = fract(uv);
@@ -208,6 +204,29 @@ Ref::simd_fvec4 SampleTransmittanceLUT(Span<const float> transmittance_lut, Ref:
                           tr1 = tr11 * k.get<0>() + tr10 * (1.0f - k.get<0>());
 
     return (tr1 * k.get<1>() + tr0 * (1.0f - k.get<1>()));
+}
+
+Ref::simd_fvec4 SampleMultiscatterLUT(Span<const float> lut, Ref::simd_fvec2 uv) {
+    uv = uv * Ref::simd_fvec2(MULTISCATTER_LUT_RES);
+    auto iuv0 = Ref::simd_ivec2(uv);
+    iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{MULTISCATTER_LUT_RES - 1});
+    const Ref::simd_ivec2 iuv1 = min(iuv0 + 1, Ref::simd_ivec2{MULTISCATTER_LUT_RES - 1});
+
+    const auto ms00 = Ref::simd_fvec4(&lut[4 * (iuv0.get<1>() * MULTISCATTER_LUT_RES + iuv0.get<0>())],
+                                      Ref::simd_mem_aligned),
+               ms01 = Ref::simd_fvec4(&lut[4 * (iuv0.get<1>() * MULTISCATTER_LUT_RES + iuv1.get<0>())],
+                                      Ref::simd_mem_aligned),
+               ms10 = Ref::simd_fvec4(&lut[4 * (iuv1.get<1>() * MULTISCATTER_LUT_RES + iuv0.get<0>())],
+                                      Ref::simd_mem_aligned),
+               ms11 = Ref::simd_fvec4(&lut[4 * (iuv1.get<1>() * MULTISCATTER_LUT_RES + iuv1.get<0>())],
+                                      Ref::simd_mem_aligned);
+
+    const Ref::simd_fvec2 k = fract(uv);
+
+    const Ref::simd_fvec4 ms0 = ms01 * k.get<0>() + ms00 * (1.0f - k.get<0>()),
+                          ms1 = ms11 * k.get<0>() + ms10 * (1.0f - k.get<0>());
+
+    return (ms1 * k.get<1>() + ms0 * (1.0f - k.get<1>()));
 }
 
 force_inline Ref::simd_fvec4 FetchWeatherTex(const int x, const int y) {
@@ -281,7 +300,7 @@ float Sample3dNoiseTex(Ref::simd_fvec4 uvw) {
 }
 
 float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_position, float &out_local_height,
-                       Ref::simd_fvec4 &out_up_vector) {
+                       float &out_height_fraction, Ref::simd_fvec4 &out_up_vector) {
     out_local_height = AtmosphereHeight(params, local_position, out_up_vector);
 
     Ref::simd_fvec2 weather_uv = {local_position.get<0>() + params.clouds_offset_x,
@@ -291,16 +310,16 @@ float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_
     Ref::simd_fvec4 weather_sample = SampleWeatherTex(weather_uv);
     // weather_sample = srgb_to_rgb(weather_sample);
 
-    const float height_fraction =
+    out_height_fraction =
         (out_local_height - params.clouds_height_beg) / (params.clouds_height_end - params.clouds_height_beg);
 
     float cloud_coverage = mix(weather_sample.get<2>(), weather_sample.get<1>(), params.clouds_variety);
-    cloud_coverage = remap(cloud_coverage, saturate(1.0f - params.clouds_density + 0.5f * height_fraction));
+    cloud_coverage = remap(cloud_coverage, saturate(1.0f - params.clouds_density + 0.5f * out_height_fraction));
 
     float cloud_type = weather_sample.get<0>();
-    cloud_coverage *= GetDensityHeightGradientForPoint(height_fraction, cloud_type);
+    cloud_coverage *= GetDensityHeightGradientForPoint(out_height_fraction, cloud_type);
 
-    if (height_fraction > 1.0f || cloud_coverage < 0.01f) {
+    if (out_height_fraction > 1.0f || cloud_coverage < 0.01f) {
         return 0.0f;
     }
 
@@ -311,24 +330,24 @@ float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_
     const float noise_read = 1.0f - Sample3dNoiseTex(local_position);
 
     return remap(cloud_coverage, 0.6f * noise_read);
-    return 0.12f * mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, height_fraction) *
-           powf(5.0f * remap(cloud_coverage, 0.6f * noise_read), 1.0f - height_fraction);
+    return 0.12f * mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, out_height_fraction) *
+           powf(5.0f * remap(cloud_coverage, 0.6f * noise_read), 1.0f - out_height_fraction);
 }
 
 float TraceCloudShadow(const atmosphere_params_t &params, const uint32_t rand_hash, Ref::simd_fvec4 ray_start,
                        const Ref::simd_fvec4 &ray_dir) {
     const Ref::simd_fvec4 clouds_intersection = CloudsIntersection(params, ray_start, ray_dir);
     if (clouds_intersection.get<3>() > 0) {
-        const int SampleCount = 24;
+        const int SampleCount = 32;
         const float StepSize = 16.0f;
 
         Ref::simd_fvec4 pos = ray_start + Ref::construct_float(rand_hash) * StepSize;
 
         float ret = 0.0f;
         for (int i = 0; i < SampleCount; ++i) {
-            float local_height;
+            float local_height, height_fraction;
             Ref::simd_fvec4 up_vector;
-            const float local_density = GetCloudsDensity(params, pos, local_height, up_vector);
+            const float local_density = GetCloudsDensity(params, pos, local_height, height_fraction, up_vector);
             ret += local_density;
             pos += ray_dir * StepSize;
         }
@@ -453,13 +472,20 @@ Ray::Ref::simd_fvec4 Ray::IntegrateOpticalDepth(const atmosphere_params_t &param
     return optical_depth;
 }
 
-template <bool ExpSampleDistribution>
-Ray::Ref::simd_fvec4 Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
-                                                  const Ref::simd_fvec4 &ray_dir, const float ray_length,
-                                                  const Ref::simd_fvec4 &light_dir, const Ref::simd_fvec4 &moon_dir,
-                                                  const Ref::simd_fvec4 &light_color,
-                                                  Span<const float> transmittance_lut, const float rand_offset,
-                                                  const int sample_count, Ref::simd_fvec4 &inout_transmittance) {
+template <bool ExpSampleDistribution, bool UniformPhase>
+std::pair<Ray::Ref::simd_fvec4, Ray::Ref::simd_fvec4>
+Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
+                             const Ref::simd_fvec4 &ray_dir, float ray_length, const Ref::simd_fvec4 &light_dir,
+                             const Ref::simd_fvec4 &moon_dir, const Ref::simd_fvec4 &light_color,
+                             Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+                             const float rand_offset, const int sample_count, Ref::simd_fvec4 &inout_transmittance) {
+    const Ref::simd_fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
+    ray_length = fminf(ray_length, atm_intersection.get<1>());
+    const Ref::simd_fvec2 planet_intersection = PlanetIntersection(params, ray_start, ray_dir);
+    if (planet_intersection.get<0>() > 0) {
+        ray_length = fminf(ray_length, planet_intersection.get<0>());
+    }
+
     Ref::simd_fvec4 _unused;
     const float ray_height = AtmosphereHeight(params, ray_start, _unused);
     const float sample_distribution_exponent = 1.0f + saturate(1.0f - ray_height / params.atmosphere_height) * 8.0f;
@@ -470,7 +496,9 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScatteringMain(const atmosphere_params_t &par
     const float moon_costh = dot(ray_dir, moon_dir);
     const float moon_phase_r = PhaseRayleigh(moon_costh), moon_phase_m = PhaseMie(moon_costh);
 
-    Ref::simd_fvec4 total_radiance = 0.0f;
+    const float phase_uniform = 1.0f / (4.0f * PI);
+
+    Ref::simd_fvec4 radiance = 0.0f, multiscat_as_1 = 0.0f;
 
     float prev_ray_time = 0;
     for (int i = 0; i < sample_count; ++i) {
@@ -501,9 +529,22 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScatteringMain(const atmosphere_params_t &par
             const Ref::simd_fvec2 planet_intersection = PlanetIntersection(params, local_position, light_dir);
             const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
 
+            Ref::simd_fvec4 multiscattered_lum = 0.0f;
+            if (!multiscatter_lut.empty()) {
+                Ref::simd_fvec2 uv = saturate(
+                    Ref::simd_fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
+                uv = Ref::simd_fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
+                                     from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+
+                multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+            }
+
             const Ref::simd_fvec4 phase_times_scattering =
-                medium.scattering_ray * phase_r + medium.scattering_mie * phase_m;
-            S += planet_shadow * light_transmittance * phase_times_scattering * light_color;
+                UniformPhase ? medium.scattering * phase_uniform
+                             : medium.scattering_ray * phase_r + medium.scattering_mie * phase_m;
+            S += (planet_shadow * light_transmittance * phase_times_scattering +
+                  multiscattered_lum * medium.scattering) *
+                 light_color;
         } else if (params.moon_radius > 0.0f) {
             // moon reflection contribution  (totally fake)
             const float view_zenith_cos_angle = dot(moon_dir, up_vector);
@@ -511,44 +552,68 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScatteringMain(const atmosphere_params_t &par
                 LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
             const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
+            Ref::simd_fvec4 multiscattered_lum = 0.0f;
+            if (!multiscatter_lut.empty()) {
+                Ref::simd_fvec2 uv = saturate(
+                    Ref::simd_fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
+                uv = Ref::simd_fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
+                                     from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+
+                multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+            }
+
             const Ref::simd_fvec4 phase_times_scattering =
                 medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
-            S += 0.0001f * light_transmittance * phase_times_scattering * light_color;
+            S += 0.0001f * (light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) *
+                 light_color;
         }
 
+        // 1 is the integration of luminance over the 4pi of a sphere, and assuming an isotropic phase function
+        // of 1.0/(4*PI)
+        const Ref::simd_fvec4 MS = medium.scattering * 1.0f;
+        const Ref::simd_fvec4 MS_int = (MS - MS * local_transmittance) / medium.extinction;
+        multiscat_as_1 += inout_transmittance * MS_int;
+
 #if 0
-        total_radiance += inout_transmittance * S * step_size;
+        radiance += inout_transmittance * S * step_size;
 #else
-        const Ref::simd_fvec4 S_int =
-            (S - S * local_transmittance) / medium.extinction; // integrate along the current step segment
-        total_radiance += inout_transmittance * S_int;
+        const Ref::simd_fvec4 S_int = (S - S * local_transmittance) / medium.extinction;
+        radiance += inout_transmittance * S_int;
 #endif
         inout_transmittance *= local_transmittance;
 
         prev_ray_time = ray_time;
     }
 
-    return total_radiance;
+    return std::make_pair(radiance, multiscat_as_1);
 }
 
-template Ray::Ref::simd_fvec4
-Ray::IntegrateScatteringMain<false>(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
-                                    const Ref::simd_fvec4 &ray_dir, float ray_length, const Ref::simd_fvec4 &light_dir,
-                                    const Ref::simd_fvec4 &moon_dir, const Ref::simd_fvec4 &light_color,
-                                    Span<const float> transmittance_lut, float rand_offset, int sample_count,
-                                    Ref::simd_fvec4 &inout_transmittance);
-template Ray::Ref::simd_fvec4
-Ray::IntegrateScatteringMain<true>(const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start,
-                                   const Ref::simd_fvec4 &ray_dir, float ray_length, const Ref::simd_fvec4 &light_dir,
-                                   const Ref::simd_fvec4 &moon_dir, const Ref::simd_fvec4 &light_color,
-                                   Span<const float> transmittance_lut, float rand_offset, int sample_count,
-                                   Ref::simd_fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::simd_fvec4, Ray::Ref::simd_fvec4> Ray::IntegrateScatteringMain<false, false>(
+    const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start, const Ref::simd_fvec4 &ray_dir,
+    float ray_length, const Ref::simd_fvec4 &light_dir, const Ref::simd_fvec4 &moon_dir,
+    const Ref::simd_fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+    float rand_offset, int sample_count, Ref::simd_fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::simd_fvec4, Ray::Ref::simd_fvec4> Ray::IntegrateScatteringMain<false, true>(
+    const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start, const Ref::simd_fvec4 &ray_dir,
+    float ray_length, const Ref::simd_fvec4 &light_dir, const Ref::simd_fvec4 &moon_dir,
+    const Ref::simd_fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+    float rand_offset, int sample_count, Ref::simd_fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::simd_fvec4, Ray::Ref::simd_fvec4> Ray::IntegrateScatteringMain<true, false>(
+    const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start, const Ref::simd_fvec4 &ray_dir,
+    float ray_length, const Ref::simd_fvec4 &light_dir, const Ref::simd_fvec4 &moon_dir,
+    const Ref::simd_fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+    float rand_offset, int sample_count, Ref::simd_fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::simd_fvec4, Ray::Ref::simd_fvec4> Ray::IntegrateScatteringMain<true, true>(
+    const atmosphere_params_t &params, const Ref::simd_fvec4 &ray_start, const Ref::simd_fvec4 &ray_dir,
+    float ray_length, const Ref::simd_fvec4 &light_dir, const Ref::simd_fvec4 &moon_dir,
+    const Ref::simd_fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+    float rand_offset, int sample_count, Ref::simd_fvec4 &inout_transmittance);
 
 Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref::simd_fvec4 ray_start,
                                               const Ref::simd_fvec4 &ray_dir, float ray_length,
                                               const Ref::simd_fvec4 &light_dir, const float light_angle,
                                               const Ref::simd_fvec4 &light_color, Span<const float> transmittance_lut,
-                                              uint32_t rand_hash) {
+                                              Span<const float> multiscatter_lut, uint32_t rand_hash) {
     const Ref::simd_fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     if (atm_intersection.get<0>() > 0) {
@@ -579,9 +644,6 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
 
     const int PreAtmosphereSampleCount = 8, MainAtmosphereSampleCount = 24, CloudsSampleCount = 128;
 
-    const float rand_offset = Ref::construct_float(rand_hash);
-    rand_hash = Ref::hash(rand_hash);
-
     const float light_brightness = light_color.get<0>() + light_color.get<1>() + light_color.get<2>();
 
     Ref::simd_fvec4 total_radiance = 0.0f, total_transmittance = 1.0f;
@@ -594,9 +656,14 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     if (clouds_intersection.get<1>() > 0 && light_brightness > 0.0f) {
         const float pre_atmosphere_ray_length = fminf(ray_length, clouds_intersection.get<1>());
 
-        total_radiance += IntegrateScatteringMain<false>(params, ray_start, ray_dir, pre_atmosphere_ray_length,
-                                                         light_dir, moon_dir, light_color, transmittance_lut,
-                                                         rand_offset, PreAtmosphereSampleCount, total_transmittance);
+        const float rand_offset = Ref::construct_float(rand_hash);
+        rand_hash = Ref::hash(rand_hash);
+
+        total_radiance +=
+            IntegrateScatteringMain<false>(params, ray_start, ray_dir, pre_atmosphere_ray_length, light_dir, moon_dir,
+                                           light_color, transmittance_lut, multiscatter_lut, rand_offset,
+                                           PreAtmosphereSampleCount, total_transmittance)
+                .first;
     }
 
     //
@@ -604,7 +671,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     //
     const float CloudsHorizonCutoff = 0.0025f;
     if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.clouds_density > 0.0f &&
-        light_brightness > 0.0f && ray_dir.get<1>() > CloudsHorizonCutoff) {
+        light_brightness > 0.0f /*&& ray_dir.get<1>() > CloudsHorizonCutoff*/) {
 
         float clouds_ray_length = fminf(ray_length, clouds_intersection.get<3>());
         Ref::simd_fvec4 clouds_ray_start = ray_start + ray_dir * clouds_intersection.get<1>();
@@ -619,7 +686,8 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
             Ref::simd_fvec4 clouds = 0.0f;
 
             // NOTE: We assume transmittance is constant along the clouds range (~500m)
-            Ref::simd_fvec4 light_transmittance, moon_transmittance;
+            Ref::simd_fvec4 light_transmittance, moon_transmittance, multiscattered_lum = 0.0f,
+                                                                     moon_multiscattered_lum = 0.0f;
             {
                 Ref::simd_fvec4 up_vector;
                 const float local_height = AtmosphereHeight(params, local_position, up_vector);
@@ -628,23 +696,43 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
                     const Ref::simd_fvec2 uv =
                         LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
                     light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+
+                    if (!multiscatter_lut.empty()) {
+                        Ref::simd_fvec2 uv = saturate(Ref::simd_fvec2(view_zenith_cos_angle * 0.5f + 0.5f,
+                                                                      local_height / params.atmosphere_height));
+                        uv = Ref::simd_fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
+                                             from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+
+                        multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+                    }
                 }
                 {
                     const float view_zenith_cos_angle = dot(moon_dir, up_vector);
                     const Ref::simd_fvec2 uv =
                         LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
                     moon_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+
+                    if (!multiscatter_lut.empty()) {
+                        Ref::simd_fvec2 uv = saturate(Ref::simd_fvec2(view_zenith_cos_angle * 0.5f + 0.5f,
+                                                                      local_height / params.atmosphere_height));
+                        uv = Ref::simd_fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
+                                             from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+
+                        moon_multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+                    }
                 }
             }
 
             Ref::simd_fvec4 transmittance_before = total_transmittance;
 
             for (int i = 0; i < CloudsSampleCount; ++i) {
-                float local_height;
+                float local_height, height_fraction;
                 Ref::simd_fvec4 up_vector;
-                const float local_density = GetCloudsDensity(params, local_position, local_height, up_vector);
+                const float local_density =
+                    GetCloudsDensity(params, local_position, local_height, height_fraction, up_vector);
                 if (local_density > 0.0f) {
                     const float local_transmittance = expf(-local_density * step_size);
+                    const float ambient_visibility = (0.75f + 1.5f * fmaxf(0.0f, height_fraction - 0.1f));
 
                     if (light_dir.get<1>() > -0.025f) {
                         // main light contribution
@@ -654,15 +742,17 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
 
                         const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, light_dir);
 
-                        clouds += planet_shadow * total_transmittance *
-                                  GetLightEnergy(cloud_shadow, local_density, phase_w) * (1.0f - local_transmittance) *
-                                  light_transmittance;
+                        clouds += total_transmittance *
+                                  (planet_shadow * GetLightEnergy(cloud_shadow, local_density, phase_w) +
+                                   ambient_visibility * multiscattered_lum) *
+                                  (1.0f - local_transmittance) * light_transmittance;
                     } else if (params.moon_radius > 0.0f) {
                         // moon reflection contribution (totally fake)
                         const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, moon_dir);
 
                         clouds += 0.0001f * total_transmittance *
-                                  GetLightEnergy(cloud_shadow, local_density, moon_phase_w) *
+                                  (GetLightEnergy(cloud_shadow, local_density, moon_phase_w) +
+                                   ambient_visibility * moon_multiscattered_lum) *
                                   (1.0f - local_transmittance) * moon_transmittance;
                     }
 
@@ -744,9 +834,13 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
         Ref::simd_fvec4 main_ray_start = ray_start + ray_dir * clouds_intersection.get<3>();
         main_ray_length -= clouds_intersection.get<1>();
 
-        total_radiance +=
-            IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir, light_color,
-                                    transmittance_lut, rand_offset, MainAtmosphereSampleCount, total_transmittance);
+        const float rand_offset = Ref::construct_float(rand_hash);
+        rand_hash = Ref::hash(rand_hash);
+
+        total_radiance += IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir,
+                                                  light_color, transmittance_lut, multiscatter_lut, rand_offset,
+                                                  MainAtmosphereSampleCount, total_transmittance)
+                              .first;
     }
 
     //
