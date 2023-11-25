@@ -10,6 +10,8 @@ namespace Ray {
 #include "precomputed/__moon_tex.inl"
 #include "precomputed/__weather_tex.inl"
 
+const float MoonSunRelation = 0.0000001f;
+
 force_inline float remap(float value, float original_min) {
     return saturate((value - original_min) / (1.000001f - original_min));
 }
@@ -564,8 +566,8 @@ Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::simd_
 
             const Ref::simd_fvec4 phase_times_scattering =
                 medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
-            S += 0.0001f * (light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) *
-                 light_color;
+            S += MoonSunRelation *
+                 (light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * light_color;
         }
 
         // 1 is the integration of luminance over the 4pi of a sphere, and assuming an isotropic phase function
@@ -750,7 +752,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
                         // moon reflection contribution (totally fake)
                         const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, moon_dir);
 
-                        clouds += 0.0001f * total_transmittance *
+                        clouds += MoonSunRelation * total_transmittance *
                                   (GetLightEnergy(cloud_shadow, local_density, moon_phase_w) +
                                    ambient_visibility * moon_multiscattered_lum) *
                                   (1.0f - local_transmittance) * moon_transmittance;
@@ -820,7 +822,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
             total_radiance +=
                 total_transmittance * GetLightEnergy(0.002f, dC, phase_w) * light_transmittance * dC * light_color;
         } else if (params.moon_radius > 0.0f) {
-            total_radiance += 0.0001f * total_transmittance * GetLightEnergy(0.002f, dC, moon_phase_w) *
+            total_radiance += MoonSunRelation * total_transmittance * GetLightEnergy(0.002f, dC, moon_phase_w) *
                               moon_transmittance * dC * light_color;
         }
         total_transmittance *= expf(-dC * 0.002f * 1000.0f);

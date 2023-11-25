@@ -286,7 +286,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
         } else if (test_scene == eTestScene::Ray_Flags) {
             cam_desc.regularize_alpha = 0.1f;
         } else if (test_scene == eTestScene::Standard_SunLight) {
-            cam_desc.exposure = -4.0f;
+            cam_desc.exposure = -14.0f;
         } else if (test_scene == eTestScene::Standard_MoonLight) {
             cam_desc.exposure = 8.0f;
         }
@@ -917,9 +917,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
         sun_desc.direction[1] = -0.454519480f;
         sun_desc.direction[2] = -0.766044438f;
 
-        sun_desc.color[0] = 144.809866891f;
-        sun_desc.color[1] = 129.443618266f;
-        sun_desc.color[2] = 127.098894121f;
+        sun_desc.color[0] = 144809.866891f;
+        sun_desc.color[1] = 129443.618266f;
+        sun_desc.color[2] = 127098.894121f;
 
         sun_desc.angle = 4.0f;
 
