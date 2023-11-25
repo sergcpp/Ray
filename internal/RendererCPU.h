@@ -93,14 +93,14 @@ class SIMDPolicy {
                           mix_factor, out_color, out_base_color, out_depth_normal);
     }
 
-    static force_inline void ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t> inters,
-                                            Span<const ray_data_t> rays, const uint32_t rand_seq[],
-                                            const uint32_t rand_seed, const int iteration, const scene_data_t &sc,
-                                            uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                                            ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
-                                            shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                                            color_rgba_t *out_color) {
-        Ref::ShadeSecondary(ps, clamp_val, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
+    static force_inline void ShadeSecondary(const pass_settings_t &ps, const float clamp_direct,
+                                            Span<const hit_data_t> inters, Span<const ray_data_t> rays,
+                                            const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
+                                            const scene_data_t &sc, uint32_t node_index,
+                                            const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                                            int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
+                                            int *out_shadow_rays_count, int img_w, color_rgba_t *out_color) {
+        Ref::ShadeSecondary(ps, clamp_direct, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
                             out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
                             out_color);
     }
@@ -528,9 +528,10 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         shadow_rays_count = 0;
         std::swap(p.primary_rays, p.secondary_rays);
 
-        const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
+        // Use direct clamping value only for the first intersection with lightsource
+        const float clamp_direct = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
         SIMDPolicy::ShadeSecondary(
-            cam.pass_settings, clamp_val, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
+            cam.pass_settings, clamp_direct, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
             Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq, rand_seed,
             region.iteration, sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
             &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data());

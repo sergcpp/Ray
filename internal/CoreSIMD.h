@@ -514,9 +514,9 @@ void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<S> &ray, 
 
 // Shade
 template <int S>
-void ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[], uint32_t rand_seed, int iteration,
-                  const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
-                  const Cpu::TexStorageBase *const tex_atlases[], simd_fvec<S> out_rgba[4],
+void ShadeSurface(const pass_settings_t &ps, const float limits[2], const uint32_t rand_seq[], uint32_t rand_seed,
+                  int iteration, const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
+                  uint32_t node_index, const Cpu::TexStorageBase *const tex_atlases[], simd_fvec<S> out_rgba[4],
                   ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count, shadow_ray_t<S> out_shadow_rays[],
                   int *out_shadow_rays_count, simd_fvec<S> out_base_color[4], simd_fvec<S> out_depth_normals[4]);
 template <int S>
@@ -527,7 +527,7 @@ void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters, S
                   int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
                   color_rgba_t *out_depth_normals);
 template <int S>
-void ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t<S>> inters,
+void ShadeSecondary(const pass_settings_t &ps, float clamp_direct, Span<const hit_data_t<S>> inters,
                     Span<const ray_data_t<S>> rays, const uint32_t rand_seq[], uint32_t rand_seed, int iteration,
                     const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
                     ray_data_t<S> *out_secondary_rays, int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays,
@@ -614,14 +614,15 @@ class SIMDPolicyBase {
                                  img_w, mix_factor, out_color, out_base_color, out_depth_normal);
     }
 
-    static force_inline void ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const HitDataType> inters,
-                                            Span<const RayDataType> rays, const uint32_t rand_seq[],
-                                            const uint32_t rand_seed, const int iteration, const scene_data_t &sc,
-                                            uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+    static force_inline void ShadeSecondary(const pass_settings_t &ps, const float clamp_direct,
+                                            Span<const HitDataType> inters, Span<const RayDataType> rays,
+                                            const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
+                                            const scene_data_t &sc, uint32_t node_index,
+                                            const Cpu::TexStorageBase *const textures[],
                                             RayDataType *out_secondary_rays, int *out_secondary_rays_count,
                                             ShadowRayType *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                                             color_rgba_t *out_color) {
-        NS::ShadeSecondary<RPSize>(ps, clamp_val, inters, rays, rand_seq, rand_seed, iteration, sc, node_index,
+        NS::ShadeSecondary<RPSize>(ps, clamp_direct, inters, rays, rand_seq, rand_seed, iteration, sc, node_index,
                                    textures, out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
                                    out_shadow_rays_count, img_w, out_color);
     }
@@ -5264,7 +5265,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
             UNROLLED_FOR(j, 3, { rc[j] *= k; })
         }
         const simd_fvec<S> sum = rc[0] + rc[1] + rc[2];
-        UNROLLED_FOR(j, 3, { where(sum > limit, rc[j]) = safe_div_pos(rc[j]  * limit, sum); })
+        UNROLLED_FOR(j, 3, { where(sum > limit, rc[j]) = safe_div_pos(rc[j] * limit, sum); })
 
         const simd_uvec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
@@ -7085,9 +7086,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
 }
 
 template <int S>
-void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[], const uint32_t rand_seed,
-                           const int iteration, const hit_data_t<S> &inter, const ray_data_t<S> &ray,
-                           const scene_data_t &sc, const uint32_t node_index,
+void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], const uint32_t rand_seq[],
+                           const uint32_t rand_seed, const int iteration, const hit_data_t<S> &inter,
+                           const ray_data_t<S> &ray, const scene_data_t &sc, const uint32_t node_index,
                            const Cpu::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
                            ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
                            shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count,
@@ -7122,8 +7123,13 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
                                                simd_fvec<S>{-1.0f});
         Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), pdf_factor,
                           tex_rand, env_col);
+        UNROLLED_FOR(i, 3, { env_col[i] = ray.c[i] * env_col[i]; })
 
-        UNROLLED_FOR(i, 3, { where(ino_hit, out_rgba[i]) = ray.c[i] * env_col[i]; })
+        const simd_fvec<S> sum = env_col[0] + env_col[1] + env_col[2];
+        UNROLLED_FOR(i, 3, {
+            where(sum > limits[0], env_col[i]) = safe_div_pos(env_col[i] * limits[0], sum);
+            where(ino_hit, out_rgba[i]) = env_col[i];
+        })
         where(ino_hit, out_rgba[3]) = env_col[3];
     }
 
@@ -7142,8 +7148,13 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
         simd_fvec<S> light_col[3] = {};
         Evaluate_LightColor(surf.P, ray, is_light_hit, inter, sc.env, sc.lights, uint32_t(sc.li_indices.size()),
                             *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), tex_rand, light_col);
+        UNROLLED_FOR(i, 3, { light_col[i] = ray.c[i] * light_col[i]; })
 
-        UNROLLED_FOR(i, 3, { where(is_light_hit, out_rgba[i]) = ray.c[i] * light_col[i]; })
+        const simd_fvec<S> sum = light_col[0] + light_col[1] + light_col[2];
+        UNROLLED_FOR(i, 3, {
+            where(sum > limits[0], light_col[i]) = safe_div_pos(light_col[i] * limits[0], sum);
+            where(is_light_hit, out_rgba[i]) = light_col[i];
+        })
         where(is_light_hit, out_rgba[3]) = 1.0f;
 
         is_active_lane &= ~is_light_hit;
@@ -7824,7 +7835,13 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const uint32_t rand_seq[],
     }
 #endif
 
-    UNROLLED_FOR(i, 3, { where(is_active_lane, out_rgba[i]) = ray.c[i] * col[i]; })
+    UNROLLED_FOR(i, 3, { where(is_active_lane, col[i]) = ray.c[i] * col[i]; })
+
+    const simd_fvec<S> sum = col[0] + col[1] + col[2];
+    UNROLLED_FOR(i, 3, {
+        where(sum > limits[1], col[i]) = safe_div_pos(col[i] * limits[1], sum);
+        where(is_active_lane, out_rgba[i]) = col[i];
+    })
     where(is_active_lane, out_rgba[3]) = 1.0f;
 }
 
@@ -7836,16 +7853,16 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
                            int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
                            int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
                            color_rgba_t *out_depth_normals) {
-    const float limit = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
+    const float limits[2] = {(ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX,
+                             (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX};
     for (int i = 0; i < inters.size(); ++i) {
         const ray_data_t<S> &r = rays[i];
         const hit_data_t<S> &inter = inters[i];
 
         simd_fvec<S> col[4] = {}, base_color[3] = {}, depth_normal[4] = {};
-        ShadeSurface(ps, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col, out_secondary_rays,
-                     out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, base_color, depth_normal);
-        const simd_fvec<S> sum = col[0] + col[1] + col[2];
-        UNROLLED_FOR(j, 3, { where(sum > limit, col[j]) = safe_div_pos(col[j] * limit, sum); })
+        ShadeSurface(ps, limits, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col,
+                     out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, base_color,
+                     depth_normal);
 
         const simd_uvec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
@@ -7881,23 +7898,22 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
 }
 
 template <int S>
-void Ray::NS::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t<S>> inters,
+void Ray::NS::ShadeSecondary(const pass_settings_t &ps, const float clamp_direct, Span<const hit_data_t<S>> inters,
                              Span<const ray_data_t<S>> rays, const uint32_t rand_seq[], const uint32_t rand_seed,
                              const int iteration, const scene_data_t &sc, uint32_t node_index,
                              const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
                              int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays,
                              int *out_shadow_rays_count, int img_w, color_rgba_t *out_color) {
-    const float limit = (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX;
+    const float limits[2] = {(clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX,
+                             (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX};
     for (int i = 0; i < inters.size(); ++i) {
         const ray_data_t<S> &r = rays[i];
         const hit_data_t<S> &inter = inters[i];
 
         simd_fvec<S> col[4] = {0.0f};
-        Ray::NS::ShadeSurface(ps, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col,
+        Ray::NS::ShadeSurface(ps, limits, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col,
                               out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
                               (simd_fvec<S> *)nullptr, (simd_fvec<S> *)nullptr);
-        const simd_fvec<S> sum = col[0] + col[1] + col[2];
-        UNROLLED_FOR(j, 3, { where(sum > limit, col[j]) = safe_div_pos(col[j]  * limit, sum); })
 
         const simd_uvec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 

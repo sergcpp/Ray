@@ -2032,7 +2032,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_light_index = sc_data.env->light_index;
 
-    uniform_params.clamp_val = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
+    uniform_params.limit_direct = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
+    uniform_params.limit_indirect = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
 
     Pipeline *pi = &pi_shade_primary_;
     if (out_base_color.ready()) {
@@ -2062,7 +2063,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
 }
 
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
-    CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_val, const environment_t &env,
+    CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_direct, const environment_t &env,
     const Buffer &indir_args, const int indir_args_index, const Buffer &hits, const Buffer &rays,
     const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
     Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Texture2D &out_img,
@@ -2117,7 +2118,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_light_index = sc_data.env->light_index;
 
-    uniform_params.clamp_val = (clamp_val != 0.0f) ? 3.0f * clamp_val : FLT_MAX;
+    uniform_params.limit_direct = (clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX;
+    uniform_params.limit_indirect = (settings.clamp_indirect != 0.0f) ? 3.0f * settings.clamp_indirect : FLT_MAX;
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);

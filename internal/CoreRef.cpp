@@ -5113,9 +5113,9 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
     }
 }
 
-Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
-                                         const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
-                                         const scene_data_t &sc, const uint32_t node_index,
+Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float limits[2], const hit_data_t &inter,
+                                         const ray_data_t &ray, const uint32_t rand_seq[], const uint32_t rand_seed,
+                                         const int iteration, const scene_data_t &sc, const uint32_t node_index,
                                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                                          int *out_shadow_rays_count, color_rgba_t *out_base_color,
@@ -5139,19 +5139,33 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
             (get_total_depth(ray.depth) < ps.max_total_depth) ? float(sc.li_indices.size()) : -1.0f;
 #endif
 
-        const simd_fvec4 env_col = Evaluate_EnvColor(
-            ray, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), pdf_factor, tex_rand);
-        return color_rgba_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
+        simd_fvec4 env_col = Evaluate_EnvColor(ray, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
+                                               pdf_factor, tex_rand);
+        env_col *= simd_fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
+
+        const float sum = hsum(env_col);
+        if (sum > limits[0]) {
+            env_col *= (limits[0] / sum);
+        }
+
+        return color_rgba_t{env_col.get<0>(), env_col.get<1>(), env_col.get<2>(), env_col.get<3>()};
     }
 
     surface_t surf = {};
     surf.P = ro + inter.t * I;
 
     if (inter.obj_index < 0) { // Area light intersection
-        const simd_fvec4 lcol =
+        simd_fvec4 lcol =
             Evaluate_LightColor(ray, inter, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.lights,
                                 uint32_t(sc.li_indices.size()), tex_rand);
-        return color_rgba_t{ray.c[0] * lcol.get<0>(), ray.c[1] * lcol.get<1>(), ray.c[2] * lcol.get<2>(), 1.0f};
+        lcol *= simd_fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
+
+        const float sum = hsum(lcol);
+        if (sum > limits[0]) {
+            lcol *= (limits[0] / sum);
+        }
+
+        return color_rgba_t{lcol.get<0>(), lcol.get<1>(), lcol.get<2>(), 1.0f};
     }
 
     const bool is_backfacing = (inter.prim_index < 0);
@@ -5543,7 +5557,14 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     }
 #endif
 
-    return color_rgba_t{ray.c[0] * col.get<0>(), ray.c[1] * col.get<1>(), ray.c[2] * col.get<2>(), 1.0f};
+    col *= simd_fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
+
+    const float sum = hsum(col);
+    if (sum > limits[1]) {
+        col *= (limits[1] / sum);
+    }
+
+    return color_rgba_t{col.get<0>(), col.get<1>(), col.get<2>(), 1.0f};
 }
 
 void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
@@ -5552,7 +5573,8 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
                             ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                             shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w, float mix_factor,
                             color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
-    const float limit = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
+    const float limits[2] = {(ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX,
+                             (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX};
     for (int i = 0; i < int(inters.size()); ++i) {
         const ray_data_t &r = rays[i];
         const hit_data_t &inter = inters[i];
@@ -5561,17 +5583,11 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
         const int y = r.xy & 0x0000ffff;
 
         color_rgba_t base_color = {}, depth_normal = {};
-        const color_rgba_t col =
-            ShadeSurface(ps, inter, r, rand_seq, rand_seed, iteration, sc, node_index, textures, out_secondary_rays,
-                         out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, &base_color, &depth_normal);
+        const color_rgba_t col = ShadeSurface(ps, limits, inter, r, rand_seq, rand_seed, iteration, sc, node_index,
+                                              textures, out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
+                                              out_shadow_rays_count, &base_color, &depth_normal);
+        out_color[y * img_w + x] = col;
 
-        auto vcol = Ref::simd_fvec4{col.v[0], col.v[1], col.v[2], 0.0f};
-        const float sum = hsum(vcol);
-        if (sum > limit) {
-            vcol *= (limit / sum);
-        }
-        vcol.set<3>(col.v[3]);
-        vcol.store_to(out_color[y * img_w + x].v, Ref::simd_mem_aligned);
         if (ps.flags & ePassFlags::OutputBaseColor) {
             auto old_val = Ref::simd_fvec4{out_base_color[y * img_w + x].v, Ref::simd_mem_aligned};
             old_val += (Ref::simd_fvec4{base_color.v, Ref::simd_mem_aligned} - old_val) * mix_factor;
@@ -5585,13 +5601,14 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
     }
 }
 
-void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t> inters,
-                              Span<const ray_data_t> rays, const uint32_t rand_seq[], uint32_t rand_seed, int iteration,
-                              const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                              ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
-                              shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                              color_rgba_t *out_color) {
-    const float limit = (clamp_val != 0.0f) ? 3.0f * clamp_val : FLT_MAX;
+void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, const float clamp_direct,
+                              Span<const hit_data_t> inters, Span<const ray_data_t> rays, const uint32_t rand_seq[],
+                              uint32_t rand_seed, int iteration, const scene_data_t &sc, uint32_t node_index,
+                              const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                              int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
+                              int img_w, color_rgba_t *out_color) {
+    const float limits[2] = {(clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX,
+                             (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX};
     for (int i = 0; i < int(inters.size()); ++i) {
         const ray_data_t &r = rays[i];
         const hit_data_t &inter = inters[i];
@@ -5599,16 +5616,12 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<c
         const int x = (r.xy >> 16) & 0x0000ffff;
         const int y = r.xy & 0x0000ffff;
 
-        color_rgba_t col =
-            ShadeSurface(ps, inter, r, rand_seq, rand_seed, iteration, sc, node_index, textures, out_secondary_rays,
-                         out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, nullptr, nullptr);
+        color_rgba_t col = ShadeSurface(ps, limits, inter, r, rand_seq, rand_seed, iteration, sc, node_index, textures,
+                                        out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
+                                        out_shadow_rays_count, nullptr, nullptr);
         col.v[3] = 0.0f;
 
         auto vcol = Ref::simd_fvec4{col.v};
-        const float sum = hsum(vcol);
-        if (sum > limit) {
-            vcol *= (limit / sum);
-        }
 
         auto old_val = Ref::simd_fvec4{out_color[y * img_w + x].v, Ref::simd_mem_aligned};
         old_val += vcol;

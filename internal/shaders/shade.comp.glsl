@@ -1904,8 +1904,14 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         const float pdf_factor = (total_depth < g_params.max_total_depth) ? float(g_params.li_count) : -1.0;
 #endif
 
-        const vec3 env_col = Evaluate_EnvColor(ray, pdf_factor, tex_rand);
-        return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
+        vec3 env_col = Evaluate_EnvColor(ray, pdf_factor, tex_rand) * vec3(ray.c[0], ray.c[1], ray.c[2]);
+
+        const float sum = env_col.r + env_col.g + env_col.b;
+        if (sum > g_params.limit_direct) {
+            env_col *= (g_params.limit_direct / sum);
+        }
+
+        return env_col;
     }
 
     const vec3 I = rd;
@@ -1914,8 +1920,14 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     surf.P = ro + inter.t * rd;
 
     [[dont_flatten]] if (inter.obj_index < 0) { // Area light intersection
-        const vec3 lcol = Evaluate_LightColor(ray, inter, tex_rand);
-        return vec3(ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2]);
+        vec3 lcol = Evaluate_LightColor(ray, inter, tex_rand) * vec3(ray.c[0], ray.c[1], ray.c[2]);
+
+        const float sum = lcol.r + lcol.g + lcol.b;
+        if (sum > g_params.limit_direct) {
+            lcol *= (g_params.limit_direct / sum);
+        }
+
+        return lcol;
     }
 
     const bool is_backfacing = (inter.prim_index < 0);
@@ -2291,7 +2303,14 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     }
 #endif
 
-    return vec3(ray.c[0] * col[0], ray.c[1] * col[1], ray.c[2] * col[2]);
+    col *= vec3(ray.c[0], ray.c[1], ray.c[2]);
+
+    const float sum = col.r + col.g + col.b;
+    if (sum > g_params.limit_indirect) {
+        col *= (g_params.limit_indirect / sum);
+    }
+
+    return col;
 }
 
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
@@ -2321,10 +2340,7 @@ void main() {
 
     vec3 base_color = vec3(0.0), normals = vec3(0.0);
     vec3 col = ShadeSurface(inter, ray, base_color, normals);
-    const float sum = col.r + col.g + col.b;
-    if (sum > g_params.clamp_val) {
-        col *= (g_params.clamp_val / sum);
-    }
+
 #if !PRIMARY
     col += imageLoad(g_out_img, ivec2(x, y)).rgb;
 #endif

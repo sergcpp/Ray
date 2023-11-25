@@ -179,7 +179,7 @@ class Renderer : public RendererBase {
                                  const BindlessTexData &bindless_tex, const Texture2D &out_img, const Buffer &out_rays,
                                  const Buffer &out_sh_rays, const Buffer &inout_counters,
                                  const Texture2D &out_base_color, const Texture2D &out_depth_normals);
-    void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_val,
+    void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_direct,
                                    const environment_t &env, const Buffer &indir_args, int indir_args_index,
                                    const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
                                    const Buffer &rand_seq, uint32_t rand_seed, int iteration,

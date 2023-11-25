@@ -15,7 +15,7 @@ struct Params {
     uint max_ray_depth;
     float regularize_alpha;
     //
-    int _unused1;
+    float limit_direct;
     int _unused2;
     int max_total_depth;
     int min_total_depth;
@@ -26,7 +26,7 @@ struct Params {
     float back_rotation;
     //
     int env_light_index;
-    float clamp_val;
+    float limit_indirect;
     uint env_map_res;
     uint back_map_res;
 };
