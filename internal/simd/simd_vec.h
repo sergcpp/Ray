@@ -546,7 +546,7 @@ template <typename T, int S> class simd_vec {
     }
 
 #define DEFINE_BITS_OPERATOR(OP)                                                                                       \
-    friend simd_vec<T, S> operator OP(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {                           \
+    friend simd_vec<T, S> operator OP(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {                            \
         const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);                                            \
         const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);                                            \
         simd_vec<T, S> ret;                                                                                            \
@@ -564,7 +564,7 @@ template <typename T, int S> class simd_vec {
 #undef DEFINE_BITS_OPERATOR
 
 #define DEFINE_ARITHMETIC_OPERATOR(OP)                                                                                 \
-    friend force_inline simd_vec<T, S> operator OP(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {              \
+    friend force_inline simd_vec<T, S> operator OP(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {               \
         simd_vec<T, S> ret;                                                                                            \
         UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] OP v2.comp_[i]; })                                           \
         return ret;                                                                                                    \
@@ -645,6 +645,10 @@ template <typename T, int S> force_inline simd_vec<T, S> floor(const simd_vec<T,
 
 template <typename T, int S> force_inline simd_vec<T, S> ceil(const simd_vec<T, S> &v1) {
     return simd_vec<T, S>::ceil(v1);
+}
+
+template <typename T, int S> force_inline simd_vec<T, S> mod(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+    return v1 - v2 * floor(v1 / v2);
 }
 
 template <typename T, int S> force_inline simd_vec<T, S> sqrt(const simd_vec<T, S> &v1) { return v1.sqrt(); }

@@ -450,4 +450,6 @@ force_inline float clamp(const float val, const float min, const float max) {
 
 force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
 
+force_inline float mix(float x, float y, float a) { return x * (1.0f - a) + y * a; }
+
 } // namespace Ray

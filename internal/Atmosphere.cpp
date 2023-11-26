@@ -16,8 +16,6 @@ force_inline float remap(float value, float original_min) {
     return saturate((value - original_min) / (1.000001f - original_min));
 }
 
-force_inline float mix(float x, float y, float a) { return x * (1.0f - a) + y * a; }
-
 // GPU PRO 7 - Real-time Volumetric Cloudscapes
 // https://www.guerrilla-games.com/read/the-real-time-volumetric-cloudscapes-of-horizon-zero-dawn
 // https://github.com/sebh/TileableVolumeNoise
@@ -742,7 +740,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
 
             Ref::simd_fvec4 transmittance_before = total_transmittance;
 
-            for (int i = 0; i < CloudsSampleCount; ++i) {
+            for (int i = 0; i < CloudsSampleCount /*&& total_transmittance.get<1>() > 0.001f*/; ++i) {
                 float local_height, height_fraction;
                 Ref::simd_fvec4 up_vector;
                 const float local_density =
