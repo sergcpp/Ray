@@ -143,8 +143,9 @@ force_inline float construct_float(uint32_t m) {
 }
 
 force_inline float fract(const float v) {
-    float _unused;
-    return modff(v, &_unused);
+    //float _unused;
+    //return modff(v, &_unused);
+    return v - floorf(v);
 }
 
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {

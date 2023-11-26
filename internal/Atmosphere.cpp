@@ -230,16 +230,16 @@ Ref::simd_fvec4 SampleMultiscatterLUT(Span<const float> lut, Ref::simd_fvec2 uv)
 }
 
 force_inline Ref::simd_fvec4 FetchWeatherTex(const int x, const int y) {
-    return Ref::simd_fvec4{
-        float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 0]), float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 1]),
-        float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 2]), float(__weather_tex[4 * (y * WEATHER_TEX_W + x) + 3])};
+    return Ref::simd_fvec4{float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 0]),
+                           float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 1]),
+                           float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 2]), 0.0f};
 }
 
 Ref::simd_fvec4 SampleWeatherTex(Ref::simd_fvec2 uv) {
-    uv = uv * Ref::simd_fvec2(WEATHER_TEX_W, WEATHER_TEX_H);
+    uv = uv * Ref::simd_fvec2(WEATHER_TEX_RES);
     auto iuv0 = Ref::simd_ivec2{uv};
-    iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{WEATHER_TEX_W - 1, WEATHER_TEX_H - 1});
-    const Ref::simd_ivec2 iuv1 = (iuv0 + 1) & Ref::simd_ivec2{WEATHER_TEX_W - 1, WEATHER_TEX_H - 1};
+    iuv0 = clamp(iuv0, Ref::simd_ivec2{0, 0}, Ref::simd_ivec2{WEATHER_TEX_RES - 1});
+    const Ref::simd_ivec2 iuv1 = (iuv0 + 1) & Ref::simd_ivec2{WEATHER_TEX_RES - 1};
 
     const Ref::simd_fvec4 w00 = FetchWeatherTex(iuv0.get<0>(), iuv0.get<1>()),
                           w01 = FetchWeatherTex(iuv1.get<0>(), iuv0.get<1>()),
@@ -324,8 +324,7 @@ float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_
     local_position /= 1.5f * (params.clouds_height_end - params.clouds_height_beg);
     local_position = fract(local_position);
 
-    const float noise_read = 1.0f - Sample3dNoiseTex(local_position);
-
+    const float noise_read = Sample3dNoiseTex(local_position);
     return 0.12f * mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, out_height_fraction) *
            powf(5.0f * remap(cloud_coverage, 0.6f * noise_read), 1.0f - out_height_fraction);
 }
@@ -794,8 +793,8 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
             0.8f * (Ref::simd_fvec2{ray_dir.get<2>(), ray_dir.get<0>()}) / (fabsf(ray_dir.get<1>()) + 0.02f);
         cirrus_coords.set<1>(cirrus_coords.get<1>() + 1.75f);
 
-        float noise_read = Sample3dNoiseTex(
-            fract(Ref::simd_fvec4{0.0f, cirrus_coords.get<0>() * 0.03f, cirrus_coords.get<1>() * 0.03f, 0.0f}));
+        float noise_read = 1.0f - Sample3dNoiseTex(fract(Ref::simd_fvec4{0.0f, cirrus_coords.get<0>() * 0.03f,
+                                                                         cirrus_coords.get<1>() * 0.03f, 0.0f}));
         noise_read =
             saturate(noise_read - 1.0f + params.cirrus_clouds_amount * 0.6f) / (params.cirrus_clouds_amount + 1e-9f);
 
@@ -803,8 +802,8 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
 
         //
         cirrus_coords.set<0>(cirrus_coords.get<0>() + 0.25f);
-        noise_read = Sample3dNoiseTex(
-            fract(Ref::simd_fvec4{0.7f, cirrus_coords.get<0>() * 0.02f, cirrus_coords.get<1>() * 0.02f, 0.0f}));
+        noise_read = 1.0f - Sample3dNoiseTex(fract(Ref::simd_fvec4{0.7f, cirrus_coords.get<0>() * 0.02f,
+                                                                   cirrus_coords.get<1>() * 0.02f, 0.0f}));
         noise_read =
             saturate(noise_read - 1.0f + params.cirrus_clouds_amount * 0.7f) / (params.cirrus_clouds_amount + 1e-9f);
 
