@@ -304,21 +304,19 @@ float Sample3dNoiseTex(Ref::simd_fvec4 uvw) {
 float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_position, float &out_local_height,
                        float &out_height_fraction, Ref::simd_fvec4 &out_up_vector) {
     out_local_height = AtmosphereHeight(params, local_position, out_up_vector);
+    out_height_fraction =
+        (out_local_height - params.clouds_height_beg) / (params.clouds_height_end - params.clouds_height_beg);
 
     Ref::simd_fvec2 weather_uv = {local_position.get<0>() + params.clouds_offset_x,
                                   local_position.get<2>() + params.clouds_offset_z};
     weather_uv = fract(weather_uv * 0.00007f);
 
-    Ref::simd_fvec4 weather_sample = SampleWeatherTex(weather_uv);
-    // weather_sample = srgb_to_rgb(weather_sample);
-
-    out_height_fraction =
-        (out_local_height - params.clouds_height_beg) / (params.clouds_height_end - params.clouds_height_beg);
+    const Ref::simd_fvec4 weather_sample = SampleWeatherTex(weather_uv);
 
     float cloud_coverage = mix(weather_sample.get<2>(), weather_sample.get<1>(), params.clouds_variety);
     cloud_coverage = remap(cloud_coverage, saturate(1.0f - params.clouds_density + 0.5f * out_height_fraction));
 
-    float cloud_type = weather_sample.get<0>();
+    const float cloud_type = weather_sample.get<0>();
     cloud_coverage *= GetDensityHeightGradientForPoint(out_height_fraction, cloud_type);
 
     if (out_height_fraction > 1.0f || cloud_coverage < 0.01f) {
@@ -688,9 +686,9 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     //
     // Main clouds
     //
-    const float CloudsHorizonCutoff = 0.0025f;
+    const float CloudsHorizonCutoff = 0.005f;
     if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.clouds_density > 0.0f &&
-        light_brightness > 0.0f /*&& ray_dir.get<1>() > CloudsHorizonCutoff*/) {
+        light_brightness > 0.0f && ray_dir.get<1>() > CloudsHorizonCutoff) {
 
         float clouds_ray_length = fminf(ray_length, clouds_intersection.get<3>());
         Ref::simd_fvec4 clouds_ray_start = ray_start + ray_dir * clouds_intersection.get<1>();
@@ -758,7 +756,6 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
                         const Ref::simd_fvec2 planet_intersection =
                             PlanetIntersection(params, local_position, light_dir);
                         const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
-
                         const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, light_dir);
 
                         clouds += total_transmittance *
@@ -781,18 +778,18 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
             }
 
             // NOTE: totally arbitrary cloud blending
-            float cloud_blend = linstep(CloudsHorizonCutoff + 0.6f, CloudsHorizonCutoff, ray_dir.get<1>());
+            float cloud_blend = linstep(CloudsHorizonCutoff + 0.25f, CloudsHorizonCutoff, ray_dir.get<1>());
             cloud_blend = 1.0f - powf(cloud_blend, 5.0f);
 
             total_radiance += cloud_blend * clouds * light_color;
-            mix(transmittance_before, total_transmittance, cloud_blend);
+            total_transmittance = mix(transmittance_before, total_transmittance, cloud_blend);
         }
     }
 
     //
     // Cirrus clouds
     //
-    if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.clouds_density > 0.0f &&
+    if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.cirrus_clouds_amount > 0.0f &&
         light_brightness > 0.0f) {
         Ref::simd_fvec2 cirrus_coords =
             3e-4 * Ref::simd_fvec2{params.clouds_offset_z, params.clouds_offset_x} +
