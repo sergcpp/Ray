@@ -326,12 +326,10 @@ float GetCloudsDensity(const atmosphere_params_t &params, Ref::simd_fvec4 local_
     }
 
     local_position /= 1.5f * (params.clouds_height_end - params.clouds_height_beg);
-
     local_position = fract(local_position);
 
     const float noise_read = 1.0f - Sample3dNoiseTex(local_position);
 
-    return remap(cloud_coverage, 0.6f * noise_read);
     return 0.12f * mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, out_height_fraction) *
            powf(5.0f * remap(cloud_coverage, 0.6f * noise_read), 1.0f - out_height_fraction);
 }
@@ -343,7 +341,7 @@ float TraceCloudShadow(const atmosphere_params_t &params, const uint32_t rand_ha
         const int SampleCount = 32;
         const float StepSize = 16.0f;
 
-        Ref::simd_fvec4 pos = ray_start + Ref::construct_float(rand_hash) * StepSize;
+        Ref::simd_fvec4 pos = ray_start + Ref::construct_float(rand_hash) * ray_dir * StepSize;
 
         float ret = 0.0f;
         for (int i = 0; i < SampleCount; ++i) {
@@ -502,6 +500,9 @@ Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::simd_
 
     Ref::simd_fvec4 radiance = 0.0f, multiscat_as_1 = 0.0f;
 
+    //
+    // Atmosphere
+    //
     float prev_ray_time = 0;
     for (int i = 0; i < sample_count; ++i) {
         float ray_time;
@@ -585,6 +586,22 @@ Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::simd_
         inout_transmittance *= local_transmittance;
 
         prev_ray_time = ray_time;
+    }
+
+    //
+    // Ground 'floor'
+    //
+    if (planet_intersection.get<0>() > 0) {
+        const Ref::simd_fvec4 local_position = ray_start + ray_dir * planet_intersection.get<0>();
+        Ref::simd_fvec4 up_vector;
+        const float local_height = AtmosphereHeight(params, local_position, up_vector);
+
+        const float view_zenith_cos_angle = dot(light_dir, up_vector);
+        const Ref::simd_fvec2 uv =
+            LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
+        const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
+        radiance += Ref::simd_fvec4{params.ground_albedo, Ref::simd_mem_aligned} * saturate(dot(up_vector, light_dir)) *
+                    inout_transmittance * light_transmittance * light_color;
     }
 
     return std::make_pair(radiance, multiscat_as_1);
@@ -843,22 +860,6 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
                                                   light_color, transmittance_lut, multiscatter_lut, rand_offset,
                                                   MainAtmosphereSampleCount, total_transmittance)
                               .first;
-    }
-
-    //
-    // Ground 'floor'
-    //
-    if (planet_intersection.get<0>() > 0 && light_brightness > 0.0f) {
-        const Ref::simd_fvec4 local_position = ray_start + ray_dir * ray_length;
-        Ref::simd_fvec4 up_vector;
-        const float local_height = AtmosphereHeight(params, local_position, up_vector);
-
-        const float view_zenith_cos_angle = dot(light_dir, up_vector);
-        const Ref::simd_fvec2 uv =
-            LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
-        const Ref::simd_fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
-        total_radiance += Ref::simd_fvec4{params.ground_albedo, Ref::simd_mem_aligned} *
-                          saturate(dot(up_vector, light_dir)) * total_transmittance * light_transmittance * light_color;
     }
 
     //
