@@ -476,7 +476,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdEncodeVideoKHR(
     const VkVideoEncodeInfoKHR*                 pEncodeInfo);
 #endif
 
-
+#if 0
 #define VK_EXT_video_encode_h264 1
 #include "vk_video/vulkan_video_codec_h264std.h"
 #include "vk_video/vulkan_video_codec_h264std_encode.h"
@@ -979,7 +979,7 @@ typedef struct VkVideoDecodeH265DpbSlotInfoEXT {
     const void*                               pNext;
     const StdVideoDecodeH265ReferenceInfo*    pStdReferenceInfo;
 } VkVideoDecodeH265DpbSlotInfoEXT;
-
+#endif
 
 #ifdef __cplusplus
 }
