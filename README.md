@@ -13,7 +13,7 @@ Features:
 <details>
   <summary>Images</summary>
 
-  - Rendered with time limit of 1 minute using: <https://github.com/sergcpp/RayDemo>
+  - Rendered with time limit of 15 seconds using: <https://github.com/sergcpp/RayDemo>
   - Links to the original scenes:  \
     https://benedikt-bitterli.me/resources/  \
     https://www.blender.org/download/demo-files/  \
