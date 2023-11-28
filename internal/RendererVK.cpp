@@ -7,6 +7,7 @@
 #include "Core.h"
 #include "SceneVK.h"
 #include "UNetFilter.h"
+#include "inflate/Inflate.h"
 
 #include "Vk/BufferVK.h"
 #include "Vk/DebugMarkerVK.h"
@@ -163,6 +164,45 @@ namespace Vk {
 } // namespace Vk
 } // namespace Ray
 
+#if 0
+#undef FAR
+#include <zlib.h>
+
+#pragma comment(lib, "zlibstatic.lib")
+
+namespace Ray {
+std::vector<uint8_t> deflate_data(const uint8_t *data, const int len) {
+    z_stream stream = {};
+
+    int ret = deflateInit(&stream, Z_DEFAULT_COMPRESSION);
+    if (ret != Z_OK) {
+        return {};
+    }
+
+    stream.next_in = (Bytef *)data;
+    stream.avail_in = len;
+
+    std::vector<uint8_t> out_data;
+    uint8_t temp_buf[4096];
+
+    do {
+        stream.next_out = temp_buf;
+        stream.avail_out = sizeof(temp_buf);
+
+        ret = deflate(&stream, Z_FINISH);
+        if (ret == Z_STREAM_ERROR) {
+            return {};
+        }
+
+        const int count = sizeof(temp_buf) - stream.avail_out;
+        out_data.insert(end(out_data), temp_buf, temp_buf + count);
+    } while (stream.avail_out == 0);
+
+    return out_data;
+}
+}
+#endif
+
 #define NS Vk
 #include "RendererGPU.h"
 #include "RendererGPU_kernels.h"
@@ -192,133 +232,143 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
     log->Info("CoopMatrix  is %s", use_nv_coop_matrix_ ? "enabled" : "disabled");
     log->Info("===========================================");
 
-    sh_prim_rays_gen_simple_ = Shader{"Primary Raygen Simple", ctx_.get(),
-                                      internal_shaders_output_primary_ray_gen_simple_comp_spv, eShaderType::Comp, log};
-    sh_prim_rays_gen_adaptive_ =
-        Shader{"Primary Raygen Adaptive", ctx_.get(), internal_shaders_output_primary_ray_gen_adaptive_comp_spv,
+    sh_prim_rays_gen_simple_ =
+        Shader{"Primary Raygen Simple", ctx_.get(), Inflate(internal_shaders_output_primary_ray_gen_simple_comp_spv),
                eShaderType::Comp, log};
+    sh_prim_rays_gen_adaptive_ =
+        Shader{"Primary Raygen Adaptive", ctx_.get(),
+               Inflate(internal_shaders_output_primary_ray_gen_adaptive_comp_spv), eShaderType::Comp, log};
     if (use_hwrt_) {
-        sh_intersect_scene_ =
-            Shader{"Intersect Scene (Primary) (HWRT)", ctx_.get(),
-                   use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv}
-                                 : Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv},
-                   eShaderType::Comp, log};
+        sh_intersect_scene_ = Shader{
+            "Intersect Scene (Primary) (HWRT)", ctx_.get(),
+            Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv}
+                                  : Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv}),
+            eShaderType::Comp, log};
     } else {
-        sh_intersect_scene_ =
-            Shader{"Intersect Scene (Primary) (SWRT)", ctx_.get(),
-                   use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_bindless_comp_spv}
-                                 : Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_atlas_comp_spv},
-                   eShaderType::Comp, log};
+        sh_intersect_scene_ = Shader{
+            "Intersect Scene (Primary) (SWRT)", ctx_.get(),
+            Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_bindless_comp_spv}
+                                  : Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_atlas_comp_spv}),
+            eShaderType::Comp, log};
     }
 
     if (use_hwrt_) {
         sh_intersect_scene_indirect_ = Shader{
             "Intersect Scene (Secondary) (HWRT)", ctx_.get(),
-            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv}
-                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv},
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv}),
             eShaderType::Comp, log};
     } else {
         sh_intersect_scene_indirect_ = Shader{
             "Intersect Scene (Secondary) (SWRT)", ctx_.get(),
-            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv}
-                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv},
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv}),
             eShaderType::Comp, log};
     }
 
-    sh_intersect_area_lights_ = Shader{"Intersect Area Lights", ctx_.get(),
-                                       internal_shaders_output_intersect_area_lights_comp_spv, eShaderType::Comp, log};
+    sh_intersect_area_lights_ =
+        Shader{"Intersect Area Lights", ctx_.get(), Inflate(internal_shaders_output_intersect_area_lights_comp_spv),
+               eShaderType::Comp, log};
     sh_shade_primary_ =
         Shader{"Shade (Primary)", ctx_.get(),
-               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_spv}
-                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_spv},
+               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_spv}
+                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_spv}),
                eShaderType::Comp, log};
     sh_shade_primary_b_ =
         Shader{"Shade (Primary) B", ctx_.get(),
-               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_b_comp_spv}
-                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_b_comp_spv},
+               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_b_comp_spv}
+                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_b_comp_spv}),
                eShaderType::Comp, log};
     sh_shade_primary_n_ =
         Shader{"Shade (Primary) N", ctx_.get(),
-               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_n_comp_spv}
-                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_n_comp_spv},
+               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_n_comp_spv}
+                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_n_comp_spv}),
                eShaderType::Comp, log};
     sh_shade_primary_bn_ =
         Shader{"Shade (Primary) BN", ctx_.get(),
-               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_bn_comp_spv}
-                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_bn_comp_spv},
+               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_bn_comp_spv}
+                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_bn_comp_spv}),
                eShaderType::Comp, log};
     sh_shade_secondary_ =
         Shader{"Shade (Secondary)", ctx_.get(),
-               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_spv}
-                             : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_spv},
+               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_spv}
+                                     : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_spv}),
                eShaderType::Comp, log};
 
     if (use_hwrt_) {
         sh_intersect_scene_shadow_ = Shader{
             "Intersect Scene (Shadow) (HWRT)", ctx_.get(),
-            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv}
-                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv},
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv}),
             eShaderType::Comp, log};
     } else {
         sh_intersect_scene_shadow_ = Shader{
-            "Intersect Scene (Shadow) (SWRT)",
-            ctx_.get(),
-            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv}
-                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv},
-            eShaderType::Comp,
-            log};
+            "Intersect Scene (Shadow) (SWRT)", ctx_.get(),
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv}),
+            eShaderType::Comp, log};
     }
-    sh_prepare_indir_args_ = Shader{"Prepare Indir Args", ctx_.get(),
-                                    internal_shaders_output_prepare_indir_args_comp_spv, eShaderType::Comp, log};
-    sh_mix_incremental_ =
-        Shader{"Mix Incremental", ctx_.get(), internal_shaders_output_mix_incremental_comp_spv, eShaderType::Comp, log};
-    sh_mix_incremental_b_ = Shader{"Mix Incremental B", ctx_.get(), internal_shaders_output_mix_incremental_b_comp_spv,
-                                   eShaderType::Comp, log};
-    sh_mix_incremental_n_ = Shader{"Mix Incremental N", ctx_.get(), internal_shaders_output_mix_incremental_n_comp_spv,
-                                   eShaderType::Comp, log};
-    sh_mix_incremental_bn_ = Shader{"Mix Incremental BN", ctx_.get(),
-                                    internal_shaders_output_mix_incremental_bn_comp_spv, eShaderType::Comp, log};
-    sh_postprocess_ =
-        Shader{"Postprocess", ctx_.get(), internal_shaders_output_postprocess_comp_spv, eShaderType::Comp, log};
-    sh_filter_variance_ =
-        Shader{"Filter Variance", ctx_.get(), internal_shaders_output_filter_variance_comp_spv, eShaderType::Comp, log};
+    sh_prepare_indir_args_ =
+        Shader{"Prepare Indir Args", ctx_.get(), Inflate(internal_shaders_output_prepare_indir_args_comp_spv),
+               eShaderType::Comp, log};
+    sh_mix_incremental_ = Shader{"Mix Incremental", ctx_.get(),
+                                 Inflate(internal_shaders_output_mix_incremental_comp_spv), eShaderType::Comp, log};
+    sh_mix_incremental_b_ = Shader{"Mix Incremental B", ctx_.get(),
+                                   Inflate(internal_shaders_output_mix_incremental_b_comp_spv), eShaderType::Comp, log};
+    sh_mix_incremental_n_ = Shader{"Mix Incremental N", ctx_.get(),
+                                   Inflate(internal_shaders_output_mix_incremental_n_comp_spv), eShaderType::Comp, log};
+    sh_mix_incremental_bn_ =
+        Shader{"Mix Incremental BN", ctx_.get(), Inflate(internal_shaders_output_mix_incremental_bn_comp_spv),
+               eShaderType::Comp, log};
+    sh_postprocess_ = Shader{"Postprocess", ctx_.get(), Inflate(internal_shaders_output_postprocess_comp_spv),
+                             eShaderType::Comp, log};
+    sh_filter_variance_ = Shader{"Filter Variance", ctx_.get(),
+                                 Inflate(internal_shaders_output_filter_variance_comp_spv), eShaderType::Comp, log};
     sh_nlm_filter_ =
-        Shader{"NLM Filter", ctx_.get(), internal_shaders_output_nlm_filter_comp_spv, eShaderType::Comp, log};
-    sh_nlm_filter_b_ =
-        Shader{"NLM Filter B", ctx_.get(), internal_shaders_output_nlm_filter_b_comp_spv, eShaderType::Comp, log};
-    sh_nlm_filter_n_ =
-        Shader{"NLM Filter N", ctx_.get(), internal_shaders_output_nlm_filter_n_comp_spv, eShaderType::Comp, log};
-    sh_nlm_filter_bn_ =
-        Shader{"NLM Filter BN", ctx_.get(), internal_shaders_output_nlm_filter_bn_comp_spv, eShaderType::Comp, log};
+        Shader{"NLM Filter", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_comp_spv), eShaderType::Comp, log};
+    sh_nlm_filter_b_ = Shader{"NLM Filter B", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_b_comp_spv),
+                              eShaderType::Comp, log};
+    sh_nlm_filter_n_ = Shader{"NLM Filter N", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_n_comp_spv),
+                              eShaderType::Comp, log};
+    sh_nlm_filter_bn_ = Shader{"NLM Filter BN", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_bn_comp_spv),
+                               eShaderType::Comp, log};
     if (use_hwrt_) {
         sh_debug_rt_ =
-            Shader{"Debug RT", ctx_.get(), internal_shaders_output_debug_rt_comp_spv, eShaderType::Comp, log};
+            Shader{"Debug RT", ctx_.get(), Inflate(internal_shaders_output_debug_rt_comp_spv), eShaderType::Comp, log};
     }
 
-    sh_sort_hash_rays_ =
-        Shader{"Sort Hash Rays", ctx_.get(), internal_shaders_output_sort_hash_rays_comp_spv, eShaderType::Comp, log};
-    sh_sort_init_count_table_ = Shader{"Sort Init Count Table", ctx_.get(),
-                                       internal_shaders_output_sort_init_count_table_comp_spv, eShaderType::Comp, log};
-    sh_sort_reduce_ =
-        Shader{"Sort Reduce", ctx_.get(), internal_shaders_output_sort_reduce_comp_spv, eShaderType::Comp, log};
-    sh_sort_scan_ = Shader{"Sort Scan", ctx_.get(), internal_shaders_output_sort_scan_comp_spv, eShaderType::Comp, log};
-    sh_sort_scan_add_ =
-        Shader{"Sort Scan Add", ctx_.get(), internal_shaders_output_sort_scan_add_comp_spv, eShaderType::Comp, log};
-    sh_sort_scatter_ =
-        Shader{"Sort Scatter", ctx_.get(), internal_shaders_output_sort_scatter_comp_spv, eShaderType::Comp, log};
-    sh_sort_reorder_rays_ = Shader{"Sort Reorder Rays", ctx_.get(), internal_shaders_output_sort_reorder_rays_comp_spv,
-                                   eShaderType::Comp, log};
+    sh_sort_hash_rays_ = Shader{"Sort Hash Rays", ctx_.get(), Inflate(internal_shaders_output_sort_hash_rays_comp_spv),
+                                eShaderType::Comp, log};
+    sh_sort_init_count_table_ =
+        Shader{"Sort Init Count Table", ctx_.get(), Inflate(internal_shaders_output_sort_init_count_table_comp_spv),
+               eShaderType::Comp, log};
+    sh_sort_reduce_ = Shader{"Sort Reduce", ctx_.get(), Inflate(internal_shaders_output_sort_reduce_comp_spv),
+                             eShaderType::Comp, log};
+    sh_sort_scan_ =
+        Shader{"Sort Scan", ctx_.get(), Inflate(internal_shaders_output_sort_scan_comp_spv), eShaderType::Comp, log};
+    sh_sort_scan_add_ = Shader{"Sort Scan Add", ctx_.get(), Inflate(internal_shaders_output_sort_scan_add_comp_spv),
+                               eShaderType::Comp, log};
+    sh_sort_scatter_ = Shader{"Sort Scatter", ctx_.get(), Inflate(internal_shaders_output_sort_scatter_comp_spv),
+                              eShaderType::Comp, log};
+    sh_sort_reorder_rays_ = Shader{"Sort Reorder Rays", ctx_.get(),
+                                   Inflate(internal_shaders_output_sort_reorder_rays_comp_spv), eShaderType::Comp, log};
     if (use_hwrt_) {
-        sh_intersect_scene_rgen_ = Shader{"Intersect Scene RGEN", ctx_.get(),
-                                          internal_shaders_output_intersect_scene_rgen_spv, eShaderType::RayGen, log};
+        sh_intersect_scene_rgen_ =
+            Shader{"Intersect Scene RGEN", ctx_.get(), Inflate(internal_shaders_output_intersect_scene_rgen_spv),
+                   eShaderType::RayGen, log};
         sh_intersect_scene_indirect_rgen_ =
             Shader{"Intersect Scene Indirect RGEN", ctx_.get(),
-                   internal_shaders_output_intersect_scene_indirect_rgen_spv, eShaderType::RayGen, log};
+                   Inflate(internal_shaders_output_intersect_scene_indirect_rgen_spv), eShaderType::RayGen, log};
         sh_intersect_scene_rchit_ =
-            Shader{"Intersect Scene RCHIT", ctx_.get(), internal_shaders_output_intersect_scene_rchit_spv,
+            Shader{"Intersect Scene RCHIT", ctx_.get(), Inflate(internal_shaders_output_intersect_scene_rchit_spv),
                    eShaderType::ClosestHit, log};
-        sh_intersect_scene_rmiss_ = Shader{"Intersect Scene RMISS", ctx_.get(),
-                                           internal_shaders_output_intersect_scene_rmiss_spv, eShaderType::AnyHit, log};
+        sh_intersect_scene_rmiss_ =
+            Shader{"Intersect Scene RMISS", ctx_.get(), Inflate(internal_shaders_output_intersect_scene_rmiss_spv),
+                   eShaderType::AnyHit, log};
     }
 
     prog_prim_rays_gen_simple_ = Program{"Primary Raygen Simple", ctx_.get(), &sh_prim_rays_gen_simple_, log};
@@ -1546,115 +1596,115 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
 bool Ray::Vk::Renderer::InitUNetPipelines() {
     ILog *log = ctx_->log();
 
-    auto select_shader = [this](Span<const uint8_t> default_shader, Span<const uint8_t> fp16_shader,
-                                Span<const uint8_t> nv_coop_shader) {
-        return use_fp16_ ? (use_nv_coop_matrix_ ? nv_coop_shader : fp16_shader) : default_shader;
+    auto select_unpack_shader = [this](Span<const uint8_t> default_shader, Span<const uint8_t> fp16_shader,
+                                       Span<const uint8_t> nv_coop_shader) {
+        return Inflate(use_fp16_ ? (use_nv_coop_matrix_ ? nv_coop_shader : fp16_shader) : default_shader);
     };
 
     sh_convolution_Img_3_32_ = Shader{"Convolution Img 3 32", ctx_.get(),
-                                      select_shader(internal_shaders_output_convolution_Img_3_32_fp32_comp_spv,
-                                                    internal_shaders_output_convolution_Img_3_32_fp16_comp_spv,
-                                                    internal_shaders_output_convolution_Img_3_32_nv_comp_spv),
+                                      select_unpack_shader(internal_shaders_output_convolution_Img_3_32_fp32_comp_spv,
+                                                           internal_shaders_output_convolution_Img_3_32_fp16_comp_spv,
+                                                           internal_shaders_output_convolution_Img_3_32_nv_comp_spv),
                                       eShaderType::Comp, log};
     sh_convolution_Img_6_32_ = Shader{"Convolution Img 6 32", ctx_.get(),
-                                      select_shader(internal_shaders_output_convolution_Img_6_32_fp32_comp_spv,
-                                                    internal_shaders_output_convolution_Img_6_32_fp16_comp_spv,
-                                                    internal_shaders_output_convolution_Img_6_32_nv_comp_spv),
+                                      select_unpack_shader(internal_shaders_output_convolution_Img_6_32_fp32_comp_spv,
+                                                           internal_shaders_output_convolution_Img_6_32_fp16_comp_spv,
+                                                           internal_shaders_output_convolution_Img_6_32_nv_comp_spv),
                                       eShaderType::Comp, log};
     sh_convolution_Img_9_32_ = Shader{"Convolution Img 9 32", ctx_.get(),
-                                      select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_spv,
-                                                    internal_shaders_output_convolution_Img_9_32_fp16_comp_spv,
-                                                    internal_shaders_output_convolution_Img_9_32_nv_comp_spv),
+                                      select_unpack_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_spv,
+                                                           internal_shaders_output_convolution_Img_9_32_fp16_comp_spv,
+                                                           internal_shaders_output_convolution_Img_9_32_nv_comp_spv),
                                       eShaderType::Comp, log};
     sh_convolution_32_32_Downsample_ =
         Shader{"Convolution 32 32 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_spv,
-                             internal_shaders_output_convolution_32_32_Downsample_fp16_comp_spv,
-                             internal_shaders_output_convolution_32_32_Downsample_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_spv,
+                                    internal_shaders_output_convolution_32_32_Downsample_fp16_comp_spv,
+                                    internal_shaders_output_convolution_32_32_Downsample_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_32_48_Downsample_ =
         Shader{"Convolution 32 48 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_spv,
-                             internal_shaders_output_convolution_32_48_Downsample_fp16_comp_spv,
-                             internal_shaders_output_convolution_32_48_Downsample_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_spv,
+                                    internal_shaders_output_convolution_32_48_Downsample_fp16_comp_spv,
+                                    internal_shaders_output_convolution_32_48_Downsample_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_48_64_Downsample_ =
         Shader{"Convolution 48 64 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_spv,
-                             internal_shaders_output_convolution_48_64_Downsample_fp16_comp_spv,
-                             internal_shaders_output_convolution_48_64_Downsample_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_spv,
+                                    internal_shaders_output_convolution_48_64_Downsample_fp16_comp_spv,
+                                    internal_shaders_output_convolution_48_64_Downsample_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_64_80_Downsample_ =
         Shader{"Convolution 64 80 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_spv,
-                             internal_shaders_output_convolution_64_80_Downsample_fp16_comp_spv,
-                             internal_shaders_output_convolution_64_80_Downsample_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_spv,
+                                    internal_shaders_output_convolution_64_80_Downsample_fp16_comp_spv,
+                                    internal_shaders_output_convolution_64_80_Downsample_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_64_64_ = Shader{"Convolution 64 64", ctx_.get(),
-                                   select_shader(internal_shaders_output_convolution_64_64_fp32_comp_spv,
-                                                 internal_shaders_output_convolution_64_64_fp16_comp_spv,
-                                                 internal_shaders_output_convolution_64_64_nv_comp_spv),
+                                   select_unpack_shader(internal_shaders_output_convolution_64_64_fp32_comp_spv,
+                                                        internal_shaders_output_convolution_64_64_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_64_64_nv_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_64_32_ = Shader{"Convolution 64 32", ctx_.get(),
-                                   select_shader(internal_shaders_output_convolution_64_32_fp32_comp_spv,
-                                                 internal_shaders_output_convolution_64_32_fp16_comp_spv,
-                                                 internal_shaders_output_convolution_64_32_nv_comp_spv),
+                                   select_unpack_shader(internal_shaders_output_convolution_64_32_fp32_comp_spv,
+                                                        internal_shaders_output_convolution_64_32_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_64_32_nv_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_80_96_ = Shader{"Convolution 80 96", ctx_.get(),
-                                   select_shader(internal_shaders_output_convolution_80_96_fp32_comp_spv,
-                                                 internal_shaders_output_convolution_80_96_fp16_comp_spv,
-                                                 internal_shaders_output_convolution_80_96_nv_comp_spv),
+                                   select_unpack_shader(internal_shaders_output_convolution_80_96_fp32_comp_spv,
+                                                        internal_shaders_output_convolution_80_96_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_80_96_nv_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_96_96_ = Shader{"Convolution 96 96", ctx_.get(),
-                                   select_shader(internal_shaders_output_convolution_96_96_fp32_comp_spv,
-                                                 internal_shaders_output_convolution_96_96_fp16_comp_spv,
-                                                 internal_shaders_output_convolution_96_96_nv_comp_spv),
+                                   select_unpack_shader(internal_shaders_output_convolution_96_96_fp32_comp_spv,
+                                                        internal_shaders_output_convolution_96_96_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_96_96_nv_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_112_112_ = Shader{"Convolution 112 112", ctx_.get(),
-                                     select_shader(internal_shaders_output_convolution_112_112_fp32_comp_spv,
-                                                   internal_shaders_output_convolution_112_112_fp16_comp_spv,
-                                                   internal_shaders_output_convolution_112_112_nv_comp_spv),
+                                     select_unpack_shader(internal_shaders_output_convolution_112_112_fp32_comp_spv,
+                                                          internal_shaders_output_convolution_112_112_fp16_comp_spv,
+                                                          internal_shaders_output_convolution_112_112_nv_comp_spv),
                                      eShaderType::Comp, log};
     sh_convolution_concat_96_64_112_ =
         Shader{"Convolution Concat 96 64 112", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_spv,
-                             internal_shaders_output_convolution_concat_96_64_112_fp16_comp_spv,
-                             internal_shaders_output_convolution_concat_96_64_112_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_spv,
+                                    internal_shaders_output_convolution_concat_96_64_112_fp16_comp_spv,
+                                    internal_shaders_output_convolution_concat_96_64_112_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_112_48_96_ =
         Shader{"Convolution Concat 112 48 96", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_spv,
-                             internal_shaders_output_convolution_concat_112_48_96_fp16_comp_spv,
-                             internal_shaders_output_convolution_concat_112_48_96_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_spv,
+                                    internal_shaders_output_convolution_concat_112_48_96_fp16_comp_spv,
+                                    internal_shaders_output_convolution_concat_112_48_96_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_96_32_64_ =
         Shader{"Convolution Concat 96 32 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_spv,
-                             internal_shaders_output_convolution_concat_96_32_64_fp16_comp_spv,
-                             internal_shaders_output_convolution_concat_96_32_64_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_spv,
+                                    internal_shaders_output_convolution_concat_96_32_64_fp16_comp_spv,
+                                    internal_shaders_output_convolution_concat_96_32_64_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_64_3_64_ =
         Shader{"Convolution Concat 64 3 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_64_3_64_fp32_comp_spv,
-                             internal_shaders_output_convolution_concat_64_3_64_fp16_comp_spv,
-                             internal_shaders_output_convolution_concat_64_3_64_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_concat_64_3_64_fp32_comp_spv,
+                                    internal_shaders_output_convolution_concat_64_3_64_fp16_comp_spv,
+                                    internal_shaders_output_convolution_concat_64_3_64_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_64_6_64_ =
         Shader{"Convolution Concat 64 6 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_64_6_64_fp32_comp_spv,
-                             internal_shaders_output_convolution_concat_64_6_64_fp16_comp_spv,
-                             internal_shaders_output_convolution_concat_64_6_64_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_concat_64_6_64_fp32_comp_spv,
+                                    internal_shaders_output_convolution_concat_64_6_64_fp16_comp_spv,
+                                    internal_shaders_output_convolution_concat_64_6_64_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_64_9_64_ =
         Shader{"Convolution Concat 64 9 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_spv,
-                             internal_shaders_output_convolution_concat_64_9_64_fp16_comp_spv,
-                             internal_shaders_output_convolution_concat_64_9_64_nv_comp_spv),
+               select_unpack_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_spv,
+                                    internal_shaders_output_convolution_concat_64_9_64_fp16_comp_spv,
+                                    internal_shaders_output_convolution_concat_64_9_64_nv_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_32_3_img_ = Shader{"Convolution 32 3 Img", ctx_.get(),
-                                      select_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_spv,
-                                                    internal_shaders_output_convolution_32_3_img_fp16_comp_spv,
-                                                    internal_shaders_output_convolution_32_3_img_nv_comp_spv),
+                                      select_unpack_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_spv,
+                                                           internal_shaders_output_convolution_32_3_img_fp16_comp_spv,
+                                                           internal_shaders_output_convolution_32_3_img_nv_comp_spv),
                                       eShaderType::Comp, log};
 
     prog_convolution_Img_3_32_ = Program{"Convolution Img 3 32", ctx_.get(), &sh_convolution_Img_3_32_, log};

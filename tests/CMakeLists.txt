@@ -14,6 +14,8 @@ add_executable(test_Ray main.cpp
                         test_aux_channels.cpp
                         test_freelist_alloc.cpp
                         test_hashmap.cpp
+                        test_huffman.cpp
+                        test_inflate.cpp
                         test_materials.cpp
                         test_scene.h
                         test_scene.cpp

@@ -332,6 +332,11 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/traverse_bvh.glsl
                     internal/shaders/types.h)
 
+set(INFLATE_SOURCE_FILES    internal/inflate/Huffman.h
+                            internal/inflate/Huffman.cpp
+                            internal/inflate/Inflate.h
+                            internal/inflate/Inflate.cpp)
+
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
 
@@ -353,6 +358,9 @@ if(ENABLE_DX_IMPL AND WIN32)
     list(APPEND ALL_SOURCE_FILES ${DX_SOURCE_FILES})
     source_group("src\\internal\\Dx" FILES ${DX_SOURCE_FILES})
 endif(ENABLE_DX_IMPL AND WIN32)
+
+list(APPEND ALL_SOURCE_FILES ${INFLATE_SOURCE_FILES})
+source_group("src\\internal\\inflate" FILES ${INFLATE_SOURCE_FILES})
 
 set_source_files_properties(${SHADER_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 

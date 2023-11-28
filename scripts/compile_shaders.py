@@ -3,9 +3,11 @@ import os
 import sys
 import subprocess
 import threading
+import zlib
 
 ENABLE_MULTIPLE_THREADS = True
 ENABLE_SPIRV_OPTIMIZATION = True
+ENABLE_COMPRESSION = True
 ENABLE_DXC_COMPILATION = (os.name == "nt")
 
 mutex = threading.Lock()
@@ -37,6 +39,8 @@ def do_conversion(content: bytes) -> str:
 
 def bin2header(data, file_name):
     file_name = file_name.replace(os.sep, '/')
+    if ENABLE_COMPRESSION:
+        data = zlib.compress(data, level=9)
     ret = "/* Contents of file " + file_name + " */\n"
     ret += "const int " + file_name.replace('/', '_').replace('.', '_') + "_size = " + str(len(data)) + ";\n"
     ret += "const unsigned char " + file_name.replace('/', '_').replace('.', '_') + "[" + str(len(data)) + "] = {\n    "
