@@ -335,217 +335,112 @@ int Ray::SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_fil
 template <typename T>
 int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm, const int alignment,
                           unet_weight_offsets_t *out_offsets, T out_weights[]) {
-    int enc_conv0_weight_count, enc_conv0_bias_count, enc_conv1_weight_count, enc_conv1_bias_count,
-        enc_conv2_weight_count, enc_conv2_bias_count, enc_conv3_weight_count, enc_conv3_bias_count,
-        enc_conv4_weight_count, enc_conv4_bias_count, enc_conv5a_weight_count, enc_conv5a_bias_count,
-        enc_conv5b_weight_count, enc_conv5b_bias_count, dec_conv4a_weight_count, dec_conv4a_bias_count,
-        dec_conv4b_weight_count, dec_conv4b_bias_count, dec_conv3a_weight_count, dec_conv3a_bias_count,
-        dec_conv3b_weight_count, dec_conv3b_bias_count, dec_conv2a_weight_count, dec_conv2a_bias_count,
-        dec_conv2b_weight_count, dec_conv2b_bias_count, dec_conv1a_weight_count, dec_conv1a_bias_count,
-        dec_conv1b_weight_count, dec_conv1b_bias_count, dec_conv0_weight_count, dec_conv0_bias_count;
-
-    const uint16_t *enc_conv0_weight, *enc_conv0_bias, *enc_conv1_weight, *enc_conv1_bias, *enc_conv2_weight,
-        *enc_conv2_bias, *enc_conv3_weight, *enc_conv3_bias, *enc_conv4_weight, *enc_conv4_bias, *enc_conv5a_weight,
-        *enc_conv5a_bias, *enc_conv5b_weight, *enc_conv5b_bias, *dec_conv4a_weight, *dec_conv4a_bias,
-        *dec_conv4b_weight, *dec_conv4b_bias, *dec_conv3a_weight, *dec_conv3a_bias, *dec_conv3b_weight,
-        *dec_conv3b_bias, *dec_conv2a_weight, *dec_conv2a_bias, *dec_conv2b_weight, *dec_conv2b_bias,
-        *dec_conv1a_weight, *dec_conv1a_bias, *dec_conv1b_weight, *dec_conv1b_bias, *dec_conv0_weight, *dec_conv0_bias;
+    Span<const uint16_t> enc_conv0_weight, enc_conv0_bias, enc_conv1_weight, enc_conv1_bias, enc_conv2_weight,
+        enc_conv2_bias, enc_conv3_weight, enc_conv3_bias, enc_conv4_weight, enc_conv4_bias, enc_conv5a_weight,
+        enc_conv5a_bias, enc_conv5b_weight, enc_conv5b_bias, dec_conv4a_weight, dec_conv4a_bias, dec_conv4b_weight,
+        dec_conv4b_bias, dec_conv3a_weight, dec_conv3a_bias, dec_conv3b_weight, dec_conv3b_bias, dec_conv2a_weight,
+        dec_conv2a_bias, dec_conv2b_weight, dec_conv2b_bias, dec_conv1a_weight, dec_conv1a_bias, dec_conv1b_weight,
+        dec_conv1b_bias, dec_conv0_weight, dec_conv0_bias;
 
     if (albedo && normals) {
         enc_conv0_weight = unet_weights_hdr_alb_nrm::enc_conv0_weight;
-        enc_conv0_weight_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv0_weight) / sizeof(uint16_t);
         enc_conv0_bias = unet_weights_hdr_alb_nrm::enc_conv0_bias;
-        enc_conv0_bias_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv0_bias) / sizeof(uint16_t);
         enc_conv1_weight = unet_weights_hdr_alb_nrm::enc_conv1_weight;
-        enc_conv1_weight_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv1_weight) / sizeof(uint16_t);
         enc_conv1_bias = unet_weights_hdr_alb_nrm::enc_conv1_bias;
-        enc_conv1_bias_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv1_bias) / sizeof(uint16_t);
         enc_conv2_weight = unet_weights_hdr_alb_nrm::enc_conv2_weight;
-        enc_conv2_weight_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv2_weight) / sizeof(uint16_t);
         enc_conv2_bias = unet_weights_hdr_alb_nrm::enc_conv2_bias;
-        enc_conv2_bias_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv2_bias) / sizeof(uint16_t);
         enc_conv3_weight = unet_weights_hdr_alb_nrm::enc_conv3_weight;
-        enc_conv3_weight_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv3_weight) / sizeof(uint16_t);
         enc_conv3_bias = unet_weights_hdr_alb_nrm::enc_conv3_bias;
-        enc_conv3_bias_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv3_bias) / sizeof(uint16_t);
         enc_conv4_weight = unet_weights_hdr_alb_nrm::enc_conv4_weight;
-        enc_conv4_weight_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv4_weight) / sizeof(uint16_t);
         enc_conv4_bias = unet_weights_hdr_alb_nrm::enc_conv4_bias;
-        enc_conv4_bias_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv4_bias) / sizeof(uint16_t);
         enc_conv5a_weight = unet_weights_hdr_alb_nrm::enc_conv5a_weight;
-        enc_conv5a_weight_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv5a_weight) / sizeof(uint16_t);
         enc_conv5a_bias = unet_weights_hdr_alb_nrm::enc_conv5a_bias;
-        enc_conv5a_bias_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv5a_bias) / sizeof(uint16_t);
         enc_conv5b_weight = unet_weights_hdr_alb_nrm::enc_conv5b_weight;
-        enc_conv5b_weight_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv5b_weight) / sizeof(uint16_t);
         enc_conv5b_bias = unet_weights_hdr_alb_nrm::enc_conv5b_bias;
-        enc_conv5b_bias_count = sizeof(unet_weights_hdr_alb_nrm::enc_conv5b_bias) / sizeof(uint16_t);
         dec_conv4a_weight = unet_weights_hdr_alb_nrm::dec_conv4a_weight;
-        dec_conv4a_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv4a_weight) / sizeof(uint16_t);
         dec_conv4a_bias = unet_weights_hdr_alb_nrm::dec_conv4a_bias;
-        dec_conv4a_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv4a_bias) / sizeof(uint16_t);
         dec_conv4b_weight = unet_weights_hdr_alb_nrm::dec_conv4b_weight;
-        dec_conv4b_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv4b_weight) / sizeof(uint16_t);
         dec_conv4b_bias = unet_weights_hdr_alb_nrm::dec_conv4b_bias;
-        dec_conv4b_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv4b_bias) / sizeof(uint16_t);
         dec_conv3a_weight = unet_weights_hdr_alb_nrm::dec_conv3a_weight;
-        dec_conv3a_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv3a_weight) / sizeof(uint16_t);
         dec_conv3a_bias = unet_weights_hdr_alb_nrm::dec_conv3a_bias;
-        dec_conv3a_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv3a_bias) / sizeof(uint16_t);
         dec_conv3b_weight = unet_weights_hdr_alb_nrm::dec_conv3b_weight;
-        dec_conv3b_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv3b_weight) / sizeof(uint16_t);
         dec_conv3b_bias = unet_weights_hdr_alb_nrm::dec_conv3b_bias;
-        dec_conv3b_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv3b_bias) / sizeof(uint16_t);
         dec_conv2a_weight = unet_weights_hdr_alb_nrm::dec_conv2a_weight;
-        dec_conv2a_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv2a_weight) / sizeof(uint16_t);
         dec_conv2a_bias = unet_weights_hdr_alb_nrm::dec_conv2a_bias;
-        dec_conv2a_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv2a_bias) / sizeof(uint16_t);
         dec_conv2b_weight = unet_weights_hdr_alb_nrm::dec_conv2b_weight;
-        dec_conv2b_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv2b_weight) / sizeof(uint16_t);
         dec_conv2b_bias = unet_weights_hdr_alb_nrm::dec_conv2b_bias;
-        dec_conv2b_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv2b_bias) / sizeof(uint16_t);
         dec_conv1a_weight = unet_weights_hdr_alb_nrm::dec_conv1a_weight;
-        dec_conv1a_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv1a_weight) / sizeof(uint16_t);
         dec_conv1a_bias = unet_weights_hdr_alb_nrm::dec_conv1a_bias;
-        dec_conv1a_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv1a_bias) / sizeof(uint16_t);
         dec_conv1b_weight = unet_weights_hdr_alb_nrm::dec_conv1b_weight;
-        dec_conv1b_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv1b_weight) / sizeof(uint16_t);
         dec_conv1b_bias = unet_weights_hdr_alb_nrm::dec_conv1b_bias;
-        dec_conv1b_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv1b_bias) / sizeof(uint16_t);
         dec_conv0_weight = unet_weights_hdr_alb_nrm::dec_conv0_weight;
-        dec_conv0_weight_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv0_weight) / sizeof(uint16_t);
         dec_conv0_bias = unet_weights_hdr_alb_nrm::dec_conv0_bias;
-        dec_conv0_bias_count = sizeof(unet_weights_hdr_alb_nrm::dec_conv0_bias) / sizeof(uint16_t);
     } else if (albedo) {
         enc_conv0_weight = unet_weights_hdr_alb::enc_conv0_weight;
-        enc_conv0_weight_count = sizeof(unet_weights_hdr_alb::enc_conv0_weight) / sizeof(uint16_t);
         enc_conv0_bias = unet_weights_hdr_alb::enc_conv0_bias;
-        enc_conv0_bias_count = sizeof(unet_weights_hdr_alb::enc_conv0_bias) / sizeof(uint16_t);
         enc_conv1_weight = unet_weights_hdr_alb::enc_conv1_weight;
-        enc_conv1_weight_count = sizeof(unet_weights_hdr_alb::enc_conv1_weight) / sizeof(uint16_t);
         enc_conv1_bias = unet_weights_hdr_alb::enc_conv1_bias;
-        enc_conv1_bias_count = sizeof(unet_weights_hdr_alb::enc_conv1_bias) / sizeof(uint16_t);
         enc_conv2_weight = unet_weights_hdr_alb::enc_conv2_weight;
-        enc_conv2_weight_count = sizeof(unet_weights_hdr_alb::enc_conv2_weight) / sizeof(uint16_t);
         enc_conv2_bias = unet_weights_hdr_alb::enc_conv2_bias;
-        enc_conv2_bias_count = sizeof(unet_weights_hdr_alb::enc_conv2_bias) / sizeof(uint16_t);
         enc_conv3_weight = unet_weights_hdr_alb::enc_conv3_weight;
-        enc_conv3_weight_count = sizeof(unet_weights_hdr_alb::enc_conv3_weight) / sizeof(uint16_t);
         enc_conv3_bias = unet_weights_hdr_alb::enc_conv3_bias;
-        enc_conv3_bias_count = sizeof(unet_weights_hdr_alb::enc_conv3_bias) / sizeof(uint16_t);
         enc_conv4_weight = unet_weights_hdr_alb::enc_conv4_weight;
-        enc_conv4_weight_count = sizeof(unet_weights_hdr_alb::enc_conv4_weight) / sizeof(uint16_t);
         enc_conv4_bias = unet_weights_hdr_alb::enc_conv4_bias;
-        enc_conv4_bias_count = sizeof(unet_weights_hdr_alb::enc_conv4_bias) / sizeof(uint16_t);
         enc_conv5a_weight = unet_weights_hdr_alb::enc_conv5a_weight;
-        enc_conv5a_weight_count = sizeof(unet_weights_hdr_alb::enc_conv5a_weight) / sizeof(uint16_t);
         enc_conv5a_bias = unet_weights_hdr_alb::enc_conv5a_bias;
-        enc_conv5a_bias_count = sizeof(unet_weights_hdr_alb::enc_conv5a_bias) / sizeof(uint16_t);
         enc_conv5b_weight = unet_weights_hdr_alb::enc_conv5b_weight;
-        enc_conv5b_weight_count = sizeof(unet_weights_hdr_alb::enc_conv5b_weight) / sizeof(uint16_t);
         enc_conv5b_bias = unet_weights_hdr_alb::enc_conv5b_bias;
-        enc_conv5b_bias_count = sizeof(unet_weights_hdr_alb::enc_conv5b_bias) / sizeof(uint16_t);
         dec_conv4a_weight = unet_weights_hdr_alb::dec_conv4a_weight;
-        dec_conv4a_weight_count = sizeof(unet_weights_hdr_alb::dec_conv4a_weight) / sizeof(uint16_t);
         dec_conv4a_bias = unet_weights_hdr_alb::dec_conv4a_bias;
-        dec_conv4a_bias_count = sizeof(unet_weights_hdr_alb::dec_conv4a_bias) / sizeof(uint16_t);
         dec_conv4b_weight = unet_weights_hdr_alb::dec_conv4b_weight;
-        dec_conv4b_weight_count = sizeof(unet_weights_hdr_alb::dec_conv4b_weight) / sizeof(uint16_t);
         dec_conv4b_bias = unet_weights_hdr_alb::dec_conv4b_bias;
-        dec_conv4b_bias_count = sizeof(unet_weights_hdr_alb::dec_conv4b_bias) / sizeof(uint16_t);
         dec_conv3a_weight = unet_weights_hdr_alb::dec_conv3a_weight;
-        dec_conv3a_weight_count = sizeof(unet_weights_hdr_alb::dec_conv3a_weight) / sizeof(uint16_t);
         dec_conv3a_bias = unet_weights_hdr_alb::dec_conv3a_bias;
-        dec_conv3a_bias_count = sizeof(unet_weights_hdr_alb::dec_conv3a_bias) / sizeof(uint16_t);
         dec_conv3b_weight = unet_weights_hdr_alb::dec_conv3b_weight;
-        dec_conv3b_weight_count = sizeof(unet_weights_hdr_alb::dec_conv3b_weight) / sizeof(uint16_t);
         dec_conv3b_bias = unet_weights_hdr_alb::dec_conv3b_bias;
-        dec_conv3b_bias_count = sizeof(unet_weights_hdr_alb::dec_conv3b_bias) / sizeof(uint16_t);
         dec_conv2a_weight = unet_weights_hdr_alb::dec_conv2a_weight;
-        dec_conv2a_weight_count = sizeof(unet_weights_hdr_alb::dec_conv2a_weight) / sizeof(uint16_t);
         dec_conv2a_bias = unet_weights_hdr_alb::dec_conv2a_bias;
-        dec_conv2a_bias_count = sizeof(unet_weights_hdr_alb::dec_conv2a_bias) / sizeof(uint16_t);
         dec_conv2b_weight = unet_weights_hdr_alb::dec_conv2b_weight;
-        dec_conv2b_weight_count = sizeof(unet_weights_hdr_alb::dec_conv2b_weight) / sizeof(uint16_t);
         dec_conv2b_bias = unet_weights_hdr_alb::dec_conv2b_bias;
-        dec_conv2b_bias_count = sizeof(unet_weights_hdr_alb::dec_conv2b_bias) / sizeof(uint16_t);
         dec_conv1a_weight = unet_weights_hdr_alb::dec_conv1a_weight;
-        dec_conv1a_weight_count = sizeof(unet_weights_hdr_alb::dec_conv1a_weight) / sizeof(uint16_t);
         dec_conv1a_bias = unet_weights_hdr_alb::dec_conv1a_bias;
-        dec_conv1a_bias_count = sizeof(unet_weights_hdr_alb::dec_conv1a_bias) / sizeof(uint16_t);
         dec_conv1b_weight = unet_weights_hdr_alb::dec_conv1b_weight;
-        dec_conv1b_weight_count = sizeof(unet_weights_hdr_alb::dec_conv1b_weight) / sizeof(uint16_t);
         dec_conv1b_bias = unet_weights_hdr_alb::dec_conv1b_bias;
-        dec_conv1b_bias_count = sizeof(unet_weights_hdr_alb::dec_conv1b_bias) / sizeof(uint16_t);
         dec_conv0_weight = unet_weights_hdr_alb::dec_conv0_weight;
-        dec_conv0_weight_count = sizeof(unet_weights_hdr_alb::dec_conv0_weight) / sizeof(uint16_t);
         dec_conv0_bias = unet_weights_hdr_alb::dec_conv0_bias;
-        dec_conv0_bias_count = sizeof(unet_weights_hdr_alb::dec_conv0_bias) / sizeof(uint16_t);
     } else {
         enc_conv0_weight = unet_weights_hdr::enc_conv0_weight;
-        enc_conv0_weight_count = sizeof(unet_weights_hdr::enc_conv0_weight) / sizeof(uint16_t);
         enc_conv0_bias = unet_weights_hdr::enc_conv0_bias;
-        enc_conv0_bias_count = sizeof(unet_weights_hdr::enc_conv0_bias) / sizeof(uint16_t);
         enc_conv1_weight = unet_weights_hdr::enc_conv1_weight;
-        enc_conv1_weight_count = sizeof(unet_weights_hdr::enc_conv1_weight) / sizeof(uint16_t);
         enc_conv1_bias = unet_weights_hdr::enc_conv1_bias;
-        enc_conv1_bias_count = sizeof(unet_weights_hdr::enc_conv1_bias) / sizeof(uint16_t);
         enc_conv2_weight = unet_weights_hdr::enc_conv2_weight;
-        enc_conv2_weight_count = sizeof(unet_weights_hdr::enc_conv2_weight) / sizeof(uint16_t);
         enc_conv2_bias = unet_weights_hdr::enc_conv2_bias;
-        enc_conv2_bias_count = sizeof(unet_weights_hdr::enc_conv2_bias) / sizeof(uint16_t);
         enc_conv3_weight = unet_weights_hdr::enc_conv3_weight;
-        enc_conv3_weight_count = sizeof(unet_weights_hdr::enc_conv3_weight) / sizeof(uint16_t);
         enc_conv3_bias = unet_weights_hdr::enc_conv3_bias;
-        enc_conv3_bias_count = sizeof(unet_weights_hdr::enc_conv3_bias) / sizeof(uint16_t);
         enc_conv4_weight = unet_weights_hdr::enc_conv4_weight;
-        enc_conv4_weight_count = sizeof(unet_weights_hdr::enc_conv4_weight) / sizeof(uint16_t);
         enc_conv4_bias = unet_weights_hdr::enc_conv4_bias;
-        enc_conv4_bias_count = sizeof(unet_weights_hdr::enc_conv4_bias) / sizeof(uint16_t);
         enc_conv5a_weight = unet_weights_hdr::enc_conv5a_weight;
-        enc_conv5a_weight_count = sizeof(unet_weights_hdr::enc_conv5a_weight) / sizeof(uint16_t);
         enc_conv5a_bias = unet_weights_hdr::enc_conv5a_bias;
-        enc_conv5a_bias_count = sizeof(unet_weights_hdr::enc_conv5a_bias) / sizeof(uint16_t);
         enc_conv5b_weight = unet_weights_hdr::enc_conv5b_weight;
-        enc_conv5b_weight_count = sizeof(unet_weights_hdr::enc_conv5b_weight) / sizeof(uint16_t);
         enc_conv5b_bias = unet_weights_hdr::enc_conv5b_bias;
-        enc_conv5b_bias_count = sizeof(unet_weights_hdr::enc_conv5b_bias) / sizeof(uint16_t);
         dec_conv4a_weight = unet_weights_hdr::dec_conv4a_weight;
-        dec_conv4a_weight_count = sizeof(unet_weights_hdr::dec_conv4a_weight) / sizeof(uint16_t);
         dec_conv4a_bias = unet_weights_hdr::dec_conv4a_bias;
-        dec_conv4a_bias_count = sizeof(unet_weights_hdr::dec_conv4a_bias) / sizeof(uint16_t);
         dec_conv4b_weight = unet_weights_hdr::dec_conv4b_weight;
-        dec_conv4b_weight_count = sizeof(unet_weights_hdr::dec_conv4b_weight) / sizeof(uint16_t);
         dec_conv4b_bias = unet_weights_hdr::dec_conv4b_bias;
-        dec_conv4b_bias_count = sizeof(unet_weights_hdr::dec_conv4b_bias) / sizeof(uint16_t);
         dec_conv3a_weight = unet_weights_hdr::dec_conv3a_weight;
-        dec_conv3a_weight_count = sizeof(unet_weights_hdr::dec_conv3a_weight) / sizeof(uint16_t);
         dec_conv3a_bias = unet_weights_hdr::dec_conv3a_bias;
-        dec_conv3a_bias_count = sizeof(unet_weights_hdr::dec_conv3a_bias) / sizeof(uint16_t);
         dec_conv3b_weight = unet_weights_hdr::dec_conv3b_weight;
-        dec_conv3b_weight_count = sizeof(unet_weights_hdr::dec_conv3b_weight) / sizeof(uint16_t);
         dec_conv3b_bias = unet_weights_hdr::dec_conv3b_bias;
-        dec_conv3b_bias_count = sizeof(unet_weights_hdr::dec_conv3b_bias) / sizeof(uint16_t);
         dec_conv2a_weight = unet_weights_hdr::dec_conv2a_weight;
-        dec_conv2a_weight_count = sizeof(unet_weights_hdr::dec_conv2a_weight) / sizeof(uint16_t);
         dec_conv2a_bias = unet_weights_hdr::dec_conv2a_bias;
-        dec_conv2a_bias_count = sizeof(unet_weights_hdr::dec_conv2a_bias) / sizeof(uint16_t);
         dec_conv2b_weight = unet_weights_hdr::dec_conv2b_weight;
-        dec_conv2b_weight_count = sizeof(unet_weights_hdr::dec_conv2b_weight) / sizeof(uint16_t);
         dec_conv2b_bias = unet_weights_hdr::dec_conv2b_bias;
-        dec_conv2b_bias_count = sizeof(unet_weights_hdr::dec_conv2b_bias) / sizeof(uint16_t);
         dec_conv1a_weight = unet_weights_hdr::dec_conv1a_weight;
-        dec_conv1a_weight_count = sizeof(unet_weights_hdr::dec_conv1a_weight) / sizeof(uint16_t);
         dec_conv1a_bias = unet_weights_hdr::dec_conv1a_bias;
-        dec_conv1a_bias_count = sizeof(unet_weights_hdr::dec_conv1a_bias) / sizeof(uint16_t);
         dec_conv1b_weight = unet_weights_hdr::dec_conv1b_weight;
-        dec_conv1b_weight_count = sizeof(unet_weights_hdr::dec_conv1b_weight) / sizeof(uint16_t);
         dec_conv1b_bias = unet_weights_hdr::dec_conv1b_bias;
-        dec_conv1b_bias_count = sizeof(unet_weights_hdr::dec_conv1b_bias) / sizeof(uint16_t);
         dec_conv0_weight = unet_weights_hdr::dec_conv0_weight;
-        dec_conv0_weight_count = sizeof(unet_weights_hdr::dec_conv0_weight) / sizeof(uint16_t);
         dec_conv0_bias = unet_weights_hdr::dec_conv0_bias;
-        dec_conv0_bias_count = sizeof(unet_weights_hdr::dec_conv0_bias) / sizeof(uint16_t);
     }
 
     auto extend = [&](int val, const int in_channels) {
@@ -568,61 +463,62 @@ int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm
 
     const int el_align = (256 / sizeof(T));
 
-    const int total_count =
-        round_up(extend(enc_conv0_weight_count, input_channels), el_align) + round_up(enc_conv0_bias_count, el_align) +
-        round_up(enc_conv1_weight_count, el_align) + round_up(enc_conv1_bias_count, el_align) +
-        round_up(enc_conv2_weight_count, el_align) + round_up(enc_conv2_bias_count, el_align) +
-        round_up(enc_conv3_weight_count, el_align) + round_up(enc_conv3_bias_count, el_align) +
-        round_up(enc_conv4_weight_count, el_align) + round_up(enc_conv4_bias_count, el_align) +
-        round_up(enc_conv5a_weight_count, el_align) + round_up(enc_conv5a_bias_count, el_align) +
-        round_up(enc_conv5b_weight_count, el_align) + round_up(enc_conv5b_bias_count, el_align) +
-        round_up(dec_conv4a_weight_count, el_align) + round_up(dec_conv4a_bias_count, el_align) +
-        round_up(dec_conv4b_weight_count, el_align) + round_up(dec_conv4b_bias_count, el_align) +
-        round_up(dec_conv3a_weight_count, el_align) + round_up(dec_conv3a_bias_count, el_align) +
-        round_up(dec_conv3b_weight_count, el_align) + round_up(dec_conv3b_bias_count, el_align) +
-        round_up(dec_conv2a_weight_count, el_align) + round_up(dec_conv2a_bias_count, el_align) +
-        round_up(dec_conv2b_weight_count, el_align) + round_up(dec_conv2b_bias_count, el_align) +
-        round_up(count2(64, input_channels, 64), el_align) + round_up(dec_conv1a_bias_count, el_align) +
-        round_up(dec_conv1b_weight_count, el_align) + round_up(dec_conv1b_bias_count, el_align) +
-        round_up(dec_conv0_weight_count, el_align) + dec_conv0_bias_count;
+    const int total_count = round_up(extend(enc_conv0_weight.size(), input_channels), el_align) +
+                            round_up(enc_conv0_bias.size(), el_align) + round_up(enc_conv1_weight.size(), el_align) +
+                            round_up(enc_conv1_bias.size(), el_align) + round_up(enc_conv2_weight.size(), el_align) +
+                            round_up(enc_conv2_bias.size(), el_align) + round_up(enc_conv3_weight.size(), el_align) +
+                            round_up(enc_conv3_bias.size(), el_align) + round_up(enc_conv4_weight.size(), el_align) +
+                            round_up(enc_conv4_bias.size(), el_align) + round_up(enc_conv5a_weight.size(), el_align) +
+                            round_up(enc_conv5a_bias.size(), el_align) + round_up(enc_conv5b_weight.size(), el_align) +
+                            round_up(enc_conv5b_bias.size(), el_align) + round_up(dec_conv4a_weight.size(), el_align) +
+                            round_up(dec_conv4a_bias.size(), el_align) + round_up(dec_conv4b_weight.size(), el_align) +
+                            round_up(dec_conv4b_bias.size(), el_align) + round_up(dec_conv3a_weight.size(), el_align) +
+                            round_up(dec_conv3a_bias.size(), el_align) + round_up(dec_conv3b_weight.size(), el_align) +
+                            round_up(dec_conv3b_bias.size(), el_align) + round_up(dec_conv2a_weight.size(), el_align) +
+                            round_up(dec_conv2a_bias.size(), el_align) + round_up(dec_conv2b_weight.size(), el_align) +
+                            round_up(dec_conv2b_bias.size(), el_align) +
+                            round_up(count2(64, input_channels, 64), el_align) +
+                            round_up(dec_conv1a_bias.size(), el_align) + round_up(dec_conv1b_weight.size(), el_align) +
+                            round_up(dec_conv1b_bias.size(), el_align) + round_up(dec_conv0_weight.size(), el_align) +
+                            dec_conv0_bias.size();
 
     if (out_offsets) {
         out_offsets->enc_conv0_weight = 0;
         out_offsets->enc_conv0_bias =
-            out_offsets->enc_conv0_weight + round_up(extend(enc_conv0_weight_count, input_channels), el_align);
-        out_offsets->enc_conv1_weight = out_offsets->enc_conv0_bias + round_up(enc_conv0_bias_count, el_align);
-        out_offsets->enc_conv1_bias = out_offsets->enc_conv1_weight + round_up(enc_conv1_weight_count, el_align);
-        out_offsets->enc_conv2_weight = out_offsets->enc_conv1_bias + round_up(enc_conv1_bias_count, el_align);
-        out_offsets->enc_conv2_bias = out_offsets->enc_conv2_weight + round_up(enc_conv2_weight_count, el_align);
-        out_offsets->enc_conv3_weight = out_offsets->enc_conv2_bias + round_up(enc_conv2_bias_count, el_align);
-        out_offsets->enc_conv3_bias = out_offsets->enc_conv3_weight + round_up(enc_conv3_weight_count, el_align);
-        out_offsets->enc_conv4_weight = out_offsets->enc_conv3_bias + round_up(enc_conv3_bias_count, el_align);
-        out_offsets->enc_conv4_bias = out_offsets->enc_conv4_weight + round_up(enc_conv4_weight_count, el_align);
-        out_offsets->enc_conv5a_weight = out_offsets->enc_conv4_bias + round_up(enc_conv4_bias_count, el_align);
-        out_offsets->enc_conv5a_bias = out_offsets->enc_conv5a_weight + round_up(enc_conv5a_weight_count, el_align);
-        out_offsets->enc_conv5b_weight = out_offsets->enc_conv5a_bias + round_up(enc_conv5a_bias_count, el_align);
-        out_offsets->enc_conv5b_bias = out_offsets->enc_conv5b_weight + round_up(enc_conv5b_weight_count, el_align);
-        out_offsets->dec_conv4a_weight = out_offsets->enc_conv5b_bias + round_up(enc_conv5b_bias_count, el_align);
-        out_offsets->dec_conv4a_bias = out_offsets->dec_conv4a_weight + round_up(dec_conv4a_weight_count, el_align);
-        out_offsets->dec_conv4b_weight = out_offsets->dec_conv4a_bias + round_up(dec_conv4a_bias_count, el_align);
-        out_offsets->dec_conv4b_bias = out_offsets->dec_conv4b_weight + round_up(dec_conv4b_weight_count, el_align);
-        out_offsets->dec_conv3a_weight = out_offsets->dec_conv4b_bias + round_up(dec_conv4b_bias_count, el_align);
-        out_offsets->dec_conv3a_bias = out_offsets->dec_conv3a_weight + round_up(dec_conv3a_weight_count, el_align);
-        out_offsets->dec_conv3b_weight = out_offsets->dec_conv3a_bias + round_up(dec_conv3a_bias_count, el_align);
-        out_offsets->dec_conv3b_bias = out_offsets->dec_conv3b_weight + round_up(dec_conv3b_weight_count, el_align);
-        out_offsets->dec_conv2a_weight = out_offsets->dec_conv3b_bias + round_up(dec_conv3b_bias_count, el_align);
-        out_offsets->dec_conv2a_bias = out_offsets->dec_conv2a_weight + round_up(dec_conv2a_weight_count, el_align);
-        out_offsets->dec_conv2b_weight = out_offsets->dec_conv2a_bias + round_up(dec_conv2a_bias_count, el_align);
-        out_offsets->dec_conv2b_bias = out_offsets->dec_conv2b_weight + round_up(dec_conv2b_weight_count, el_align);
-        out_offsets->dec_conv1a_weight = out_offsets->dec_conv2b_bias + round_up(dec_conv2b_bias_count, el_align);
+            out_offsets->enc_conv0_weight + round_up(extend(enc_conv0_weight.size(), input_channels), el_align);
+        out_offsets->enc_conv1_weight = out_offsets->enc_conv0_bias + round_up(enc_conv0_bias.size(), el_align);
+        out_offsets->enc_conv1_bias = out_offsets->enc_conv1_weight + round_up(enc_conv1_weight.size(), el_align);
+        out_offsets->enc_conv2_weight = out_offsets->enc_conv1_bias + round_up(enc_conv1_bias.size(), el_align);
+        out_offsets->enc_conv2_bias = out_offsets->enc_conv2_weight + round_up(enc_conv2_weight.size(), el_align);
+        out_offsets->enc_conv3_weight = out_offsets->enc_conv2_bias + round_up(enc_conv2_bias.size(), el_align);
+        out_offsets->enc_conv3_bias = out_offsets->enc_conv3_weight + round_up(enc_conv3_weight.size(), el_align);
+        out_offsets->enc_conv4_weight = out_offsets->enc_conv3_bias + round_up(enc_conv3_bias.size(), el_align);
+        out_offsets->enc_conv4_bias = out_offsets->enc_conv4_weight + round_up(enc_conv4_weight.size(), el_align);
+        out_offsets->enc_conv5a_weight = out_offsets->enc_conv4_bias + round_up(enc_conv4_bias.size(), el_align);
+        out_offsets->enc_conv5a_bias = out_offsets->enc_conv5a_weight + round_up(enc_conv5a_weight.size(), el_align);
+        out_offsets->enc_conv5b_weight = out_offsets->enc_conv5a_bias + round_up(enc_conv5a_bias.size(), el_align);
+        out_offsets->enc_conv5b_bias = out_offsets->enc_conv5b_weight + round_up(enc_conv5b_weight.size(), el_align);
+        out_offsets->dec_conv4a_weight = out_offsets->enc_conv5b_bias + round_up(enc_conv5b_bias.size(), el_align);
+        out_offsets->dec_conv4a_bias = out_offsets->dec_conv4a_weight + round_up(dec_conv4a_weight.size(), el_align);
+        out_offsets->dec_conv4b_weight = out_offsets->dec_conv4a_bias + round_up(dec_conv4a_bias.size(), el_align);
+        out_offsets->dec_conv4b_bias = out_offsets->dec_conv4b_weight + round_up(dec_conv4b_weight.size(), el_align);
+        out_offsets->dec_conv3a_weight = out_offsets->dec_conv4b_bias + round_up(dec_conv4b_bias.size(), el_align);
+        out_offsets->dec_conv3a_bias = out_offsets->dec_conv3a_weight + round_up(dec_conv3a_weight.size(), el_align);
+        out_offsets->dec_conv3b_weight = out_offsets->dec_conv3a_bias + round_up(dec_conv3a_bias.size(), el_align);
+        out_offsets->dec_conv3b_bias = out_offsets->dec_conv3b_weight + round_up(dec_conv3b_weight.size(), el_align);
+        out_offsets->dec_conv2a_weight = out_offsets->dec_conv3b_bias + round_up(dec_conv3b_bias.size(), el_align);
+        out_offsets->dec_conv2a_bias = out_offsets->dec_conv2a_weight + round_up(dec_conv2a_weight.size(), el_align);
+        out_offsets->dec_conv2b_weight = out_offsets->dec_conv2a_bias + round_up(dec_conv2a_bias.size(), el_align);
+        out_offsets->dec_conv2b_bias = out_offsets->dec_conv2b_weight + round_up(dec_conv2b_weight.size(), el_align);
+        out_offsets->dec_conv1a_weight = out_offsets->dec_conv2b_bias + round_up(dec_conv2b_bias.size(), el_align);
         out_offsets->dec_conv1a_bias =
             out_offsets->dec_conv1a_weight + round_up(count2(64, input_channels, 64), el_align);
-        out_offsets->dec_conv1b_weight = out_offsets->dec_conv1a_bias + round_up(dec_conv1a_bias_count, el_align);
-        out_offsets->dec_conv1b_bias = out_offsets->dec_conv1b_weight + round_up(dec_conv1b_weight_count, el_align);
-        out_offsets->dec_conv0_weight = out_offsets->dec_conv1b_bias + round_up(dec_conv1b_bias_count, el_align);
-        out_offsets->dec_conv0_bias = out_offsets->dec_conv0_weight + round_up(dec_conv0_weight_count, el_align);
+        out_offsets->dec_conv1b_weight = out_offsets->dec_conv1a_bias + round_up(dec_conv1a_bias.size(), el_align);
+        out_offsets->dec_conv1b_bias = out_offsets->dec_conv1b_weight + round_up(dec_conv1b_weight.size(), el_align);
+        out_offsets->dec_conv0_weight = out_offsets->dec_conv1b_bias + round_up(dec_conv1b_bias.size(), el_align);
+        out_offsets->dec_conv0_bias = out_offsets->dec_conv0_weight + round_up(dec_conv0_weight.size(), el_align);
 
-        assert(out_offsets->dec_conv0_bias + dec_conv0_bias_count == total_count);
+        assert(out_offsets->dec_conv0_bias + dec_conv0_bias.size() == total_count);
         assert((out_offsets->enc_conv0_weight % el_align) == 0 && (out_offsets->enc_conv0_bias % el_align) == 0);
         assert((out_offsets->enc_conv1_weight % el_align) == 0 && (out_offsets->enc_conv1_bias % el_align) == 0);
         assert((out_offsets->enc_conv2_weight % el_align) == 0 && (out_offsets->enc_conv2_bias % el_align) == 0);
@@ -645,133 +541,133 @@ int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm
         std::vector<T> temp;
 
         if (gemm) {
-            for (int i = 0; i < enc_conv0_weight_count; ++i) {
+            for (int i = 0; i < enc_conv0_weight.size(); ++i) {
                 out_weights[out_offsets->enc_conv0_weight + i] = convert_weight<T>(enc_conv0_weight[i]);
             }
         } else {
-            temp.resize(enc_conv0_weight_count);
-            for (int i = 0; i < enc_conv0_weight_count; ++i) {
+            temp.resize(enc_conv0_weight.size());
+            for (int i = 0; i < enc_conv0_weight.size(); ++i) {
                 temp[i] = convert_weight<T>(enc_conv0_weight[i]);
             }
             ReorderWeights_Conv3x3_Direct(temp.data(), input_channels, 32, alignment,
                                           &out_weights[out_offsets->enc_conv0_weight]);
         }
-        for (int i = 0; i < enc_conv0_bias_count; ++i) {
+        for (int i = 0; i < enc_conv0_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv0_bias + i] = convert_weight<T>(enc_conv0_bias[i]);
         }
 
-        temp.resize(enc_conv1_weight_count);
-        for (int i = 0; i < enc_conv1_weight_count; ++i) {
+        temp.resize(enc_conv1_weight.size());
+        for (int i = 0; i < enc_conv1_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv1_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 32, 32, alignment, &out_weights[out_offsets->enc_conv1_weight]);
-        for (int i = 0; i < enc_conv1_bias_count; ++i) {
+        for (int i = 0; i < enc_conv1_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv1_bias + i] = convert_weight<T>(enc_conv1_bias[i]);
         }
 
-        temp.resize(enc_conv2_weight_count);
-        for (int i = 0; i < enc_conv2_weight_count; ++i) {
+        temp.resize(enc_conv2_weight.size());
+        for (int i = 0; i < enc_conv2_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv2_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 32, 48, alignment, &out_weights[out_offsets->enc_conv2_weight]);
-        for (int i = 0; i < enc_conv2_bias_count; ++i) {
+        for (int i = 0; i < enc_conv2_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv2_bias + i] = convert_weight<T>(enc_conv2_bias[i]);
         }
 
-        temp.resize(enc_conv3_weight_count);
-        for (int i = 0; i < enc_conv3_weight_count; ++i) {
+        temp.resize(enc_conv3_weight.size());
+        for (int i = 0; i < enc_conv3_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv3_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 48, 64, alignment, &out_weights[out_offsets->enc_conv3_weight]);
-        for (int i = 0; i < enc_conv3_bias_count; ++i) {
+        for (int i = 0; i < enc_conv3_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv3_bias + i] = convert_weight<T>(enc_conv3_bias[i]);
         }
 
-        temp.resize(enc_conv4_weight_count);
-        for (int i = 0; i < enc_conv4_weight_count; ++i) {
+        temp.resize(enc_conv4_weight.size());
+        for (int i = 0; i < enc_conv4_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv4_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 64, 80, alignment, &out_weights[out_offsets->enc_conv4_weight]);
-        for (int i = 0; i < enc_conv4_bias_count; ++i) {
+        for (int i = 0; i < enc_conv4_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv4_bias + i] = convert_weight<T>(enc_conv4_bias[i]);
         }
 
-        temp.resize(enc_conv5a_weight_count);
-        for (int i = 0; i < enc_conv5a_weight_count; ++i) {
+        temp.resize(enc_conv5a_weight.size());
+        for (int i = 0; i < enc_conv5a_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv5a_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 80, 96, alignment, &out_weights[out_offsets->enc_conv5a_weight]);
-        for (int i = 0; i < enc_conv5a_bias_count; ++i) {
+        for (int i = 0; i < enc_conv5a_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv5a_bias + i] = convert_weight<T>(enc_conv5a_bias[i]);
         }
 
-        temp.resize(enc_conv5b_weight_count);
-        for (int i = 0; i < enc_conv5b_weight_count; ++i) {
+        temp.resize(enc_conv5b_weight.size());
+        for (int i = 0; i < enc_conv5b_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv5b_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 96, 96, alignment, &out_weights[out_offsets->enc_conv5b_weight]);
-        for (int i = 0; i < enc_conv5b_bias_count; ++i) {
+        for (int i = 0; i < enc_conv5b_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv5b_bias + i] = convert_weight<T>(enc_conv5b_bias[i]);
         }
 
-        temp.resize(dec_conv4a_weight_count);
-        for (int i = 0; i < dec_conv4a_weight_count; ++i) {
+        temp.resize(dec_conv4a_weight.size());
+        for (int i = 0; i < dec_conv4a_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv4a_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 96, 64, 112, alignment,
                                       &out_weights[out_offsets->dec_conv4a_weight]);
-        for (int i = 0; i < dec_conv4a_bias_count; ++i) {
+        for (int i = 0; i < dec_conv4a_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv4a_bias + i] = convert_weight<T>(dec_conv4a_bias[i]);
         }
 
-        temp.resize(dec_conv4b_weight_count);
-        for (int i = 0; i < dec_conv4b_weight_count; ++i) {
+        temp.resize(dec_conv4b_weight.size());
+        for (int i = 0; i < dec_conv4b_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv4b_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 112, 112, alignment, &out_weights[out_offsets->dec_conv4b_weight]);
-        for (int i = 0; i < dec_conv4b_bias_count; ++i) {
+        for (int i = 0; i < dec_conv4b_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv4b_bias + i] = convert_weight<T>(dec_conv4b_bias[i]);
         }
 
-        temp.resize(dec_conv3a_weight_count);
-        for (int i = 0; i < dec_conv3a_weight_count; ++i) {
+        temp.resize(dec_conv3a_weight.size());
+        for (int i = 0; i < dec_conv3a_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv3a_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 112, 48, 96, alignment,
                                       &out_weights[out_offsets->dec_conv3a_weight]);
-        for (int i = 0; i < dec_conv3a_bias_count; ++i) {
+        for (int i = 0; i < dec_conv3a_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv3a_bias + i] = convert_weight<T>(dec_conv3a_bias[i]);
         }
 
-        temp.resize(dec_conv3b_weight_count);
-        for (int i = 0; i < dec_conv3b_weight_count; ++i) {
+        temp.resize(dec_conv3b_weight.size());
+        for (int i = 0; i < dec_conv3b_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv3b_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 96, 96, alignment, &out_weights[out_offsets->dec_conv3b_weight]);
-        for (int i = 0; i < dec_conv3b_bias_count; ++i) {
+        for (int i = 0; i < dec_conv3b_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv3b_bias + i] = convert_weight<T>(dec_conv3b_bias[i]);
         }
 
-        temp.resize(dec_conv2a_weight_count);
-        for (int i = 0; i < dec_conv2a_weight_count; ++i) {
+        temp.resize(dec_conv2a_weight.size());
+        for (int i = 0; i < dec_conv2a_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv2a_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 96, 32, 64, alignment, &out_weights[out_offsets->dec_conv2a_weight]);
-        for (int i = 0; i < dec_conv2a_bias_count; ++i) {
+        for (int i = 0; i < dec_conv2a_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv2a_bias + i] = convert_weight<T>(dec_conv2a_bias[i]);
         }
 
-        temp.resize(dec_conv2b_weight_count);
-        for (int i = 0; i < dec_conv2b_weight_count; ++i) {
+        temp.resize(dec_conv2b_weight.size());
+        for (int i = 0; i < dec_conv2b_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv2b_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 64, 64, alignment, &out_weights[out_offsets->dec_conv2b_weight]);
-        for (int i = 0; i < dec_conv2b_bias_count; ++i) {
+        for (int i = 0; i < dec_conv2b_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv2b_bias + i] = convert_weight<T>(dec_conv2b_bias[i]);
         }
 
-        temp.resize(dec_conv1a_weight_count);
-        for (int i = 0; i < dec_conv1a_weight_count; ++i) {
+        temp.resize(dec_conv1a_weight.size());
+        for (int i = 0; i < dec_conv1a_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv1a_weight[i]);
         }
         if (gemm) {
@@ -784,25 +680,25 @@ int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm
             ReorderWeights_Conv3x3_Direct(temp.data(), 64, input_channels, 64, alignment,
                                           &out_weights[out_offsets->dec_conv1a_weight]);
         }
-        for (int i = 0; i < dec_conv1a_bias_count; ++i) {
+        for (int i = 0; i < dec_conv1a_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv1a_bias + i] = convert_weight<T>(dec_conv1a_bias[i]);
         }
 
-        temp.resize(dec_conv1b_weight_count);
-        for (int i = 0; i < dec_conv1b_weight_count; ++i) {
+        temp.resize(dec_conv1b_weight.size());
+        for (int i = 0; i < dec_conv1b_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv1b_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 64, 32, alignment, &out_weights[out_offsets->dec_conv1b_weight]);
-        for (int i = 0; i < dec_conv1b_bias_count; ++i) {
+        for (int i = 0; i < dec_conv1b_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv1b_bias + i] = convert_weight<T>(dec_conv1b_bias[i]);
         }
 
-        temp.resize(dec_conv0_weight_count);
-        for (int i = 0; i < dec_conv0_weight_count; ++i) {
+        temp.resize(dec_conv0_weight.size());
+        for (int i = 0; i < dec_conv0_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv0_weight[i]);
         }
         ReorderWeights_Conv3x3_Direct(temp.data(), 32, 3, alignment, &out_weights[out_offsets->dec_conv0_weight]);
-        for (int i = 0; i < dec_conv0_bias_count; ++i) {
+        for (int i = 0; i < dec_conv0_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv0_bias + i] = convert_weight<T>(dec_conv0_bias[i]);
         }
     }

@@ -198,110 +198,75 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         Shader{"Primary Raygen Adaptive", ctx_.get(), internal_shaders_output_primary_ray_gen_adaptive_comp_spv,
                eShaderType::Comp, log};
     if (use_hwrt_) {
-        sh_intersect_scene_ = Shader{"Intersect Scene (Primary) (HWRT)",
-                                     ctx_.get(),
-                                     use_bindless_ ? internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv
-                                                   : internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv,
-                                     use_bindless_ ? internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv_size
-                                                   : internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv_size,
-                                     eShaderType::Comp,
-                                     log};
+        sh_intersect_scene_ =
+            Shader{"Intersect Scene (Primary) (HWRT)", ctx_.get(),
+                   use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv}
+                                 : Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv},
+                   eShaderType::Comp, log};
     } else {
-        sh_intersect_scene_ = Shader{"Intersect Scene (Primary) (SWRT)",
-                                     ctx_.get(),
-                                     use_bindless_ ? internal_shaders_output_intersect_scene_swrt_bindless_comp_spv
-                                                   : internal_shaders_output_intersect_scene_swrt_atlas_comp_spv,
-                                     use_bindless_ ? internal_shaders_output_intersect_scene_swrt_bindless_comp_spv_size
-                                                   : internal_shaders_output_intersect_scene_swrt_atlas_comp_spv_size,
-                                     eShaderType::Comp,
-                                     log};
+        sh_intersect_scene_ =
+            Shader{"Intersect Scene (Primary) (SWRT)", ctx_.get(),
+                   use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_bindless_comp_spv}
+                                 : Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_atlas_comp_spv},
+                   eShaderType::Comp, log};
     }
 
     if (use_hwrt_) {
-        sh_intersect_scene_indirect_ =
-            Shader{"Intersect Scene (Secondary) (HWRT)",
-                   ctx_.get(),
-                   use_bindless_ ? internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv
-                                 : internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv,
-                   use_bindless_ ? internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv_size
-                                 : internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv_size,
-                   eShaderType::Comp,
-                   log};
+        sh_intersect_scene_indirect_ = Shader{
+            "Intersect Scene (Secondary) (HWRT)", ctx_.get(),
+            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv}
+                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv},
+            eShaderType::Comp, log};
     } else {
-        sh_intersect_scene_indirect_ =
-            Shader{"Intersect Scene (Secondary) (SWRT)",
-                   ctx_.get(),
-                   use_bindless_ ? internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv
-                                 : internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv,
-                   use_bindless_ ? internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv_size
-                                 : internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv_size,
-                   eShaderType::Comp,
-                   log};
+        sh_intersect_scene_indirect_ = Shader{
+            "Intersect Scene (Secondary) (SWRT)", ctx_.get(),
+            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv}
+                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv},
+            eShaderType::Comp, log};
     }
 
     sh_intersect_area_lights_ = Shader{"Intersect Area Lights", ctx_.get(),
                                        internal_shaders_output_intersect_area_lights_comp_spv, eShaderType::Comp, log};
-    sh_shade_primary_ = Shader{"Shade (Primary)",
-                               ctx_.get(),
-                               use_bindless_ ? internal_shaders_output_shade_primary_bindless_comp_spv
-                                             : internal_shaders_output_shade_primary_atlas_comp_spv,
-                               use_bindless_ ? internal_shaders_output_shade_primary_bindless_comp_spv_size
-                                             : internal_shaders_output_shade_primary_atlas_comp_spv_size,
-                               eShaderType::Comp,
-                               log};
-    sh_shade_primary_b_ = Shader{"Shade (Primary) B",
-                                 ctx_.get(),
-                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_b_comp_spv
-                                               : internal_shaders_output_shade_primary_atlas_b_comp_spv,
-                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_b_comp_spv_size
-                                               : internal_shaders_output_shade_primary_atlas_b_comp_spv_size,
-                                 eShaderType::Comp,
-                                 log};
-    sh_shade_primary_n_ = Shader{"Shade (Primary) N",
-                                 ctx_.get(),
-                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_n_comp_spv
-                                               : internal_shaders_output_shade_primary_atlas_n_comp_spv,
-                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_n_comp_spv_size
-                                               : internal_shaders_output_shade_primary_atlas_n_comp_spv_size,
-                                 eShaderType::Comp,
-                                 log};
-    sh_shade_primary_bn_ = Shader{"Shade (Primary) BN",
-                                  ctx_.get(),
-                                  use_bindless_ ? internal_shaders_output_shade_primary_bindless_bn_comp_spv
-                                                : internal_shaders_output_shade_primary_atlas_bn_comp_spv,
-                                  use_bindless_ ? internal_shaders_output_shade_primary_bindless_bn_comp_spv_size
-                                                : internal_shaders_output_shade_primary_atlas_bn_comp_spv_size,
-                                  eShaderType::Comp,
-                                  log};
-    sh_shade_secondary_ = Shader{"Shade (Secondary)",
-                                 ctx_.get(),
-                                 use_bindless_ ? internal_shaders_output_shade_secondary_bindless_comp_spv
-                                               : internal_shaders_output_shade_secondary_atlas_comp_spv,
-                                 use_bindless_ ? internal_shaders_output_shade_secondary_bindless_comp_spv_size
-                                               : internal_shaders_output_shade_secondary_atlas_comp_spv_size,
-                                 eShaderType::Comp,
-                                 log};
+    sh_shade_primary_ =
+        Shader{"Shade (Primary)", ctx_.get(),
+               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_spv}
+                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_spv},
+               eShaderType::Comp, log};
+    sh_shade_primary_b_ =
+        Shader{"Shade (Primary) B", ctx_.get(),
+               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_b_comp_spv}
+                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_b_comp_spv},
+               eShaderType::Comp, log};
+    sh_shade_primary_n_ =
+        Shader{"Shade (Primary) N", ctx_.get(),
+               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_n_comp_spv}
+                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_n_comp_spv},
+               eShaderType::Comp, log};
+    sh_shade_primary_bn_ =
+        Shader{"Shade (Primary) BN", ctx_.get(),
+               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_bn_comp_spv}
+                             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_bn_comp_spv},
+               eShaderType::Comp, log};
+    sh_shade_secondary_ =
+        Shader{"Shade (Secondary)", ctx_.get(),
+               use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_spv}
+                             : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_spv},
+               eShaderType::Comp, log};
 
     if (use_hwrt_) {
-        sh_intersect_scene_shadow_ =
-            Shader{"Intersect Scene (Shadow) (HWRT)",
-                   ctx_.get(),
-                   use_bindless_ ? internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv
-                                 : internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv,
-                   use_bindless_ ? internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv_size
-                                 : internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv_size,
-                   eShaderType::Comp,
-                   log};
+        sh_intersect_scene_shadow_ = Shader{
+            "Intersect Scene (Shadow) (HWRT)", ctx_.get(),
+            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv}
+                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv},
+            eShaderType::Comp, log};
     } else {
-        sh_intersect_scene_shadow_ =
-            Shader{"Intersect Scene (Shadow) (SWRT)",
-                   ctx_.get(),
-                   use_bindless_ ? internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv
-                                 : internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv,
-                   use_bindless_ ? internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv_size
-                                 : internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv_size,
-                   eShaderType::Comp,
-                   log};
+        sh_intersect_scene_shadow_ = Shader{
+            "Intersect Scene (Shadow) (SWRT)",
+            ctx_.get(),
+            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv}
+                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv},
+            eShaderType::Comp,
+            log};
     }
     sh_prepare_indir_args_ = Shader{"Prepare Indir Args", ctx_.get(),
                                     internal_shaders_output_prepare_indir_args_comp_spv, eShaderType::Comp, log};
