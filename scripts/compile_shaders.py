@@ -33,7 +33,7 @@ def do_conversion(content: bytes) -> str:
     hexstr = binascii.hexlify(content).decode("UTF-8")
     hexstr = hexstr.upper()
     array = ["0x" + hexstr[i:i + 2] + "" for i in range(0, len(hexstr), 2)]
-    array = make_sublist_group(array, 64)
+    array = make_sublist_group(array, 1000000)
     ret = "\n    ".join([", ".join(e) + "," for e in array])
     return ret[0:len(ret) - 1]
 
