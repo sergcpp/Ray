@@ -5588,12 +5588,12 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
                                               out_shadow_rays_count, &base_color, &depth_normal);
         out_color[y * img_w + x] = col;
 
-        if (ps.flags & ePassFlags::OutputBaseColor) {
+        { // base color
             auto old_val = Ref::simd_fvec4{out_base_color[y * img_w + x].v, Ref::simd_mem_aligned};
             old_val += (Ref::simd_fvec4{base_color.v, Ref::simd_mem_aligned} - old_val) * mix_factor;
             old_val.store_to(out_base_color[y * img_w + x].v, Ref::simd_mem_aligned);
         }
-        if (ps.flags & ePassFlags::OutputDepthNormals) {
+        { // depth-normals
             auto old_val = Ref::simd_fvec4{out_depth_normal[y * img_w + x].v, Ref::simd_mem_aligned};
             old_val += (Ref::simd_fvec4{depth_normal.v, Ref::simd_mem_aligned} - old_val) * mix_factor;
             old_val.store_to(out_depth_normal[y * img_w + x].v, Ref::simd_mem_aligned);

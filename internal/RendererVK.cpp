@@ -527,84 +527,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     const Ray::camera_t &cam = s->cams_[s->current_cam()._index];
 
-    // allocate aux data on demand
-    if (cam.pass_settings.flags & (Bitmask<ePassFlags>{ePassFlags::OutputBaseColor} | ePassFlags::OutputDepthNormals)) {
-        const int w = final_buf_.params.w, h = final_buf_.params.h;
-
-        Tex2DParams params;
-        params.w = w;
-        params.h = h;
-        params.format = eTexFormat::RawRGBA32F;
-        params.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer | eTexUsageBits::Sampled;
-
-        if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
-            if (!base_color_buf_.ready() || base_color_buf_.params.w != w || base_color_buf_.params.h != h) {
-                base_color_buf_ = {};
-                base_color_buf_ =
-                    Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-                if (base_color_pixels_) {
-                    base_color_readback_buf_.Unmap();
-                    base_color_pixels_ = nullptr;
-                }
-                base_color_readback_buf_ = {};
-                base_color_readback_buf_ = Buffer{"Base Color Readback Buf", ctx_.get(), eBufType::Readback,
-                                                  uint32_t(4 * w * h * sizeof(float))};
-                base_color_pixels_ = (const color_rgba_t *)base_color_readback_buf_.Map(true /* persistent */);
-
-                // Perform initial clear
-                const TransitionInfo img_transitions[] = {{&base_color_buf_, ResStateForClear}};
-                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-                TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-                static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
-                ClearColorImage(base_color_buf_, rgba, cmd_buf);
-                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
-                                      ctx_->temp_command_pool());
-            }
-        } else {
-            base_color_buf_ = {};
-            if (base_color_pixels_) {
-                base_color_readback_buf_.Unmap();
-                base_color_pixels_ = nullptr;
-            }
-            base_color_readback_buf_ = {};
-        }
-        if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
-            if (!depth_normals_buf_.ready() || depth_normals_buf_.params.w != w || depth_normals_buf_.params.h != h) {
-                temp_depth_normals_buf_ = {};
-                temp_depth_normals_buf_ = Texture2D{"Temp Depth-Normals Image", ctx_.get(), params,
-                                                    ctx_->default_memory_allocs(), ctx_->log()};
-                depth_normals_buf_ = {};
-                depth_normals_buf_ =
-                    Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-                if (depth_normals_pixels_) {
-                    depth_normals_readback_buf_.Unmap();
-                    depth_normals_pixels_ = nullptr;
-                }
-                depth_normals_readback_buf_ = {};
-                depth_normals_readback_buf_ = Buffer{"Depth Normals Readback Buf", ctx_.get(), eBufType::Readback,
-                                                     uint32_t(4 * w * h * sizeof(float))};
-                depth_normals_pixels_ = (const color_rgba_t *)depth_normals_readback_buf_.Map(true /* persistent */);
-
-                // Perform initial clear
-                const TransitionInfo img_transitions[] = {{&depth_normals_buf_, ResStateForClear}};
-                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-                TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-                static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
-                ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
-                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
-                                      ctx_->temp_command_pool());
-            }
-        } else {
-            temp_depth_normals_buf_ = {};
-            depth_normals_buf_ = {};
-            if (depth_normals_pixels_) {
-                depth_normals_readback_buf_.Unmap();
-                depth_normals_pixels_ = nullptr;
-            }
-            depth_normals_readback_buf_ = {};
-        }
-    }
-
     // TODO: Use common command buffer for all uploads
     if (cam.filter != filter_table_filter_ || cam.filter_width != filter_table_width_) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -829,16 +751,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
-    Texture2D null_tex;
-    Texture2D &temp_base_color = base_color_buf_.ready() ? temp_buf1_ : null_tex;
-
     { // shade primary hits
         DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_, prim_rays_buf_,
                                 sc_data, random_seq_buf_, rand_seed, region.iteration, rect, s->tex_atlases_,
                                 s->bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_, counters_buf_,
-                                temp_base_color, temp_depth_normals_buf_);
+                                temp_buf1_, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
@@ -943,9 +862,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float main_mix_factor = 1.0f / float((region.iteration + 1) / 2);
         const float aux_mix_factor = 1.0f / float(region.iteration);
 
-        kernel_MixIncremental(cmd_buf, main_mix_factor, aux_mix_factor, rect, region.iteration, temp_buf0_,
-                              temp_base_color, temp_depth_normals_buf_, required_samples_buf_, clean_buf,
-                              base_color_buf_, depth_normals_buf_);
+        kernel_MixIncremental(cmd_buf, main_mix_factor, aux_mix_factor, rect, region.iteration, temp_buf0_, temp_buf1_,
+                              temp_depth_normals_buf_, required_samples_buf_, clean_buf, base_color_buf_,
+                              depth_normals_buf_);
     }
 
     { // output final buffer, prepare variance
@@ -1150,38 +1069,18 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
         r.h = 16 * ((r.h + 15) / 16);
     }
 
-    Buffer *weights = &unet_weights_[0];
-    const unet_weight_offsets_t *offsets = &unet_offsets_[0];
-    if (base_color_buf_.ready() && depth_normals_buf_.ready()) {
-        weights = &unet_weights_[2];
-        offsets = &unet_offsets_[2];
-    } else if (base_color_buf_.ready()) {
-        weights = &unet_weights_[1];
-        offsets = &unet_offsets_[1];
-    }
+    Buffer *weights = &unet_weights_;
+    const unet_weight_offsets_t *offsets = &unet_offsets_;
 
     // NOTE: timings captured for 513x513 resolution on 3080 nvidia
 
     switch (pass) {
     case 0: { // fp32 0.53ms, fp16 0.52ms, nv 0.33ms
         const int output_stride = round_up(w_rounded + 1, 16) + 1;
-        if (base_color_buf_.ready() && depth_normals_buf_.ready()) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Convolution 9 32");
-            kernel_Convolution(cmd_buf, 9, 32, raw_final_buf_, base_color_buf_, depth_normals_buf_,
-                               zero_border_sampler_, r, w_rounded, h_rounded, *weights, offsets->enc_conv0_weight,
-                               offsets->enc_conv0_bias, unet_tensors_heap_, unet_tensors_.enc_conv0_offset,
-                               output_stride);
-        } else if (base_color_buf_.ready()) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Convolution 6 32");
-            kernel_Convolution(cmd_buf, 6, 32, raw_final_buf_, base_color_buf_, {}, zero_border_sampler_, r, w_rounded,
-                               h_rounded, *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias,
-                               unet_tensors_heap_, unet_tensors_.enc_conv0_offset, output_stride);
-        } else {
-            DebugMarker _(ctx_.get(), cmd_buf, "Convolution 3 32");
-            kernel_Convolution(cmd_buf, 3, 32, raw_final_buf_, {}, {}, zero_border_sampler_, r, w_rounded, h_rounded,
-                               *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias, unet_tensors_heap_,
-                               unet_tensors_.enc_conv0_offset, output_stride);
-        }
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 9 32");
+        kernel_Convolution(cmd_buf, 9, 32, raw_final_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
+                           w_rounded, h_rounded, *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias,
+                           unet_tensors_heap_, unet_tensors_.enc_conv0_offset, output_stride);
     } break;
     case 1: { // fp32 2.44ms, fp16 1.96ms, nv 0.61ms
         DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 32 Downscale");
@@ -1345,27 +1244,11 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
     } break;
     case 13: { // fp32 8.72ms, fp16 9.34ms, nv 3.46ms
         const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
-        if (base_color_buf_.ready() && depth_normals_buf_.ready()) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 9 64");
-            kernel_ConvolutionConcat(cmd_buf, 64, 9, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset,
-                                     input_stride, true, raw_final_buf_, base_color_buf_, depth_normals_buf_,
-                                     zero_border_sampler_, r, w_rounded, h_rounded, *weights,
-                                     offsets->dec_conv1a_weight, offsets->dec_conv1a_bias, unet_tensors_heap_,
-                                     unet_tensors_.dec_conv1a_offset, output_stride);
-        } else if (base_color_buf_.ready()) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 6 64");
-            kernel_ConvolutionConcat(cmd_buf, 64, 6, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset,
-                                     input_stride, true, raw_final_buf_, base_color_buf_, {}, zero_border_sampler_, r,
-                                     w_rounded, h_rounded, *weights, offsets->dec_conv1a_weight,
-                                     offsets->dec_conv1a_bias, unet_tensors_heap_, unet_tensors_.dec_conv1a_offset,
-                                     output_stride);
-        } else {
-            DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 3 64");
-            kernel_ConvolutionConcat(cmd_buf, 64, 3, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset,
-                                     input_stride, true, raw_final_buf_, {}, {}, zero_border_sampler_, r, w_rounded,
-                                     h_rounded, *weights, offsets->dec_conv1a_weight, offsets->dec_conv1a_bias,
-                                     unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, output_stride);
-        }
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 9 64");
+        kernel_ConvolutionConcat(cmd_buf, 64, 9, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset, input_stride,
+                                 true, raw_final_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
+                                 w_rounded, h_rounded, *weights, offsets->dec_conv1a_weight, offsets->dec_conv1a_bias,
+                                 unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, output_stride);
     } break;
     case 14: { // fp32 7.88ms, fp16 5.73ms, nv 1.82ms
         DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 32");

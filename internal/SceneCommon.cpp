@@ -96,8 +96,6 @@ void Ray::SceneCommon::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     c.skip_indirect_lighting = (cam.pass_settings.flags & ePassFlags::SkipIndirectLight);
     c.no_background = (cam.pass_settings.flags & ePassFlags::NoBackground);
     c.output_sh = (cam.pass_settings.flags & ePassFlags::OutputSH);
-    c.output_base_color = (cam.pass_settings.flags & ePassFlags::OutputBaseColor);
-    c.output_depth_normals = (cam.pass_settings.flags & ePassFlags::OutputDepthNormals);
 
     c.max_diff_depth = cam.pass_settings.max_diff_depth;
     c.max_spec_depth = cam.pass_settings.max_spec_depth;
@@ -153,12 +151,6 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
     }
     if (c.output_sh) {
         cam.pass_settings.flags |= ePassFlags::OutputSH;
-    }
-    if (c.output_base_color) {
-        cam.pass_settings.flags |= ePassFlags::OutputBaseColor;
-    }
-    if (c.output_depth_normals) {
-        cam.pass_settings.flags |= ePassFlags::OutputDepthNormals;
     }
 
     cam.pass_settings.max_diff_depth = c.max_diff_depth;

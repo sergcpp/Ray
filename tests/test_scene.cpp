@@ -226,8 +226,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 }
 
 template <typename MatDesc>
-void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool output_base_color,
-                      const bool output_normals, const int min_samples, const float variance_threshold,
+void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_samples, const float variance_threshold,
                       const MatDesc &main_mat_desc, const char *textures[], const eTestScene test_scene) {
     { // setup camera
         static const float view_origin_standard[] = {0.16149f, 0.294997f, 0.332965f};
@@ -259,8 +258,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
             cam_desc.clip_end = 0.5f;
         }
         memcpy(&cam_desc.up[0], &view_up[0], 3 * sizeof(float));
-        cam_desc.output_base_color = output_base_color;
-        cam_desc.output_depth_normals = output_normals;
 
         cam_desc.regularize_alpha = 0.0f; // disabled
 
@@ -989,11 +986,10 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const bool out
     scene.Finalize(std::bind(&ThreadPool::ParallelFor<Ray::ParallelForFunction>, &threads, _1, _2, _3));
 }
 
-template void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, bool output_base_color, bool output_normals,
-                               int min_samples, float variance_threshold, const Ray::shading_node_desc_t &main_mat_desc,
-                               const char *textures[], eTestScene test_scene);
-template void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, bool output_base_color, bool output_normals,
-                               int min_samples, float variance_threshold,
+template void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, int min_samples, float variance_threshold,
+                               const Ray::shading_node_desc_t &main_mat_desc, const char *textures[],
+                               eTestScene test_scene);
+template void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, int min_samples, float variance_threshold,
                                const Ray::principled_mat_desc_t &main_mat_desc, const char *textures[],
                                eTestScene test_scene);
 
@@ -1067,8 +1063,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
             job_res.clear();
 
             if (i + std::min(SamplePortion, max_samples - i) == max_samples && denoise != eDenoiseMethod::None) {
-                if (denoise == eDenoiseMethod::NLM || denoise == eDenoiseMethod::NLM_b ||
-                    denoise == eDenoiseMethod::NLM_bn) {
+                if (denoise == eDenoiseMethod::NLM) {
                     for (int j = 0; j < int(region_contexts.size()); ++j) {
                         job_res.push_back(threads.Enqueue(denoise_job_nlm, j));
                     }
@@ -1076,8 +1071,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
                         res.wait();
                     }
                     job_res.clear();
-                } else if (denoise == eDenoiseMethod::UNet || denoise == eDenoiseMethod::UNet_b ||
-                           denoise == eDenoiseMethod::UNet_bn) {
+                } else if (denoise == eDenoiseMethod::UNet) {
                     Ray::unet_filter_properties_t props;
                     renderer.InitUNetFilter(true, props);
 
@@ -1137,12 +1131,11 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
                 fflush(stdout);
             }
         }
-        if (denoise == eDenoiseMethod::NLM || denoise == eDenoiseMethod::NLM_b || denoise == eDenoiseMethod::NLM_bn) {
+        if (denoise == eDenoiseMethod::NLM) {
             for (auto &region : region_contexts) {
                 renderer.DenoiseImage(region);
             }
-        } else if (denoise == eDenoiseMethod::UNet || denoise == eDenoiseMethod::UNet_b ||
-                   denoise == eDenoiseMethod::UNet_bn) {
+        } else if (denoise == eDenoiseMethod::UNet) {
             Ray::unet_filter_properties_t props;
             renderer.InitUNetFilter(true, props);
 

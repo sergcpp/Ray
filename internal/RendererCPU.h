@@ -176,8 +176,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     Ref::tonemap_params_t tonemap_params_;
     float variance_threshold_ = 0.0f;
 
-    aligned_vector<float, 64> unet_weights_[3];
-    unet_weight_offsets_t unet_offsets_[3];
+    aligned_vector<float, 64> unet_weights_;
+    unet_weight_offsets_t unet_offsets_;
     bool unet_alias_memory_ = true;
     aligned_vector<float, 64> unet_tensors_heap_;
     struct {
@@ -230,6 +230,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
                 buf.assign(w * h, {});
                 buf.shrink_to_fit();
             }
+            base_color_buf_.assign(w * h, {});
+            depth_normals_buf_.assign(w * h, {});
             required_samples_.assign(w * h, 0xffff);
             required_samples_.shrink_to_fit();
             temp_buf_.assign(w * h, {});
@@ -400,23 +402,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     }
 
     PassData<SIMDPolicy> &p = get_per_thread_pass_data<SIMDPolicy>();
-
-    // allocate aux data on demand
-    if (cam.pass_settings.flags & (Bitmask<ePassFlags>{ePassFlags::OutputBaseColor} | ePassFlags::OutputDepthNormals)) {
-        // TODO: Skip locking here
-        std::lock_guard<std::mutex> _(mtx_);
-
-        if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
-            base_color_buf_.resize(w_ * h_);
-        } else if (!base_color_buf_.empty()) {
-            base_color_buf_ = {};
-        }
-        if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
-            depth_normals_buf_.resize(w_ * h_);
-        } else if (!depth_normals_buf_.empty()) {
-            depth_normals_buf_ = {};
-        }
-    }
 
     // make sure we will not use stale values
     get_per_thread_BCCache<1>().Invalidate();
@@ -655,16 +640,8 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
     p.temp_final_buf.resize(rect_ext.w * rect_ext.h);
     p.variance_buf.resize(rect_ext.w * rect_ext.h);
     p.filtered_variance_buf.resize(rect_ext.w * rect_ext.h);
-    if (!base_color_buf_.empty()) {
-        p.feature_buf1.resize(rect_ext.w * rect_ext.h);
-    } else {
-        p.feature_buf1 = {};
-    }
-    if (!depth_normals_buf_.empty()) {
-        p.feature_buf2.resize(rect_ext.w * rect_ext.h);
-    } else {
-        p.feature_buf2 = {};
-    }
+    p.feature_buf1.resize(rect_ext.w * rect_ext.h);
+    p.feature_buf2.resize(rect_ext.w * rect_ext.h);
 
 #define FETCH_FINAL_BUF(_x, _y)                                                                                        \
     Ref::simd_fvec4(raw_final_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,      \
@@ -718,12 +695,8 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
             res = max(res, center_val);
             res.store_to(p.filtered_variance_buf[y * rect_ext.w + x].v, Ref::simd_mem_aligned);
 
-            if (!base_color_buf_.empty()) {
-                p.feature_buf1[y * rect_ext.w + x] = FETCH_BASE_COLOR(rect_ext.x + x, rect_ext.y + y);
-            }
-            if (!depth_normals_buf_.empty()) {
-                p.feature_buf2[y * rect_ext.w + x] = FETCH_DEPTH_NORMALS(rect_ext.x + x, rect_ext.y + y);
-            }
+            p.feature_buf1[y * rect_ext.w + x] = FETCH_BASE_COLOR(rect_ext.x + x, rect_ext.y + y);
+            p.feature_buf2[y * rect_ext.w + x] = FETCH_DEPTH_NORMALS(rect_ext.x + x, rect_ext.y + y);
         }
     }
 
@@ -794,35 +767,16 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.h = 16 * ((r.h + 15) / 16);
     }
 
-    const float *weights = unet_weights_[0].data();
-    const unet_weight_offsets_t *offsets = &unet_offsets_[0];
-    if (!base_color_buf_.empty() && !depth_normals_buf_.empty()) {
-        weights = unet_weights_[2].data();
-        offsets = &unet_offsets_[2];
-    } else if (!base_color_buf_.empty()) {
-        weights = unet_weights_[1].data();
-        offsets = &unet_offsets_[1];
-    }
+    const float *weights = unet_weights_.data();
+    const unet_weight_offsets_t *offsets = &unet_offsets_;
 
     switch (pass) {
     case 0: {
-        if (!base_color_buf_.empty() && !depth_normals_buf_.empty()) {
-            SIMDPolicy::template Convolution3x3_GEMM<3, 3, 3, 4, 32, ePreOp::HDRTransfer, ePreOp::None,
-                                                     ePreOp::PositiveNormalize>(
-                &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0], &depth_normals_buf_[0].v[0], r, w_, h_, w_rounded,
-                h_rounded, w_, &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
-                unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
-        } else if (!base_color_buf_.empty()) {
-            SIMDPolicy::template Convolution3x3_GEMM<3, 3, 0, 4, 32, ePreOp::HDRTransfer>(
-                &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0], nullptr, r, w_, h_, w_rounded, h_rounded, w_,
-                &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
-                unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
-        } else {
-            SIMDPolicy::template Convolution3x3_GEMM<3, 0, 0, 4, 32, ePreOp::HDRTransfer>(
-                &raw_final_buf_[0].v[0], nullptr, nullptr, r, w_, h_, w_rounded, h_rounded, w_,
-                &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
-                unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
-        }
+        SIMDPolicy::template Convolution3x3_GEMM<3, 3, 3, 4, 32, ePreOp::HDRTransfer, ePreOp::None,
+                                                 ePreOp::PositiveNormalize>(
+            &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0], &depth_normals_buf_[0].v[0], r, w_, h_, w_rounded,
+            h_rounded, w_, &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
+            unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
         SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 32, unet_tensors_.encConv0);
         break;
     }
@@ -968,27 +922,13 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         break;
     }
     case 13: {
-        if (!base_color_buf_.empty() && !depth_normals_buf_.empty()) {
-            SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upscale,
-                                                                    Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                                                    Ray::ePreOp::PositiveNormalize>(
-                unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0],
-                &depth_normals_buf_[0].v[0], r, w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_,
-                &weights[offsets->dec_conv1a_weight], &weights[offsets->dec_conv1a_bias],
-                unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
-        } else if (!base_color_buf_.empty()) {
-            SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 0, 4, 64, Ray::ePreOp::Upscale,
-                                                                    Ray::ePreOp::HDRTransfer>(
-                unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0],
-                nullptr, r, w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_, &weights[offsets->dec_conv1a_weight],
-                &weights[offsets->dec_conv1a_bias], unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
-        } else {
-            SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 0, 0, 4, 64, Ray::ePreOp::Upscale,
-                                                                    Ray::ePreOp::HDRTransfer>(
-                unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], nullptr, nullptr, r,
-                w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_, &weights[offsets->dec_conv1a_weight],
-                &weights[offsets->dec_conv1a_bias], unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
-        }
+        SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upscale,
+                                                                Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
+                                                                Ray::ePreOp::PositiveNormalize>(
+            unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0],
+            &depth_normals_buf_[0].v[0], r, w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_,
+            &weights[offsets->dec_conv1a_weight], &weights[offsets->dec_conv1a_bias],
+            unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
         SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 64, unet_tensors_.dec_conv1a);
         break;
     }
@@ -1060,21 +1000,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateFilterTable(ePixelFilter filter, floa
 
 template <typename SIMDPolicy>
 void Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(const bool alias_memory, unet_filter_properties_t &out_props) {
-    { // weights for no feature buffers case
-        const int total_count = SetupUNetWeights<float>(false, false, true, 1, nullptr, nullptr);
-        unet_weights_[0].resize(total_count);
-        SetupUNetWeights(false, false, true, 1, &unet_offsets_[0], unet_weights_[0].data());
-    }
-    { // weights for the case if base color is available
-        const int total_count = SetupUNetWeights<float>(true, false, true, 1, nullptr, nullptr);
-        unet_weights_[1].resize(total_count);
-        SetupUNetWeights(true, false, true, 1, &unet_offsets_[1], unet_weights_[1].data());
-    }
-    { // weights for the case if base color and normals is available
-        const int total_count = SetupUNetWeights<float>(true, true, true, 1, nullptr, nullptr);
-        unet_weights_[2].resize(total_count);
-        SetupUNetWeights(true, true, true, 1, &unet_offsets_[2], unet_weights_[2].data());
-    }
+    const int total_count = SetupUNetWeights<float>(true, 1, nullptr, nullptr);
+    unet_weights_.resize(total_count);
+    SetupUNetWeights(true, 1, &unet_offsets_, unet_weights_.data());
 
     unet_alias_memory_ = alias_memory;
     UpdateUNetFilterMemory();
@@ -1090,7 +1018,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(const bool alias_memory, une
 
 template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::UpdateUNetFilterMemory() {
     unet_tensors_heap_ = {};
-    if (unet_weights_[0].empty()) {
+    if (unet_weights_.empty()) {
         return;
     }
 

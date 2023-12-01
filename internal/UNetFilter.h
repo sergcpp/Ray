@@ -46,5 +46,5 @@ int SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_filter_t
                     SmallVector<int, 2> alias_dependencies[]);
 
 template <typename T>
-int SetupUNetWeights(bool albedo, bool normals, bool gemm, int alignment, unet_weight_offsets_t *out_offsets, T out_weights[]);
+int SetupUNetWeights(bool gemm, int alignment, unet_weight_offsets_t *out_offsets, T out_weights[]);
 } // namespace Ray

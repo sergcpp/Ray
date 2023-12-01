@@ -111,8 +111,8 @@ class Renderer : public RendererBase {
     const color_rgba_t *frame_pixels_ = nullptr, *base_color_pixels_ = nullptr, *depth_normals_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
 
-    Buffer unet_weights_[3];
-    unet_weight_offsets_t unet_offsets_[3];
+    Buffer unet_weights_;
+    unet_weight_offsets_t unet_offsets_;
     bool unet_alias_memory_ = true;
     Buffer unet_tensors_heap_;
     unet_filter_tensors_t unet_tensors_ = {};
@@ -325,6 +325,11 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     temp_buf1_ = Texture2D{"Temp Image 1", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     dual_buf_[0] = Texture2D{"Dual Image [0]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     dual_buf_[1] = Texture2D{"Dual Image [1]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    base_color_buf_ = Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    temp_depth_normals_buf_ =
+        Texture2D{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    depth_normals_buf_ =
+        Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     raw_final_buf_ = Texture2D{"Raw Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     raw_filtered_buf_ =
@@ -349,6 +354,13 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     pixel_readback_buf_ = Buffer{"Px Readback Buf", ctx_.get(), eBufType::Readback,
                                  uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
     frame_pixels_ = (const color_rgba_t *)pixel_readback_buf_.Map(true /* persistent */);
+
+    base_color_readback_buf_ = Buffer{"Base Color Stage Buf", ctx_.get(), eBufType::Readback,
+                                      uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
+    base_color_pixels_ = (const color_rgba_t *)base_color_readback_buf_.Map(true /* persistent */);
+    depth_normals_readback_buf_ = Buffer{"Depth Normals Stage Buf", ctx_.get(), eBufType::Readback,
+                                         uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
+    depth_normals_pixels_ = (const color_rgba_t *)depth_normals_readback_buf_.Map(true /* persistent */);
 
     prim_rays_buf_ =
         Buffer{"Primary Rays", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_data_t) * num_pixels)};
@@ -395,14 +407,11 @@ inline void Ray::NS::Renderer::Clear(const color_rgba_t &c) {
     ClearColorImage(final_buf_, c.v, cmd_buf);
     ClearColorImage(raw_final_buf_, c.v, cmd_buf);
     ClearColorImage(raw_filtered_buf_, c.v, cmd_buf);
-    if (base_color_buf_.ready()) {
-        static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
-        ClearColorImage(base_color_buf_, rgba, cmd_buf);
-    }
-    if (depth_normals_buf_.ready()) {
-        static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
-        ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
-    }
+
+    static const float rgba_zero[] = {0.0f, 0.0f, 0.0f, 0.0f};
+    ClearColorImage(base_color_buf_, rgba_zero, cmd_buf);
+    ClearColorImage(depth_normals_buf_, rgba_zero, cmd_buf);
+
     { // Clear integer texture
         static const uint32_t rgba[4] = {0xffff, 0xffff, 0xffff, 0xffff};
         ClearColorImage(required_samples_buf_, rgba, cmd_buf);
@@ -451,99 +460,37 @@ inline void Ray::NS::Renderer::UpdateFilterTable(CommandBuffer cmd_buf, const eP
 inline void Ray::NS::Renderer::InitUNetFilter(const bool alias_memory, unet_filter_properties_t &out_props) {
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-    Buffer temp_upload_bufs[3];
+    Buffer temp_upload_buf;
 
     if (use_fp16_) {
-        { // weights for no feature buffers case
-            const int total_count = SetupUNetWeights<uint16_t>(false, false, false, 8, nullptr, nullptr);
+        const int total_count = SetupUNetWeights<uint16_t>(false, 8, nullptr, nullptr);
 
-            temp_upload_bufs[0] =
-                Buffer{"UNet Weights C Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(uint16_t))};
-            unet_weights_[0] =
-                Buffer{"UNet Weights C", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
+        temp_upload_buf =
+            Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(uint16_t))};
+        unet_weights_ =
+            Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
 
-            uint16_t *out_weights = (uint16_t *)temp_upload_bufs[0].Map();
-            SetupUNetWeights(false, false, false, 8, &unet_offsets_[0], out_weights);
-            temp_upload_bufs[0].Unmap();
+        uint16_t *out_weights = (uint16_t *)temp_upload_buf.Map();
+        SetupUNetWeights(false, 8, &unet_offsets_, out_weights);
+        temp_upload_buf.Unmap();
 
-            CopyBufferToBuffer(temp_upload_bufs[0], 0, unet_weights_[0], 0, sizeof(uint16_t) * total_count, cmd_buf);
-        }
-        { // weights for the case if base color is available
-            const int total_count = SetupUNetWeights<uint16_t>(true, false, false, 8, nullptr, nullptr);
-
-            temp_upload_bufs[1] = Buffer{"UNet Weights CB Upload", ctx_.get(), eBufType::Upload,
-                                         uint32_t(total_count * sizeof(uint16_t))};
-            unet_weights_[1] =
-                Buffer{"UNet Weights CB", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
-
-            uint16_t *out_weights = (uint16_t *)temp_upload_bufs[1].Map();
-            SetupUNetWeights(true, false, false, 8, &unet_offsets_[1], out_weights);
-            temp_upload_bufs[1].Unmap();
-
-            CopyBufferToBuffer(temp_upload_bufs[1], 0, unet_weights_[1], 0, sizeof(uint16_t) * total_count, cmd_buf);
-        }
-        { // weights for the case if base color and normals is available
-            const int total_count = SetupUNetWeights<uint16_t>(true, true, false, 8, nullptr, nullptr);
-
-            temp_upload_bufs[2] = Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload,
-                                         uint32_t(total_count * sizeof(uint16_t))};
-            unet_weights_[2] =
-                Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
-
-            uint16_t *out_weights = (uint16_t *)temp_upload_bufs[2].Map();
-            SetupUNetWeights(true, true, false, 8, &unet_offsets_[2], out_weights);
-            temp_upload_bufs[2].Unmap();
-
-            CopyBufferToBuffer(temp_upload_bufs[2], 0, unet_weights_[2], 0, sizeof(uint16_t) * total_count, cmd_buf);
-        }
+        CopyBufferToBuffer(temp_upload_buf, 0, unet_weights_, 0, sizeof(uint16_t) * total_count, cmd_buf);
     } else {
-        { // weights for no feature buffers case
-            const int total_count = SetupUNetWeights<float>(false, false, false, 8, nullptr, nullptr);
+        const int total_count = SetupUNetWeights<float>(false, 8, nullptr, nullptr);
 
-            temp_upload_bufs[0] =
-                Buffer{"UNet Weights C Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
-            unet_weights_[0] =
-                Buffer{"UNet Weights C", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
+        temp_upload_buf =
+            Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
+        unet_weights_ =
+            Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
 
-            float *out_weights = (float *)temp_upload_bufs[0].Map();
-            SetupUNetWeights(false, false, false, 8, &unet_offsets_[0], out_weights);
-            temp_upload_bufs[0].Unmap();
+        float *out_weights = (float *)temp_upload_buf.Map();
+        SetupUNetWeights(false, 8, &unet_offsets_, out_weights);
+        temp_upload_buf.Unmap();
 
-            CopyBufferToBuffer(temp_upload_bufs[0], 0, unet_weights_[0], 0, sizeof(float) * total_count, cmd_buf);
-        }
-        { // weights for the case if base color is available
-            const int total_count = SetupUNetWeights<float>(true, false, false, 8, nullptr, nullptr);
-
-            temp_upload_bufs[1] =
-                Buffer{"UNet Weights CB Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
-            unet_weights_[1] =
-                Buffer{"UNet Weights CB", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
-
-            float *out_weights = (float *)temp_upload_bufs[1].Map();
-            SetupUNetWeights(true, false, false, 8, &unet_offsets_[1], out_weights);
-            temp_upload_bufs[1].Unmap();
-
-            CopyBufferToBuffer(temp_upload_bufs[1], 0, unet_weights_[1], 0, sizeof(float) * total_count, cmd_buf);
-        }
-        { // weights for the case if base color and normals is available
-            const int total_count = SetupUNetWeights<float>(true, true, false, 8, nullptr, nullptr);
-
-            temp_upload_bufs[2] =
-                Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
-            unet_weights_[2] =
-                Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
-
-            float *out_weights = (float *)temp_upload_bufs[2].Map();
-            SetupUNetWeights(true, true, false, 8, &unet_offsets_[2], out_weights);
-            temp_upload_bufs[2].Unmap();
-
-            CopyBufferToBuffer(temp_upload_bufs[2], 0, unet_weights_[2], 0, sizeof(float) * total_count, cmd_buf);
-        }
+        CopyBufferToBuffer(temp_upload_buf, 0, unet_weights_, 0, sizeof(float) * total_count, cmd_buf);
     }
 
-    const TransitionInfo res_transitions[] = {{&unet_weights_[0], eResState::ShaderResource},
-                                              {&unet_weights_[1], eResState::ShaderResource},
-                                              {&unet_weights_[2], eResState::ShaderResource}};
+    const TransitionInfo res_transitions[] = {{&unet_weights_, eResState::ShaderResource}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     unet_alias_memory_ = alias_memory;
@@ -553,42 +500,40 @@ inline void Ray::NS::Renderer::InitUNetFilter(const bool alias_memory, unet_filt
 
     const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
 
-    for (int i = 0; i < 3; ++i) {
-        temp_upload_bufs[i].FreeImmediate();
+    temp_upload_buf.FreeImmediate();
 
-        unet_offsets_[i].enc_conv0_weight *= el_sz;
-        unet_offsets_[i].enc_conv0_bias *= el_sz;
-        unet_offsets_[i].enc_conv1_weight *= el_sz;
-        unet_offsets_[i].enc_conv1_bias *= el_sz;
-        unet_offsets_[i].enc_conv2_weight *= el_sz;
-        unet_offsets_[i].enc_conv2_bias *= el_sz;
-        unet_offsets_[i].enc_conv3_weight *= el_sz;
-        unet_offsets_[i].enc_conv3_bias *= el_sz;
-        unet_offsets_[i].enc_conv4_weight *= el_sz;
-        unet_offsets_[i].enc_conv4_bias *= el_sz;
-        unet_offsets_[i].enc_conv5a_weight *= el_sz;
-        unet_offsets_[i].enc_conv5a_bias *= el_sz;
-        unet_offsets_[i].enc_conv5b_weight *= el_sz;
-        unet_offsets_[i].enc_conv5b_bias *= el_sz;
-        unet_offsets_[i].dec_conv4a_weight *= el_sz;
-        unet_offsets_[i].dec_conv4a_bias *= el_sz;
-        unet_offsets_[i].dec_conv4b_weight *= el_sz;
-        unet_offsets_[i].dec_conv4b_bias *= el_sz;
-        unet_offsets_[i].dec_conv3a_weight *= el_sz;
-        unet_offsets_[i].dec_conv3a_bias *= el_sz;
-        unet_offsets_[i].dec_conv3b_weight *= el_sz;
-        unet_offsets_[i].dec_conv3b_bias *= el_sz;
-        unet_offsets_[i].dec_conv2a_weight *= el_sz;
-        unet_offsets_[i].dec_conv2a_bias *= el_sz;
-        unet_offsets_[i].dec_conv2b_weight *= el_sz;
-        unet_offsets_[i].dec_conv2b_bias *= el_sz;
-        unet_offsets_[i].dec_conv1a_weight *= el_sz;
-        unet_offsets_[i].dec_conv1a_bias *= el_sz;
-        unet_offsets_[i].dec_conv1b_weight *= el_sz;
-        unet_offsets_[i].dec_conv1b_bias *= el_sz;
-        unet_offsets_[i].dec_conv0_weight *= el_sz;
-        unet_offsets_[i].dec_conv0_bias *= el_sz;
-    }
+    unet_offsets_.enc_conv0_weight *= el_sz;
+    unet_offsets_.enc_conv0_bias *= el_sz;
+    unet_offsets_.enc_conv1_weight *= el_sz;
+    unet_offsets_.enc_conv1_bias *= el_sz;
+    unet_offsets_.enc_conv2_weight *= el_sz;
+    unet_offsets_.enc_conv2_bias *= el_sz;
+    unet_offsets_.enc_conv3_weight *= el_sz;
+    unet_offsets_.enc_conv3_bias *= el_sz;
+    unet_offsets_.enc_conv4_weight *= el_sz;
+    unet_offsets_.enc_conv4_bias *= el_sz;
+    unet_offsets_.enc_conv5a_weight *= el_sz;
+    unet_offsets_.enc_conv5a_bias *= el_sz;
+    unet_offsets_.enc_conv5b_weight *= el_sz;
+    unet_offsets_.enc_conv5b_bias *= el_sz;
+    unet_offsets_.dec_conv4a_weight *= el_sz;
+    unet_offsets_.dec_conv4a_bias *= el_sz;
+    unet_offsets_.dec_conv4b_weight *= el_sz;
+    unet_offsets_.dec_conv4b_bias *= el_sz;
+    unet_offsets_.dec_conv3a_weight *= el_sz;
+    unet_offsets_.dec_conv3a_bias *= el_sz;
+    unet_offsets_.dec_conv3b_weight *= el_sz;
+    unet_offsets_.dec_conv3b_bias *= el_sz;
+    unet_offsets_.dec_conv2a_weight *= el_sz;
+    unet_offsets_.dec_conv2a_bias *= el_sz;
+    unet_offsets_.dec_conv2b_weight *= el_sz;
+    unet_offsets_.dec_conv2b_bias *= el_sz;
+    unet_offsets_.dec_conv1a_weight *= el_sz;
+    unet_offsets_.dec_conv1a_bias *= el_sz;
+    unet_offsets_.dec_conv1b_weight *= el_sz;
+    unet_offsets_.dec_conv1b_bias *= el_sz;
+    unet_offsets_.dec_conv0_weight *= el_sz;
+    unet_offsets_.dec_conv0_bias *= el_sz;
 
     out_props.pass_count = UNetFilterPasses;
     for (int i = 0; i < UNetFilterPasses; ++i) {
@@ -607,7 +552,7 @@ inline void Ray::NS::Renderer::InitUNetFilter(const bool alias_memory, unet_filt
 
 inline void Ray::NS::Renderer::UpdateUNetFilterMemory(CommandBuffer cmd_buf) {
     unet_tensors_heap_ = {};
-    if (!unet_weights_[0]) {
+    if (!unet_weights_) {
         return;
     }
 

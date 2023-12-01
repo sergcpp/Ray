@@ -7872,7 +7872,7 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
                 UNROLLED_FOR(k, 4, {
                     out_color[y.template get<j>() * img_w + x.template get<j>()].v[k] = col[k].template get<j>();
                 })
-                if (ps.flags & ePassFlags::OutputBaseColor) {
+                { // base color
                     auto old_val = simd_fvec4(out_base_color[y.template get<j>() * img_w + x.template get<j>()].v,
                                               simd_mem_aligned);
                     old_val += (simd_fvec4{base_color[0].template get<j>(), base_color[1].template get<j>(),
@@ -7882,7 +7882,7 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
                     old_val.store_to(out_base_color[y.template get<j>() * img_w + x.template get<j>()].v,
                                      simd_mem_aligned);
                 }
-                if (ps.flags & ePassFlags::OutputDepthNormals) {
+                { // depth-normals
                     auto old_val = simd_fvec4(out_depth_normals[y.template get<j>() * img_w + x.template get<j>()].v,
                                               simd_mem_aligned);
                     old_val += (simd_fvec4{depth_normal[0].template get<j>(), depth_normal[1].template get<j>(),

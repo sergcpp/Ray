@@ -27,7 +27,7 @@ enum class eTestScene {
     Ray_Flags
 };
 
-enum class eDenoiseMethod { None, NLM, NLM_b, NLM_bn, UNet, UNet_b, UNet_bn };
+enum class eDenoiseMethod { None, NLM, UNet };
 
 class ThreadPool;
 
@@ -74,9 +74,8 @@ class LogErr final : public Ray::ILog {
 extern LogErr g_log_err;
 
 template <typename MatDesc>
-void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, bool output_base_color, bool output_normals,
-                      int min_samples, float variance_threshold, const MatDesc &main_mat_desc, const char *textures[],
-                      eTestScene test_scene);
+void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, int min_samples, float variance_threshold,
+                      const MatDesc &main_mat_desc, const char *textures[], eTestScene test_scene);
 
 void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, const Ray::SceneBase *scene,
                           const Ray::settings_t &settings, int max_samples, eDenoiseMethod denoise, bool partial,

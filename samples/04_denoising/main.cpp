@@ -121,9 +121,6 @@ int main() {
     memcpy(&cam_desc.fwd[0], &view_dir[0], 3 * sizeof(float));
     cam_desc.fov = 45.0f;
     cam_desc.gamma = 2.2f;
-    // Output additional channels to help denoiser
-    cam_desc.output_base_color = true;
-    cam_desc.output_depth_normals = true;
 
     const Ray::CameraHandle cam = scene->AddCamera(cam_desc);
     scene->set_current_cam(cam);

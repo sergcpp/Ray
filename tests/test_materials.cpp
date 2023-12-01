@@ -79,12 +79,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
                 auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
-                const bool output_base_color =
-                    (denoise == eDenoiseMethod::NLM_b || denoise == eDenoiseMethod::NLM_bn ||
-                     denoise == eDenoiseMethod::UNet_b || denoise == eDenoiseMethod::UNet_bn);
-                const bool output_normals = (denoise == eDenoiseMethod::NLM_bn || denoise == eDenoiseMethod::UNet_bn);
-                setup_test_scene(threads, *scene, output_base_color, output_normals, min_sample_count,
-                                 variance_threshold, mat_desc, textures, test_scene);
+                setup_test_scene(threads, *scene, min_sample_count, variance_threshold, mat_desc, textures, test_scene);
 
                 snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
                 schedule_render_jobs(threads, *renderer, scene.get(), s, current_sample_count, denoise, partial,
@@ -212,12 +207,9 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat6_hdr_light"},
         {"complex_mat5_regions", "complex_mat5_dof", "complex_mat5_spot_light", "complex_mat6_dof",
          "complex_mat6_spot_light"},
-        {"refr_mis2", "complex_mat5_nlm_filter_bn", "complex_mat5_adaptive", "complex_mat5_clipped",
-         "complex_mat6_nlm_filter_bn"},
-        {"complex_mat5_nlm_filter", "complex_mat5_nlm_filter_b", "complex_mat5_unet_filter",
-         "complex_mat5_unet_filter_b", "complex_mat5_unet_filter_bn"},
-        {"complex_mat6_nlm_filter", "complex_mat6_nlm_filter_b", "complex_mat6_unet_filter_b",
-         "complex_mat6_unet_filter_bn"},
+        {"refr_mis2", "complex_mat5_nlm_filter", "complex_mat5_adaptive", "complex_mat5_clipped",
+         "complex_mat6_nlm_filter"},
+        {"complex_mat5_unet_filter", "complex_mat6_unet_filter"},
         {"complex_mat5_dir_light", "complex_mat6_dir_light", "complex_mat5_moon_light", "complex_mat6_moon_light"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
@@ -1417,8 +1409,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_material_test(arch_list, preferred_device, "complex_mat5_adaptive", metal_mat_desc, MinSampleCount,
-                      MaxSampleCount, VarianceThreshold, FastMinPSNR, PixThres, eDenoiseMethod::NLM_bn, false,
-                      textures);
+                      MaxSampleCount, VarianceThreshold, FastMinPSNR, PixThres, eDenoiseMethod::NLM, false, textures);
 }
 
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
@@ -1443,8 +1434,8 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
 }
 
 void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 23;
-    const int PixThres = 2093;
+    const int SampleCount = 15;
+    const int PixThres = 2046;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1463,91 +1454,7 @@ void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred
                       PixThres, eDenoiseMethod::NLM, false, textures);
 }
 
-void test_complex_mat5_nlm_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 17;
-    const int PixThres = 2035;
-
-    Ray::principled_mat_desc_t metal_mat_desc;
-    metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.roughness = 1.0f;
-    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
-    metal_mat_desc.normal_map = Ray::TextureHandle{1};
-
-    const char *textures[] = {
-        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
-        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
-
-    run_material_test(arch_list, preferred_device, "complex_mat5_nlm_filter_b", metal_mat_desc, SampleCount,
-                      FastMinPSNR, PixThres, eDenoiseMethod::NLM_b, false, textures);
-}
-
-void test_complex_mat5_nlm_filter_bn(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 15;
-    const int PixThres = 2046;
-
-    Ray::principled_mat_desc_t metal_mat_desc;
-    metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.roughness = 1.0f;
-    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
-    metal_mat_desc.normal_map = Ray::TextureHandle{1};
-
-    const char *textures[] = {
-        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
-        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
-
-    run_material_test(arch_list, preferred_device, "complex_mat5_nlm_filter_bn", metal_mat_desc, SampleCount,
-                      FastMinPSNR, PixThres, eDenoiseMethod::NLM_bn, false, textures);
-}
-
 void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 32;
-    const int PixThres = 1143;
-
-    Ray::principled_mat_desc_t metal_mat_desc;
-    metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.roughness = 1.0f;
-    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
-    metal_mat_desc.normal_map = Ray::TextureHandle{1};
-
-    const char *textures[] = {
-        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
-        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
-
-    run_material_test(arch_list, preferred_device, "complex_mat5_unet_filter", metal_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::UNet, false, textures);
-}
-
-void test_complex_mat5_unet_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 21;
-    const int PixThres = 1147;
-
-    Ray::principled_mat_desc_t metal_mat_desc;
-    metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.roughness = 1.0f;
-    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
-    metal_mat_desc.normal_map = Ray::TextureHandle{1};
-
-    const char *textures[] = {
-        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
-        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
-
-    run_material_test(arch_list, preferred_device, "complex_mat5_unet_filter_b", metal_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::UNet_b, false, textures);
-}
-
-void test_complex_mat5_unet_filter_bn(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 22;
     const int PixThres = 1180;
 
@@ -1564,8 +1471,8 @@ void test_complex_mat5_unet_filter_bn(const char *arch_list[], const char *prefe
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_unet_filter_bn", metal_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::UNet_bn, false, textures);
+    run_material_test(arch_list, preferred_device, "complex_mat5_unet_filter", metal_mat_desc, SampleCount,
+                      DefaultMinPSNR, PixThres, eDenoiseMethod::UNet, false, textures);
 }
 
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
@@ -1760,8 +1667,8 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 14;
-    const int PixThres = 1978;
+    const int SampleCount = 9;
+    const int PixThres = 1725;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1775,71 +1682,7 @@ void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred
                       VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM);
 }
 
-void test_complex_mat6_nlm_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 10;
-    const int PixThres = 1761;
-
-    Ray::principled_mat_desc_t olive_mat_desc;
-    olive_mat_desc.base_color[0] = 0.836164f;
-    olive_mat_desc.base_color[1] = 0.836164f;
-    olive_mat_desc.base_color[2] = 0.656603f;
-    olive_mat_desc.roughness = 0.041667f;
-    olive_mat_desc.transmission = 1.0f;
-    olive_mat_desc.ior = 2.3f;
-
-    run_material_test(arch_list, preferred_device, "complex_mat6_nlm_filter_b", olive_mat_desc, SampleCount,
-                      VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM_b);
-}
-
-void test_complex_mat6_nlm_filter_bn(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 9;
-    const int PixThres = 1725;
-
-    Ray::principled_mat_desc_t olive_mat_desc;
-    olive_mat_desc.base_color[0] = 0.836164f;
-    olive_mat_desc.base_color[1] = 0.836164f;
-    olive_mat_desc.base_color[2] = 0.656603f;
-    olive_mat_desc.roughness = 0.041667f;
-    olive_mat_desc.transmission = 1.0f;
-    olive_mat_desc.ior = 2.3f;
-
-    run_material_test(arch_list, preferred_device, "complex_mat6_nlm_filter_bn", olive_mat_desc, SampleCount,
-                      VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM_bn);
-}
-
 void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 34;
-    const int PixThres = 1012;
-
-    Ray::principled_mat_desc_t olive_mat_desc;
-    olive_mat_desc.base_color[0] = 0.836164f;
-    olive_mat_desc.base_color[1] = 0.836164f;
-    olive_mat_desc.base_color[2] = 0.656603f;
-    olive_mat_desc.roughness = 0.041667f;
-    olive_mat_desc.transmission = 1.0f;
-    olive_mat_desc.ior = 2.3f;
-
-    run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter", olive_mat_desc, SampleCount, FastMinPSNR,
-                      PixThres, eDenoiseMethod::UNet);
-}
-
-void test_complex_mat6_unet_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 23;
-    const int PixThres = 942;
-
-    Ray::principled_mat_desc_t olive_mat_desc;
-    olive_mat_desc.base_color[0] = 0.836164f;
-    olive_mat_desc.base_color[1] = 0.836164f;
-    olive_mat_desc.base_color[2] = 0.656603f;
-    olive_mat_desc.roughness = 0.041667f;
-    olive_mat_desc.transmission = 1.0f;
-    olive_mat_desc.ior = 2.3f;
-
-    run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter_b", olive_mat_desc, SampleCount,
-                      FastMinPSNR, PixThres, eDenoiseMethod::UNet_b);
-}
-
-void test_complex_mat6_unet_filter_bn(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 27;
     const int PixThres = 948;
 
@@ -1851,8 +1694,8 @@ void test_complex_mat6_unet_filter_bn(const char *arch_list[], const char *prefe
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter_bn", olive_mat_desc, SampleCount,
-                      FastMinPSNR, PixThres, eDenoiseMethod::UNet_bn);
+    run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter", olive_mat_desc, SampleCount, FastMinPSNR,
+                      PixThres, eDenoiseMethod::UNet);
 }
 
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {

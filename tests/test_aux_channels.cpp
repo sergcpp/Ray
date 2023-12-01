@@ -89,7 +89,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
             auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
-            setup_test_scene(threads, *scene, true, true, -1, 0.0f, mat_desc, textures, eTestScene::Standard);
+            setup_test_scene(threads, *scene, -1, 0.0f, mat_desc, textures, eTestScene::Standard);
 
             char name_buf[1024];
             snprintf(name_buf, sizeof(name_buf), "Test %s", TestName);

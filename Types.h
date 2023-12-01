@@ -84,9 +84,7 @@ enum class ePassFlags : uint8_t {
     SkipIndirectLight,
     LightingOnly,
     NoBackground,
-    OutputSH,
-    OutputBaseColor,
-    OutputDepthNormals
+    OutputSH
 };
 
 struct pass_settings_t {

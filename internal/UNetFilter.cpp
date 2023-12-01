@@ -7,12 +7,7 @@
 namespace Ray {
 float f16_to_f32(uint16_t h);
 int round_up(int v, int align);
-namespace unet_weights_hdr {
-#include "precomputed/__oidn_weights_hdr.inl"
-}
-namespace unet_weights_hdr_alb {
-#include "precomputed/__oidn_weights_hdr_alb.inl"
-}
+
 namespace unet_weights_hdr_alb_nrm {
 #include "precomputed/__oidn_weights_hdr_alb_nrm.inl"
 }
@@ -333,115 +328,39 @@ int Ray::SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_fil
 }
 
 template <typename T>
-int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm, const int alignment,
-                          unet_weight_offsets_t *out_offsets, T out_weights[]) {
-    Span<const uint16_t> enc_conv0_weight, enc_conv0_bias, enc_conv1_weight, enc_conv1_bias, enc_conv2_weight,
-        enc_conv2_bias, enc_conv3_weight, enc_conv3_bias, enc_conv4_weight, enc_conv4_bias, enc_conv5a_weight,
-        enc_conv5a_bias, enc_conv5b_weight, enc_conv5b_bias, dec_conv4a_weight, dec_conv4a_bias, dec_conv4b_weight,
-        dec_conv4b_bias, dec_conv3a_weight, dec_conv3a_bias, dec_conv3b_weight, dec_conv3b_bias, dec_conv2a_weight,
-        dec_conv2a_bias, dec_conv2b_weight, dec_conv2b_bias, dec_conv1a_weight, dec_conv1a_bias, dec_conv1b_weight,
-        dec_conv1b_bias, dec_conv0_weight, dec_conv0_bias;
-
-    if (albedo && normals) {
-        enc_conv0_weight = unet_weights_hdr_alb_nrm::enc_conv0_weight;
-        enc_conv0_bias = unet_weights_hdr_alb_nrm::enc_conv0_bias;
-        enc_conv1_weight = unet_weights_hdr_alb_nrm::enc_conv1_weight;
-        enc_conv1_bias = unet_weights_hdr_alb_nrm::enc_conv1_bias;
-        enc_conv2_weight = unet_weights_hdr_alb_nrm::enc_conv2_weight;
-        enc_conv2_bias = unet_weights_hdr_alb_nrm::enc_conv2_bias;
-        enc_conv3_weight = unet_weights_hdr_alb_nrm::enc_conv3_weight;
-        enc_conv3_bias = unet_weights_hdr_alb_nrm::enc_conv3_bias;
-        enc_conv4_weight = unet_weights_hdr_alb_nrm::enc_conv4_weight;
-        enc_conv4_bias = unet_weights_hdr_alb_nrm::enc_conv4_bias;
-        enc_conv5a_weight = unet_weights_hdr_alb_nrm::enc_conv5a_weight;
-        enc_conv5a_bias = unet_weights_hdr_alb_nrm::enc_conv5a_bias;
-        enc_conv5b_weight = unet_weights_hdr_alb_nrm::enc_conv5b_weight;
-        enc_conv5b_bias = unet_weights_hdr_alb_nrm::enc_conv5b_bias;
-        dec_conv4a_weight = unet_weights_hdr_alb_nrm::dec_conv4a_weight;
-        dec_conv4a_bias = unet_weights_hdr_alb_nrm::dec_conv4a_bias;
-        dec_conv4b_weight = unet_weights_hdr_alb_nrm::dec_conv4b_weight;
-        dec_conv4b_bias = unet_weights_hdr_alb_nrm::dec_conv4b_bias;
-        dec_conv3a_weight = unet_weights_hdr_alb_nrm::dec_conv3a_weight;
-        dec_conv3a_bias = unet_weights_hdr_alb_nrm::dec_conv3a_bias;
-        dec_conv3b_weight = unet_weights_hdr_alb_nrm::dec_conv3b_weight;
-        dec_conv3b_bias = unet_weights_hdr_alb_nrm::dec_conv3b_bias;
-        dec_conv2a_weight = unet_weights_hdr_alb_nrm::dec_conv2a_weight;
-        dec_conv2a_bias = unet_weights_hdr_alb_nrm::dec_conv2a_bias;
-        dec_conv2b_weight = unet_weights_hdr_alb_nrm::dec_conv2b_weight;
-        dec_conv2b_bias = unet_weights_hdr_alb_nrm::dec_conv2b_bias;
-        dec_conv1a_weight = unet_weights_hdr_alb_nrm::dec_conv1a_weight;
-        dec_conv1a_bias = unet_weights_hdr_alb_nrm::dec_conv1a_bias;
-        dec_conv1b_weight = unet_weights_hdr_alb_nrm::dec_conv1b_weight;
-        dec_conv1b_bias = unet_weights_hdr_alb_nrm::dec_conv1b_bias;
-        dec_conv0_weight = unet_weights_hdr_alb_nrm::dec_conv0_weight;
-        dec_conv0_bias = unet_weights_hdr_alb_nrm::dec_conv0_bias;
-    } else if (albedo) {
-        enc_conv0_weight = unet_weights_hdr_alb::enc_conv0_weight;
-        enc_conv0_bias = unet_weights_hdr_alb::enc_conv0_bias;
-        enc_conv1_weight = unet_weights_hdr_alb::enc_conv1_weight;
-        enc_conv1_bias = unet_weights_hdr_alb::enc_conv1_bias;
-        enc_conv2_weight = unet_weights_hdr_alb::enc_conv2_weight;
-        enc_conv2_bias = unet_weights_hdr_alb::enc_conv2_bias;
-        enc_conv3_weight = unet_weights_hdr_alb::enc_conv3_weight;
-        enc_conv3_bias = unet_weights_hdr_alb::enc_conv3_bias;
-        enc_conv4_weight = unet_weights_hdr_alb::enc_conv4_weight;
-        enc_conv4_bias = unet_weights_hdr_alb::enc_conv4_bias;
-        enc_conv5a_weight = unet_weights_hdr_alb::enc_conv5a_weight;
-        enc_conv5a_bias = unet_weights_hdr_alb::enc_conv5a_bias;
-        enc_conv5b_weight = unet_weights_hdr_alb::enc_conv5b_weight;
-        enc_conv5b_bias = unet_weights_hdr_alb::enc_conv5b_bias;
-        dec_conv4a_weight = unet_weights_hdr_alb::dec_conv4a_weight;
-        dec_conv4a_bias = unet_weights_hdr_alb::dec_conv4a_bias;
-        dec_conv4b_weight = unet_weights_hdr_alb::dec_conv4b_weight;
-        dec_conv4b_bias = unet_weights_hdr_alb::dec_conv4b_bias;
-        dec_conv3a_weight = unet_weights_hdr_alb::dec_conv3a_weight;
-        dec_conv3a_bias = unet_weights_hdr_alb::dec_conv3a_bias;
-        dec_conv3b_weight = unet_weights_hdr_alb::dec_conv3b_weight;
-        dec_conv3b_bias = unet_weights_hdr_alb::dec_conv3b_bias;
-        dec_conv2a_weight = unet_weights_hdr_alb::dec_conv2a_weight;
-        dec_conv2a_bias = unet_weights_hdr_alb::dec_conv2a_bias;
-        dec_conv2b_weight = unet_weights_hdr_alb::dec_conv2b_weight;
-        dec_conv2b_bias = unet_weights_hdr_alb::dec_conv2b_bias;
-        dec_conv1a_weight = unet_weights_hdr_alb::dec_conv1a_weight;
-        dec_conv1a_bias = unet_weights_hdr_alb::dec_conv1a_bias;
-        dec_conv1b_weight = unet_weights_hdr_alb::dec_conv1b_weight;
-        dec_conv1b_bias = unet_weights_hdr_alb::dec_conv1b_bias;
-        dec_conv0_weight = unet_weights_hdr_alb::dec_conv0_weight;
-        dec_conv0_bias = unet_weights_hdr_alb::dec_conv0_bias;
-    } else {
-        enc_conv0_weight = unet_weights_hdr::enc_conv0_weight;
-        enc_conv0_bias = unet_weights_hdr::enc_conv0_bias;
-        enc_conv1_weight = unet_weights_hdr::enc_conv1_weight;
-        enc_conv1_bias = unet_weights_hdr::enc_conv1_bias;
-        enc_conv2_weight = unet_weights_hdr::enc_conv2_weight;
-        enc_conv2_bias = unet_weights_hdr::enc_conv2_bias;
-        enc_conv3_weight = unet_weights_hdr::enc_conv3_weight;
-        enc_conv3_bias = unet_weights_hdr::enc_conv3_bias;
-        enc_conv4_weight = unet_weights_hdr::enc_conv4_weight;
-        enc_conv4_bias = unet_weights_hdr::enc_conv4_bias;
-        enc_conv5a_weight = unet_weights_hdr::enc_conv5a_weight;
-        enc_conv5a_bias = unet_weights_hdr::enc_conv5a_bias;
-        enc_conv5b_weight = unet_weights_hdr::enc_conv5b_weight;
-        enc_conv5b_bias = unet_weights_hdr::enc_conv5b_bias;
-        dec_conv4a_weight = unet_weights_hdr::dec_conv4a_weight;
-        dec_conv4a_bias = unet_weights_hdr::dec_conv4a_bias;
-        dec_conv4b_weight = unet_weights_hdr::dec_conv4b_weight;
-        dec_conv4b_bias = unet_weights_hdr::dec_conv4b_bias;
-        dec_conv3a_weight = unet_weights_hdr::dec_conv3a_weight;
-        dec_conv3a_bias = unet_weights_hdr::dec_conv3a_bias;
-        dec_conv3b_weight = unet_weights_hdr::dec_conv3b_weight;
-        dec_conv3b_bias = unet_weights_hdr::dec_conv3b_bias;
-        dec_conv2a_weight = unet_weights_hdr::dec_conv2a_weight;
-        dec_conv2a_bias = unet_weights_hdr::dec_conv2a_bias;
-        dec_conv2b_weight = unet_weights_hdr::dec_conv2b_weight;
-        dec_conv2b_bias = unet_weights_hdr::dec_conv2b_bias;
-        dec_conv1a_weight = unet_weights_hdr::dec_conv1a_weight;
-        dec_conv1a_bias = unet_weights_hdr::dec_conv1a_bias;
-        dec_conv1b_weight = unet_weights_hdr::dec_conv1b_weight;
-        dec_conv1b_bias = unet_weights_hdr::dec_conv1b_bias;
-        dec_conv0_weight = unet_weights_hdr::dec_conv0_weight;
-        dec_conv0_bias = unet_weights_hdr::dec_conv0_bias;
-    }
+int Ray::SetupUNetWeights(const bool gemm, const int alignment, unet_weight_offsets_t *out_offsets, T out_weights[]) {
+    Span<const uint16_t> enc_conv0_weight = unet_weights_hdr_alb_nrm::enc_conv0_weight,
+                         enc_conv0_bias = unet_weights_hdr_alb_nrm::enc_conv0_bias,
+                         enc_conv1_weight = unet_weights_hdr_alb_nrm::enc_conv1_weight,
+                         enc_conv1_bias = unet_weights_hdr_alb_nrm::enc_conv1_bias,
+                         enc_conv2_weight = unet_weights_hdr_alb_nrm::enc_conv2_weight,
+                         enc_conv2_bias = unet_weights_hdr_alb_nrm::enc_conv2_bias,
+                         enc_conv3_weight = unet_weights_hdr_alb_nrm::enc_conv3_weight,
+                         enc_conv3_bias = unet_weights_hdr_alb_nrm::enc_conv3_bias,
+                         enc_conv4_weight = unet_weights_hdr_alb_nrm::enc_conv4_weight,
+                         enc_conv4_bias = unet_weights_hdr_alb_nrm::enc_conv4_bias,
+                         enc_conv5a_weight = unet_weights_hdr_alb_nrm::enc_conv5a_weight,
+                         enc_conv5a_bias = unet_weights_hdr_alb_nrm::enc_conv5a_bias,
+                         enc_conv5b_weight = unet_weights_hdr_alb_nrm::enc_conv5b_weight,
+                         enc_conv5b_bias = unet_weights_hdr_alb_nrm::enc_conv5b_bias,
+                         dec_conv4a_weight = unet_weights_hdr_alb_nrm::dec_conv4a_weight,
+                         dec_conv4a_bias = unet_weights_hdr_alb_nrm::dec_conv4a_bias,
+                         dec_conv4b_weight = unet_weights_hdr_alb_nrm::dec_conv4b_weight,
+                         dec_conv4b_bias = unet_weights_hdr_alb_nrm::dec_conv4b_bias,
+                         dec_conv3a_weight = unet_weights_hdr_alb_nrm::dec_conv3a_weight,
+                         dec_conv3a_bias = unet_weights_hdr_alb_nrm::dec_conv3a_bias,
+                         dec_conv3b_weight = unet_weights_hdr_alb_nrm::dec_conv3b_weight,
+                         dec_conv3b_bias = unet_weights_hdr_alb_nrm::dec_conv3b_bias,
+                         dec_conv2a_weight = unet_weights_hdr_alb_nrm::dec_conv2a_weight,
+                         dec_conv2a_bias = unet_weights_hdr_alb_nrm::dec_conv2a_bias,
+                         dec_conv2b_weight = unet_weights_hdr_alb_nrm::dec_conv2b_weight,
+                         dec_conv2b_bias = unet_weights_hdr_alb_nrm::dec_conv2b_bias,
+                         dec_conv1a_weight = unet_weights_hdr_alb_nrm::dec_conv1a_weight,
+                         dec_conv1a_bias = unet_weights_hdr_alb_nrm::dec_conv1a_bias,
+                         dec_conv1b_weight = unet_weights_hdr_alb_nrm::dec_conv1b_weight,
+                         dec_conv1b_bias = unet_weights_hdr_alb_nrm::dec_conv1b_bias,
+                         dec_conv0_weight = unet_weights_hdr_alb_nrm::dec_conv0_weight,
+                         dec_conv0_bias = unet_weights_hdr_alb_nrm::dec_conv0_bias;
 
     auto extend = [&](int val, const int in_channels) {
         val /= 3 * in_channels;
@@ -454,13 +373,7 @@ int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm
         return per_output * out_channels;
     };
 
-    int input_channels = 3;
-    if (albedo && normals) {
-        input_channels = 9;
-    } else if (albedo) {
-        input_channels = 6;
-    }
-
+    const int input_channels = 9; // color(3), base color(3) and normals(3)
     const int el_align = (256 / sizeof(T));
 
     const int total_count = round_up(extend(enc_conv0_weight.size(), input_channels), el_align) +
@@ -706,7 +619,7 @@ int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm
     return total_count;
 }
 
-template int Ray::SetupUNetWeights<float>(bool albedo, bool normals, bool gemm, int alignment,
-                                          unet_weight_offsets_t *out_offsets, float out_weights[]);
-template int Ray::SetupUNetWeights<uint16_t>(bool albedo, bool normals, bool gemm, int alignment,
-                                             unet_weight_offsets_t *out_offsets, uint16_t out_weights[]);
+template int Ray::SetupUNetWeights<float>(bool gemm, int alignment, unet_weight_offsets_t *out_offsets,
+                                          float out_weights[]);
+template int Ray::SetupUNetWeights<uint16_t>(bool gemm, int alignment, unet_weight_offsets_t *out_offsets,
+                                             uint16_t out_weights[]);
