@@ -187,14 +187,7 @@ def main():
                          glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=1", hlsl_profile="cs_6_5")
 
     # Postprocess
-    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental.comp.spv",
-                         defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental_n.comp.spv",
-                         defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental_b.comp.spv",
-                         defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental_bn.comp.spv",
-                         defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental.comp.spv")
     compile_shader_async(src_name="postprocess.comp.glsl")
 
     # Denoise

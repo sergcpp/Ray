@@ -139,18 +139,7 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
     uniform_params.accumulate_half_img = ((iteration - 1) % 2) ? 1.0f : 0.0f;
     uniform_params.exposure = exposure;
 
-    Pipeline *pi = &pi_mix_incremental_;
-    if (out_base_color.ready()) {
-        if (out_depth_normals.ready()) {
-            pi = &pi_mix_incremental_bn_;
-        } else {
-            pi = &pi_mix_incremental_b_;
-        }
-    } else if (out_depth_normals.ready()) {
-        pi = &pi_mix_incremental_n_;
-    }
-
-    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_mix_incremental_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 

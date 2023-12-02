@@ -133,9 +133,6 @@ namespace Vk {
 #include "shaders/output/intersect_scene_swrt_atlas.comp.spv.inl"
 #include "shaders/output/intersect_scene_swrt_bindless.comp.spv.inl"
 #include "shaders/output/mix_incremental.comp.spv.inl"
-#include "shaders/output/mix_incremental_b.comp.spv.inl"
-#include "shaders/output/mix_incremental_bn.comp.spv.inl"
-#include "shaders/output/mix_incremental_n.comp.spv.inl"
 #include "shaders/output/nlm_filter.comp.spv.inl"
 #include "shaders/output/nlm_filter_b.comp.spv.inl"
 #include "shaders/output/nlm_filter_bn.comp.spv.inl"
@@ -317,13 +314,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
                eShaderType::Comp, log};
     sh_mix_incremental_ = Shader{"Mix Incremental", ctx_.get(),
                                  Inflate(internal_shaders_output_mix_incremental_comp_spv), eShaderType::Comp, log};
-    sh_mix_incremental_b_ = Shader{"Mix Incremental B", ctx_.get(),
-                                   Inflate(internal_shaders_output_mix_incremental_b_comp_spv), eShaderType::Comp, log};
-    sh_mix_incremental_n_ = Shader{"Mix Incremental N", ctx_.get(),
-                                   Inflate(internal_shaders_output_mix_incremental_n_comp_spv), eShaderType::Comp, log};
-    sh_mix_incremental_bn_ =
-        Shader{"Mix Incremental BN", ctx_.get(), Inflate(internal_shaders_output_mix_incremental_bn_comp_spv),
-               eShaderType::Comp, log};
     sh_postprocess_ = Shader{"Postprocess", ctx_.get(), Inflate(internal_shaders_output_postprocess_comp_spv),
                              eShaderType::Comp, log};
     sh_filter_variance_ = Shader{"Filter Variance", ctx_.get(),
@@ -385,9 +375,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
     prog_intersect_scene_shadow_ = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_intersect_scene_shadow_, log};
     prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
     prog_mix_incremental_ = Program{"Mix Incremental", ctx_.get(), &sh_mix_incremental_, log};
-    prog_mix_incremental_b_ = Program{"Mix Incremental B", ctx_.get(), &sh_mix_incremental_b_, log};
-    prog_mix_incremental_n_ = Program{"Mix Incremental N", ctx_.get(), &sh_mix_incremental_n_, log};
-    prog_mix_incremental_bn_ = Program{"Mix Incremental BN", ctx_.get(), &sh_mix_incremental_bn_, log};
     prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
     prog_filter_variance_ = Program{"Filter Variance", ctx_.get(), &sh_filter_variance_, log};
     prog_nlm_filter_ = Program{"NLM Filter", ctx_.get(), &sh_nlm_filter_, log};
@@ -432,9 +419,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         !pi_intersect_scene_shadow_.Init(ctx_.get(), &prog_intersect_scene_shadow_, log) ||
         !pi_prepare_indir_args_.Init(ctx_.get(), &prog_prepare_indir_args_, log) ||
         !pi_mix_incremental_.Init(ctx_.get(), &prog_mix_incremental_, log) ||
-        !pi_mix_incremental_b_.Init(ctx_.get(), &prog_mix_incremental_b_, log) ||
-        !pi_mix_incremental_n_.Init(ctx_.get(), &prog_mix_incremental_n_, log) ||
-        !pi_mix_incremental_bn_.Init(ctx_.get(), &prog_mix_incremental_bn_, log) ||
         !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log) ||
         !pi_filter_variance_.Init(ctx_.get(), &prog_filter_variance_, log) ||
         !pi_nlm_filter_.Init(ctx_.get(), &prog_nlm_filter_, log) ||
