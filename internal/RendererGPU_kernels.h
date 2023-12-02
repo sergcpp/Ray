@@ -97,20 +97,22 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float main_mix_factor,
-                                              const float aux_mix_factor, const rect_t &rect, const int iteration,
-                                              const Texture2D &temp_img, const Texture2D &temp_base_color,
-                                              const Texture2D &temp_depth_normals, const Texture2D &req_samples,
-                                              const Texture2D &out_img, const Texture2D &out_base_color,
+void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float mix_factor,
+                                              const float half_mix_factor, const rect_t &rect, int iteration,
+                                              const float exposure, const Texture2D &temp_img,
+                                              const Texture2D &temp_base_color, const Texture2D &temp_depth_normals,
+                                              const Texture2D &req_samples, const Texture2D &out_full_img,
+                                              const Texture2D &out_half_img, const Texture2D &out_base_color,
                                               const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {
-        {&temp_img, eResState::UnorderedAccess},         {&temp_base_color, eResState::UnorderedAccess},
-        {&req_samples, eResState::UnorderedAccess},      {&out_img, eResState::UnorderedAccess},
-        {&out_base_color, eResState::UnorderedAccess},   {&temp_depth_normals, eResState::UnorderedAccess},
-        {&out_depth_normals, eResState::UnorderedAccess}};
+        {&temp_img, eResState::UnorderedAccess},           {&temp_base_color, eResState::UnorderedAccess},
+        {&req_samples, eResState::UnorderedAccess},        {&out_full_img, eResState::UnorderedAccess},
+        {&out_half_img, eResState::UnorderedAccess},       {&out_base_color, eResState::UnorderedAccess},
+        {&temp_depth_normals, eResState::UnorderedAccess}, {&out_depth_normals, eResState::UnorderedAccess}};
     SmallVector<Binding, 16> bindings = {{eBindTarget::Image, MixIncremental::IN_TEMP_IMG_SLOT, temp_img},
                                          {eBindTarget::Image, MixIncremental::IN_REQ_SAMPLES_SLOT, req_samples},
-                                         {eBindTarget::Image, MixIncremental::OUT_IMG_SLOT, out_img}};
+                                         {eBindTarget::Image, MixIncremental::OUT_FULL_IMG_SLOT, out_full_img},
+                                         {eBindTarget::Image, MixIncremental::OUT_HALF_IMG_SLOT, out_half_img}};
     if (out_base_color.ready()) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_BASE_COLOR_SLOT, temp_base_color);
         bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
@@ -131,9 +133,11 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
     uniform_params.rect[1] = rect.y;
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
-    uniform_params.main_mix_factor = main_mix_factor;
-    uniform_params.aux_mix_factor = aux_mix_factor;
+    uniform_params.mix_factor = mix_factor;
+    uniform_params.half_mix_factor = half_mix_factor;
     uniform_params.iteration = iteration;
+    uniform_params.accumulate_half_img = ((iteration - 1) % 2) ? 1.0f : 0.0f;
+    uniform_params.exposure = exposure;
 
     Pipeline *pi = &pi_mix_incremental_;
     if (out_base_color.ready()) {
@@ -150,24 +154,20 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture2D &img0_buf, const float img0_weight,
-                                           const Texture2D &img1_buf, const float img1_weight, const float exposure,
+void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture2D &full_buf, const Texture2D &half_buf,
                                            const float inv_gamma, const rect_t &rect, const float variance_threshold,
                                            const int iteration, const Texture2D &out_pixels,
-                                           const Texture2D &out_raw_pixels, const Texture2D &out_variance,
-                                           const Texture2D &out_req_samples) const {
+                                           const Texture2D &out_variance, const Texture2D &out_req_samples) const {
     const TransitionInfo res_transitions[] = {
-        {&img0_buf, eResState::UnorderedAccess},       {&img1_buf, eResState::UnorderedAccess},
-        {&tonemap_lut_, eResState::ShaderResource},    {&out_pixels, eResState::UnorderedAccess},
-        {&out_raw_pixels, eResState::UnorderedAccess}, {&out_variance, eResState::UnorderedAccess},
-        {&out_req_samples, eResState::UnorderedAccess}};
+        {&full_buf, eResState::UnorderedAccess},     {&half_buf, eResState::UnorderedAccess},
+        {&tonemap_lut_, eResState::ShaderResource},  {&out_pixels, eResState::UnorderedAccess},
+        {&out_variance, eResState::UnorderedAccess}, {&out_req_samples, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_IMG0_SLOT, img0_buf},
-                                {eBindTarget::Image, Postprocess::IN_IMG1_SLOT, img1_buf},
+    const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_FULL_IMG_SLOT, full_buf},
+                                {eBindTarget::Image, Postprocess::IN_HALF_IMG_SLOT, half_buf},
                                 {eBindTarget::Tex3D, Postprocess::TONEMAP_LUT_SLOT, tonemap_lut_},
                                 {eBindTarget::Image, Postprocess::OUT_IMG_SLOT, out_pixels},
-                                {eBindTarget::Image, Postprocess::OUT_RAW_IMG_SLOT, out_raw_pixels},
                                 {eBindTarget::Image, Postprocess::OUT_VARIANCE_IMG_SLOT, out_variance},
                                 {eBindTarget::Image, Postprocess::OUT_REQ_SAMPLES_IMG_SLOT, out_req_samples}};
 
@@ -180,10 +180,7 @@ void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture2
     uniform_params.rect[1] = rect.y;
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
-    uniform_params.exposure = exposure;
     uniform_params.inv_gamma = inv_gamma;
-    uniform_params.img0_weight = img0_weight;
-    uniform_params.img1_weight = img1_weight;
     uniform_params.tonemap_mode = (loaded_view_transform_ == eViewTransform::Standard) ? 0 : 1;
     uniform_params.variance_threshold = variance_threshold;
     uniform_params.iteration = iteration;

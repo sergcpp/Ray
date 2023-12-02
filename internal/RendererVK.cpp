@@ -856,27 +856,20 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // prepare result
         DebugMarker _(ctx_.get(), cmd_buf, "Prepare Result");
 
-        Texture2D &clean_buf = dual_buf_[(region.iteration - 1) % 2];
+        const float exposure = std::pow(2.0f, cam.exposure);
 
         // factor used to compute incremental average
-        const float main_mix_factor = 1.0f / float((region.iteration + 1) / 2);
-        const float aux_mix_factor = 1.0f / float(region.iteration);
+        const float mix_factor = 1.0f / float(region.iteration);
+        const float half_mix_factor = 1.0f / float((region.iteration + 1) / 2);
 
-        kernel_MixIncremental(cmd_buf, main_mix_factor, aux_mix_factor, rect, region.iteration, temp_buf0_, temp_buf1_,
-                              temp_depth_normals_buf_, required_samples_buf_, clean_buf, base_color_buf_,
-                              depth_normals_buf_);
+        kernel_MixIncremental(cmd_buf, mix_factor, half_mix_factor, rect, region.iteration, exposure, temp_buf0_,
+                              temp_buf1_, temp_depth_normals_buf_, required_samples_buf_, full_buf_, half_buf_,
+                              base_color_buf_, depth_normals_buf_);
     }
 
     { // output final buffer, prepare variance
         DebugMarker _(ctx_.get(), cmd_buf, "Postprocess frame");
 
-        const int p1_samples = (region.iteration + 1) / 2;
-        const int p2_samples = (region.iteration) / 2;
-
-        const float p1_weight = float(p1_samples) / float(region.iteration);
-        const float p2_weight = float(p2_samples) / float(region.iteration);
-
-        const float exposure = std::pow(2.0f, cam.exposure);
         tonemap_params_.view_transform = cam.view_transform;
         tonemap_params_.inv_gamma = (1.0f / cam.gamma);
 
@@ -884,15 +877,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                   ? 0.5f * cam.pass_settings.variance_threshold * cam.pass_settings.variance_threshold
                                   : 0.0f;
 
-        kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, exposure,
-                           tonemap_params_.inv_gamma, rect, variance_threshold_, region.iteration, final_buf_,
-                           raw_final_buf_, temp_buf0_, required_samples_buf_);
+        kernel_Postprocess(cmd_buf, full_buf_, half_buf_, tonemap_params_.inv_gamma, rect, variance_threshold_,
+                           region.iteration, final_buf_, temp_buf0_, required_samples_buf_);
         // Also store as denosed result until Denoise method will be called
-        const TransitionInfo img_transitions[] = {{&raw_final_buf_, eResState::CopySrc},
+        const TransitionInfo img_transitions[] = {{&full_buf_, eResState::CopySrc},
                                                   {&raw_filtered_buf_, eResState::CopyDst}};
         TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-        CopyImageToImage(cmd_buf, raw_final_buf_, 0, rect.x, rect.y, raw_filtered_buf_, 0, rect.x, rect.y, rect.w,
-                         rect.h);
+        CopyImageToImage(cmd_buf, full_buf_, 0, rect.x, rect.y, raw_filtered_buf_, 0, rect.x, rect.y, rect.w, rect.h);
     }
 
 #if RUN_IN_LOCKSTEP
@@ -975,9 +966,9 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     { // Apply NLM Filter
         DebugMarker _(ctx_.get(), cmd_buf, "NLM Filter");
-        kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, base_color_buf_, 64.0f,
-                         depth_normals_buf_, 32.0f, raw_filtered_buf_, tonemap_params_.view_transform,
-                         tonemap_params_.inv_gamma, rect, final_buf_);
+        kernel_NLMFilter(cmd_buf, full_buf_, filtered_variance, 1.0f, 0.45f, base_color_buf_, 64.0f, depth_normals_buf_,
+                         32.0f, raw_filtered_buf_, tonemap_params_.view_transform, tonemap_params_.inv_gamma, rect,
+                         final_buf_);
     }
 
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -1078,7 +1069,7 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
     case 0: { // fp32 0.53ms, fp16 0.52ms, nv 0.33ms
         const int output_stride = round_up(w_rounded + 1, 16) + 1;
         DebugMarker _(ctx_.get(), cmd_buf, "Convolution 9 32");
-        kernel_Convolution(cmd_buf, 9, 32, raw_final_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
+        kernel_Convolution(cmd_buf, 9, 32, full_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
                            w_rounded, h_rounded, *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias,
                            unet_tensors_heap_, unet_tensors_.enc_conv0_offset, output_stride);
     } break;
@@ -1246,7 +1237,7 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
         const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
         DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 9 64");
         kernel_ConvolutionConcat(cmd_buf, 64, 9, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset, input_stride,
-                                 true, raw_final_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
+                                 true, full_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
                                  w_rounded, h_rounded, *weights, offsets->dec_conv1a_weight, offsets->dec_conv1a_bias,
                                  unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, output_stride);
     } break;

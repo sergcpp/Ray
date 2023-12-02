@@ -159,8 +159,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     ILog *log_;
 
     bool use_tex_compression_;
-    aligned_vector<color_rgba_t, 16> dual_buf_[2], base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
-        raw_final_buf_, raw_filtered_buf_;
+    aligned_vector<color_rgba_t, 16> full_buf_, half_buf_, base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
+        raw_filtered_buf_;
     std::vector<uint16_t> required_samples_;
 
     std::mutex mtx_;
@@ -226,20 +226,20 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     void Resize(const int w, const int h) override {
         if (w_ != w || h_ != h) {
-            for (auto &buf : dual_buf_) {
-                buf.assign(w * h, {});
-                buf.shrink_to_fit();
-            }
+            full_buf_.assign(w * h, {});
+            full_buf_.shrink_to_fit();
+            half_buf_.assign(w * h, {});
+            half_buf_.shrink_to_fit();
             base_color_buf_.assign(w * h, {});
+            base_color_buf_.shrink_to_fit();
             depth_normals_buf_.assign(w * h, {});
+            depth_normals_buf_.shrink_to_fit();
             required_samples_.assign(w * h, 0xffff);
             required_samples_.shrink_to_fit();
             temp_buf_.assign(w * h, {});
             temp_buf_.shrink_to_fit();
             final_buf_.assign(w * h, {});
             final_buf_.shrink_to_fit();
-            raw_final_buf_.assign(w * h, {});
-            raw_final_buf_.shrink_to_fit();
             raw_filtered_buf_.assign(w * h, {});
             raw_filtered_buf_.shrink_to_fit();
 
@@ -251,9 +251,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     }
 
     void Clear(const color_rgba_t &c) override {
-        for (auto &buf : dual_buf_) {
-            buf.assign(w_ * h_, c);
-        }
+        full_buf_.assign(w_ * h_, c);
+        half_buf_.assign(w_ * h_, c);
         required_samples_.assign(w_ * h_, 0xffff);
     }
 
@@ -544,9 +543,10 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     Ref::simd_fvec4 exposure = std::pow(2.0f, cam.exposure);
     exposure.set<3>(1.0f);
 
-    float variance_threshold = region.iteration > cam.pass_settings.min_samples
-                                   ? 0.5f * cam.pass_settings.variance_threshold * cam.pass_settings.variance_threshold
-                                   : 0.0f;
+    const float variance_threshold =
+        region.iteration > cam.pass_settings.min_samples
+            ? 0.5f * cam.pass_settings.variance_threshold * cam.pass_settings.variance_threshold
+            : 0.0f;
 
     {
         std::lock_guard<std::mutex> _(mtx_);
@@ -568,8 +568,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         variance_threshold_ = variance_threshold;
     }
 
-    color_rgba_t *clean_buf = dual_buf_[(region.iteration - 1) % 2].data();
-
     const float half_mix_factor = 1.0f / float((region.iteration + 1) / 2);
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
@@ -577,44 +575,42 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
                 continue;
             }
 
-            const Ref::simd_fvec4 new_val = {temp_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
-
-            Ref::simd_fvec4 cur_val = {clean_buf[y * w_ + x].v, Ref::simd_mem_aligned};
-            cur_val += (new_val - cur_val) * half_mix_factor;
-            cur_val.store_to(clean_buf[y * w_ + x].v, Ref::simd_mem_aligned);
+            const auto new_val = Ref::simd_fvec4{temp_buf_[y * w_ + x].v, Ref::simd_mem_aligned} * exposure;
+            // accumulate full buffer
+            Ref::simd_fvec4 cur_val_full = {full_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
+            cur_val_full += (new_val - cur_val_full) * mix_factor;
+            cur_val_full.store_to(full_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            if ((region.iteration - 1) % 2) {
+                // accumulate half buffer
+                Ref::simd_fvec4 cur_val_half = {half_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
+                cur_val_half += (new_val - cur_val_half) * half_mix_factor;
+                cur_val_half.store_to(half_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            }
         }
     }
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            auto p1 = Ref::simd_fvec4{dual_buf_[0][y * w_ + x].v, Ref::simd_mem_aligned} * exposure;
-            auto p2 = Ref::simd_fvec4{dual_buf_[1][y * w_ + x].v, Ref::simd_mem_aligned} * exposure;
+            auto full_val = Ref::simd_fvec4{full_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
+            auto half_val = Ref::simd_fvec4{half_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
 
-            const int p1_samples = (region.iteration + 1) / 2;
-            const int p2_samples = (region.iteration) / 2;
+            // Store as denosed result until DenoiseImage method will be called
+            full_val.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
 
-            const float p1_weight = float(p1_samples) / float(region.iteration);
-            const float p2_weight = float(p2_samples) / float(region.iteration);
-
-            const Ref::simd_fvec4 untonemapped_res = p1_weight * p1 + p2_weight * p2;
-            untonemapped_res.store_to(raw_final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
-            // Also store as denosed result until DenoiseImage method will be called
-            untonemapped_res.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
-
-            const Ref::simd_fvec4 tonemapped_res = Tonemap(tonemap_params, untonemapped_res);
+            const Ref::simd_fvec4 tonemapped_res = Tonemap(tonemap_params, full_val);
             tonemapped_res.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
 
-            p1 = reversible_tonemap(p1);
-            p2 = reversible_tonemap(p2);
+            const Ref::simd_fvec4 p1 = reversible_tonemap(2.0f * full_val - half_val);
+            const Ref::simd_fvec4 p2 = reversible_tonemap(half_val);
 
             const Ref::simd_fvec4 variance = 0.5f * (p1 - p2) * (p1 - p2);
             variance.store_to(temp_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
 
 #if DEBUG_ADAPTIVE_SAMPLING
             if (cam.pass_settings.variance_threshold != 0.0f && required_samples_[y * w_ + x] >= region.iteration &&
-                (region.iteration % 2)) {
+                (region.iteration % 5) == 0) {
                 final_buf_[y * w_ + x].v[0] = 1.0f;
-                raw_final_buf_[y * w_ + x].v[0] = 1.0f;
+                full_buf_[y * w_ + x].v[0] = 1.0f;
             }
 #endif
 
@@ -644,7 +640,7 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
     p.feature_buf2.resize(rect_ext.w * rect_ext.h);
 
 #define FETCH_FINAL_BUF(_x, _y)                                                                                        \
-    Ref::simd_fvec4(raw_final_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,      \
+    Ref::simd_fvec4(full_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
                     Ref::simd_mem_aligned)
 #define FETCH_VARIANCE(_x, _y)                                                                                         \
     Ref::simd_fvec4(temp_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
@@ -656,7 +652,7 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
         const int yy = rect_ext.y + y;
         for (int x = 0; x < rect_ext.w; ++x) {
             const int xx = rect_ext.x + x;
-            const Ref::simd_fvec4 center_col = Ref::reversible_tonemap(FETCH_FINAL_BUF(xx, yy));
+            const Ref::simd_fvec4 center_col = reversible_tonemap(FETCH_FINAL_BUF(xx, yy));
             center_col.store_to(p.temp_final_buf[y * rect_ext.w + x].v, Ref::simd_mem_aligned);
 
             const Ref::simd_fvec4 center_val = FETCH_VARIANCE(xx, yy);
@@ -774,8 +770,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
     case 0: {
         SIMDPolicy::template Convolution3x3_GEMM<3, 3, 3, 4, 32, ePreOp::HDRTransfer, ePreOp::None,
                                                  ePreOp::PositiveNormalize>(
-            &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0], &depth_normals_buf_[0].v[0], r, w_, h_, w_rounded,
-            h_rounded, w_, &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
+            &full_buf_[0].v[0], &base_color_buf_[0].v[0], &depth_normals_buf_[0].v[0], r, w_, h_, w_rounded, h_rounded,
+            w_, &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
             unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
         SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 32, unet_tensors_.encConv0);
         break;
@@ -925,7 +921,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upscale,
                                                                 Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
                                                                 Ray::ePreOp::PositiveNormalize>(
-            unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0],
+            unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &full_buf_[0].v[0], &base_color_buf_[0].v[0],
             &depth_normals_buf_[0].v[0], r, w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_,
             &weights[offsets->dec_conv1a_weight], &weights[offsets->dec_conv1a_bias],
             unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);

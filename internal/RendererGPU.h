@@ -90,7 +90,7 @@ class Renderer : public RendererBase {
     void UpdateFilterTable(CommandBuffer cmd_buf, ePixelFilter filter, float filter_width);
 
     // TODO: Optimize these!
-    Texture2D temp_buf0_, dual_buf_[2], final_buf_, raw_final_buf_, raw_filtered_buf_;
+    Texture2D temp_buf0_, full_buf_, half_buf_, final_buf_, raw_filtered_buf_;
     Texture2D temp_buf1_, base_color_buf_;
     Texture2D temp_depth_normals_buf_, depth_normals_buf_;
     Texture2D required_samples_buf_;
@@ -187,15 +187,15 @@ class Renderer : public RendererBase {
                                    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                    const Buffer &inout_counters);
     void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
-    void kernel_MixIncremental(CommandBuffer cmd_buf, float main_mix_factor, float aux_mix_factor, const rect_t &rect,
-                               int iteration, const Texture2D &temp_img, const Texture2D &temp_base_color,
-                               const Texture2D &temp_depth_normals, const Texture2D &req_samples,
-                               const Texture2D &out_img, const Texture2D &out_base_color,
+    void kernel_MixIncremental(CommandBuffer cmd_buf, float mix_factor, float half_mix_factor, const rect_t &rect,
+                               int iteration, float exposure, const Texture2D &temp_img,
+                               const Texture2D &temp_base_color, const Texture2D &temp_depth_normals,
+                               const Texture2D &req_samples, const Texture2D &out_full_img,
+                               const Texture2D &out_half_img, const Texture2D &out_base_color,
                                const Texture2D &out_depth_normals);
-    void kernel_Postprocess(CommandBuffer cmd_buf, const Texture2D &img0_buf, float img0_weight,
-                            const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma,
-                            const rect_t &rect, float variance_threshold, int iteration, const Texture2D &out_pixels,
-                            const Texture2D &out_raw_pixels, const Texture2D &out_variance,
+    void kernel_Postprocess(CommandBuffer cmd_buf, const Texture2D &full_buf, const Texture2D &half_buf,
+                            float inv_gamma, const rect_t &rect, float variance_threshold, int iteration,
+                            const Texture2D &out_pixels, const Texture2D &out_variance,
                             const Texture2D &out_req_samples) const;
     void kernel_FilterVariance(CommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
                                float variance_threshold, int iteration, const Texture2D &out_variance,
@@ -323,15 +323,14 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
 
     temp_buf0_ = Texture2D{"Temp Image 0", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     temp_buf1_ = Texture2D{"Temp Image 1", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    dual_buf_[0] = Texture2D{"Dual Image [0]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    dual_buf_[1] = Texture2D{"Dual Image [1]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    full_buf_ = Texture2D{"Full Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    half_buf_ = Texture2D{"Half Image [1]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     base_color_buf_ = Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     temp_depth_normals_buf_ =
         Texture2D{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     depth_normals_buf_ =
         Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    raw_final_buf_ = Texture2D{"Raw Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     raw_filtered_buf_ =
         Texture2D{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     { // Texture that holds required sample count per pixel
@@ -403,17 +402,18 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
 inline void Ray::NS::Renderer::Clear(const color_rgba_t &c) {
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-    const TransitionInfo img_transitions[] = {
-        {&dual_buf_[0], ResStateForClear},       {&dual_buf_[1], ResStateForClear},
-        {&final_buf_, ResStateForClear},         {&raw_final_buf_, ResStateForClear},
-        {&raw_filtered_buf_, ResStateForClear},  {&base_color_buf_, ResStateForClear},
-        {&depth_normals_buf_, ResStateForClear}, {&required_samples_buf_, ResStateForClear}};
+    const TransitionInfo img_transitions[] = {{&full_buf_, ResStateForClear},
+                                              {&half_buf_, ResStateForClear},
+                                              {&final_buf_, ResStateForClear},
+                                              {&raw_filtered_buf_, ResStateForClear},
+                                              {&base_color_buf_, ResStateForClear},
+                                              {&depth_normals_buf_, ResStateForClear},
+                                              {&required_samples_buf_, ResStateForClear}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
-    ClearColorImage(dual_buf_[0], c.v, cmd_buf);
-    ClearColorImage(dual_buf_[1], c.v, cmd_buf);
+    ClearColorImage(full_buf_, c.v, cmd_buf);
+    ClearColorImage(half_buf_, c.v, cmd_buf);
     ClearColorImage(final_buf_, c.v, cmd_buf);
-    ClearColorImage(raw_final_buf_, c.v, cmd_buf);
     ClearColorImage(raw_filtered_buf_, c.v, cmd_buf);
 
     static const float rgba_zero[] = {0.0f, 0.0f, 0.0f, 0.0f};

@@ -11,7 +11,8 @@ LAYOUT_PARAMS uniform UniformParams {
 layout(binding = IN_TEMP_IMG_SLOT, rgba32f) uniform readonly image2D g_temp_img;
 layout(binding = IN_REQ_SAMPLES_SLOT, r16ui) uniform readonly uimage2D g_req_samples_img;
 
-layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
+layout(binding = OUT_FULL_IMG_SLOT, rgba32f) uniform image2D g_out_full_img;
+layout(binding = OUT_HALF_IMG_SLOT, rgba32f) uniform image2D g_out_half_img;
 #if OUTPUT_BASE_COLOR
     layout(binding = IN_TEMP_BASE_COLOR_SLOT, rgba32f) uniform readonly image2D g_temp_base_color;
     layout(binding = OUT_BASE_COLOR_IMG_SLOT, rgba32f) uniform image2D g_out_base_color_img;
@@ -35,22 +36,31 @@ void main() {
         return;
     }
 
-    vec3 col1 = imageLoad(g_out_img, icoord).rgb;
-    vec3 col2 = imageLoad(g_temp_img, icoord).rgb;
-    vec3 diff = col2 - col1;
-    imageStore(g_out_img, icoord, vec4(col1 + diff * g_params.main_mix_factor, 1.0));
+    vec3 new_val = imageLoad(g_temp_img, icoord).rgb * g_params.exposure;
+
+    { // accumulate full buffer
+        vec3 old_val = imageLoad(g_out_full_img, icoord).rgb;
+        vec3 diff = new_val - old_val;
+        imageStore(g_out_full_img, icoord, vec4(old_val + diff * g_params.mix_factor, 1.0));
+    }
+
+    [[dont_flatten]] if (g_params.accumulate_half_img > 0.5) {
+        vec3 old_val = imageLoad(g_out_half_img, icoord).rgb;
+        vec3 diff = new_val - old_val;
+        imageStore(g_out_half_img, icoord, vec4(old_val + diff * g_params.half_mix_factor, 1.0));
+    }
 
 #if OUTPUT_BASE_COLOR
     vec3 base_color1 = imageLoad(g_out_base_color_img, icoord).rgb;
     vec3 base_color2 = imageLoad(g_temp_base_color, icoord).rgb;
     vec3 base_color_diff = base_color2 - base_color1;
-    imageStore(g_out_base_color_img, icoord, vec4(base_color1 + base_color_diff * g_params.aux_mix_factor, 1.0));
+    imageStore(g_out_base_color_img, icoord, vec4(base_color1 + base_color_diff * g_params.mix_factor, 1.0));
 #endif
 #if OUTPUT_DEPTH_NORMALS
     vec4 depth_normals1 = imageLoad(g_out_depth_normals_img, icoord);
     vec4 depth_normals2 = imageLoad(g_temp_depth_normals_img, icoord);
     depth_normals2.xyz = clamp(depth_normals2.xyz, vec3(-1.0), vec3(1.0));
     vec4 depth_normals_diff = depth_normals2 - depth_normals1;
-    imageStore(g_out_depth_normals_img, icoord, vec4(depth_normals1 + depth_normals_diff * g_params.aux_mix_factor));
+    imageStore(g_out_depth_normals_img, icoord, vec4(depth_normals1 + depth_normals_diff * g_params.mix_factor));
 #endif
 }

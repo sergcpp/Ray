@@ -35,11 +35,11 @@ class Inflater {
     int Inflate(Span<uint8_t> output);
 };
 
-inline std::vector<uint8_t> Inflate(Span<const uint8_t> data) {
+inline std::vector<uint8_t> Inflate(Span<const uint8_t> data, const int max_size = 256 * 1024) {
     Inflater inflater;
     inflater.Feed(data);
 
-    std::vector<uint8_t> ret(256 * 1024);
+    std::vector<uint8_t> ret(max_size);
     const int decompressed_size = inflater.Inflate(ret);
     if (decompressed_size == -1) {
         ret.assign(data.begin(), data.end());

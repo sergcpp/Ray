@@ -15,12 +15,11 @@ vec3 heatmap(float u) {
     return vec3(sin(level), sin(2.0 * level), cos(level));
 }
 
-layout(binding = IN_IMG0_SLOT, rgba32f) uniform readonly image2D g_in_img0;
-layout(binding = IN_IMG1_SLOT, rgba32f) uniform readonly image2D g_in_img1;
+layout(binding = IN_FULL_IMG_SLOT, rgba32f) uniform readonly image2D g_in_full_img;
+layout(binding = IN_HALF_IMG_SLOT, rgba32f) uniform readonly image2D g_in_half_img;
 layout(binding = TONEMAP_LUT_SLOT) uniform sampler3D g_tonemap_lut;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
-layout(binding = OUT_RAW_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_raw_img;
 layout(binding = OUT_VARIANCE_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_variance_img;
 layout(binding = OUT_REQ_SAMPLES_IMG_SLOT, r16ui) uniform uimage2D g_out_req_samples_img;
 
@@ -33,40 +32,34 @@ void main() {
 
     ivec2 gi = ivec2(g_params.rect.xy + gl_GlobalInvocationID.xy);
 
-    // Mix two half-buffers together
-    vec4 img0 = imageLoad(g_in_img0, gi);
-    vec4 img1 = imageLoad(g_in_img1, gi);
+    vec4 full_val = imageLoad(g_in_full_img, gi);
+    vec4 half_val = imageLoad(g_in_half_img, gi);
 
-    img0.xyz *= g_params.exposure;
-    img1.xyz *= g_params.exposure;
-
-    vec4 untonemapped_res = (g_params.img0_weight * img0) + (g_params.img1_weight * img1);
 #if DEBUG_ADAPTIVE_SAMPLING
     uint req_samples = imageLoad(g_out_req_samples_img, gi).r;
     vec3 debug_color = heatmap(float(req_samples) / g_params.iteration);
     if ((g_params.iteration % 2) != 0 /*&& req_samples >= g_params.iteration*/) {
-        untonemapped_res.rgb = mix(untonemapped_res.rgb, debug_color, vec3(0.5));
+        full_val.rgb = mix(full_val.rgb, debug_color, vec3(0.5));
     }
 #endif
-    imageStore(g_out_raw_img, gi, untonemapped_res);
 
     vec4 tonemapped_res;
     [[dont_flatten]] if (g_params.tonemap_mode == 0) {
-        tonemapped_res = TonemapStandard(g_params.inv_gamma, untonemapped_res);
+        tonemapped_res = TonemapStandard(g_params.inv_gamma, full_val);
     } else {
-        tonemapped_res = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, untonemapped_res);
+        tonemapped_res = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, full_val);
     }
 #if DEBUG_ADAPTIVE_SAMPLING
-    if ((g_params.iteration % 2) != 0 /*&& req_samples >= g_params.iteration*/) {
+    if ((g_params.iteration % 5) != 0 /*&& req_samples >= g_params.iteration*/) {
         tonemapped_res.rgb = mix(tonemapped_res.rgb, debug_color, vec3(0.5));
     }
 #endif
     imageStore(g_out_img, gi, tonemapped_res);
 
-    img0 = reversible_tonemap(img0);
-    img1 = reversible_tonemap(img1);
+    vec4 p1 = reversible_tonemap(2.0 * full_val - half_val);
+    vec4 p2 = reversible_tonemap(half_val);
 
-    vec4 variance = 0.5 * (img0 - img1) * (img0 - img1);
+    vec4 variance = 0.5 * (p1 - p2) * (p1 - p2);
     imageStore(g_out_variance_img, gi, variance);
 
     if (any(greaterThanEqual(variance, vec4(g_params.variance_threshold)))) {
