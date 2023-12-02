@@ -80,13 +80,18 @@ class Scene : public SceneCommon {
 
     bvh_node_t tlas_root_node_ = {};
 
-    Buffer rt_blas_buf_, rt_geo_data_buf_, rt_instance_buf_, rt_tlas_buf_;
+    Buffer rt_geo_data_buf_, rt_instance_buf_, rt_tlas_buf_;
 
     struct MeshBlas {
         AccStructure acc;
         uint32_t geo_index, geo_count;
+        FreelistAlloc::Allocation mem_alloc;
     };
-    std::vector<MeshBlas> rt_mesh_blases_;
+    Cpu::SparseStorage<MeshBlas> rt_mesh_blases_;
+
+    static const uint32_t RtBLASChunkSize = 16 * 1024 * 1024;
+    FreelistAlloc rt_blas_mem_alloc_;
+    std::vector<Buffer> rt_blas_buffers_;
     AccStructure rt_tlas_;
 
     MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);
@@ -94,14 +99,15 @@ class Scene : public SceneCommon {
 
     void RemoveMesh_nolock(MeshHandle m);
     void RemoveMeshInstance_nolock(MeshInstanceHandle i);
-    void RebuildTLAS_nolock();
+    void Rebuild_SWRT_TLAS_nolock();
     void RebuildLightTree_nolock();
 
     void PrepareSkyEnvMap_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
     void PrepareEnvMapQTree_nolock();
     void GenerateTextureMips_nolock();
     void PrepareBindlessTextures_nolock();
-    void RebuildHWAccStructures_nolock();
+    std::pair<uint32_t, uint32_t> Build_HWRT_BLAS_nolock(uint32_t vert_index, uint32_t vert_count);
+    void Rebuild_HWRT_TLAS_nolock();
 
     TextureHandle AddAtlasTexture_nolock(const tex_desc_t &t);
     TextureHandle AddBindlessTexture_nolock(const tex_desc_t &t);
@@ -997,42 +1003,6 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
         i += trimat_index.first;
     }
 
-    std::pair<uint32_t, uint32_t> tris_index = {}, tri_indices_index = {}, nodes_index = {};
-    if (!use_hwrt_) {
-        tris_index = tris_.Allocate(&new_tris[0], uint32_t(new_tris.size()));
-        tri_indices_index = tri_indices_.Allocate(&new_tri_indices[0], uint32_t(new_tri_indices.size()));
-        assert(tri_indices_index.first == tris_index.first);
-        assert(tri_indices_index.second == tris_index.second);
-        assert(trimat_index.second == tris_index.second);
-
-        nodes_index = nodes_.Allocate(nullptr, uint32_t(new_nodes.size()));
-    } else {
-        tris_index = trimat_index;
-    }
-
-    if (!use_hwrt_) {
-        // offset nodes and primitives
-        for (bvh_node_t &n : new_nodes) {
-            if (n.prim_index & LEAF_NODE_BIT) {
-                n.prim_index += tri_indices_index.first;
-            } else {
-                n.left_child += nodes_index.first;
-                n.right_child += nodes_index.first;
-            }
-        }
-        nodes_.Set(nodes_index.first, uint32_t(new_nodes.size()), new_nodes.data());
-    }
-
-    // add mesh
-    mesh_t m = {};
-    memcpy(m.bbox_min, value_ptr(bbox_min), 3 * sizeof(float));
-    memcpy(m.bbox_max, value_ptr(bbox_max), 3 * sizeof(float));
-    m.node_index = nodes_index.first;
-    m.node_block = nodes_index.second;
-    m.tris_index = tris_index.first;
-    m.tris_block = tris_index.second;
-    m.tris_count = uint32_t(new_tris.size());
-
     // add attributes
     std::vector<vertex_t> new_vertices(_m.vtx_positions.data.size() / _m.vtx_positions.stride);
     for (int i = 0; i < int(new_vertices.size()); ++i) {
@@ -1064,6 +1034,40 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     }
     vtx_indices_.Set(vtx_indices_index.first, uint32_t(new_vtx_indices.size()), new_vtx_indices.data());
 
+    std::pair<uint32_t, uint32_t> tris_index = {}, tri_indices_index = {}, nodes_index = {0xffffffff, 0xffffffff};
+    if (use_hwrt_) {
+        tris_index = trimat_index;
+        nodes_index = Build_HWRT_BLAS_nolock(vtx_indices_index.first, uint32_t(new_vtx_indices.size()));
+    } else {
+        tris_index = tris_.Allocate(&new_tris[0], uint32_t(new_tris.size()));
+        tri_indices_index = tri_indices_.Allocate(&new_tri_indices[0], uint32_t(new_tri_indices.size()));
+        assert(tri_indices_index.first == tris_index.first);
+        assert(tri_indices_index.second == tris_index.second);
+        assert(trimat_index.second == tris_index.second);
+
+        nodes_index = nodes_.Allocate(nullptr, uint32_t(new_nodes.size()));
+
+        // offset nodes and primitives
+        for (bvh_node_t &n : new_nodes) {
+            if (n.prim_index & LEAF_NODE_BIT) {
+                n.prim_index += tri_indices_index.first;
+            } else {
+                n.left_child += nodes_index.first;
+                n.right_child += nodes_index.first;
+            }
+        }
+        nodes_.Set(nodes_index.first, uint32_t(new_nodes.size()), new_nodes.data());
+    }
+
+    // add mesh
+    mesh_t m = {};
+    memcpy(m.bbox_min, value_ptr(bbox_min), 3 * sizeof(float));
+    memcpy(m.bbox_max, value_ptr(bbox_max), 3 * sizeof(float));
+    m.node_index = nodes_index.first;
+    m.node_block = nodes_index.second;
+    m.tris_index = tris_index.first;
+    m.tris_block = tris_index.second;
+    m.tris_count = uint32_t(new_tris.size());
     m.vert_index = vtx_indices_index.first;
     m.vert_block = vtx_indices_index.second;
     m.vert_count = uint32_t(new_vtx_indices.size());
@@ -1078,7 +1082,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
 inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
     const mesh_t &m = meshes_[i._index];
 
-    const uint32_t node_block = m.node_block;
+    const uint32_t node_index = m.node_index, node_block = m.node_block;
     const uint32_t tris_block = m.tris_block;
     const uint32_t vert_block = m.vert_block, vert_data_block = m.vert_data_block;
 
@@ -1095,7 +1099,13 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
         }
     }
 
-    if (!use_hwrt_) {
+    if (use_hwrt_) {
+        { // release struct memory
+            const MeshBlas &blas = rt_mesh_blases_[node_index];
+            rt_blas_mem_alloc_.Free(blas.mem_alloc.block);
+        }
+        rt_mesh_blases_.Erase(node_block);
+    } else {
         tris_.Erase(tris_block);
         tri_indices_.Erase(tris_block);
         nodes_.Erase(node_block);
@@ -1105,7 +1115,11 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
     vtx_indices_.Erase(vert_block);
 
     if (rebuild_required) {
-        RebuildTLAS_nolock();
+        if (use_hwrt_) {
+            Rebuild_HWRT_TLAS_nolock();
+        } else {
+            Rebuild_SWRT_TLAS_nolock();
+        }
     }
 }
 
@@ -1381,7 +1395,11 @@ inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHa
 
     mesh_instances_.Set(mi_handle._index, mi);
 
-    RebuildTLAS_nolock();
+    if (use_hwrt_) {
+        Rebuild_HWRT_TLAS_nolock();
+    } else {
+        Rebuild_SWRT_TLAS_nolock();
+    }
 }
 
 inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
@@ -1393,7 +1411,11 @@ inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i
     }
     mesh_instances_.Erase(i._block);
 
-    RebuildTLAS_nolock();
+    if (use_hwrt_) {
+        Rebuild_HWRT_TLAS_nolock();
+    } else {
+        Rebuild_SWRT_TLAS_nolock();
+    }
 }
 
 inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
@@ -1463,11 +1485,10 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
 
     GenerateTextureMips_nolock();
     PrepareBindlessTextures_nolock();
-    RebuildHWAccStructures_nolock();
     RebuildLightTree_nolock();
 }
 
-inline void Ray::NS::Scene::RebuildTLAS_nolock() {
+inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
     if (macro_nodes_root_ != 0xffffffff) {
         nodes_.Erase(macro_nodes_block_);
         macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;

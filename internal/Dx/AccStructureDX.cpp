@@ -12,14 +12,14 @@
 
 Ray::Dx::AccStructure::AccStructure(AccStructure &&rhs) noexcept
     : ctx_(exchange(rhs.ctx_, nullptr)), gpu_virtual_address_(exchange(rhs.gpu_virtual_address_, {})),
-      view_ref_(std::move(rhs.view_ref_)) {}
+      view_ref_(exchange(rhs.view_ref_, {})) {}
 
 Ray::Dx::AccStructure &Ray::Dx::AccStructure::operator=(AccStructure &&rhs) noexcept {
     Free();
 
     ctx_ = exchange(rhs.ctx_, nullptr);
     gpu_virtual_address_ = exchange(rhs.gpu_virtual_address_, 0);
-    view_ref_ = std::move(rhs.view_ref_);
+    view_ref_ = exchange(rhs.view_ref_, {});
     resource_state = exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);

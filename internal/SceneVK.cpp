@@ -30,6 +30,8 @@ namespace Vk {
 VkDeviceSize align_up(const VkDeviceSize size, const VkDeviceSize alignment) {
     return (size + alignment - 1) & ~(alignment - 1);
 }
+
+const VkDeviceSize AccStructAlignment = 256;
 } // namespace Vk
 } // namespace Ray
 
@@ -282,236 +284,201 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
-void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
-    if (!use_hwrt_) {
-        return;
+std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint32_t vert_index,
+                                                                     const uint32_t vert_count) {
+    VkAccelerationStructureGeometryTrianglesDataKHR tri_data = {
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR};
+    tri_data.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+    tri_data.vertexData.deviceAddress = vertices_.gpu_buf().vk_device_address();
+    tri_data.vertexStride = sizeof(vertex_t);
+    tri_data.indexType = VK_INDEX_TYPE_UINT32;
+    tri_data.indexData.deviceAddress = vtx_indices_.gpu_buf().vk_device_address();
+    // TODO: fix this!
+    tri_data.maxVertex = vert_index + vert_count;
+
+    //
+    // Gather geometries
+    //
+    SmallVector<VkAccelerationStructureGeometryKHR, 16> geometries;
+    SmallVector<VkAccelerationStructureBuildRangeInfoKHR, 16> build_ranges;
+    SmallVector<uint32_t, 16> prim_counts;
+    {
+        auto &new_geo = geometries.emplace_back();
+        new_geo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+        new_geo.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        new_geo.flags = 0;
+        // if ((mat_flags & uint32_t(Ren::eMatFlags::AlphaTest)) == 0) {
+        //     new_geo.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+        // }
+        new_geo.geometry.triangles = tri_data;
+
+        auto &new_range = build_ranges.emplace_back();
+        new_range.firstVertex = 0;
+        new_range.primitiveCount = vert_count / 3;
+        new_range.primitiveOffset = vert_index * sizeof(uint32_t);
+        new_range.transformOffset = 0;
+
+        prim_counts.push_back(new_range.primitiveCount);
     }
 
-    static const VkDeviceSize AccStructAlignment = 256;
+    //
+    // Query needed memory
+    //
+    VkAccelerationStructureBuildGeometryInfoKHR build_info = {
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
+    build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    build_info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    build_info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
+                       VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+    build_info.geometryCount = uint32_t(geometries.size());
+    build_info.pGeometries = geometries.cdata();
 
-    struct Blas {
-        SmallVector<VkAccelerationStructureGeometryKHR, 16> geometries;
-        SmallVector<VkAccelerationStructureBuildRangeInfoKHR, 16> build_ranges;
-        SmallVector<uint32_t, 16> prim_counts;
-        VkAccelerationStructureBuildSizesInfoKHR size_info = {};
-        VkAccelerationStructureBuildGeometryInfoKHR build_info = {};
-    };
-    std::vector<Blas> all_blases;
-    std::vector<uint32_t> mesh_to_blas(meshes_.capacity(), 0xffffffff);
+    VkAccelerationStructureBuildSizesInfoKHR size_info = {
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
+    ctx_->api().vkGetAccelerationStructureBuildSizesKHR(ctx_->device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+                                                        &build_info, prim_counts.cdata(), &size_info);
+    // make sure we will not use this potentially stale pointer
+    build_info.pGeometries = nullptr;
 
-    uint32_t needed_build_scratch_size = 0;
-    uint32_t needed_total_acc_struct_size = 0;
+    const uint32_t needed_build_scratch_size = uint32_t(size_info.buildScratchSize);
+    const uint32_t needed_total_acc_struct_size =
+        uint32_t(align_up(size_info.accelerationStructureSize, AccStructAlignment));
 
-    for (auto it = meshes_.cbegin(); it != meshes_.cend(); ++it) {
-        const mesh_t &mesh = *it;
+    const std::pair<uint32_t, uint32_t> blas_index = rt_mesh_blases_.Allocate(1);
 
-        mesh_to_blas[it.index()] = uint32_t(all_blases.size());
+    //
+    // Allocate memory
+    //
+    Buffer scratch_buf =
+        Buffer("BLAS Scratch Buf", ctx_, eBufType::Storage, next_power_of_two(needed_build_scratch_size));
+    VkDeviceAddress scratch_addr = scratch_buf.vk_device_address();
 
-        VkAccelerationStructureGeometryTrianglesDataKHR tri_data = {
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR};
-        tri_data.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-        tri_data.vertexData.deviceAddress = vertices_.gpu_buf().vk_device_address();
-        tri_data.vertexStride = sizeof(vertex_t);
-        tri_data.indexType = VK_INDEX_TYPE_UINT32;
-        tri_data.indexData.deviceAddress = vtx_indices_.gpu_buf().vk_device_address();
-        // TODO: fix this!
-        tri_data.maxVertex = mesh.vert_index + mesh.vert_count;
+    Buffer acc_structs_buf("BLAS Before-Compaction Buf", ctx_, eBufType::AccStructure, needed_total_acc_struct_size);
 
-        //
-        // Gather geometries
-        //
-        all_blases.emplace_back();
-        Blas &new_blas = all_blases.back();
+    VkQueryPoolCreateInfo query_pool_create_info = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+    query_pool_create_info.queryCount = 1;
+    query_pool_create_info.queryType = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
 
-        {
-            auto &new_geo = new_blas.geometries.emplace_back();
-            new_geo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-            new_geo.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-            new_geo.flags = 0;
-            // if ((mat_flags & uint32_t(Ren::eMatFlags::AlphaTest)) == 0) {
-            //     new_geo.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
-            // }
-            new_geo.geometry.triangles = tri_data;
-
-            auto &new_range = new_blas.build_ranges.emplace_back();
-            new_range.firstVertex = 0; // mesh.vert_index;
-            new_range.primitiveCount = mesh.vert_count / 3;
-            new_range.primitiveOffset = mesh.vert_index * sizeof(uint32_t);
-            new_range.transformOffset = 0;
-
-            new_blas.prim_counts.push_back(new_range.primitiveCount);
-        }
-
-        //
-        // Query needed memory
-        //
-        new_blas.build_info = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
-        new_blas.build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-        new_blas.build_info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        new_blas.build_info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
-                                    VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
-        new_blas.build_info.geometryCount = uint32_t(new_blas.geometries.size());
-        new_blas.build_info.pGeometries = new_blas.geometries.cdata();
-
-        new_blas.size_info = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
-        ctx_->api().vkGetAccelerationStructureBuildSizesKHR(
-            ctx_->device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &new_blas.build_info,
-            new_blas.prim_counts.cdata(), &new_blas.size_info);
-
-        // make sure we will not use this potentially stale pointer
-        new_blas.build_info.pGeometries = nullptr;
-
-        needed_build_scratch_size = std::max(needed_build_scratch_size, uint32_t(new_blas.size_info.buildScratchSize));
-        needed_total_acc_struct_size +=
-            uint32_t(align_up(new_blas.size_info.accelerationStructureSize, AccStructAlignment));
-
-        rt_mesh_blases_.emplace_back();
+    VkQueryPool query_pool;
+    VkResult res = ctx_->api().vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
+    if (res != VK_SUCCESS) {
+        log_->Error("Failed to create query pool!");
+        return {0xffffffff, 0xffffffff};
     }
 
-    if (!all_blases.empty()) {
-        //
-        // Allocate memory
-        //
-        Buffer scratch_buf("BLAS Scratch Buf", ctx_, eBufType::Storage, next_power_of_two(needed_build_scratch_size));
-        VkDeviceAddress scratch_addr = scratch_buf.vk_device_address();
+    AccStructure blas_before_compaction;
 
-        Buffer acc_structs_buf("BLAS Before-Compaction Buf", ctx_, eBufType::AccStructure,
-                               needed_total_acc_struct_size);
+    { // submit build commands
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-        //
+        ctx_->api().vkCmdResetQueryPool(cmd_buf, query_pool, 0, 1);
 
-        VkQueryPoolCreateInfo query_pool_create_info = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
-        query_pool_create_info.queryCount = uint32_t(all_blases.size());
-        query_pool_create_info.queryType = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
+        VkAccelerationStructureCreateInfoKHR acc_create_info = {
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
+        acc_create_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        acc_create_info.buffer = acc_structs_buf.vk_handle();
+        acc_create_info.offset = 0;
+        acc_create_info.size = size_info.accelerationStructureSize;
 
-        VkQueryPool query_pool;
-        VkResult res = ctx_->api().vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
+        VkAccelerationStructureKHR acc_struct;
+        VkResult res =
+            ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr, &acc_struct);
         if (res != VK_SUCCESS) {
-            log_->Error("Failed to create query pool!");
+            log_->Error("Failed to create acceleration structure!");
+            return {0xffffffff, 0xffffffff};
         }
 
-        std::vector<AccStructure> blases_before_compaction;
-        blases_before_compaction.resize(all_blases.size());
-
-        { // Submit build commands
-            VkDeviceSize acc_buf_offset = 0;
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-
-            ctx_->api().vkCmdResetQueryPool(cmd_buf, query_pool, 0, uint32_t(all_blases.size()));
-
-            for (int i = 0; i < int(all_blases.size()); ++i) {
-                VkAccelerationStructureCreateInfoKHR acc_create_info = {
-                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-                acc_create_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-                acc_create_info.buffer = acc_structs_buf.vk_handle();
-                acc_create_info.offset = acc_buf_offset;
-                acc_create_info.size = all_blases[i].size_info.accelerationStructureSize;
-                acc_buf_offset += align_up(acc_create_info.size, AccStructAlignment);
-
-                VkAccelerationStructureKHR acc_struct;
-                VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr,
-                                                                            &acc_struct);
-                if (res != VK_SUCCESS) {
-                    log_->Error("Failed to create acceleration structure!");
-                }
-
-                auto &acc = blases_before_compaction[i];
-                if (!acc.Init(ctx_, acc_struct)) {
-                    log_->Error("Failed to init BLAS!");
-                }
-
-                all_blases[i].build_info.pGeometries = all_blases[i].geometries.cdata();
-
-                all_blases[i].build_info.dstAccelerationStructure = acc_struct;
-                all_blases[i].build_info.scratchData.deviceAddress = scratch_addr;
-
-                const VkAccelerationStructureBuildRangeInfoKHR *build_ranges = all_blases[i].build_ranges.cdata();
-                ctx_->api().vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &all_blases[i].build_info, &build_ranges);
-
-                { // Place barrier
-                    VkMemoryBarrier scr_buf_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-                    scr_buf_barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-                    scr_buf_barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-
-                    ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                                                     VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1,
-                                                     &scr_buf_barrier, 0, nullptr, 0, nullptr);
-                }
-
-                ctx_->api().vkCmdWriteAccelerationStructuresPropertiesKHR(
-                    cmd_buf, 1, &all_blases[i].build_info.dstAccelerationStructure,
-                    VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, query_pool, i);
-            }
-
-            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
-                                  ctx_->temp_command_pool());
+        if (!blas_before_compaction.Init(ctx_, acc_struct)) {
+            log_->Error("Failed to init BLAS!");
+            return {0xffffffff, 0xffffffff};
         }
 
-        std::vector<VkDeviceSize> compact_sizes(all_blases.size());
-        res = ctx_->api().vkGetQueryPoolResults(ctx_->device(), query_pool, 0, uint32_t(all_blases.size()),
-                                                all_blases.size() * sizeof(VkDeviceSize), compact_sizes.data(),
-                                                sizeof(VkDeviceSize), VK_QUERY_RESULT_WAIT_BIT);
-        assert(res == VK_SUCCESS);
+        build_info.pGeometries = geometries.cdata();
 
-        ctx_->api().vkDestroyQueryPool(ctx_->device(), query_pool, nullptr);
+        build_info.dstAccelerationStructure = acc_struct;
+        build_info.scratchData.deviceAddress = scratch_addr;
 
-        VkDeviceSize total_compacted_size = 0;
-        for (int i = 0; i < int(compact_sizes.size()); ++i) {
-            total_compacted_size += align_up(compact_sizes[i], AccStructAlignment);
+        const VkAccelerationStructureBuildRangeInfoKHR *_build_ranges = build_ranges.cdata();
+        ctx_->api().vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &build_info, &_build_ranges);
+
+        { // Place barrier
+            VkMemoryBarrier scr_buf_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+            scr_buf_barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+            scr_buf_barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+            ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                                             VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1,
+                                             &scr_buf_barrier, 0, nullptr, 0, nullptr);
         }
 
-        rt_blas_buf_ =
-            Buffer{"BLAS After-Compaction Buf", ctx_, eBufType::AccStructure, uint32_t(total_compacted_size)};
+        ctx_->api().vkCmdWriteAccelerationStructuresPropertiesKHR(
+            cmd_buf, 1, &build_info.dstAccelerationStructure, VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+            query_pool, 0);
 
-        { // Submit compaction commands
-            VkDeviceSize compact_acc_buf_offset = 0;
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-
-            for (int i = 0; i < int(all_blases.size()); ++i) {
-                VkAccelerationStructureCreateInfoKHR acc_create_info = {
-                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-                acc_create_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-                acc_create_info.buffer = rt_blas_buf_.vk_handle();
-                acc_create_info.offset = compact_acc_buf_offset;
-                acc_create_info.size = compact_sizes[i];
-                assert(compact_acc_buf_offset + compact_sizes[i] <= total_compacted_size);
-                compact_acc_buf_offset += align_up(acc_create_info.size, AccStructAlignment);
-
-                VkAccelerationStructureKHR compact_acc_struct;
-                const VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info,
-                                                                                  nullptr, &compact_acc_struct);
-                if (res != VK_SUCCESS) {
-                    log_->Error("Failed to create acceleration structure!");
-                }
-
-                VkCopyAccelerationStructureInfoKHR copy_info = {VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR};
-                copy_info.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
-                copy_info.src = blases_before_compaction[i].vk_handle();
-                copy_info.dst = compact_acc_struct;
-
-                ctx_->api().vkCmdCopyAccelerationStructureKHR(cmd_buf, &copy_info);
-
-                auto &vk_blas = rt_mesh_blases_[i].acc;
-                if (!vk_blas.Init(ctx_, compact_acc_struct)) {
-                    log_->Error("Blas compaction failed!");
-                }
-            }
-
-            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
-                                  ctx_->temp_command_pool());
-
-            for (auto &b : blases_before_compaction) {
-                b.FreeImmediate();
-            }
-            acc_structs_buf.FreeImmediate();
-            scratch_buf.FreeImmediate();
-        }
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
-    //
-    // Build TLAS
-    //
+    VkDeviceSize compact_size = {};
+    res = ctx_->api().vkGetQueryPoolResults(ctx_->device(), query_pool, 0, 1, sizeof(VkDeviceSize), &compact_size,
+                                            sizeof(VkDeviceSize), VK_QUERY_RESULT_WAIT_BIT);
+    assert(res == VK_SUCCESS);
 
+    ctx_->api().vkDestroyQueryPool(ctx_->device(), query_pool, nullptr);
+
+    FreelistAlloc::Allocation mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
+    if (mem_alloc.offset == 0xffffffff) {
+        // allocate one more buffer
+        const uint32_t buf_size = std::max(next_power_of_two(compact_size), RtBLASChunkSize);
+        rt_blas_buffers_.emplace_back("RT BLAS Buffer", ctx_, eBufType::AccStructure, buf_size);
+        const uint16_t pool_index = rt_blas_mem_alloc_.AddPool(buf_size);
+        assert(pool_index == rt_blas_buffers_.size() - 1);
+        // try to allocate again
+        mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
+        assert(mem_alloc.offset != 0xffffffff);
+    }
+
+    rt_mesh_blases_[blas_index.first].mem_alloc = mem_alloc;
+
+    { // Submit compaction commands
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+
+        VkAccelerationStructureCreateInfoKHR acc_create_info = {
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
+        acc_create_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        acc_create_info.buffer = rt_blas_buffers_[mem_alloc.pool].vk_handle();
+        acc_create_info.offset = mem_alloc.offset;
+        acc_create_info.size = compact_size;
+
+        VkAccelerationStructureKHR compact_acc_struct;
+        const VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr,
+                                                                          &compact_acc_struct);
+        if (res != VK_SUCCESS) {
+            log_->Error("Failed to create acceleration structure!");
+        }
+
+        VkCopyAccelerationStructureInfoKHR copy_info = {VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR};
+        copy_info.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
+        copy_info.src = blas_before_compaction.vk_handle();
+        copy_info.dst = compact_acc_struct;
+
+        ctx_->api().vkCmdCopyAccelerationStructureKHR(cmd_buf, &copy_info);
+
+        auto &vk_blas = rt_mesh_blases_[blas_index.first].acc;
+        if (!vk_blas.Init(ctx_, compact_acc_struct)) {
+            log_->Error("Blas compaction failed!");
+        }
+
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+        blas_before_compaction.FreeImmediate();
+        acc_structs_buf.FreeImmediate();
+        scratch_buf.FreeImmediate();
+    }
+
+    return blas_index;
+}
+
+void Ray::Vk::Scene::Rebuild_HWRT_TLAS_nolock() {
     struct RTGeoInstance {
         uint32_t indices_start;
         uint32_t vertices_start;
@@ -525,8 +492,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
     for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
         const mesh_instance_t &instance = *it;
+        const mesh_t &m = meshes_[instance.mesh_index];
 
-        auto &blas = rt_mesh_blases_[mesh_to_blas[instance.mesh_index]];
+        auto &blas = rt_mesh_blases_[m.node_index];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;
 
@@ -535,7 +503,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         tlas_instances.emplace_back();
         auto &new_instance = tlas_instances.back();
         to_khr_xform(instance.xform, new_instance.transform.matrix);
-        new_instance.instanceCustomIndex = meshes_[instance.mesh_index].vert_index / 3;
+        new_instance.instanceCustomIndex = m.vert_index / 3;
         // blas.geo_index;
         new_instance.mask = (instance.ray_visibility & 0xff);
         new_instance.instanceShaderBindingTableRecordOffset = 0;

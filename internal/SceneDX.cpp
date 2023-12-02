@@ -34,6 +34,8 @@ void to_dxr_xform(const float xform[16], float matrix[3][4]) {
         }
     }
 }
+
+const uint32_t AccStructAlignment = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT;
 } // namespace Ray
 
 Ray::Dx::Scene::~Scene() {
@@ -140,210 +142,160 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
-void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
-    if (!use_hwrt_) {
-        return;
+std::pair<uint32_t, uint32_t> Ray::Dx::Scene::Build_HWRT_BLAS_nolock(const uint32_t vert_index,
+                                                                     const uint32_t vert_count) {
+    //
+    // Gather geometries
+    //
+    SmallVector<D3D12_RAYTRACING_GEOMETRY_DESC, 16> geometries;
+    SmallVector<uint32_t, 16> prim_counts;
+    {
+        auto &new_geo = geometries.emplace_back();
+        new_geo.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        new_geo.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+
+        new_geo.Triangles.Transform3x4 = 0;
+        new_geo.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+        new_geo.Triangles.VertexBuffer.StartAddress = vertices_.gpu_buf().dx_resource()->GetGPUVirtualAddress();
+        new_geo.Triangles.VertexBuffer.StrideInBytes = sizeof(vertex_t);
+        new_geo.Triangles.VertexCount = vertices_.gpu_buf().size() / sizeof(vertex_t);
+        new_geo.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+        new_geo.Triangles.IndexBuffer =
+            vtx_indices_.gpu_buf().dx_resource()->GetGPUVirtualAddress() + vert_index * sizeof(uint32_t);
+        new_geo.Triangles.IndexCount = vert_count;
+
+        // auto &new_range = new_blas.build_ranges.emplace_back();
+        // new_range.firstVertex = 0; // mesh.vert_index;
+        // new_range.primitiveCount = mesh.vert_count / 3;
+        // new_range.primitiveOffset = mesh.vert_index * sizeof(uint32_t);
+        // new_range.transformOffset = 0;
+
+        prim_counts.push_back(vert_count / 3);
     }
 
-    static const uint32_t AccStructAlignment = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT;
+    //
+    // Query needed memory
+    //
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc = {};
+    as_desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+    as_desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    as_desc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+                           D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+    as_desc.Inputs.NumDescs = UINT(geometries.size());
+    as_desc.Inputs.pGeometryDescs = geometries.data();
 
-    struct Blas {
-        SmallVector<D3D12_RAYTRACING_GEOMETRY_DESC, 16> geometries;
-        SmallVector<uint32_t, 16> prim_counts;
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO as_prebuild_info = {};
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc = {};
-    };
-    std::vector<Blas> all_blases;
-    std::vector<uint32_t> mesh_to_blas(meshes_.capacity(), 0xffffffff);
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO as_prebuild_info = {};
+    ctx_->device5()->GetRaytracingAccelerationStructurePrebuildInfo(&as_desc.Inputs, &as_prebuild_info);
 
-    uint32_t needed_build_scratch_size = 0;
-    uint32_t needed_total_acc_struct_size = 0;
+    // make sure we will not use this potentially stale pointer
+    as_desc.Inputs.pGeometryDescs = nullptr;
 
-    for (auto it = meshes_.cbegin(); it != meshes_.cend(); ++it) {
-        const mesh_t &mesh = *it;
+    const uint32_t needed_build_scratch_size = uint32_t(as_prebuild_info.ScratchDataSizeInBytes);
+    const uint32_t needed_acc_struct_size =
+        uint32_t(round_up(int(as_prebuild_info.ResultDataMaxSizeInBytes), AccStructAlignment));
 
-        mesh_to_blas[it.index()] = uint32_t(all_blases.size());
+    const std::pair<uint32_t, uint32_t> blas_index = rt_mesh_blases_.Allocate(1);
 
-        //
-        // Gather geometries
-        //
-        all_blases.emplace_back();
-        Blas &new_blas = all_blases.back();
+    //
+    // Allocate memory
+    //
+    Buffer scratch_buf("BLAS Scratch Buf", ctx_, eBufType::Storage, next_power_of_two(needed_build_scratch_size));
+    const uint64_t scratch_addr = scratch_buf.dx_resource()->GetGPUVirtualAddress();
+
+    Buffer acc_structs_buf("BLAS Before-Compaction Buf", ctx_, eBufType::AccStructure, needed_acc_struct_size);
+    const uint64_t acc_structs_addr = acc_structs_buf.dx_resource()->GetGPUVirtualAddress();
+
+    Buffer compacted_sizes_buf(
+        "BLAS Compacted Sizes Buf", ctx_, eBufType::Storage,
+        uint32_t(sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC)));
+    const uint64_t compacted_sizes_addr = compacted_sizes_buf.dx_resource()->GetGPUVirtualAddress();
+
+    Buffer compacted_sizes_readback_buf("BLAS Compacted Sizes Readback Buf", ctx_, eBufType::Readback,
+                                        compacted_sizes_buf.size());
+
+    { // Submit build commands
+        auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
+            BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool()));
+
+        { // transition buffers to required states
+            const TransitionInfo transitions[] = {{&scratch_buf, eResState::UnorderedAccess},
+                                                  {&compacted_sizes_buf, eResState::UnorderedAccess}};
+            TransitionResourceStates(cmd_buf, AllStages, AllStages, transitions);
+        }
+
+        as_desc.Inputs.pGeometryDescs = geometries.data();
+        as_desc.ScratchAccelerationStructureData = scratch_addr;
+        as_desc.DestAccelerationStructureData = acc_structs_addr;
+
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC postbuild_info = {};
+        postbuild_info.InfoType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
+        postbuild_info.DestBuffer = compacted_sizes_addr;
+        cmd_buf->BuildRaytracingAccelerationStructure(&as_desc, 1, &postbuild_info);
 
         {
-            auto &new_geo = new_blas.geometries.emplace_back();
-            new_geo.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-            new_geo.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+            D3D12_RESOURCE_BARRIER barrier = {};
+            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            barrier.Transition.pResource = scratch_buf.dx_resource();
+            barrier.Transition.StateBefore = DXResourceState(eResState::UnorderedAccess);
+            barrier.Transition.StateAfter = DXResourceState(eResState::UnorderedAccess);
+            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-            new_geo.Triangles.Transform3x4 = 0;
-            new_geo.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-            new_geo.Triangles.VertexBuffer.StartAddress = vertices_.gpu_buf().dx_resource()->GetGPUVirtualAddress();
-            new_geo.Triangles.VertexBuffer.StrideInBytes = sizeof(vertex_t);
-            new_geo.Triangles.VertexCount = vertices_.gpu_buf().size() / sizeof(vertex_t);
-            new_geo.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-            new_geo.Triangles.IndexBuffer =
-                vtx_indices_.gpu_buf().dx_resource()->GetGPUVirtualAddress() + mesh.vert_index * sizeof(uint32_t);
-            new_geo.Triangles.IndexCount = mesh.vert_count;
-
-            // auto &new_range = new_blas.build_ranges.emplace_back();
-            // new_range.firstVertex = 0; // mesh.vert_index;
-            // new_range.primitiveCount = mesh.vert_count / 3;
-            // new_range.primitiveOffset = mesh.vert_index * sizeof(uint32_t);
-            // new_range.transformOffset = 0;
-
-            new_blas.prim_counts.push_back(mesh.vert_count / 3);
+            cmd_buf->ResourceBarrier(1, &barrier);
         }
 
-        //
-        // Query needed memory
-        //
-        new_blas.as_desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-        new_blas.as_desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-        new_blas.as_desc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-                                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
-        new_blas.as_desc.Inputs.NumDescs = UINT(new_blas.geometries.size());
-        new_blas.as_desc.Inputs.pGeometryDescs = new_blas.geometries.data();
+        // copy compacted sizes for readback
+        CopyBufferToBuffer(compacted_sizes_buf, 0, compacted_sizes_readback_buf, 0, compacted_sizes_buf.size(),
+                           cmd_buf);
 
-        ctx_->device5()->GetRaytracingAccelerationStructurePrebuildInfo(&new_blas.as_desc.Inputs,
-                                                                        &new_blas.as_prebuild_info);
-
-        // make sure we will not use this potentially stale pointer
-        new_blas.as_desc.Inputs.pGeometryDescs = nullptr;
-
-        needed_build_scratch_size =
-            std::max(needed_build_scratch_size, uint32_t(new_blas.as_prebuild_info.ScratchDataSizeInBytes));
-        needed_total_acc_struct_size +=
-            uint32_t(round_up(int(new_blas.as_prebuild_info.ResultDataMaxSizeInBytes), AccStructAlignment));
-
-        rt_mesh_blases_.emplace_back();
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
-    if (!all_blases.empty()) {
-        //
-        // Allocate memory
-        //
-        Buffer scratch_buf("BLAS Scratch Buf", ctx_, eBufType::Storage, next_power_of_two(needed_build_scratch_size));
-        const uint64_t scratch_addr = scratch_buf.dx_resource()->GetGPUVirtualAddress();
+    const uint32_t compact_size =
+        reinterpret_cast<const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC *>(
+            compacted_sizes_readback_buf.Map())
+            ->CompactedSizeInBytes;
+    compacted_sizes_readback_buf.Unmap();
 
-        Buffer acc_structs_buf("BLAS Before-Compaction Buf", ctx_, eBufType::AccStructure,
-                               needed_total_acc_struct_size);
-        const uint64_t acc_structs_addr = acc_structs_buf.dx_resource()->GetGPUVirtualAddress();
-
-        Buffer compacted_sizes_buf(
-            "BLAS Compacted Sizes Buf", ctx_, eBufType::Storage,
-            uint32_t(sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC) *
-                     all_blases.size()));
-        const uint64_t compacted_sizes_addr = compacted_sizes_buf.dx_resource()->GetGPUVirtualAddress();
-
-        Buffer compacted_sizes_readback_buf("BLAS Compacted Sizes Readback Buf", ctx_, eBufType::Readback,
-                                            compacted_sizes_buf.size());
-
-        //
-
-        std::vector<AccStructure> blases_before_compaction;
-        blases_before_compaction.resize(all_blases.size());
-
-        { // Submit build commands
-            uint64_t acc_buf_offset = 0;
-            auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
-                BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool()));
-
-            { // transition buffers to required states
-                const TransitionInfo transitions[] = {{&scratch_buf, eResState::UnorderedAccess},
-                                                      {&compacted_sizes_buf, eResState::UnorderedAccess}};
-                TransitionResourceStates(cmd_buf, AllStages, AllStages, transitions);
-            }
-
-            for (int i = 0; i < int(all_blases.size()); ++i) {
-                auto &blas = all_blases[i];
-
-                blas.as_desc.Inputs.pGeometryDescs = blas.geometries.data();
-                blas.as_desc.ScratchAccelerationStructureData = scratch_addr;
-                blas.as_desc.DestAccelerationStructureData = acc_structs_addr + acc_buf_offset;
-
-                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC postbuild_info = {};
-                postbuild_info.InfoType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
-                postbuild_info.DestBuffer =
-                    compacted_sizes_addr +
-                    i * sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC);
-                cmd_buf->BuildRaytracingAccelerationStructure(&blas.as_desc, 1, &postbuild_info);
-
-                {
-                    D3D12_RESOURCE_BARRIER barrier = {};
-                    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                    barrier.Transition.pResource = scratch_buf.dx_resource();
-                    barrier.Transition.StateBefore = DXResourceState(eResState::UnorderedAccess);
-                    barrier.Transition.StateAfter = DXResourceState(eResState::UnorderedAccess);
-                    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-                    cmd_buf->ResourceBarrier(1, &barrier);
-                }
-
-                acc_buf_offset += round_up(int(blas.as_prebuild_info.ResultDataMaxSizeInBytes), AccStructAlignment);
-                assert(acc_buf_offset <= needed_total_acc_struct_size);
-            }
-
-            // copy compacted sizes for readback
-            CopyBufferToBuffer(compacted_sizes_buf, 0, compacted_sizes_readback_buf, 0, compacted_sizes_buf.size(),
-                               cmd_buf);
-
-            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
-                                  ctx_->temp_command_pool());
-        }
-
-        const auto *compact_sizes =
-            reinterpret_cast<const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC *>(
-                compacted_sizes_readback_buf.Map());
-
-        uint64_t total_compacted_size = 0;
-        for (int i = 0; i < int(all_blases.size()); ++i) {
-            total_compacted_size += round_up(uint32_t(compact_sizes[i].CompactedSizeInBytes), AccStructAlignment);
-        }
-
-        rt_blas_buf_ =
-            Buffer{"BLAS After-Compaction Buf", ctx_, eBufType::AccStructure, uint32_t(total_compacted_size)};
-
-        compacted_sizes_readback_buf.Unmap();
-
-        { // Submit compaction commands
-            uint64_t compact_acc_buf_offset = 0;
-            auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
-                BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool()));
-
-            for (int i = 0; i < int(all_blases.size()); ++i) {
-                auto &blas = all_blases[i];
-
-                const uint64_t old_address = blas.as_desc.DestAccelerationStructureData;
-                const uint64_t new_address =
-                    rt_blas_buf_.dx_resource()->GetGPUVirtualAddress() + compact_acc_buf_offset;
-
-                cmd_buf->CopyRaytracingAccelerationStructure(new_address, old_address,
-                                                             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
-
-                auto &vk_blas = rt_mesh_blases_[i].acc;
-                if (!vk_blas.Init(ctx_, new_address)) {
-                    log_->Error("Blas compaction failed!");
-                }
-
-                assert(compact_acc_buf_offset + compact_sizes[i].CompactedSizeInBytes <= total_compacted_size);
-                compact_acc_buf_offset += round_up(uint32_t(compact_sizes[i].CompactedSizeInBytes), AccStructAlignment);
-            }
-
-            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
-                                  ctx_->temp_command_pool());
-
-            for (auto &b : blases_before_compaction) {
-                b.FreeImmediate();
-            }
-            acc_structs_buf.FreeImmediate();
-            scratch_buf.FreeImmediate();
-        }
+    FreelistAlloc::Allocation mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
+    if (mem_alloc.offset == 0xffffffff) {
+        // allocate one more buffer
+        const uint32_t buf_size = std::max(next_power_of_two(compact_size), RtBLASChunkSize);
+        rt_blas_buffers_.emplace_back("RT BLAS Buffer", ctx_, eBufType::AccStructure, buf_size);
+        const uint16_t pool_index = rt_blas_mem_alloc_.AddPool(buf_size);
+        assert(pool_index == rt_blas_buffers_.size() - 1);
+        // try to allocate again
+        mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
+        assert(mem_alloc.offset != 0xffffffff);
     }
 
-    //
-    // Build TLAS
-    //
+    rt_mesh_blases_[blas_index.first].mem_alloc = mem_alloc;
 
+    { // Submit compaction commands
+        auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
+            BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool()));
+
+        const uint64_t old_address = as_desc.DestAccelerationStructureData;
+        const uint64_t new_address =
+            rt_blas_buffers_[mem_alloc.pool].dx_resource()->GetGPUVirtualAddress() + mem_alloc.offset;
+
+        cmd_buf->CopyRaytracingAccelerationStructure(new_address, old_address,
+                                                     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+
+        auto &vk_blas = rt_mesh_blases_[blas_index.first].acc;
+        if (!vk_blas.Init(ctx_, new_address)) {
+            log_->Error("Blas compaction failed!");
+        }
+
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+        acc_structs_buf.FreeImmediate();
+        scratch_buf.FreeImmediate();
+    }
+
+    return blas_index;
+}
+
+void Ray::Dx::Scene::Rebuild_HWRT_TLAS_nolock() {
     struct RTGeoInstance {
         uint32_t indices_start;
         uint32_t vertices_start;
@@ -357,8 +309,9 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
 
     for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
         const mesh_instance_t &instance = *it;
+        const mesh_t &m = meshes_[instance.mesh_index];
 
-        auto &blas = rt_mesh_blases_[mesh_to_blas[instance.mesh_index]];
+        auto &blas = rt_mesh_blases_[m.node_index];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;
 
