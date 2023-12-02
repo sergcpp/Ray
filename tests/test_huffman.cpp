@@ -1,5 +1,7 @@
 #include "test_common.h"
 
+#include <cstring>
+
 #include "../internal/inflate/Huffman.h"
 
 struct huff_code_t {
@@ -9,7 +11,7 @@ struct huff_code_t {
 void traverse(Ray::Span<const Ray::huff_node_t> nodes, uint32_t i, int level, std::vector<char> &codes_heap,
               char code_so_far[], huff_code_t codes[]) {
     if (nodes[i].left == 0xffffffff && nodes[i].right == 0xffffffff) {
-        codes[nodes[i].c] = {uint16_t(codes_heap.size()), uint16_t(level)};
+        codes[uint8_t(nodes[i].c)] = {uint16_t(codes_heap.size()), uint16_t(level)};
         codes_heap.insert(end(codes_heap), code_so_far, code_so_far + level);
     } else {
         code_so_far[level] = '0';

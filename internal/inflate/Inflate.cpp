@@ -296,7 +296,7 @@ uint32_t Ray::Inflater::DecodeHuffman(const bool dynamic, Span<uint8_t> output) 
 
     for (int i = 0; i < HuffMaxSymbols; i++) {
         const uint32_t n = literals_decode.rev_sym_table[i];
-        if (n >= MatchLenSymStart && n < HuffMaxSymbols) {
+        if (n >= MatchLenSymStart && n < HuffMaxSymbols - 2) {
             literals_decode.rev_sym_table[i] = HuffMatchLenCode[n - MatchLenSymStart];
         }
     }
