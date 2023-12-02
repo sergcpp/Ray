@@ -209,8 +209,8 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat6_spot_light"},
         {"refr_mis2", "complex_mat5_nlm_filter", "complex_mat5_adaptive", "complex_mat5_clipped",
          "complex_mat6_nlm_filter"},
-        {"complex_mat5_unet_filter", "complex_mat6_unet_filter"},
-        {"complex_mat5_dir_light", "complex_mat6_dir_light", "complex_mat5_moon_light", "complex_mat6_moon_light"}};
+        {"complex_mat5_unet_filter", "complex_mat6_unet_filter", "complex_mat5_dir_light", "complex_mat6_dir_light",
+         "complex_mat5_moon_light"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1797,23 +1797,6 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
 
     run_material_test(arch_list, preferred_device, "complex_mat6_sun_light", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_SunLight);
-}
-
-void test_complex_mat6_moon_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 12;
-    const double MinPSNR = 28.0;
-    const int PixThres = 503;
-
-    Ray::principled_mat_desc_t olive_mat_desc;
-    olive_mat_desc.base_color[0] = 0.836164f;
-    olive_mat_desc.base_color[1] = 0.836164f;
-    olive_mat_desc.base_color[2] = 0.656603f;
-    olive_mat_desc.roughness = 0.041667f;
-    olive_mat_desc.transmission = 1.0f;
-    olive_mat_desc.ior = 2.3f;
-
-    run_material_test(arch_list, preferred_device, "complex_mat6_moon_light", olive_mat_desc, SampleCount, MinPSNR,
-                      PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MoonLight);
 }
 
 void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred_device) {

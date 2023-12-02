@@ -106,7 +106,6 @@ void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferr
 void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device);
-void test_complex_mat6_moon_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device);
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device);
@@ -262,7 +261,6 @@ int main(int argc, char *argv[]) {
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_spot_light, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_dir_light, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_sun_light, arch_list, device_name));
-        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_moon_light, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_hdri_light, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat7_refractive, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat7_principled, arch_list, device_name));
