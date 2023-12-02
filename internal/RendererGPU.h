@@ -355,9 +355,17 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
                                  uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
     frame_pixels_ = (const color_rgba_t *)pixel_readback_buf_.Map(true /* persistent */);
 
+    if (base_color_readback_buf_) {
+        base_color_readback_buf_.Unmap();
+        base_color_pixels_ = nullptr;
+    }
     base_color_readback_buf_ = Buffer{"Base Color Stage Buf", ctx_.get(), eBufType::Readback,
                                       uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
     base_color_pixels_ = (const color_rgba_t *)base_color_readback_buf_.Map(true /* persistent */);
+    if (depth_normals_readback_buf_) {
+        depth_normals_readback_buf_.Unmap();
+        depth_normals_pixels_ = nullptr;
+    }
     depth_normals_readback_buf_ = Buffer{"Depth Normals Stage Buf", ctx_.get(), eBufType::Readback,
                                          uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
     depth_normals_pixels_ = (const color_rgba_t *)depth_normals_readback_buf_.Map(true /* persistent */);

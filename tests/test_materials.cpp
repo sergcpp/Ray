@@ -81,6 +81,11 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
                 setup_test_scene(threads, *scene, min_sample_count, variance_threshold, mat_desc, textures, test_scene);
 
+                { // test Resize robustness
+                    renderer->Resize(test_img_w / 2, test_img_h / 2);
+                    renderer->Resize(test_img_w, test_img_h);
+                }
+
                 snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
                 schedule_render_jobs(threads, *renderer, scene.get(), s, current_sample_count, denoise, partial,
                                      name_buf);
