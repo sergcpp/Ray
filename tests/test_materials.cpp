@@ -1396,9 +1396,9 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
 
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
     const int MinSampleCount = 8;
-    const int MaxSampleCount = 16;
+    const int MaxSampleCount = 18;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 2012;
+    const int PixThres = 1992;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1439,8 +1439,8 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
 }
 
 void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 16;
-    const int PixThres = 1995;
+    const int SampleCount = 18;
+    const int PixThres = 1949;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1672,8 +1672,8 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 10;
-    const int PixThres = 1624;
+    const int SampleCount = 12;
+    const int PixThres = 1647;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

@@ -568,6 +568,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         variance_threshold_ = variance_threshold;
     }
 
+    const bool is_class_a = popcount(uint32_t(region.iteration - 1) & 0xaaaaaaaa) & 1;
     const float half_mix_factor = 1.0f / float((region.iteration + 1) / 2);
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
@@ -580,7 +581,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
             Ref::simd_fvec4 cur_val_full = {full_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
             cur_val_full += (new_val - cur_val_full) * mix_factor;
             cur_val_full.store_to(full_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
-            if ((region.iteration - 1) % 2) {
+            if (is_class_a) {
                 // accumulate half buffer
                 Ref::simd_fvec4 cur_val_half = {half_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
                 cur_val_half += (new_val - cur_val_half) * half_mix_factor;

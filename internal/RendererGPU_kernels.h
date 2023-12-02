@@ -128,6 +128,8 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
         uint32_t((rect.w + MixIncremental::LOCAL_GROUP_SIZE_X - 1) / MixIncremental::LOCAL_GROUP_SIZE_X),
         uint32_t((rect.h + MixIncremental::LOCAL_GROUP_SIZE_Y - 1) / MixIncremental::LOCAL_GROUP_SIZE_Y), 1u};
 
+    const bool is_class_a = popcount(uint32_t(iteration - 1) & 0xaaaaaaaa) & 1;
+
     MixIncremental::Params uniform_params = {};
     uniform_params.rect[0] = rect.x;
     uniform_params.rect[1] = rect.y;
@@ -136,7 +138,7 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
     uniform_params.mix_factor = mix_factor;
     uniform_params.half_mix_factor = half_mix_factor;
     uniform_params.iteration = iteration;
-    uniform_params.accumulate_half_img = ((iteration - 1) % 2) ? 1.0f : 0.0f;
+    uniform_params.accumulate_half_img = is_class_a ? 1.0f : 0.0f;
     uniform_params.exposure = exposure;
 
     DispatchCompute(cmd_buf, pi_mix_incremental_, grp_count, bindings, &uniform_params, sizeof(uniform_params),

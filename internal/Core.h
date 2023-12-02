@@ -12,12 +12,24 @@
 #define assume_aligned(ptr, sz) (__builtin_assume_aligned((const void *)ptr, sz))
 #define vectorcall
 #define restrict __restrict__
+#define popcount __builtin_popcount
 #endif
 #ifdef _MSC_VER
 #define force_inline __forceinline
 #define vectorcall __vectorcall
 #define assume_aligned(ptr, sz) (__assume((((const char *)ptr) - ((const char *)0)) % (sz) == 0), (ptr))
 #define restrict __restrict
+#if !defined(_M_ARM) && !defined(_M_ARM64)
+#define popcount __popcnt
+#else
+force_inline int popcount(unsigned x) {
+    int c = 0;
+    for (; x != 0; x &= x - 1) {
+        c++;
+    }
+    return c;
+}
+#endif
 
 #include <intrin.h>
 
