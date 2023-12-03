@@ -4,6 +4,17 @@
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+
+## [0.3.0] - 2023-12-03
+
+### Added
+
 - Light tree for hierarchical NEE and direct intersections
 - PMJ sampling
 - Ray type visibility masks (diffuse, glossy etc.)
@@ -127,6 +138,7 @@
 
 
 
-[Unreleased]: https://gitlab.com/sergcpp/Ray/-/compare/v0.2.0...master
+[Unreleased]: https://gitlab.com/sergcpp/Ray/-/compare/v0.3.0...master
+[0.3.0]: https://gitlab.com/sergcpp/Ray/-/releases/v0.3.0
 [0.2.0]: https://gitlab.com/sergcpp/Ray/-/releases/v0.2.0
 [0.1.0]: https://gitlab.com/sergcpp/Ray/-/releases/v0.1.0
