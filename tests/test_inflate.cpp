@@ -1,5 +1,7 @@
 #include "test_common.h"
 
+#include <cstring>
+
 #include "../internal/inflate/Inflate.h"
 
 static const unsigned char uncompressed_deflate_block[603] = {
