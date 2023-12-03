@@ -89,7 +89,7 @@ class Scene : public SceneCommon {
     };
     Cpu::SparseStorage<MeshBlas> rt_mesh_blases_;
 
-    static const uint32_t RtBLASChunkSize = 16 * 1024 * 1024;
+    const uint32_t RtBLASChunkSize = 16 * 1024 * 1024;
     FreelistAlloc rt_blas_mem_alloc_;
     std::vector<Buffer> rt_blas_buffers_;
     AccStructure rt_tlas_;
