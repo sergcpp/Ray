@@ -1,10 +1,11 @@
 # Ray [![pipeline status](https://gitlab.com/sergcpp/Ray/badges/master/pipeline.svg)](https://gitlab.com/sergcpp/Ray/-/commits/master)
 
-Small pathtracing library created for learning purposes. \
+Embeddable physically based renderer.
+
 Features:
 
 - Unidirectional pathtracing with NEE and skyportals
-- Principled BSDF, filmic tonemapping
+- Principled BSDF, filmic tonemapping, physical sky
 - Automatic texture compression
 - CPU backend accelerated using SSE/AVX/NEON extensions
 - GPU backends (Vulkan, DirectX 12) with optional HW raytracing
@@ -175,8 +176,9 @@ int main() {
 
     Ray::mesh_desc_t mesh_desc;
     mesh_desc.prim_type = Ray::ePrimType::TriangleList;
-    mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-    mesh_desc.vtx_attrs = attrs;
+    mesh_desc.vtx_positions = {attrs, 0, 8};
+    mesh_desc.vtx_normals = {attrs, 3, 8};
+    mesh_desc.vtx_uvs = {attrs, 6, 8};
     mesh_desc.vtx_indices = indices;
 
     // Setup material groups
