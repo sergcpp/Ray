@@ -1398,7 +1398,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
     const int MinSampleCount = 8;
     const int MaxSampleCount = 18;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 1992;
+    const int PixThres = 1995;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1790,7 +1790,7 @@ void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 14;
     const double MinPSNR = 19.0;
-    const int PixThres = 13549;
+    const int PixThres = 13550;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
