@@ -7,6 +7,7 @@
 namespace Ray {
 float f16_to_f32(uint16_t h);
 int round_up(int v, int align);
+int round_up_(ptrdiff_t v, int align) { return int(align * ((v + align - 1) / align)); }
 
 namespace unet_weights_hdr_alb_nrm {
 #include "precomputed/__oidn_weights_hdr_alb_nrm.inl"
@@ -376,60 +377,60 @@ int Ray::SetupUNetWeights(const bool gemm, const int alignment, unet_weight_offs
     const int input_channels = 9; // color(3), base color(3) and normals(3)
     const int el_align = (256 / sizeof(T));
 
-    const int total_count = round_up(extend(enc_conv0_weight.size(), input_channels), el_align) +
-                            round_up(enc_conv0_bias.size(), el_align) + round_up(enc_conv1_weight.size(), el_align) +
-                            round_up(enc_conv1_bias.size(), el_align) + round_up(enc_conv2_weight.size(), el_align) +
-                            round_up(enc_conv2_bias.size(), el_align) + round_up(enc_conv3_weight.size(), el_align) +
-                            round_up(enc_conv3_bias.size(), el_align) + round_up(enc_conv4_weight.size(), el_align) +
-                            round_up(enc_conv4_bias.size(), el_align) + round_up(enc_conv5a_weight.size(), el_align) +
-                            round_up(enc_conv5a_bias.size(), el_align) + round_up(enc_conv5b_weight.size(), el_align) +
-                            round_up(enc_conv5b_bias.size(), el_align) + round_up(dec_conv4a_weight.size(), el_align) +
-                            round_up(dec_conv4a_bias.size(), el_align) + round_up(dec_conv4b_weight.size(), el_align) +
-                            round_up(dec_conv4b_bias.size(), el_align) + round_up(dec_conv3a_weight.size(), el_align) +
-                            round_up(dec_conv3a_bias.size(), el_align) + round_up(dec_conv3b_weight.size(), el_align) +
-                            round_up(dec_conv3b_bias.size(), el_align) + round_up(dec_conv2a_weight.size(), el_align) +
-                            round_up(dec_conv2a_bias.size(), el_align) + round_up(dec_conv2b_weight.size(), el_align) +
-                            round_up(dec_conv2b_bias.size(), el_align) +
-                            round_up(count2(64, input_channels, 64), el_align) +
-                            round_up(dec_conv1a_bias.size(), el_align) + round_up(dec_conv1b_weight.size(), el_align) +
-                            round_up(dec_conv1b_bias.size(), el_align) + round_up(dec_conv0_weight.size(), el_align) +
-                            dec_conv0_bias.size();
+    const int total_count =
+        round_up(extend(int(enc_conv0_weight.size()), input_channels), el_align) +
+        round_up_(enc_conv0_bias.size(), el_align) + round_up_(enc_conv1_weight.size(), el_align) +
+        round_up_(enc_conv1_bias.size(), el_align) + round_up_(enc_conv2_weight.size(), el_align) +
+        round_up_(enc_conv2_bias.size(), el_align) + round_up_(enc_conv3_weight.size(), el_align) +
+        round_up_(enc_conv3_bias.size(), el_align) + round_up_(enc_conv4_weight.size(), el_align) +
+        round_up_(enc_conv4_bias.size(), el_align) + round_up_(enc_conv5a_weight.size(), el_align) +
+        round_up_(enc_conv5a_bias.size(), el_align) + round_up_(enc_conv5b_weight.size(), el_align) +
+        round_up_(enc_conv5b_bias.size(), el_align) + round_up_(dec_conv4a_weight.size(), el_align) +
+        round_up_(dec_conv4a_bias.size(), el_align) + round_up_(dec_conv4b_weight.size(), el_align) +
+        round_up_(dec_conv4b_bias.size(), el_align) + round_up_(dec_conv3a_weight.size(), el_align) +
+        round_up_(dec_conv3a_bias.size(), el_align) + round_up_(dec_conv3b_weight.size(), el_align) +
+        round_up_(dec_conv3b_bias.size(), el_align) + round_up_(dec_conv2a_weight.size(), el_align) +
+        round_up_(dec_conv2a_bias.size(), el_align) + round_up_(dec_conv2b_weight.size(), el_align) +
+        round_up_(dec_conv2b_bias.size(), el_align) + round_up(count2(64, input_channels, 64), el_align) +
+        round_up_(dec_conv1a_bias.size(), el_align) + round_up_(dec_conv1b_weight.size(), el_align) +
+        round_up_(dec_conv1b_bias.size(), el_align) + round_up_(dec_conv0_weight.size(), el_align) +
+        int(dec_conv0_bias.size());
 
     if (out_offsets) {
         out_offsets->enc_conv0_weight = 0;
         out_offsets->enc_conv0_bias =
-            out_offsets->enc_conv0_weight + round_up(extend(enc_conv0_weight.size(), input_channels), el_align);
-        out_offsets->enc_conv1_weight = out_offsets->enc_conv0_bias + round_up(enc_conv0_bias.size(), el_align);
-        out_offsets->enc_conv1_bias = out_offsets->enc_conv1_weight + round_up(enc_conv1_weight.size(), el_align);
-        out_offsets->enc_conv2_weight = out_offsets->enc_conv1_bias + round_up(enc_conv1_bias.size(), el_align);
-        out_offsets->enc_conv2_bias = out_offsets->enc_conv2_weight + round_up(enc_conv2_weight.size(), el_align);
-        out_offsets->enc_conv3_weight = out_offsets->enc_conv2_bias + round_up(enc_conv2_bias.size(), el_align);
-        out_offsets->enc_conv3_bias = out_offsets->enc_conv3_weight + round_up(enc_conv3_weight.size(), el_align);
-        out_offsets->enc_conv4_weight = out_offsets->enc_conv3_bias + round_up(enc_conv3_bias.size(), el_align);
-        out_offsets->enc_conv4_bias = out_offsets->enc_conv4_weight + round_up(enc_conv4_weight.size(), el_align);
-        out_offsets->enc_conv5a_weight = out_offsets->enc_conv4_bias + round_up(enc_conv4_bias.size(), el_align);
-        out_offsets->enc_conv5a_bias = out_offsets->enc_conv5a_weight + round_up(enc_conv5a_weight.size(), el_align);
-        out_offsets->enc_conv5b_weight = out_offsets->enc_conv5a_bias + round_up(enc_conv5a_bias.size(), el_align);
-        out_offsets->enc_conv5b_bias = out_offsets->enc_conv5b_weight + round_up(enc_conv5b_weight.size(), el_align);
-        out_offsets->dec_conv4a_weight = out_offsets->enc_conv5b_bias + round_up(enc_conv5b_bias.size(), el_align);
-        out_offsets->dec_conv4a_bias = out_offsets->dec_conv4a_weight + round_up(dec_conv4a_weight.size(), el_align);
-        out_offsets->dec_conv4b_weight = out_offsets->dec_conv4a_bias + round_up(dec_conv4a_bias.size(), el_align);
-        out_offsets->dec_conv4b_bias = out_offsets->dec_conv4b_weight + round_up(dec_conv4b_weight.size(), el_align);
-        out_offsets->dec_conv3a_weight = out_offsets->dec_conv4b_bias + round_up(dec_conv4b_bias.size(), el_align);
-        out_offsets->dec_conv3a_bias = out_offsets->dec_conv3a_weight + round_up(dec_conv3a_weight.size(), el_align);
-        out_offsets->dec_conv3b_weight = out_offsets->dec_conv3a_bias + round_up(dec_conv3a_bias.size(), el_align);
-        out_offsets->dec_conv3b_bias = out_offsets->dec_conv3b_weight + round_up(dec_conv3b_weight.size(), el_align);
-        out_offsets->dec_conv2a_weight = out_offsets->dec_conv3b_bias + round_up(dec_conv3b_bias.size(), el_align);
-        out_offsets->dec_conv2a_bias = out_offsets->dec_conv2a_weight + round_up(dec_conv2a_weight.size(), el_align);
-        out_offsets->dec_conv2b_weight = out_offsets->dec_conv2a_bias + round_up(dec_conv2a_bias.size(), el_align);
-        out_offsets->dec_conv2b_bias = out_offsets->dec_conv2b_weight + round_up(dec_conv2b_weight.size(), el_align);
-        out_offsets->dec_conv1a_weight = out_offsets->dec_conv2b_bias + round_up(dec_conv2b_bias.size(), el_align);
+            out_offsets->enc_conv0_weight + round_up(extend(int(enc_conv0_weight.size()), input_channels), el_align);
+        out_offsets->enc_conv1_weight = out_offsets->enc_conv0_bias + round_up_(enc_conv0_bias.size(), el_align);
+        out_offsets->enc_conv1_bias = out_offsets->enc_conv1_weight + round_up_(enc_conv1_weight.size(), el_align);
+        out_offsets->enc_conv2_weight = out_offsets->enc_conv1_bias + round_up_(enc_conv1_bias.size(), el_align);
+        out_offsets->enc_conv2_bias = out_offsets->enc_conv2_weight + round_up_(enc_conv2_weight.size(), el_align);
+        out_offsets->enc_conv3_weight = out_offsets->enc_conv2_bias + round_up_(enc_conv2_bias.size(), el_align);
+        out_offsets->enc_conv3_bias = out_offsets->enc_conv3_weight + round_up_(enc_conv3_weight.size(), el_align);
+        out_offsets->enc_conv4_weight = out_offsets->enc_conv3_bias + round_up_(enc_conv3_bias.size(), el_align);
+        out_offsets->enc_conv4_bias = out_offsets->enc_conv4_weight + round_up_(enc_conv4_weight.size(), el_align);
+        out_offsets->enc_conv5a_weight = out_offsets->enc_conv4_bias + round_up_(enc_conv4_bias.size(), el_align);
+        out_offsets->enc_conv5a_bias = out_offsets->enc_conv5a_weight + round_up_(enc_conv5a_weight.size(), el_align);
+        out_offsets->enc_conv5b_weight = out_offsets->enc_conv5a_bias + round_up_(enc_conv5a_bias.size(), el_align);
+        out_offsets->enc_conv5b_bias = out_offsets->enc_conv5b_weight + round_up_(enc_conv5b_weight.size(), el_align);
+        out_offsets->dec_conv4a_weight = out_offsets->enc_conv5b_bias + round_up_(enc_conv5b_bias.size(), el_align);
+        out_offsets->dec_conv4a_bias = out_offsets->dec_conv4a_weight + round_up_(dec_conv4a_weight.size(), el_align);
+        out_offsets->dec_conv4b_weight = out_offsets->dec_conv4a_bias + round_up_(dec_conv4a_bias.size(), el_align);
+        out_offsets->dec_conv4b_bias = out_offsets->dec_conv4b_weight + round_up_(dec_conv4b_weight.size(), el_align);
+        out_offsets->dec_conv3a_weight = out_offsets->dec_conv4b_bias + round_up_(dec_conv4b_bias.size(), el_align);
+        out_offsets->dec_conv3a_bias = out_offsets->dec_conv3a_weight + round_up_(dec_conv3a_weight.size(), el_align);
+        out_offsets->dec_conv3b_weight = out_offsets->dec_conv3a_bias + round_up_(dec_conv3a_bias.size(), el_align);
+        out_offsets->dec_conv3b_bias = out_offsets->dec_conv3b_weight + round_up_(dec_conv3b_weight.size(), el_align);
+        out_offsets->dec_conv2a_weight = out_offsets->dec_conv3b_bias + round_up_(dec_conv3b_bias.size(), el_align);
+        out_offsets->dec_conv2a_bias = out_offsets->dec_conv2a_weight + round_up_(dec_conv2a_weight.size(), el_align);
+        out_offsets->dec_conv2b_weight = out_offsets->dec_conv2a_bias + round_up_(dec_conv2a_bias.size(), el_align);
+        out_offsets->dec_conv2b_bias = out_offsets->dec_conv2b_weight + round_up_(dec_conv2b_weight.size(), el_align);
+        out_offsets->dec_conv1a_weight = out_offsets->dec_conv2b_bias + round_up_(dec_conv2b_bias.size(), el_align);
         out_offsets->dec_conv1a_bias =
             out_offsets->dec_conv1a_weight + round_up(count2(64, input_channels, 64), el_align);
-        out_offsets->dec_conv1b_weight = out_offsets->dec_conv1a_bias + round_up(dec_conv1a_bias.size(), el_align);
-        out_offsets->dec_conv1b_bias = out_offsets->dec_conv1b_weight + round_up(dec_conv1b_weight.size(), el_align);
-        out_offsets->dec_conv0_weight = out_offsets->dec_conv1b_bias + round_up(dec_conv1b_bias.size(), el_align);
-        out_offsets->dec_conv0_bias = out_offsets->dec_conv0_weight + round_up(dec_conv0_weight.size(), el_align);
+        out_offsets->dec_conv1b_weight = out_offsets->dec_conv1a_bias + round_up_(dec_conv1a_bias.size(), el_align);
+        out_offsets->dec_conv1b_bias = out_offsets->dec_conv1b_weight + round_up_(dec_conv1b_weight.size(), el_align);
+        out_offsets->dec_conv0_weight = out_offsets->dec_conv1b_bias + round_up_(dec_conv1b_bias.size(), el_align);
+        out_offsets->dec_conv0_bias = out_offsets->dec_conv0_weight + round_up_(dec_conv0_weight.size(), el_align);
 
         assert(out_offsets->dec_conv0_bias + dec_conv0_bias.size() == total_count);
         assert((out_offsets->enc_conv0_weight % el_align) == 0 && (out_offsets->enc_conv0_bias % el_align) == 0);

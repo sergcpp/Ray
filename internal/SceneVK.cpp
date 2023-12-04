@@ -425,15 +425,15 @@ std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint3
 
     ctx_->api().vkDestroyQueryPool(ctx_->device(), query_pool, nullptr);
 
-    FreelistAlloc::Allocation mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
+    FreelistAlloc::Allocation mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, uint32_t(compact_size));
     if (mem_alloc.offset == 0xffffffff) {
         // allocate one more buffer
-        const uint32_t buf_size = std::max(next_power_of_two(compact_size), RtBLASChunkSize);
+        const uint32_t buf_size = std::max(next_power_of_two(uint32_t(compact_size)), RtBLASChunkSize);
         rt_blas_buffers_.emplace_back("RT BLAS Buffer", ctx_, eBufType::AccStructure, buf_size);
         const uint16_t pool_index = rt_blas_mem_alloc_.AddPool(buf_size);
         assert(pool_index == rt_blas_buffers_.size() - 1);
         // try to allocate again
-        mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
+        mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, uint32_t(compact_size));
         assert(mem_alloc.offset != 0xffffffff);
     }
 

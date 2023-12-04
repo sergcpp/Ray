@@ -251,9 +251,9 @@ std::pair<uint32_t, uint32_t> Ray::Dx::Scene::Build_HWRT_BLAS_nolock(const uint3
     }
 
     const uint32_t compact_size =
-        reinterpret_cast<const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC *>(
-            compacted_sizes_readback_buf.Map())
-            ->CompactedSizeInBytes;
+        uint32_t(reinterpret_cast<const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC *>(
+                     compacted_sizes_readback_buf.Map())
+                     ->CompactedSizeInBytes);
     compacted_sizes_readback_buf.Unmap();
 
     FreelistAlloc::Allocation mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);

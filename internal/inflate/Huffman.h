@@ -31,7 +31,7 @@ struct huff_table_t {
     uint32_t fast_symbol[1 << HuffFastSymbolBits];
     uint32_t start_index[16];
     uint32_t symbols;
-    int num_sorted, starting_pos[16];
+    uint32_t num_sorted, starting_pos[16];
     uint32_t rev_sym_table[HuffMaxSymbols * 2];
 };
 

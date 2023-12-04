@@ -789,7 +789,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params,
     if (planet_intersection.get<0>() < 0 && clouds_intersection.get<1>() > 0 && params.cirrus_clouds_amount > 0.0f &&
         light_brightness > 0.0f) {
         Ref::simd_fvec2 cirrus_coords =
-            3e-4 * Ref::simd_fvec2{params.clouds_offset_z, params.clouds_offset_x} +
+            3e-4f * Ref::simd_fvec2{params.clouds_offset_z, params.clouds_offset_x} +
             0.8f * (Ref::simd_fvec2{ray_dir.get<2>(), ray_dir.get<0>()}) / (fabsf(ray_dir.get<1>()) + 0.02f);
         cirrus_coords.set<1>(cirrus_coords.get<1>() + 1.75f);
 

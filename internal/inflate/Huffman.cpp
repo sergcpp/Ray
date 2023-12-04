@@ -1,7 +1,7 @@
 #include "Huffman.h"
 
 void Ray::huff_insert(std::vector<uint32_t> &q, Span<const huff_node_t> nodes, const uint32_t n) {
-    uint32_t i = q.size();
+    uint32_t i = uint32_t(q.size());
     q.emplace_back();
 
     while ((i > 0) && (nodes[q[huff_parent(i)]].freq > nodes[n].freq)) {
@@ -55,19 +55,19 @@ uint32_t Ray::huff_build_tree(Span<const char> input, const uint32_t freq[256],
             new_node.freq = freq[i];
             new_node.c = char(i);
 
-            huff_insert(queue, out_nodes, out_nodes.size() - 1);
+            huff_insert(queue, out_nodes, uint32_t(out_nodes.size() - 1));
         }
     }
 
-    const uint32_t n = queue.size() - 1;
-    for (int i = 0; i < n; ++i) {
+    const uint32_t n = uint32_t(queue.size() - 1);
+    for (uint32_t i = 0; i < n; ++i) {
         out_nodes.emplace_back();
         huff_node_t &new_node = out_nodes.back();
         new_node.left = huff_extract_min(queue, out_nodes);
         new_node.right = huff_extract_min(queue, out_nodes);
         new_node.freq = out_nodes[new_node.left].freq + out_nodes[new_node.right].freq;
 
-        huff_insert(queue, out_nodes, out_nodes.size() - 1);
+        huff_insert(queue, out_nodes, uint32_t(out_nodes.size() - 1));
     }
 
     return queue[0];
@@ -112,8 +112,8 @@ int Ray::huff_finalize_table(huff_table_t &out_table) {
     uint32_t canonical_code_word = 0;
     uint32_t *rev_code_length_table = out_table.rev_sym_table + out_table.symbols;
     int canonical_length = 1;
-    int i;
 
+    uint32_t i;
     for (i = 0; i < (1 << HuffFastSymbolBits); i++) {
         out_table.fast_symbol[i] = 0;
     }
