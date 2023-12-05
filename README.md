@@ -1,6 +1,6 @@
 # Ray [![pipeline status](https://gitlab.com/sergcpp/Ray/badges/master/pipeline.svg)](https://gitlab.com/sergcpp/Ray/-/commits/master)
 
-Embeddable physically based renderer.
+Embeddable cross-platform semi-realtime physically based renderer.
 
 Features:
 
@@ -9,7 +9,8 @@ Features:
 - Automatic texture compression
 - CPU backend accelerated using SSE/AVX/NEON extensions
 - GPU backends (Vulkan, DirectX 12) with optional HW raytracing
-- DNN denoising (manual inference of OpenImageDenoise UNet), accelerated using VK_NV_cooperative_matrix if available
+- DNN denoising (manual port of OpenImageDenoise UNet), accelerated using VK_NV_cooperative_matrix if available
+- Compatible with Windows (including ARM), Linux, and macOS
 
 <details>
   <summary>Images</summary>
