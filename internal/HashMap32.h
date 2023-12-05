@@ -166,9 +166,9 @@ template <typename K, typename V, typename HashFunc = Hash<K>, typename KeyEqual
 
     bool Insert(const K &key, const V &val) {
         const V *v = Find(key);
-        if (v)
+        if (v) {
             return false;
-
+        }
         *InsertNoCheck(key) = val;
         return true;
     }
@@ -177,9 +177,9 @@ template <typename K, typename V, typename HashFunc = Hash<K>, typename KeyEqual
         uint32_t hash = hash_func_(key);
 
         const V *v = Find(hash, key);
-        if (v)
+        if (v) {
             return false;
-
+        }
         InsertInternal(hash, std::forward<K>(key), std::forward<V>(val));
         return true;
     }

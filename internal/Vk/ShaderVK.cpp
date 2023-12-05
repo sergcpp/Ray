@@ -4,11 +4,12 @@
 
 #include "../../Log.h"
 #include "../ScopeExit.h"
+#include "../TextureParams.h"
 #include "ContextVK.h"
-
-#include "../../third-party/SPIRV-Reflect/spirv_reflect.h"
+#include "SPIRV.h"
 
 namespace Ray {
+int round_up(int v, int align);
 namespace Vk {
 extern const VkShaderStageFlagBits g_shader_stages_vk[] = {
     VK_SHADER_STAGE_VERTEX_BIT,                  // Vert
@@ -32,10 +33,10 @@ static_assert(int(eShaderType::AnyHit) < int(eShaderType::Intersection), "!");
 } // namespace Vk
 } // namespace Ray
 
-Ray::Vk::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_code, const int code_size,
-                        const eShaderType type, ILog *log)
+Ray::Vk::Shader::Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
+                        ILog *log)
     : ctx_(ctx), name_(name) {
-    if (!Init(shader_code, code_size, type, log)) {
+    if (!Init(shader_code, type, log)) {
         throw std::runtime_error("Shader Init error!");
     }
 }
@@ -63,8 +64,13 @@ Ray::Vk::Shader &Ray::Vk::Shader::operator=(Shader &&rhs) noexcept {
     return (*this);
 }
 
-bool Ray::Vk::Shader::Init(const uint8_t *shader_code, const int code_size, const eShaderType type, ILog *log) {
-    if (!InitFromSPIRV(shader_code, code_size, type, log)) {
+bool Ray::Vk::Shader::Init(Span<const uint8_t> shader_code, const eShaderType type, ILog *log) {
+    if (shader_code.size() % sizeof(uint32_t) != 0) {
+        return false;
+    }
+    if (!InitFromSPIRV(Span<const uint32_t>{reinterpret_cast<const uint32_t *>(shader_code.data()),
+                                            shader_code.size() / sizeof(uint32_t)},
+                       type, log)) {
         return false;
     }
 
@@ -79,9 +85,8 @@ bool Ray::Vk::Shader::Init(const uint8_t *shader_code, const int code_size, cons
     return true;
 }
 
-bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_size, const eShaderType type,
-                                    ILog *log) {
-    if (!shader_code) {
+bool Ray::Vk::Shader::InitFromSPIRV(Span<const uint32_t> shader_code, const eShaderType type, ILog *log) {
+    if (shader_code.empty()) {
         return false;
     }
 
@@ -89,8 +94,8 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
 
     { // init module
         VkShaderModuleCreateInfo create_info = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        create_info.codeSize = static_cast<size_t>(code_size);
-        create_info.pCode = reinterpret_cast<const uint32_t *>(shader_code);
+        create_info.codeSize = static_cast<size_t>(shader_code.size() * sizeof(uint32_t));
+        create_info.pCode = reinterpret_cast<const uint32_t *>(shader_code.data());
 
         const VkResult res = ctx_->api().vkCreateShaderModule(ctx_->device(), &create_info, nullptr, &module_);
         if (res != VK_SUCCESS) {
@@ -99,48 +104,104 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
         }
     }
 
-    SpvReflectShaderModule module = {};
-    const SpvReflectResult res = spvReflectCreateShaderModule(code_size, shader_code, &module);
-    if (res != SPV_REFLECT_RESULT_SUCCESS) {
-        log->Error("Failed to reflect shader module!");
-        return false;
-    }
-    SCOPE_EXIT(spvReflectDestroyShaderModule(&module));
-
     attr_bindings.clear();
     unif_bindings.clear();
     pc_ranges.clear();
 
-    for (uint32_t i = 0; i < module.input_variable_count; i++) {
-        const auto *var = module.input_variables[i];
-        if (int(var->built_in) == -1) {
-            Descr &new_item = attr_bindings.emplace_back();
-            new_item.name = var->name;
-            new_item.loc = int(var->location);
-            new_item.format = VkFormat(var->format);
+    spirv_parser_state_t ps;
+    ps.endianness = spirv_test_endianness(shader_code);
+    if (ps.endianness == eEndianness::Invalid) {
+        return false;
+    }
+    ps.header.magic = fix_endianness(shader_code[SPIRV_INDEX_MAGIC_NUMBER], ps.endianness);
+    ps.header.version = fix_endianness(shader_code[SPIRV_INDEX_VERSION_NUMBER], ps.endianness);
+    ps.header.generator = fix_endianness(shader_code[SPIRV_INDEX_GENERATOR_NUMBER], ps.endianness);
+    ps.header.bound = fix_endianness(shader_code[SPIRV_INDEX_BOUND], ps.endianness);
+    ps.header.schema = fix_endianness(shader_code[SPIRV_INDEX_SCHEMA], ps.endianness);
+    ps.header.instructions = &shader_code[SPIRV_INDEX_INSTRUCTION];
+
+    uint32_t offset = 0;
+    while (offset < shader_code.size() - SPIRV_INDEX_INSTRUCTION) {
+        const uint32_t instruction = fix_endianness(ps.header.instructions[offset], ps.endianness);
+
+        const uint32_t length = instruction >> 16;
+        const auto opcode = eSPIRVOp(instruction & 0x0ffffu);
+
+        switch (opcode) {
+        case eSPIRVOp::Name:
+        case eSPIRVOp::TypeInt:
+        case eSPIRVOp::TypeFloat:
+        case eSPIRVOp::TypeVector:
+        case eSPIRVOp::TypeStruct:
+        case eSPIRVOp::TypeImage:
+        case eSPIRVOp::TypeSampledImage:
+        case eSPIRVOp::TypeRuntimeArray:
+        case eSPIRVOp::TypePointer:
+        case eSPIRVOp::TypeArray:
+        case eSPIRVOp::TypeAccelerationStructureKHR: {
+            const uint32_t result_id = fix_endianness(ps.header.instructions[offset + 1], ps.endianness);
+            ps.offsets[result_id] = offset;
+        } break;
+        case eSPIRVOp::Constant: {
+            const uint32_t result_id = fix_endianness(ps.header.instructions[offset + 2], ps.endianness);
+            ps.offsets[result_id] = offset;
+        } break;
+        case eSPIRVOp::Decorate: {
+            const uint32_t target = fix_endianness(ps.header.instructions[offset + 1], ps.endianness);
+            const auto decoration = eSPIRVDecoration(fix_endianness(ps.header.instructions[offset + 2], ps.endianness));
+            if (decoration == eSPIRVDecoration::DescriptorSet) {
+                ps.decorations[target].descriptor_set =
+                    fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
+            } else if (decoration == eSPIRVDecoration::Binding) {
+                ps.decorations[target].binding = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
+            }
+        } break;
+        case eSPIRVOp::Variable: {
+            const uint32_t result_type = fix_endianness(ps.header.instructions[offset + 1], ps.endianness);
+            const uint32_t result_id = fix_endianness(ps.header.instructions[offset + 2], ps.endianness);
+            const auto storage_class =
+                eSPIRVStorageClass(fix_endianness(ps.header.instructions[offset + 3], ps.endianness));
+            const char *debug_name = parse_debug_name(ps, result_id);
+            if (storage_class == eSPIRVStorageClass::Input) {
+            } else if (storage_class == eSPIRVStorageClass::PushConstant) {
+                // TODO: Properly initialize offset
+                const uint32_t offset = 0;
+                const uint32_t size = round_up(parse_type_size(ps, result_type), SPIRV_DATA_ALIGNMENT);
+                pc_ranges.push_back({offset, size});
+            } else if (storage_class == eSPIRVStorageClass::Output) {
+            } else if (storage_class == eSPIRVStorageClass::UniformConstant) {
+                if (strcmp(debug_name, "g_textures") == 0) {
+                    volatile int ii = 0;
+                }
+
+                const spirv_uniform_props_t props = parse_uniform_props(ps, result_type);
+                const spirv_decoration_t &decorations = ps.decorations[result_id];
+
+                Descr &new_item = unif_bindings.emplace_back();
+                if (debug_name) {
+                    new_item.name = debug_name;
+                }
+                new_item.desc_type = props.descr_type;
+                new_item.loc = decorations.binding;
+                new_item.set = decorations.descriptor_set;
+                new_item.count = props.runtime_array ? 0 : props.count;
+            } else if (storage_class == eSPIRVStorageClass::StorageBuffer) {
+                const spirv_buffer_props_t props = parse_buffer_props(ps, result_id);
+                const spirv_decoration_t &decorations = ps.decorations[result_id];
+
+                Descr &new_item = unif_bindings.emplace_back();
+                if (debug_name) {
+                    new_item.name = debug_name;
+                }
+                new_item.desc_type = VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                new_item.loc = decorations.binding;
+                new_item.set = decorations.descriptor_set;
+                new_item.count = props.runtime_array ? 0 : props.count;
+            }
+        } break;
         }
-    }
 
-    for (uint32_t i = 0; i < module.descriptor_binding_count; i++) {
-        const auto &desc = module.descriptor_bindings[i];
-
-        const bool unbounded_array =
-            (desc.descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
-             desc.descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE) &&
-            desc.count == 1 &&
-            (desc.type_description->op == SpvOpTypeRuntimeArray || desc.type_description->op == SpvOpTypeArray);
-
-        Descr &new_item = unif_bindings.emplace_back();
-        new_item.name = desc.name;
-        new_item.desc_type = VkDescriptorType(desc.descriptor_type);
-        new_item.loc = int(desc.binding);
-        new_item.set = int(desc.set);
-        new_item.count = unbounded_array ? 0 : int(desc.count);
-    }
-
-    for (uint32_t i = 0; i < module.push_constant_block_count; ++i) {
-        const auto &blck = module.push_constant_blocks[i];
-        pc_ranges.push_back({blck.offset, blck.size});
+        offset += length;
     }
 
     return true;

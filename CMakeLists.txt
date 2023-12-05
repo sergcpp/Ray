@@ -240,15 +240,15 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/ShaderVK.h
                     internal/Vk/ShaderVK.cpp
                     internal/Vk/SparseStorageVK.h
+                    internal/Vk/SPIRV.h
+                    internal/Vk/SPIRV.cpp
                     internal/Vk/TextureVK.h
                     internal/Vk/TextureVK.cpp
                     internal/Vk/TextureAtlasVK.h
                     internal/Vk/TextureAtlasVK.cpp
                     internal/Vk/VectorVK.h
                     internal/Vk/VertexInputVK.h
-                    internal/Vk/VertexInputVK.cpp
-                    third-party/SPIRV-Reflect/spirv_reflect.h
-                    third-party/SPIRV-Reflect/spirv_reflect.c)
+                    internal/Vk/VertexInputVK.cpp)
 
 if(WIN32)
     set(DX_SOURCE_FILES internal/Dx/AccStructureDX.h
