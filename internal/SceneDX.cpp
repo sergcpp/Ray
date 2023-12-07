@@ -418,3 +418,5 @@ void Ray::Dx::Scene::Rebuild_HWRT_TLAS_nolock() {
     instance_stage_buf.FreeImmediate();
     geo_data_stage_buf.FreeImmediate();
 }
+
+void Ray::Dx::Scene::_insert_mem_barrier(void *cmd_buf) {}

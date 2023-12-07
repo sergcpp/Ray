@@ -112,6 +112,9 @@ class Scene : public SceneCommon {
     TextureHandle AddAtlasTexture_nolock(const tex_desc_t &t);
     TextureHandle AddBindlessTexture_nolock(const tex_desc_t &t);
 
+    // Workaround for an Intel Arc issues
+    void _insert_mem_barrier(void *cmdbuf);
+
     template <typename T, int N>
     static void WriteTextureMips(const color_t<T, N> data[], const int _res[2], int mip_count, bool compress,
                                  uint8_t out_data[], uint32_t out_size[16]);
@@ -1607,6 +1610,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
         temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        _insert_mem_barrier(cmd_buf);
 
         CopyImageToBuffer(t, 0, 0, 0, t.params.w, t.params.h, temp_stage_buf, cmd_buf, 0);
 
@@ -1625,6 +1629,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
         temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        _insert_mem_barrier(cmd_buf);
 
         atlas.CopyRegionTo(t.page[0], t.pos[0][0], t.pos[0][1], (t.width & ATLAS_TEX_WIDTH_BITS),
                            (t.height & ATLAS_TEX_HEIGHT_BITS), temp_stage_buf, cmd_buf, 0);
@@ -1792,6 +1797,8 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
             j += round_up(res * sizeof(simd_fvec4), TextureDataPitchAlignment);
         }
     }
+    temp_stage_buf.FlushMappedRange(0, temp_stage_buf.size());
+    temp_stage_buf.Unmap();
 
     Tex2DParams p;
     p.w = p.h = (env_map_qtree_.res / 2);
@@ -1811,7 +1818,6 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
 
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
-    temp_stage_buf.Unmap();
     temp_stage_buf.FreeImmediate();
 
     log_->Info("Env map qtree res is %i", env_map_qtree_.res);

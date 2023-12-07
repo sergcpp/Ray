@@ -645,3 +645,14 @@ void Ray::Vk::Scene::Rebuild_HWRT_TLAS_nolock() {
     instance_stage_buf.FreeImmediate();
     geo_data_stage_buf.FreeImmediate();
 }
+
+void Ray::Vk::Scene::_insert_mem_barrier(void *cmd_buf) {
+    VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    mem_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+    mem_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    ctx_->api().vkCmdPipelineBarrier(
+        reinterpret_cast<VkCommandBuffer>(cmd_buf),
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0, 1, &mem_barrier, 0,
+        nullptr, 0, nullptr);
+}
