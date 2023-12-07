@@ -66,9 +66,6 @@ class Buffer {
     uint32_t size_ = 0;
     uint8_t *mapped_ptr_ = nullptr;
     uint32_t mapped_offset_ = 0xffffffff;
-#ifndef NDEBUG
-    SmallVector<RangeFence, 4> flushed_ranges_;
-#endif
 
     static int g_GenCounter;
 
@@ -112,7 +109,6 @@ class Buffer {
 
     uint8_t *Map(const bool persistent = false) { return MapRange(0, size_, persistent); }
     uint8_t *MapRange(uint32_t offset, uint32_t size, bool persistent = false);
-    void FlushMappedRange(uint32_t offset, uint32_t size, bool autoalign = false) const;
     void Unmap();
 
     void Fill(uint32_t dst_offset, uint32_t size, uint32_t data, void *_cmd_buf);

@@ -43,7 +43,8 @@ VkBufferUsageFlags GetVkBufferUsageFlags(const Context *ctx, const eBufType type
 
 VkMemoryPropertyFlags GetVkMemoryPropertyFlags(const eBufType type) {
     if (type == eBufType::Upload || type == eBufType::Readback) {
-        return (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+        return (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
     return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 }
@@ -78,10 +79,6 @@ Ray::Vk::Buffer &Ray::Vk::Buffer::operator=(Buffer &&rhs) noexcept {
     size_ = exchange(rhs.size_, 0);
     mapped_ptr_ = exchange(rhs.mapped_ptr_, nullptr);
     mapped_offset_ = exchange(rhs.mapped_offset_, 0xffffffff);
-
-#ifndef NDEBUG
-    flushed_ranges_ = std::move(rhs.flushed_ranges_);
-#endif
 
     resource_state = exchange(rhs.resource_state, eResState::Undefined);
 
@@ -292,18 +289,6 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size, c
     assert(offset == AlignMapOffset(offset));
     assert((offset + size) == size_ || (offset + size) == AlignMapOffset(offset + size));
 
-#ifndef NDEBUG
-    for (auto it = std::begin(flushed_ranges_); it != std::end(flushed_ranges_);) {
-        if (offset + size >= it->range.first && offset < it->range.first + it->range.second) {
-            const WaitResult res = it->fence.ClientWaitSync(0);
-            assert(res == WaitResult::Success);
-            it = flushed_ranges_.erase(it);
-        } else {
-            ++it;
-        }
-    }
-#endif
-
     void *mapped = nullptr;
     const VkResult res = ctx_->api().vkMapMemory(ctx_->device(), mem_, VkDeviceSize(offset),
                                                  VkDeviceSize(AlignMapOffsetUp(size)), 0, &mapped);
@@ -312,60 +297,9 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size, c
         return nullptr;
     }
 
-    if (type_ == eBufType::Readback) {
-        VkMappedMemoryRange range = {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
-        range.memory = mem_;
-        range.offset = VkDeviceSize(offset);
-        range.size = VkDeviceSize(AlignMapOffsetUp(size));
-        range.pNext = nullptr;
-
-        const VkResult res = ctx_->api().vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
-        if (res != VK_SUCCESS) {
-            ctx_->log()->Error("Failed to invalidate memory range!");
-        }
-    }
-
     mapped_ptr_ = reinterpret_cast<uint8_t *>(mapped);
     mapped_offset_ = offset;
     return reinterpret_cast<uint8_t *>(mapped);
-}
-
-void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const bool autoalign) const {
-    if (autoalign && offset != AlignMapOffset(offset)) {
-        size += offset - AlignMapOffset(offset);
-        offset = AlignMapOffset(offset);
-    }
-    assert(offset == AlignMapOffset(offset));
-    if (autoalign && (offset + size) != size_) {
-        size = AlignMapOffsetUp(offset + size) - offset;
-    }
-    assert((offset + size) == size_ || (offset + size) == AlignMapOffset(offset + size));
-
-    // offset argument is relative to mapped range
-    offset += mapped_offset_;
-
-    VkMappedMemoryRange range = {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
-    range.memory = mem_;
-    range.offset = VkDeviceSize(offset);
-    range.size = VkDeviceSize(AlignMapOffsetUp(size));
-    range.pNext = nullptr;
-
-    if (type_ == eBufType::Upload) {
-        const VkResult res = ctx_->api().vkFlushMappedMemoryRanges(ctx_->device(), 1, &range);
-        if (res != VK_SUCCESS) {
-            ctx_->log()->Error("Failed to flush memory range!");
-        }
-    } else if (type_ == eBufType::Readback) {
-        const VkResult res = ctx_->api().vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
-        if (res != VK_SUCCESS) {
-            ctx_->log()->Error("Failed to invalidate memory range!");
-        }
-    }
-
-#ifndef NDEBUG
-    // flushed_ranges_.emplace_back(std::make_pair(offset, size),
-    //                             SyncFence{glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0)});
-#endif
 }
 
 void Ray::Vk::Buffer::Unmap() {

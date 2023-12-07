@@ -1347,7 +1347,6 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) con
             is_set = false;
         }
 
-        pixel_readback_buf_.FlushMappedRange(0, pixel_readback_buf_.size());
         frame_dirty_ = false;
         pixel_readback_is_tonemapped_ = tonemap;
     }
@@ -1417,7 +1416,6 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
             is_set = false;
         }
 
-        readback_buffer_to_use.FlushMappedRange(0, readback_buffer_to_use.size());
         dirty_flag = false;
     }
 

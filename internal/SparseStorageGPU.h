@@ -94,7 +94,6 @@ template <typename T, bool Replicate = true> class SparseStorage {
 
         T *el = reinterpret_cast<T *>(temp_buf.Map());
         *el = temp_obj;
-        temp_buf.FlushMappedRange(0, sizeof(T), true /* align size */);
         temp_buf.Unmap();
 
         gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), sizeof(T), temp_buf, 0, cmd_buf);
@@ -137,7 +136,6 @@ template <typename T, bool Replicate = true> class SparseStorage {
             for (uint32_t i = 0; i < count; ++i) {
                 new (el + i) T(*it++);
             }
-            temp_buf.FlushMappedRange(0, count * sizeof(T), true /* align size */);
             temp_buf.Unmap();
 
             gpu_buf_.UpdateSubRegion(al.offset * sizeof(T), count * sizeof(T), temp_buf, 0, cmd_buf);
@@ -190,7 +188,6 @@ template <typename T, bool Replicate = true> class SparseStorage {
         for (uint32_t i = 0; i < count; ++i) {
             new (el + i) T(els[i]);
         }
-        temp_buf.FlushMappedRange(0, count * sizeof(T), true /* align size */);
         temp_buf.Unmap();
 
         gpu_buf_.UpdateSubRegion(start * sizeof(T), count * sizeof(T), temp_buf, 0, cmd_buf);

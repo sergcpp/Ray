@@ -228,7 +228,6 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
         sbuf.Unmap();
 
         Tex2DParams _p = p;
@@ -244,7 +243,6 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
     } else {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, data, size);
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(size));
         sbuf.Unmap();
 
         InitFromRAWData(&sbuf, 0, _cmd_buf, mem_allocs, p, log);
@@ -259,7 +257,6 @@ void Ray::Vk::Texture2D::Init(const void *data[6], const int size[6], const Tex2
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
         sbuf.Unmap();
 
         int data_off[6] = {};
@@ -288,7 +285,6 @@ void Ray::Vk::Texture2D::Init(const void *data[6], const int size[6], const Tex2
                 data_off[i] = -1;
             }
         }
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
         sbuf.Unmap();
 
         InitFromRAWData(sbuf, data_off, _cmd_buf, mem_allocs, p, log);

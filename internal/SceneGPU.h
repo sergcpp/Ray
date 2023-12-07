@@ -651,7 +651,6 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         }
     }
 
-    temp_stage_buf.FlushMappedRange(0, temp_stage_buf.size(), true);
     temp_stage_buf.Unmap();
 
     Tex2DParams p = {};
@@ -1797,7 +1796,6 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
             j += round_up(res * sizeof(simd_fvec4), TextureDataPitchAlignment);
         }
     }
-    temp_stage_buf.FlushMappedRange(0, temp_stage_buf.size());
     temp_stage_buf.Unmap();
 
     Tex2DParams p;
