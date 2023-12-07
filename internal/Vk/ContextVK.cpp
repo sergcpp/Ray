@@ -38,7 +38,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(const VkDebugReportFlagsEXT f
 }
 
 #ifndef NDEBUG
-const char *g_enabled_layers[] = {"VK_LAYER_KHRONOS_validation", "VK_LAYER_KHRONOS_synchronization2"};
+const char *g_enabled_layers[] = {"VK_LAYER_KHRONOS_validation"};
 const int g_enabled_layers_count = COUNT_OF(g_enabled_layers);
 #else
 const char **g_enabled_layers = nullptr;
