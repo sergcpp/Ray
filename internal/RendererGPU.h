@@ -35,9 +35,9 @@ class Renderer : public RendererBase {
     std::unique_ptr<Context> ctx_;
 
     Shader sh_prim_rays_gen_simple_, sh_prim_rays_gen_adaptive_, sh_intersect_scene_, sh_intersect_scene_indirect_,
-        sh_intersect_area_lights_, sh_shade_primary_, sh_shade_primary_b_, sh_shade_primary_n_, sh_shade_primary_bn_,
-        sh_shade_secondary_, sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_,
-        sh_filter_variance_, sh_nlm_filter_, sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_;
+        sh_intersect_area_lights_, sh_shade_primary_, sh_shade_secondary_, sh_intersect_scene_shadow_,
+        sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_filter_variance_, sh_nlm_filter_,
+        sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_;
     Shader sh_sort_hash_rays_, sh_sort_init_count_table_, sh_sort_reduce_, sh_sort_scan_, sh_sort_scan_add_,
         sh_sort_scatter_, sh_sort_reorder_rays_;
     Shader sh_intersect_scene_rgen_, sh_intersect_scene_rchit_, sh_intersect_scene_rmiss_,
@@ -50,10 +50,10 @@ class Renderer : public RendererBase {
         sh_convolution_concat_64_6_64_, sh_convolution_concat_64_9_64_, sh_convolution_32_3_img_;
 
     Program prog_prim_rays_gen_simple_, prog_prim_rays_gen_adaptive_, prog_intersect_scene_,
-        prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_, prog_shade_primary_b_,
-        prog_shade_primary_n_, prog_shade_primary_bn_, prog_shade_secondary_, prog_intersect_scene_shadow_,
-        prog_prepare_indir_args_, prog_mix_incremental_, prog_postprocess_, prog_filter_variance_, prog_nlm_filter_,
-        prog_nlm_filter_b_, prog_nlm_filter_n_, prog_nlm_filter_bn_, prog_debug_rt_;
+        prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_, prog_shade_secondary_,
+        prog_intersect_scene_shadow_, prog_prepare_indir_args_, prog_mix_incremental_, prog_postprocess_,
+        prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_, prog_nlm_filter_n_, prog_nlm_filter_bn_,
+        prog_debug_rt_;
     Program prog_sort_hash_rays_, prog_sort_init_count_table_, prog_sort_reduce_, prog_sort_scan_, prog_sort_scan_add_,
         prog_sort_scatter_, prog_sort_reorder_rays_;
     Program prog_intersect_scene_rtpipe_, prog_intersect_scene_indirect_rtpipe_;
@@ -65,9 +65,9 @@ class Renderer : public RendererBase {
         prog_convolution_concat_64_6_64_, prog_convolution_concat_64_9_64_, prog_convolution_32_3_img_;
 
     Pipeline pi_prim_rays_gen_simple_, pi_prim_rays_gen_adaptive_, pi_intersect_scene_, pi_intersect_scene_indirect_,
-        pi_intersect_area_lights_, pi_shade_primary_, pi_shade_primary_b_, pi_shade_primary_n_, pi_shade_primary_bn_,
-        pi_shade_secondary_, pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_,
-        pi_filter_variance_, pi_nlm_filter_, pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_;
+        pi_intersect_area_lights_, pi_shade_primary_, pi_shade_secondary_, pi_intersect_scene_shadow_,
+        pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_filter_variance_, pi_nlm_filter_,
+        pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_;
     Pipeline pi_sort_hash_rays_, pi_sort_init_count_table_, pi_sort_reduce_, pi_sort_scan_, pi_sort_scan_add_,
         pi_sort_scatter_, pi_sort_reorder_rays_, pi_intersect_scene_rtpipe_, pi_intersect_scene_indirect_rtpipe_;
     Pipeline pi_convolution_Img_3_32_, pi_convolution_Img_6_32_, pi_convolution_Img_9_32_,

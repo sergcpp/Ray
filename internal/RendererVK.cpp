@@ -142,13 +142,7 @@ namespace Vk {
 #include "shaders/output/primary_ray_gen_adaptive.comp.spv.inl"
 #include "shaders/output/primary_ray_gen_simple.comp.spv.inl"
 #include "shaders/output/shade_primary_atlas.comp.spv.inl"
-#include "shaders/output/shade_primary_atlas_b.comp.spv.inl"
-#include "shaders/output/shade_primary_atlas_bn.comp.spv.inl"
-#include "shaders/output/shade_primary_atlas_n.comp.spv.inl"
 #include "shaders/output/shade_primary_bindless.comp.spv.inl"
-#include "shaders/output/shade_primary_bindless_b.comp.spv.inl"
-#include "shaders/output/shade_primary_bindless_bn.comp.spv.inl"
-#include "shaders/output/shade_primary_bindless_n.comp.spv.inl"
 #include "shaders/output/shade_secondary_atlas.comp.spv.inl"
 #include "shaders/output/shade_secondary_bindless.comp.spv.inl"
 #include "shaders/output/sort_hash_rays.comp.spv.inl"
@@ -273,21 +267,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
                Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_spv}
                                      : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_spv}),
                eShaderType::Comp, log};
-    sh_shade_primary_b_ =
-        Shader{"Shade (Primary) B", ctx_.get(),
-               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_b_comp_spv}
-                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_b_comp_spv}),
-               eShaderType::Comp, log};
-    sh_shade_primary_n_ =
-        Shader{"Shade (Primary) N", ctx_.get(),
-               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_n_comp_spv}
-                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_n_comp_spv}),
-               eShaderType::Comp, log};
-    sh_shade_primary_bn_ =
-        Shader{"Shade (Primary) BN", ctx_.get(),
-               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_bn_comp_spv}
-                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_bn_comp_spv}),
-               eShaderType::Comp, log};
     sh_shade_secondary_ =
         Shader{"Shade (Secondary)", ctx_.get(),
                Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_spv}
@@ -368,9 +347,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_intersect_scene_indirect_, log};
     prog_intersect_area_lights_ = Program{"Intersect Area Lights", ctx_.get(), &sh_intersect_area_lights_, log};
     prog_shade_primary_ = Program{"Shade (Primary)", ctx_.get(), &sh_shade_primary_, log};
-    prog_shade_primary_b_ = Program{"Shade (Primary) B", ctx_.get(), &sh_shade_primary_b_, log};
-    prog_shade_primary_n_ = Program{"Shade (Primary) N", ctx_.get(), &sh_shade_primary_n_, log};
-    prog_shade_primary_bn_ = Program{"Shade (Primary) BN", ctx_.get(), &sh_shade_primary_bn_, log};
     prog_shade_secondary_ = Program{"Shade (Secondary)", ctx_.get(), &sh_shade_secondary_, log};
     prog_intersect_scene_shadow_ = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_intersect_scene_shadow_, log};
     prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
@@ -412,9 +388,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         !pi_intersect_scene_indirect_.Init(ctx_.get(), &prog_intersect_scene_indirect_, log) ||
         !pi_intersect_area_lights_.Init(ctx_.get(), &prog_intersect_area_lights_, log) ||
         !pi_shade_primary_.Init(ctx_.get(), &prog_shade_primary_, log) ||
-        !pi_shade_primary_b_.Init(ctx_.get(), &prog_shade_primary_b_, log) ||
-        !pi_shade_primary_n_.Init(ctx_.get(), &prog_shade_primary_n_, log) ||
-        !pi_shade_primary_bn_.Init(ctx_.get(), &prog_shade_primary_bn_, log) ||
         !pi_shade_secondary_.Init(ctx_.get(), &prog_shade_secondary_, log) ||
         !pi_intersect_scene_shadow_.Init(ctx_.get(), &prog_intersect_scene_shadow_, log) ||
         !pi_prepare_indir_args_.Init(ctx_.get(), &prog_prepare_indir_args_, log) ||
@@ -1908,31 +1881,21 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.limit_direct = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
     uniform_params.limit_indirect = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
 
-    Pipeline *pi = &pi_shade_primary_;
-    if (out_base_color.ready()) {
-        if (out_depth_normals.ready()) {
-            pi = &pi_shade_primary_bn_;
-        } else {
-            pi = &pi_shade_primary_b_;
-        }
-    } else if (out_depth_normals.ready()) {
-        pi = &pi_shade_primary_n_;
-    }
-
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
 
         assert(bindless_tex.descr_set);
-        ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi->layout(), 1, 1,
+        ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_primary_.layout(), 1, 1,
                                             &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
-    DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
-                            &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+    DispatchComputeIndirect(cmd_buf, pi_shade_primary_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
+                            bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
+                            ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
