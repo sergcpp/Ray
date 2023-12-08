@@ -170,10 +170,6 @@ bool Ray::Vk::Shader::InitFromSPIRV(Span<const uint32_t> shader_code, const eSha
                 pc_ranges.push_back({offset, size});
             } else if (storage_class == eSPIRVStorageClass::Output) {
             } else if (storage_class == eSPIRVStorageClass::UniformConstant) {
-                if (strcmp(debug_name, "g_textures") == 0) {
-                    volatile int ii = 0;
-                }
-
                 const spirv_uniform_props_t props = parse_uniform_props(ps, result_type);
                 const spirv_decoration_t &decorations = ps.decorations[result_id];
 
