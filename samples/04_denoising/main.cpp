@@ -244,7 +244,7 @@ void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h
 }
 
 std::vector<uint8_t> GenerateCheckerboard(const int res, const int square_size) {
-    std::vector<uint8_t> ret(res * res);
+    std::vector<uint8_t> ret(4 * res * res);
 
     for (int i = 0; i < res; i++) {
         for (int j = 0; j < res; j++) {

@@ -1115,14 +1115,6 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
     tri_materials_.Erase(tris_block);
     vertices_.Erase(vert_data_block);
     vtx_indices_.Erase(vert_block);
-
-    if (rebuild_required) {
-        if (use_hwrt_) {
-            Rebuild_HWRT_TLAS_nolock();
-        } else {
-            Rebuild_SWRT_TLAS_nolock();
-        }
-    }
 }
 
 inline Ray::LightHandle Ray::NS::Scene::AddLight(const directional_light_desc_t &_l) {
@@ -1396,12 +1388,6 @@ inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHa
     TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 
     mesh_instances_.Set(mi_handle._index, mi);
-
-    if (use_hwrt_) {
-        Rebuild_HWRT_TLAS_nolock();
-    } else {
-        Rebuild_SWRT_TLAS_nolock();
-    }
 }
 
 inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
@@ -1412,12 +1398,6 @@ inline void Ray::NS::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i
         lights_.Erase(light_block);
     }
     mesh_instances_.Erase(i._block);
-
-    if (use_hwrt_) {
-        Rebuild_HWRT_TLAS_nolock();
-    } else {
-        Rebuild_SWRT_TLAS_nolock();
-    }
 }
 
 inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
@@ -1487,6 +1467,11 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
 
     GenerateTextureMips_nolock();
     PrepareBindlessTextures_nolock();
+    if (use_hwrt_) {
+        Rebuild_HWRT_TLAS_nolock();
+    } else {
+        Rebuild_SWRT_TLAS_nolock();
+    }
     RebuildLightTree_nolock();
 }
 

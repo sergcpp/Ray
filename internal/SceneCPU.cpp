@@ -177,7 +177,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         return InvalidTextureHandle;
     }
 
-    log_->Info("Ray: Texture '%s' loaded (storage = %i, %ix%i)", _t.name, storage, _t.w, _t.h);
+    log_->Info("Ray: Texture '%s' loaded (storage = %i, %ix%i)", _t.name ? _t.name : "(unknown)", storage, _t.w, _t.h);
     log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC1[%i], BC3[%i], BC4[%i], BC5[%i])",
                tex_storage_rgba_.img_count(), tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(),
                tex_storage_r_.img_count(), tex_storage_bc1_.img_count(), tex_storage_bc3_.img_count(),
@@ -560,10 +560,6 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
     } else {
         nodes_.Erase(node_block);
     }
-
-    if (rebuild_required) {
-        RebuildTLAS_nolock();
-    }
 }
 
 Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
@@ -838,8 +834,6 @@ void Ray::Cpu::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle m
 
     const mesh_t &m = meshes_[mi.mesh_index];
     TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
-
-    RebuildTLAS_nolock();
 }
 
 void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
@@ -850,8 +844,6 @@ void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
         lights_.Erase(light_block);
     }
     mesh_instances_.Erase(i._block);
-
-    RebuildTLAS_nolock();
 }
 
 void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
@@ -887,6 +879,7 @@ void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, ParallelForFun
         }
     }
 
+    RebuildTLAS_nolock();
     RebuildLightTree_nolock();
 }
 
@@ -958,7 +951,8 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     }
 }
 
-void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(
+    const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     const uint64_t t1 = Ray::GetTimeMs();
 
     if (physical_sky_texture_ != InvalidTextureHandle) {
