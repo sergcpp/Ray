@@ -548,6 +548,7 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
             ++it;
         }
     }
+    (void)rebuild_required;
 
     tris_.Erase(tris_block);
     mtris_.Erase(tris_block);

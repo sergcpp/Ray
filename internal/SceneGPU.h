@@ -1100,6 +1100,7 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
             ++it;
         }
     }
+    (void)rebuild_required;
 
     if (use_hwrt_) {
         { // release struct memory
