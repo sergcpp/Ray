@@ -1311,7 +1311,7 @@ force_inline float approx_acos(float x) { // max error is 0.000068f
 
 force_inline simd_fvec4 approx_acos(simd_fvec4 x) {
     simd_fvec4 negate = 0.0f;
-    where(x < 0, negate) = 1.0f;
+    where(x < 0.0f, negate) = 1.0f;
     x = abs(x);
     simd_fvec4 ret = -0.0187293f;
     ret = ret * x;

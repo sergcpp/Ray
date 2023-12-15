@@ -141,10 +141,10 @@ force_inline simd_uvec<S> pack_depth(const simd_ivec<S> &diff_depth, const simd_
     assert((diff_depth >= 0x7f).all_zeros() && (spec_depth >= 0x7f).all_zeros() && (refr_depth >= 0x7f).all_zeros() &&
            (transp_depth >= 0x7f).all_zeros());
     simd_uvec<S> ret = 0u;
-    ret |= simd_uvec<S>(diff_depth) << 0;
-    ret |= simd_uvec<S>(spec_depth) << 7;
-    ret |= simd_uvec<S>(refr_depth) << 14;
-    ret |= simd_uvec<S>(transp_depth) << 21;
+    ret |= simd_uvec<S>(diff_depth) << 0u;
+    ret |= simd_uvec<S>(spec_depth) << 7u;
+    ret |= simd_uvec<S>(refr_depth) << 14u;
+    ret |= simd_uvec<S>(transp_depth) << 21u;
     return ret;
 }
 template <int S> force_inline simd_ivec<S> get_diff_depth(const simd_uvec<S> &depth) {
@@ -168,7 +168,7 @@ template <int S> force_inline simd_ivec<S> get_ray_type(const simd_uvec<S> &dept
 
 template <int S> force_inline simd_ivec<S> is_indirect(const simd_uvec<S> &depth) {
     // not only transparency ray
-    return simd_ivec<S>((depth & 0x001fffff) != 0);
+    return simd_ivec<S>((depth & 0x001fffff) != 0u);
 }
 
 // Generating rays
@@ -1470,11 +1470,11 @@ force_inline void comp_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S
         inv_d[i] = 1.0f / denom;
         inv_d_o[i] = o[i] * inv_d[i];
 
-        const simd_fvec<S> d_is_plus_zero = (d[i] <= FLT_EPS) & (d[i] >= 0);
+        const simd_fvec<S> d_is_plus_zero = (d[i] <= FLT_EPS) & (d[i] >= 0.0f);
         where(d_is_plus_zero, inv_d[i]) = MAX_DIST;
         where(d_is_plus_zero, inv_d_o[i]) = MAX_DIST;
 
-        const simd_fvec<S> d_is_minus_zero = (d[i] >= -FLT_EPS) & (d[i] < 0);
+        const simd_fvec<S> d_is_minus_zero = (d[i] >= -FLT_EPS) & (d[i] < 0.0f);
         where(d_is_minus_zero, inv_d[i]) = -MAX_DIST;
         where(d_is_minus_zero, inv_d_o[i]) = -MAX_DIST;
     }
@@ -1631,7 +1631,7 @@ template <int S> force_inline simd_fvec<S> scramble_unorm(const simd_uvec<S> &se
 template <int S>
 void get_scrambled_2d_rand(const simd_uvec<S> &dim, const simd_uvec<S> &seed, const int sample,
                            const uint32_t rand_seq[], simd_fvec<S> out_val[2]) {
-    const simd_uvec<S> i_seed = hash_combine(seed, dim), x_seed = hash_combine(seed, 2 * dim + 0),
+    const simd_uvec<S> i_seed = hash_combine(seed, dim), x_seed = hash_combine(seed, 2 * dim + 0u),
                        y_seed = hash_combine(seed, 2 * dim + 1);
 
     const auto shuffled_dim = simd_ivec<S>(nested_uniform_scramble_base2(dim, seed) & (RAND_DIMS_COUNT - 1));
@@ -1708,7 +1708,7 @@ template <int S> force_inline simd_fvec<S> portable_asinf(const simd_fvec<S> &x)
 // Equivalent to acosf(dot(a, b)), but more numerically stable
 // Taken from PBRT source code
 template <int S> simd_fvec<S> angle_between(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3]) {
-    const simd_fvec<S> dot_mask = dot3(v1, v2) < 0;
+    const simd_fvec<S> dot_mask = dot3(v1, v2) < 0.0f;
 
     simd_fvec<S> arg[3];
     UNROLLED_FOR(i, 3, {
@@ -2731,7 +2731,7 @@ template <int S> force_inline simd_fvec<S> approx_cos(simd_fvec<S> x) { // max e
 }
 
 template <int S> force_inline simd_fvec<S> approx_acos(simd_fvec<S> x) { // max error is 0.000068f
-    const simd_fvec<S> negate = select(x < 0, simd_fvec<S>{1.0f}, simd_fvec<S>{0.0f});
+    const simd_fvec<S> negate = select(x < 0.0f, simd_fvec<S>{1.0f}, simd_fvec<S>{0.0f});
     x = abs(x);
     simd_fvec<S> ret = -0.0187293f;
     ret = ret * x;
@@ -3515,7 +3515,7 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
                     const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
                     const mesh_t &m = meshes[mi.mesh_index];
 
-                    simd_ivec<S> bbox_mask = simd_ivec<S>((mi.ray_visibility & ray_flags) != 0) &
+                    simd_ivec<S> bbox_mask = simd_ivec<S>((mi.ray_visibility & ray_flags) != 0u) &
                                              bbox_test_fma(inv_d, inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) &
                                              st.queue[st.index].mask;
                     if (bbox_mask.all_zeros()) {
@@ -4471,8 +4471,8 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
         safe_normalize(out_V);
 
         out_V[3] = m;
-        UNROLLED_FOR(i, 3, { out_color[i] = select(cost2 >= 0, refr_col[i] * 1e6f, simd_fvec<S>{0.0f}); })
-        out_color[3] = select(cost2 >= 0, simd_fvec<S>{1e6f}, simd_fvec<S>{0.0f});
+        UNROLLED_FOR(i, 3, { out_color[i] = select(cost2 >= 0.0f, refr_col[i] * 1e6f, simd_fvec<S>{0.0f}); })
+        out_color[3] = select(cost2 >= 0.0f, simd_fvec<S>{1e6f}, simd_fvec<S>{0.0f});
     }
 
     const simd_ivec<S> is_glossy = ~is_mirror;
@@ -4786,7 +4786,7 @@ template <int S> void Ray::NS::TransformNormal(const simd_fvec<S> inv_xform[16],
 template <int S> void Ray::NS::CanonicalToDir(const simd_fvec<S> p[2], float y_rotation, simd_fvec<S> out_d[3]) {
     const simd_fvec<S> cos_theta = 2 * p[0] - 1;
     simd_fvec<S> phi = 2 * PI * p[1] + y_rotation;
-    where(phi < 0, phi) += 2 * PI;
+    where(phi < 0.0f, phi) += 2 * PI;
     where(phi > 2 * PI, phi) -= 2 * PI;
 
     const simd_fvec<S> sin_theta = sqrt(1 - cos_theta * cos_theta);
@@ -4806,7 +4806,7 @@ template <int S> void Ray::NS::DirToCanonical(const simd_fvec<S> d[3], float y_r
     UNROLLED_FOR_S(i, S, { phi.template set<i>(-atan2f(d[2].template get<i>(), d[0].template get<i>())); })
 
     phi += y_rotation;
-    where(phi < 0, phi) += 2 * PI;
+    where(phi < 0.0f, phi) += 2 * PI;
     where(phi > 2 * PI, phi) -= 2 * PI;
 
     out_p[0] = (cos_theta + 1.0f) / 2.0f;
@@ -5107,7 +5107,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
         }
 
         simd_fvec<S> mix_term_rand[2];
-        get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, iteration - 1, rand_seq, mix_term_rand);
+        get_scrambled_2d_rand(rand_dim + unsigned(RAND_DIM_BSDF_PICK), rand_hash, iteration - 1, rand_seq, mix_term_rand);
 
         simd_fvec<S> tex_rand[2];
         get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq, tex_rand);
@@ -7277,7 +7277,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
         0xff;
 
     simd_fvec<S> mix_term_rand[2];
-    get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, iteration - 1, rand_seq, mix_term_rand);
+    get_scrambled_2d_rand(rand_dim + unsigned(RAND_DIM_BSDF_PICK), rand_hash, iteration - 1, rand_seq, mix_term_rand);
 
     simd_fvec<S> mix_rand = mix_term_rand[0];
     simd_fvec<S> mix_weight = 1.0f;
