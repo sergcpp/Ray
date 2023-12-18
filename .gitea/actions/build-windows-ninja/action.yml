@@ -1,0 +1,42 @@
+name: 'Build Repo'
+inputs:
+  cmake-args:
+    required: true
+  config:
+    required: true
+  bin-dir:
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - run: |
+        $WORK_DIR = Get-Location
+        cd ../../builds/Ray
+        python scripts/update_version_string.py Ray.cpp
+        function Invoke-Environment {
+          param
+          (
+              # Any cmd shell command, normally a configuration batch file.
+              [Parameter(Mandatory=$true)]
+              [string] $Command
+          )
+
+          $Command = "`"" + $Command + "`""
+          cmd /c "$Command > nul 2>&1 && set" | . { process {
+              if ($_ -match '^([^=]+)=(.*)') {
+                  [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+              }
+          }}
+        }
+        if (Test-Path "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat") { Invoke-Environment "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" }
+        if (Test-Path "D:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat") { Invoke-Environment "D:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" }
+        mkdir build
+        cd build
+        cmake .. -G "Ninja" -DCMAKE_BUILD_TYPE=${{ inputs.config }} ${{ inputs.cmake-args }}
+        cd ..
+        cmake --build build --config ${{ inputs.config }} --parallel 16
+        if ("${{ inputs.bin-dir }}" -ne "") {
+          mkdir $WORK_DIR/${{ inputs.bin-dir }}
+          copy build/tests/test_Ray.exe $WORK_DIR/${{ inputs.bin-dir }}
+        }
+      shell: pwsh
