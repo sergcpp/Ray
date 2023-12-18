@@ -1,4 +1,4 @@
-# Ray [![pipeline status](https://gitlab.com/sergcpp/Ray/badges/master/pipeline.svg)](https://gitlab.com/sergcpp/Ray/-/commits/master)
+# Ray
 
 Embeddable cross-platform semi-realtime physically based renderer.
 
