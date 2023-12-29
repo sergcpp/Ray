@@ -505,7 +505,7 @@ jobs:
           test-args: "--arch SSE2 --nogpu"
           sde-args: "-p4p"
   test-windows-x86_64-cpu-sse41:
-    runs-on: [ windows, x86_64 ]
+    runs-on: [ windows, x86_64, win10 ]
     needs:
       - build-windows-x86_64-rel
     steps:
