@@ -29,7 +29,7 @@ bool Ray::Vk::Api::Load(ILog *log) {
         return false;                                                                                                  \
     }
 #elif defined(__linux__)
-    void *vulkan_module = dlopen("libvulkan.so.1", RTLD_LAZY);
+    vulkan_module = dlopen("libvulkan.so.1", RTLD_LAZY);
     if (!vulkan_module) {
         log->Error("Failed to load libvulkan.so");
         return false;
@@ -44,13 +44,13 @@ bool Ray::Vk::Api::Load(ILog *log) {
 #else
 
 #if defined(VK_USE_PLATFORM_IOS_MVK)
-    void *vulkan_module = dlopen("libMoltenVK.dylib", RTLD_LAZY);
+    vulkan_module = dlopen("libMoltenVK.dylib", RTLD_LAZY);
     if (!vulkan_module) {
         log->Error("Failed to load libMoltenVK.dylib");
         return false;
     }
 #else
-    void *vulkan_module = dlopen("libvulkan.dylib", RTLD_LAZY);
+    vulkan_module = dlopen("libvulkan.dylib", RTLD_LAZY);
     if (!vulkan_module) {
         log->Error("Failed to load libvulkan.dylib");
         return false;
