@@ -15,6 +15,7 @@ runs:
         name: ${{ inputs.bin-dir }}
         path: ${{ inputs.bin-dir }}/
     - run: |
+        export ASAN_OPTIONS="windows_hook_legacy_allocators=false"
         chmod +x ./${{ inputs.bin-dir }}/${{ inputs.bin-name }}
         WORK_DIR=`pwd`
         cd ../../builds/Ray/tests
