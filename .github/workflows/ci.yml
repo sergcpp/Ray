@@ -10,11 +10,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Compile the code
-        uses: ./.gitea/actions/build-windows-ninja
+        uses: ./.github/actions/build-windows-ninja
         with:
           cmake-args: "-DCMAKE_UNITY_BUILD=ON"
           config: "Release"
@@ -30,11 +30,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Compile the code
-        uses: ./.gitea/actions/build-windows
+        uses: ./.github/actions/build-windows
         with:
           cmake-args: "-A ARM64 -DCMAKE_UNITY_BUILD=ON -DENABLE_VK_IMPL=OFF -DENABLE_DX_IMPL=ON"
           config: "Release"
@@ -50,11 +50,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Compile the code
-        uses: ./.gitea/actions/build-linux
+        uses: ./.github/actions/build-linux
         with:
           cmake-args: "-DCMAKE_UNITY_BUILD=ON"
           config: "Release"
@@ -70,11 +70,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Compile the code
-        uses: ./.gitea/actions/build-macos
+        uses: ./.github/actions/build-macos
         with:
           cmake-args: '-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_UNITY_BUILD=ON'
           config: "Release"
@@ -92,11 +92,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
           test-args: "--nogpu"
@@ -108,11 +108,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
           test-args: "--device NV --nocpu"
@@ -124,11 +124,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
           test-args: "--device AMD --nocpu"
@@ -140,11 +140,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
           test-args: "--device Arc --nocpu"
@@ -156,11 +156,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
           test-args: "--device Xe --nocpu"
@@ -172,11 +172,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
           test-args: "--nogpu"
@@ -188,11 +188,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
           test-args: "--device Adreno --nocpu"
@@ -204,11 +204,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
           test-args: "--nogpu"
@@ -220,11 +220,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
           test-args: "--device AMD --nocpu"
@@ -236,11 +236,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
           test-args: "--device NV --nocpu"
@@ -252,11 +252,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
           test-args: "--nogpu"
@@ -268,11 +268,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
           test-args: "--device M1 --nocpu"
@@ -284,11 +284,11 @@ jobs:
       - name: Checkout Workflows
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .gitea
+          sparse-checkout: .github
       - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
+        uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.gitea/actions/test
+        uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
           test-args: "--nogpu"
