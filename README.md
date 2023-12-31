@@ -1,4 +1,5 @@
 # Ray
+[![CI](https://github.com/sergcpp/Ray/actions/workflows/ci.yml/badge.svg)](https://github.com/sergcpp/Ray/actions/workflows/ci.yml)
 
 Embeddable cross-platform semi-realtime physically based renderer.
 
