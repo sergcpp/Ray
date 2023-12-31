@@ -3,7 +3,7 @@ runs:
   using: 'composite'
   steps:
     - run: |
-        REPO_URL="${{ env.GITHUB_SERVER_URL }}/${{ env.GITHUB_REPOSITORY }}"
+        REPO_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
         cd ../..
         mkdir -p builds
         cd builds
@@ -12,13 +12,13 @@ runs:
           cd Ray
           git remote set-url origin $REPO_URL
           git fetch --all
-          git checkout -f ${{ env.GITHUB_REF_NAME }}
-          git reset --hard origin/${{ env.GITHUB_REF_NAME }}
+          git checkout -f $GITHUB_REF_NAME
+          git reset --hard origin/$GITHUB_REF_NAME
           git clean -fdx
           git fetch --tags
         else
           echo "Clone new repository"
-          git clone $REPO_URL -b ${{ env.GITHUB_REF_NAME }}
+          git clone $REPO_URL -b $GITHUB_REF_NAME
           cd Ray
           git fetch --tags
         fi
