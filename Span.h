@@ -15,6 +15,16 @@
 #endif
 
 namespace Ray {
+template <typename T> struct remove_all_const : std::remove_const<T> {};
+
+template <typename T> struct remove_all_const<T *> {
+    typedef typename remove_all_const<T>::type *type;
+};
+
+template <typename T> struct remove_all_const<T *const> {
+    typedef typename remove_all_const<T>::type *type;
+};
+
 template <typename T> class Span {
     T *p_data_ = nullptr;
     ptrdiff_t size_ = 0;
@@ -29,13 +39,13 @@ template <typename T> class Span {
 #endif
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
     template <typename Alloc>
-    Span(const std::vector<typename std::remove_const<T>::type, Alloc> &v) : Span(v.data(), size_t(v.size())) {}
+    Span(const std::vector<typename remove_all_const<T>::type, Alloc> &v) : Span(v.data(), size_t(v.size())) {}
     template <typename Alloc>
-    Span(std::vector<typename std::remove_const<T>::type, Alloc> &v) : Span(v.data(), size_t(v.size())) {}
+    Span(std::vector<typename remove_all_const<T>::type, Alloc> &v) : Span(v.data(), size_t(v.size())) {}
 
     template <size_t N> Span(T (&arr)[N]) : p_data_(arr), size_(N) {}
 
-    template <typename U = typename std::remove_const<T>::type,
+    template <typename U = typename remove_all_const<T>::type,
               typename = typename std::enable_if<!std::is_same<T, U>::value>::type>
     Span(const Span<U> &rhs) : Span(rhs.data(), rhs.size()) {}
 
