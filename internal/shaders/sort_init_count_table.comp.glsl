@@ -4,7 +4,7 @@
 #include "sort_init_count_table_interface.h"
 #include "common.glsl"
 
-LAYOUT_PARAMS uniform UniformParams {
+layout(push_constant) uniform UniformParams {
     Params g_params;
 };
 

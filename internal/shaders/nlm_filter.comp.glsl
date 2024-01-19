@@ -4,7 +4,7 @@
 #include "nlm_filter_interface.h"
 #include "common.glsl"
 
-LAYOUT_PARAMS uniform UniformParams {
+layout(push_constant) uniform UniformParams {
     Params g_params;
 };
 

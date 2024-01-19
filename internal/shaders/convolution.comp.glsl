@@ -17,7 +17,7 @@
     #define f16vec4 vec4
 #endif
 
-LAYOUT_PARAMS uniform UniformParams {
+layout(push_constant) uniform UniformParams {
     Params g_params;
 };
 
