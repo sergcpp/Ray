@@ -26,14 +26,5 @@ using mat4 = float[4][4];
 #else // __cplusplus
 #define INTERFACE_START(name)
 #define INTERFACE_END
-
-#if defined(VULKAN)
-#define LAYOUT_PARAMS layout(push_constant)
-#elif defined(GL_SPIRV)
-#define LAYOUT_PARAMS layout(binding = REN_UB_UNIF_PARAM_LOC, std140)
-#else
-#define LAYOUT_PARAMS layout(std140)
-#endif
 #endif // __cplusplus
-
 #endif // INTERFACE_COMMON_H

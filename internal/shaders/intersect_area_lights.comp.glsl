@@ -6,7 +6,7 @@
 #include "light_bvh.glsl"
 #include "traverse_bvh.glsl"
 
-LAYOUT_PARAMS uniform UniformParams {
+layout(push_constant) uniform UniformParams {
     Params g_params;
 };
 
