@@ -107,7 +107,10 @@ void main() {
             g_shared_local_counters[li] = 0;
         }
 
-        ray_hash_t local_key = (data_index < data_count) ? src_keys[i] : ray_hash_t(0xffffffff, 0xffffffff);
+        ray_hash_t local_key = ray_hash_t(0xffffffff, 0xffffffff);
+        if (data_index < data_count) {
+            local_key = src_keys[i];
+        }
 
         for (uint bit_shift = 0; bit_shift < SORT_BITS_PER_PASS; bit_shift += 2) {
             uint key_index = (local_key.hash >> g_params.shift) & 0xf;

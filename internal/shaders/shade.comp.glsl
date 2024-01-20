@@ -600,17 +600,25 @@ float pop_ior_stack(inout float stack[4], float default_value) {
 }
 
 float peek_ior_stack(float stack[4], bool skip_first, float default_value) {
-    if (stack[3] > 0.0 && !exchange(skip_first, false)) {
-        return stack[3];
+    if (stack[3] > 0.0) {
+        if (!exchange(skip_first, false)) {
+            return stack[3];
+        }
     }
-    if (stack[2] > 0.0 && !exchange(skip_first, false)) {
-        return stack[2];
+    if (stack[2] > 0.0) {
+        if (!exchange(skip_first, false)) {
+            return stack[2];
+        }
     }
-    if (stack[1] > 0.0 && !exchange(skip_first, false)) {
-        return stack[1];
+    if (stack[1] > 0.0) {
+        if (!exchange(skip_first, false)) {
+            return stack[1];
+        }
     }
-    if (stack[0] > 0.0 && !exchange(skip_first, false)) {
-        return stack[0];
+    if (stack[0] > 0.0) {
+        if (!exchange(skip_first, false)) {
+            return stack[0];
+        }
     }
     return default_value;
 }
@@ -909,10 +917,10 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
 
 #if USE_HIERARCHICAL_NEE
     float factor = 1.0;
-    uint i = 0; // start from root
-    while ((g_light_wnodes[i].child[0] & LEAF_NODE_BIT) == 0) {
+    light_wbvh_node_t n = g_light_wnodes[0]; // start from root
+    while ((n.child[0] & LEAF_NODE_BIT) == 0) {
         float importance[8];
-        const float total_importance = calc_lnode_importance(g_light_wnodes[i], P, importance);
+        const float total_importance = calc_lnode_importance(n, P, importance);
         [[dont_flatten]] if (total_importance == 0.0) {
             // failed to find lightsource for sampling
             return;
@@ -943,10 +951,10 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         }
 
         u1 = fract((u1 - importance_cdf[next]) / importance[next]);
-        i = g_light_wnodes[i].child[next];
+        n = g_light_wnodes[n.child[next]];
         factor *= importance[next];
     }
-    const uint light_index = (g_light_wnodes[i].child[0] & PRIM_INDEX_BITS);
+    const uint light_index = (n.child[0] & PRIM_INDEX_BITS);
     factor = (1.0 / factor);
 #else
     uint light_index = min(uint(u1 * g_params.li_count), uint(g_params.li_count - 1));
