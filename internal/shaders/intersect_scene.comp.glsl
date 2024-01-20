@@ -303,13 +303,18 @@ void main() {
         const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
         if (p < q || lum == 0.0 || get_transp_depth(g_rays[index].depth) + 1 >= g_params.max_transp_depth) {
             // terminate ray
-            g_rays[index].c[0] = g_rays[index].c[1] = g_rays[index].c[2] = 0.0;
+            g_rays[index].c[0] = 0.0;
+            g_rays[index].c[1] = 0.0;
+            g_rays[index].c[2] = 0.0;
             break;
         }
 
-        g_rays[index].c[0] *= mat.base_color[0] / (1.0 - q);
-        g_rays[index].c[1] *= mat.base_color[1] / (1.0 - q);
-        g_rays[index].c[2] *= mat.base_color[2] / (1.0 - q);
+        float c[3] = {g_rays[index].c[0] * mat.base_color[0] / (1.0 - q),
+                      g_rays[index].c[1] * mat.base_color[1] / (1.0 - q),
+                      g_rays[index].c[2] * mat.base_color[2] / (1.0 - q)};
+        g_rays[index].c[0] = c[0];
+        g_rays[index].c[1] = c[1];
+        g_rays[index].c[2] = c[2];
 
         const float t = inter.t + HIT_BIAS;
         ro += rd * t;
@@ -318,7 +323,8 @@ void main() {
         inter.v = -1.0;
         inter.t = t_val - inter.t;
 
-        g_rays[index].depth += pack_ray_depth(0, 0, 0, 1);
+        uint depth = g_rays[index].depth + pack_ray_depth(0, 0, 0, 1);
+        g_rays[index].depth = depth;
         rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 

@@ -26,8 +26,8 @@ layout (local_size_x = SORT_THREADGROUP_SIZE, local_size_y = 1, local_size_z = 1
 
 void main() {
     const int li = int(gl_LocalInvocationID.x), wi = int(gl_WorkGroupID.x);
-    for (int i = 0; i < 0x10; ++i) {
-        g_shared_counters[i * SORT_THREADGROUP_SIZE + li] = 0;
+    for (int i1 = 0; i1 < 0x10; ++i1) {
+        g_shared_counters[i1 * SORT_THREADGROUP_SIZE + li] = 0;
     }
     groupMemoryBarrier(); barrier();
 
@@ -40,15 +40,15 @@ void main() {
     int data_index = block_start + li;
 
     uint hashes[SORT_ELEMENTS_PER_THREAD];
-    [[unroll]] for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
-        if (data_index + i * SORT_THREADGROUP_SIZE < data_count) {
-            hashes[i] = g_hashes[data_index + i * SORT_THREADGROUP_SIZE].hash;
+    [[unroll]] for (int i2 = 0; i2 < SORT_ELEMENTS_PER_THREAD; ++i2) {
+        if (data_index + i2 * SORT_THREADGROUP_SIZE < data_count) {
+            hashes[i2] = g_hashes[data_index + i2 * SORT_THREADGROUP_SIZE].hash;
         }
     }
 
-    for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
+    for (int i3 = 0; i3 < SORT_ELEMENTS_PER_THREAD; ++i3) {
         if (data_index < data_count) {
-            uint local_key = (hashes[i] >> g_params.shift) & 0xf;
+            uint local_key = (hashes[i3] >> g_params.shift) & 0xf;
             atomicAdd(g_shared_counters[local_key * SORT_THREADGROUP_SIZE + li], 1u);
             data_index += SORT_THREADGROUP_SIZE;
         }
@@ -58,8 +58,8 @@ void main() {
 
     if (li < 0x10) {
         uint sum = 0;
-        for (int i = 0; i < SORT_THREADGROUP_SIZE; ++i) {
-            sum += g_shared_counters[li * SORT_THREADGROUP_SIZE + i];
+        for (int i4 = 0; i4 < SORT_THREADGROUP_SIZE; ++i4) {
+            sum += g_shared_counters[li * SORT_THREADGROUP_SIZE + i4];
         }
         g_count_table[li * block_count + wi] = sum;
     }
