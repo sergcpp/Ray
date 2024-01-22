@@ -229,12 +229,10 @@ void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
                                          {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
 
-    if (base_color_img.ready()) {
-        bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img);
-    }
-    if (depth_normals_img.ready()) {
-        bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img);
-    }
+    assert(base_color_img.ready());
+    bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img);
+    assert(depth_normals_img.ready());
+    bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img);
 
     const uint32_t grp_count[3] = {
         uint32_t((rect.w + NLMFilter::LOCAL_GROUP_SIZE_X - 1) / NLMFilter::LOCAL_GROUP_SIZE_X),
@@ -254,16 +252,7 @@ void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
     uniform_params.base_color_weight = base_color_weight;
     uniform_params.depth_normal_weight = depth_normals_weight;
 
-    Pipeline *pi = &pi_nlm_filter_;
-    if (base_color_img.ready() && depth_normals_img.ready()) {
-        pi = &pi_nlm_filter_bn_;
-    } else if (base_color_img.ready()) {
-        pi = &pi_nlm_filter_b_;
-    } else if (depth_normals_img.ready()) {
-        pi = &pi_nlm_filter_n_;
-    }
-
-    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_nlm_filter_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -320,12 +309,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
     uniform_params.out_dims[1] = h;
 
     Pipeline *pi = nullptr;
-    if (in_channels == 3 && out_channels == 32) {
-        pi = &pi_convolution_Img_3_32_;
-    } else if (in_channels == 6 && out_channels == 32) {
-        assert(img_buf2.ready());
-        pi = &pi_convolution_Img_6_32_;
-    } else if (in_channels == 9 && out_channels == 32) {
+    if (in_channels == 9 && out_channels == 32) {
         assert(img_buf2.ready() && img_buf3.ready());
         pi = &pi_convolution_Img_9_32_;
     }
