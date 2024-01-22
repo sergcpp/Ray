@@ -214,10 +214,7 @@ def main():
 
     # Denoise
     compile_shader_async(src_name="filter_variance.comp.glsl", rewrite_name="filter_variance.comp.glsl")
-    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter.comp.spv", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=0", rewrite_name='nlm_filter.comp.glsl')
-    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter_n.comp.spv", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=1", rewrite_name='nlm_filter_n.comp.glsl')
-    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter_b.comp.spv", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=0", rewrite_name='nlm_filter_b.comp.glsl')
-    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter_bn.comp.spv", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=1", rewrite_name='nlm_filter_bn.comp.glsl')
+    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter.comp.spv", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=1", rewrite_name='nlm_filter.comp.glsl')
 
     # Sorting
     compile_shader_async(src_name="sort_hash_rays.comp.glsl", rewrite_name="sort_hash_rays.comp.glsl")
@@ -233,22 +230,6 @@ def main():
     compile_shader_async(src_name="debug_rt.comp.glsl", target_env="spirv1.4", hlsl_profile="cs_6_5", rewrite_name="debug_rt.comp.glsl")
 
     # Convolution
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_3_32_fp32.comp.spv",
-                         defines="-DIMG_INPUT1=1 -DIN_CHANNELS1=3 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1", rewrite_name="convolution_Img_3_32_fp32.comp.glsl")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_3_32_fp16.comp.spv",
-                         defines="-DIMG_INPUT1=1 -DIN_CHANNELS1=3 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1", hlsl_profile="cs_6_2",
-                         rewrite_name="convolution_Img_3_32_fp16.comp.glsl")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_3_32_nv.comp.spv",
-                         defines="-DIMG_INPUT1=1 -DIN_CHANNELS1=3 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_6_32_fp32.comp.spv",
-                         defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIN_CHANNELS1=6 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1",
-                         rewrite_name="convolution_Img_6_32_fp32.comp.glsl")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_6_32_fp16.comp.spv",
-                         defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIN_CHANNELS1=6 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1", hlsl_profile="cs_6_2",
-                         rewrite_name="convolution_Img_6_32_fp16.comp.glsl")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_6_32_nv.comp.spv",
-                         defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIN_CHANNELS1=6 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1",
-                         hlsl_profile=None)
     compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_9_32_fp32.comp.spv",
                          defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS1=9 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DPOS_NORMALIZE3=1",
                          rewrite_name="convolution_Img_9_32_fp32.comp.glsl")

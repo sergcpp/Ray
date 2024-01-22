@@ -36,46 +36,43 @@ class Renderer : public RendererBase {
 
     Shader sh_prim_rays_gen_simple_, sh_prim_rays_gen_adaptive_, sh_intersect_scene_, sh_intersect_scene_indirect_,
         sh_intersect_area_lights_, sh_shade_primary_, sh_shade_secondary_, sh_intersect_scene_shadow_,
-        sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_filter_variance_, sh_nlm_filter_,
-        sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_;
+        sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_filter_variance_, sh_nlm_filter_, sh_debug_rt_;
     Shader sh_sort_hash_rays_, sh_sort_init_count_table_, sh_sort_reduce_, sh_sort_scan_, sh_sort_scan_add_,
         sh_sort_scatter_, sh_sort_reorder_rays_;
     Shader sh_intersect_scene_rgen_, sh_intersect_scene_rchit_, sh_intersect_scene_rmiss_,
         sh_intersect_scene_indirect_rgen_;
-    Shader sh_convolution_Img_3_32_, sh_convolution_Img_6_32_, sh_convolution_Img_9_32_,
-        sh_convolution_32_32_Downsample_, sh_convolution_32_48_Downsample_, sh_convolution_48_64_Downsample_,
-        sh_convolution_64_80_Downsample_, sh_convolution_64_64_, sh_convolution_64_32_, sh_convolution_80_96_,
-        sh_convolution_96_96_, sh_convolution_112_112_, sh_convolution_concat_96_64_112_,
-        sh_convolution_concat_112_48_96_, sh_convolution_concat_96_32_64_, sh_convolution_concat_64_3_64_,
-        sh_convolution_concat_64_6_64_, sh_convolution_concat_64_9_64_, sh_convolution_32_3_img_;
+    Shader sh_convolution_Img_9_32_, sh_convolution_32_32_Downsample_, sh_convolution_32_48_Downsample_,
+        sh_convolution_48_64_Downsample_, sh_convolution_64_80_Downsample_, sh_convolution_64_64_,
+        sh_convolution_64_32_, sh_convolution_80_96_, sh_convolution_96_96_, sh_convolution_112_112_,
+        sh_convolution_concat_96_64_112_, sh_convolution_concat_112_48_96_, sh_convolution_concat_96_32_64_,
+        sh_convolution_concat_64_3_64_, sh_convolution_concat_64_6_64_, sh_convolution_concat_64_9_64_,
+        sh_convolution_32_3_img_;
 
     Program prog_prim_rays_gen_simple_, prog_prim_rays_gen_adaptive_, prog_intersect_scene_,
         prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_, prog_shade_secondary_,
         prog_intersect_scene_shadow_, prog_prepare_indir_args_, prog_mix_incremental_, prog_postprocess_,
-        prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_, prog_nlm_filter_n_, prog_nlm_filter_bn_,
-        prog_debug_rt_;
+        prog_filter_variance_, prog_nlm_filter_, prog_debug_rt_;
     Program prog_sort_hash_rays_, prog_sort_init_count_table_, prog_sort_reduce_, prog_sort_scan_, prog_sort_scan_add_,
         prog_sort_scatter_, prog_sort_reorder_rays_;
     Program prog_intersect_scene_rtpipe_, prog_intersect_scene_indirect_rtpipe_;
-    Program prog_convolution_Img_3_32_, prog_convolution_Img_6_32_, prog_convolution_Img_9_32_,
-        prog_convolution_32_32_Downsample_, prog_convolution_32_48_Downsample_, prog_convolution_48_64_Downsample_,
-        prog_convolution_64_80_Downsample_, prog_convolution_64_64_, prog_convolution_64_32_, prog_convolution_80_96_,
-        prog_convolution_96_96_, prog_convolution_112_112_, prog_convolution_concat_96_64_112_,
-        prog_convolution_concat_112_48_96_, prog_convolution_concat_96_32_64_, prog_convolution_concat_64_3_64_,
-        prog_convolution_concat_64_6_64_, prog_convolution_concat_64_9_64_, prog_convolution_32_3_img_;
+    Program prog_convolution_Img_9_32_, prog_convolution_32_32_Downsample_, prog_convolution_32_48_Downsample_,
+        prog_convolution_48_64_Downsample_, prog_convolution_64_80_Downsample_, prog_convolution_64_64_,
+        prog_convolution_64_32_, prog_convolution_80_96_, prog_convolution_96_96_, prog_convolution_112_112_,
+        prog_convolution_concat_96_64_112_, prog_convolution_concat_112_48_96_, prog_convolution_concat_96_32_64_,
+        prog_convolution_concat_64_3_64_, prog_convolution_concat_64_6_64_, prog_convolution_concat_64_9_64_,
+        prog_convolution_32_3_img_;
 
     Pipeline pi_prim_rays_gen_simple_, pi_prim_rays_gen_adaptive_, pi_intersect_scene_, pi_intersect_scene_indirect_,
         pi_intersect_area_lights_, pi_shade_primary_, pi_shade_secondary_, pi_intersect_scene_shadow_,
-        pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_filter_variance_, pi_nlm_filter_,
-        pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_;
+        pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_filter_variance_, pi_nlm_filter_, pi_debug_rt_;
     Pipeline pi_sort_hash_rays_, pi_sort_init_count_table_, pi_sort_reduce_, pi_sort_scan_, pi_sort_scan_add_,
         pi_sort_scatter_, pi_sort_reorder_rays_, pi_intersect_scene_rtpipe_, pi_intersect_scene_indirect_rtpipe_;
-    Pipeline pi_convolution_Img_3_32_, pi_convolution_Img_6_32_, pi_convolution_Img_9_32_,
-        pi_convolution_32_32_Downsample_, pi_convolution_32_48_Downsample_, pi_convolution_48_64_Downsample_,
-        pi_convolution_64_80_Downsample_, pi_convolution_64_64_, pi_convolution_64_32_, pi_convolution_80_96_,
-        pi_convolution_96_96_, pi_convolution_112_112_, pi_convolution_concat_96_64_112_,
-        pi_convolution_concat_112_48_96_, pi_convolution_concat_96_32_64_, pi_convolution_concat_64_3_64_,
-        pi_convolution_concat_64_6_64_, pi_convolution_concat_64_9_64_, pi_convolution_32_3_img_;
+    Pipeline pi_convolution_Img_9_32_, pi_convolution_32_32_Downsample_, pi_convolution_32_48_Downsample_,
+        pi_convolution_48_64_Downsample_, pi_convolution_64_80_Downsample_, pi_convolution_64_64_,
+        pi_convolution_64_32_, pi_convolution_80_96_, pi_convolution_96_96_, pi_convolution_112_112_,
+        pi_convolution_concat_96_64_112_, pi_convolution_concat_112_48_96_, pi_convolution_concat_96_32_64_,
+        pi_convolution_concat_64_3_64_, pi_convolution_concat_64_6_64_, pi_convolution_concat_64_9_64_,
+        pi_convolution_32_3_img_;
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
@@ -548,7 +545,7 @@ inline void Ray::NS::Renderer::InitUNetFilter(const bool alias_memory, unet_filt
         }
     }
 
-    if (!pi_convolution_Img_3_32_) {
+    if (!pi_convolution_Img_9_32_) {
         if (!InitUNetPipelines()) {
             throw std::runtime_error("Error initializing pipeline!");
         }

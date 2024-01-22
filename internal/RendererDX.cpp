@@ -88,10 +88,6 @@ namespace Dx {
 #include "shaders/output/convolution_80_96_fp32.comp.cso.inl"
 #include "shaders/output/convolution_96_96_fp16.comp.cso.inl"
 #include "shaders/output/convolution_96_96_fp32.comp.cso.inl"
-#include "shaders/output/convolution_Img_3_32_fp16.comp.cso.inl"
-#include "shaders/output/convolution_Img_3_32_fp32.comp.cso.inl"
-#include "shaders/output/convolution_Img_6_32_fp16.comp.cso.inl"
-#include "shaders/output/convolution_Img_6_32_fp32.comp.cso.inl"
 #include "shaders/output/convolution_Img_9_32_fp16.comp.cso.inl"
 #include "shaders/output/convolution_Img_9_32_fp32.comp.cso.inl"
 #include "shaders/output/convolution_concat_112_48_96_fp16.comp.cso.inl"
@@ -127,9 +123,6 @@ namespace Dx {
 #include "shaders/output/intersect_scene_swrt_bindless.comp.cso.inl"
 #include "shaders/output/mix_incremental.comp.cso.inl"
 #include "shaders/output/nlm_filter.comp.cso.inl"
-#include "shaders/output/nlm_filter_b.comp.cso.inl"
-#include "shaders/output/nlm_filter_bn.comp.cso.inl"
-#include "shaders/output/nlm_filter_n.comp.cso.inl"
 #include "shaders/output/postprocess.comp.cso.inl"
 #include "shaders/output/prepare_indir_args.comp.cso.inl"
 #include "shaders/output/primary_ray_gen_adaptive.comp.cso.inl"
@@ -251,12 +244,6 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) {
                                  Inflate(internal_shaders_output_filter_variance_comp_cso), eShaderType::Comp, log};
     sh_nlm_filter_ =
         Shader{"NLM Filter", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_comp_cso), eShaderType::Comp, log};
-    sh_nlm_filter_b_ = Shader{"NLM Filter B", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_b_comp_cso),
-                              eShaderType::Comp, log};
-    sh_nlm_filter_n_ = Shader{"NLM Filter N", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_n_comp_cso),
-                              eShaderType::Comp, log};
-    sh_nlm_filter_bn_ = Shader{"NLM Filter BN", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_bn_comp_cso),
-                               eShaderType::Comp, log};
     if (use_hwrt_) {
         sh_debug_rt_ =
             Shader{"Debug RT", ctx_.get(), Inflate(internal_shaders_output_debug_rt_comp_cso), eShaderType::Comp, log};
@@ -313,9 +300,6 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) {
     prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
     prog_filter_variance_ = Program{"Filter Variance", ctx_.get(), &sh_filter_variance_, log};
     prog_nlm_filter_ = Program{"NLM Filter", ctx_.get(), &sh_nlm_filter_, log};
-    prog_nlm_filter_b_ = Program{"NLM Filter B", ctx_.get(), &sh_nlm_filter_b_, log};
-    prog_nlm_filter_n_ = Program{"NLM Filter N", ctx_.get(), &sh_nlm_filter_n_, log};
-    prog_nlm_filter_bn_ = Program{"NLM Filter BN", ctx_.get(), &sh_nlm_filter_bn_, log};
     if (use_hwrt_) {
         prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
     }
@@ -356,9 +340,6 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) {
         !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log) ||
         !pi_filter_variance_.Init(ctx_.get(), &prog_filter_variance_, log) ||
         !pi_nlm_filter_.Init(ctx_.get(), &prog_nlm_filter_, log) ||
-        !pi_nlm_filter_b_.Init(ctx_.get(), &prog_nlm_filter_b_, log) ||
-        !pi_nlm_filter_n_.Init(ctx_.get(), &prog_nlm_filter_n_, log) ||
-        !pi_nlm_filter_bn_.Init(ctx_.get(), &prog_nlm_filter_bn_, log) ||
         (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log)) ||
         !pi_sort_hash_rays_.Init(ctx_.get(), &prog_sort_hash_rays_, log) ||
         (use_subgroup_ && !pi_sort_init_count_table_.Init(ctx_.get(), &prog_sort_init_count_table_, log)) ||
@@ -1311,14 +1292,6 @@ bool Ray::Dx::Renderer::InitUNetPipelines() {
         return Inflate(use_fp16_ ? fp16_shader : default_shader);
     };
 
-    sh_convolution_Img_3_32_ = Shader{"Convolution Img 3 32", ctx_.get(),
-                                      select_unpack_shader(internal_shaders_output_convolution_Img_3_32_fp32_comp_cso,
-                                                           internal_shaders_output_convolution_Img_3_32_fp16_comp_cso),
-                                      eShaderType::Comp, log};
-    sh_convolution_Img_6_32_ = Shader{"Convolution Img 6 32", ctx_.get(),
-                                      select_unpack_shader(internal_shaders_output_convolution_Img_6_32_fp32_comp_cso,
-                                                           internal_shaders_output_convolution_Img_6_32_fp16_comp_cso),
-                                      eShaderType::Comp, log};
     sh_convolution_Img_9_32_ = Shader{"Convolution Img 9 32", ctx_.get(),
                                       select_unpack_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_cso,
                                                            internal_shaders_output_convolution_Img_9_32_fp16_comp_cso),
@@ -1398,8 +1371,6 @@ bool Ray::Dx::Renderer::InitUNetPipelines() {
                                                            internal_shaders_output_convolution_32_3_img_fp16_comp_cso),
                                       eShaderType::Comp, log};
 
-    prog_convolution_Img_3_32_ = Program{"Convolution Img 3 32", ctx_.get(), &sh_convolution_Img_3_32_, log};
-    prog_convolution_Img_6_32_ = Program{"Convolution Img 6 32", ctx_.get(), &sh_convolution_Img_6_32_, log};
     prog_convolution_Img_9_32_ = Program{"Convolution Img 9 32", ctx_.get(), &sh_convolution_Img_9_32_, log};
     prog_convolution_32_32_Downsample_ =
         Program{"Convolution 32 32", ctx_.get(), &sh_convolution_32_32_Downsample_, log};
@@ -1428,9 +1399,7 @@ bool Ray::Dx::Renderer::InitUNetPipelines() {
         Program{"Convolution Concat 64 9 64", ctx_.get(), &sh_convolution_concat_64_9_64_, log};
     prog_convolution_32_3_img_ = Program{"Convolution 32 3 Img", ctx_.get(), &sh_convolution_32_3_img_, log};
 
-    return pi_convolution_Img_3_32_.Init(ctx_.get(), &prog_convolution_Img_3_32_, log) &&
-           pi_convolution_Img_6_32_.Init(ctx_.get(), &prog_convolution_Img_6_32_, log) &&
-           pi_convolution_Img_9_32_.Init(ctx_.get(), &prog_convolution_Img_9_32_, log) &&
+    return pi_convolution_Img_9_32_.Init(ctx_.get(), &prog_convolution_Img_9_32_, log) &&
            pi_convolution_32_32_Downsample_.Init(ctx_.get(), &prog_convolution_32_32_Downsample_, log) &&
            pi_convolution_32_48_Downsample_.Init(ctx_.get(), &prog_convolution_32_48_Downsample_, log) &&
            pi_convolution_48_64_Downsample_.Init(ctx_.get(), &prog_convolution_48_64_Downsample_, log) &&
