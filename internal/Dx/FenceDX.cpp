@@ -4,17 +4,6 @@
 
 #include <utility>
 
-namespace Ray {
-#ifndef RAY_EXCHANGE_DEFINED
-template <class T, class U = T> T exchange(T &obj, U &&new_value) {
-    T old_value = std::move(obj);
-    obj = std::forward<U>(new_value);
-    return old_value;
-}
-#define RAY_EXCHANGE_DEFINED
-#endif
-}
-
 Ray::Dx::SyncFence::~SyncFence() {
     //if (fence_) {
     //    vkDestroyFence(device_, fence_, nullptr);
@@ -22,16 +11,16 @@ Ray::Dx::SyncFence::~SyncFence() {
 }
 
 Ray::Dx::SyncFence::SyncFence(SyncFence &&rhs) noexcept {
-    //device_ = exchange(rhs.device_, VkDevice{VK_NULL_HANDLE});
-    //fence_ = exchange(rhs.fence_, VkFence{VK_NULL_HANDLE});
+    //device_ = std::exchange(rhs.device_, VkDevice{VK_NULL_HANDLE});
+    //fence_ = std::exchange(rhs.fence_, VkFence{VK_NULL_HANDLE});
 }
 
 Ray::Dx::SyncFence &Ray::Dx::SyncFence::operator=(SyncFence &&rhs) noexcept {
     //if (fence_) {
     //    vkDestroyFence(device_, fence_, nullptr);
     //}
-    //device_ = exchange(rhs.device_, VkDevice{VK_NULL_HANDLE});
-    //fence_ = exchange(rhs.fence_, VkFence{VK_NULL_HANDLE});
+    //device_ = std::exchange(rhs.device_, VkDevice{VK_NULL_HANDLE});
+    //fence_ = std::exchange(rhs.fence_, VkFence{VK_NULL_HANDLE});
     return (*this);
 }
 

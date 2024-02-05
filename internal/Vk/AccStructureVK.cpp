@@ -3,14 +3,14 @@
 #include "ContextVK.h"
 
 Ray::Vk::AccStructure::AccStructure(AccStructure &&rhs) noexcept
-    : ctx_(exchange(rhs.ctx_, nullptr)), handle_(exchange(rhs.handle_, {})) {}
+    : ctx_(std::exchange(rhs.ctx_, nullptr)), handle_(std::exchange(rhs.handle_, {})) {}
 
 Ray::Vk::AccStructure &Ray::Vk::AccStructure::operator=(AccStructure &&rhs) noexcept {
     Free();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    handle_ = exchange(rhs.handle_, {});
-    resource_state = exchange(rhs.resource_state, eResState::Undefined);
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    handle_ = std::exchange(rhs.handle_, {});
+    resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);
 }

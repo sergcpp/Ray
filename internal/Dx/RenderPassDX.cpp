@@ -51,10 +51,10 @@ Ray::Dx::RenderPass &Ray::Dx::RenderPass::operator=(RenderPass &&rhs) noexcept {
 
     Destroy();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    //handle_ = exchange(rhs.handle_, {});
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    //handle_ = std::exchange(rhs.handle_, {});
     color_rts = std::move(rhs.color_rts);
-    depth_rt = exchange(rhs.depth_rt, {});
+    depth_rt = std::exchange(rhs.depth_rt, {});
 
     return (*this);
 }

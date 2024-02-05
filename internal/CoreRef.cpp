@@ -4,9 +4,11 @@
 #include <cassert>
 #include <cfloat>
 #include <tuple>
+#include <utility>
 
 #include "TextureStorageCPU.h"
 
+namespace Ray {
 //
 // Useful macros for debugging
 //
@@ -19,16 +21,6 @@
 #define USE_STOCH_TEXTURE_FILTERING 1
 #define USE_SPHERICAL_AREA_LIGHT_SAMPLING 1
 #define USE_SAFE_MATH 1
-
-namespace Ray {
-#ifndef RAY_EXCHANGE_DEFINED
-template <class T, class U = T> T exchange(T &obj, U &&new_value) {
-    T old_value = std::move(obj);
-    obj = std::forward<U>(new_value);
-    return old_value;
-}
-#define RAY_EXCHANGE_DEFINED
-#endif
 
 namespace Ref {
 #define sign_of(f) (((f) >= 0) ? 1 : -1)
@@ -1211,7 +1203,7 @@ void push_ior_stack(float stack[4], const float val) {
 float pop_ior_stack(float stack[4], const float default_value = 1.0f) {
     UNROLLED_FOR_R(i, 4, {
         if (stack[i] > 0.0f) {
-            return exchange(stack[i], -1.0f);
+            return std::exchange(stack[i], -1.0f);
         }
     })
     return default_value;
@@ -1219,7 +1211,7 @@ float pop_ior_stack(float stack[4], const float default_value = 1.0f) {
 
 float peek_ior_stack(const float stack[4], bool skip_first, const float default_value = 1.0f) {
     UNROLLED_FOR_R(i, 4, {
-        if (stack[i] > 0.0f && !exchange(skip_first, false)) {
+        if (stack[i] > 0.0f && !std::exchange(skip_first, false)) {
             return stack[i];
         }
     })

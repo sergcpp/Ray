@@ -73,21 +73,21 @@ Ray::Vk::Pipeline &Ray::Vk::Pipeline::operator=(Pipeline &&rhs) noexcept {
 
     Destroy();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    type_ = exchange(rhs.type_, ePipelineType::Undefined);
-    rast_state_ = exchange(rhs.rast_state_, {});
-    render_pass_ = exchange(rhs.render_pass_, nullptr);
-    prog_ = exchange(rhs.prog_, nullptr);
-    vtx_input_ = exchange(rhs.vtx_input_, nullptr);
-    layout_ = exchange(rhs.layout_, {});
-    handle_ = exchange(rhs.handle_, {});
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    type_ = std::exchange(rhs.type_, ePipelineType::Undefined);
+    rast_state_ = std::exchange(rhs.rast_state_, {});
+    render_pass_ = std::exchange(rhs.render_pass_, nullptr);
+    prog_ = std::exchange(rhs.prog_, nullptr);
+    vtx_input_ = std::exchange(rhs.vtx_input_, nullptr);
+    layout_ = std::exchange(rhs.layout_, {});
+    handle_ = std::exchange(rhs.handle_, {});
 
     rt_shader_groups_ = std::move(rhs.rt_shader_groups_);
 
-    rgen_region_ = exchange(rhs.rgen_region_, {});
-    miss_region_ = exchange(rhs.miss_region_, {});
-    hit_region_ = exchange(rhs.hit_region_, {});
-    call_region_ = exchange(rhs.call_region_, {});
+    rgen_region_ = std::exchange(rhs.rgen_region_, {});
+    miss_region_ = std::exchange(rhs.miss_region_, {});
+    hit_region_ = std::exchange(rhs.hit_region_, {});
+    call_region_ = std::exchange(rhs.call_region_, {});
 
     rt_sbt_buf_ = std::move(rhs.rt_sbt_buf_);
 

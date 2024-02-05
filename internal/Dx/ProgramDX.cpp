@@ -51,11 +51,11 @@ Ray::Dx::Program &Ray::Dx::Program::operator=(Program &&rhs) noexcept {
     for (int i = 0; i < COUNT_OF(descr_indices_); ++i) {
         descr_indices_[i] = std::move(rhs.descr_indices_[i]);
     }
-    pc_param_index_ = exchange(rhs.pc_param_index_, -1);
+    pc_param_index_ = std::exchange(rhs.pc_param_index_, -1);
     name_ = std::move(rhs.name_);
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    root_signature_ = exchange(rhs.root_signature_, nullptr);
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    root_signature_ = std::exchange(rhs.root_signature_, nullptr);
     // descr_set_layouts_ = std::move(rhs.descr_set_layouts_);
 
     return *this;

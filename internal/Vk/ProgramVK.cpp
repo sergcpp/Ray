@@ -49,7 +49,7 @@ Ray::Vk::Program &Ray::Vk::Program::operator=(Program &&rhs) noexcept {
     pc_ranges_ = std::move(rhs.pc_ranges_);
     name_ = std::move(rhs.name_);
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
     descr_set_layouts_ = std::move(rhs.descr_set_layouts_);
 
     return *this;

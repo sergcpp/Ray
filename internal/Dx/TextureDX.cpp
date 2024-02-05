@@ -168,15 +168,15 @@ Ray::Dx::Texture2D &Ray::Dx::Texture2D::operator=(Texture2D &&rhs) noexcept {
 
     Free();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    handle_ = exchange(rhs.handle_, {});
-    alloc_ = exchange(rhs.alloc_, {});
-    params = exchange(rhs.params, {});
-    ready_ = exchange(rhs.ready_, false);
-    cubemap_ready_ = exchange(rhs.cubemap_ready_, 0);
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    handle_ = std::exchange(rhs.handle_, {});
+    alloc_ = std::exchange(rhs.alloc_, {});
+    params = std::exchange(rhs.params, {});
+    ready_ = std::exchange(rhs.ready_, false);
+    cubemap_ready_ = std::exchange(rhs.cubemap_ready_, 0);
     name_ = std::move(rhs.name_);
 
-    resource_state = exchange(rhs.resource_state, eResState::Undefined);
+    resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);
 }
@@ -397,7 +397,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     }
 #endif
 
-    const TexHandle new_handle = {new_image, new_image_view, VK_NULL_HANDLE, exchange(handle_.sampler, {}),
+    const TexHandle new_handle = {new_image, new_image_view, VK_NULL_HANDLE, std::exchange(handle_.sampler, {}),
                                   TextureHandleCounter++};
     uint16_t new_initialized_mips = 0;
 
@@ -1205,10 +1205,10 @@ Ray::Vk::Texture1D &Ray::Vk::Texture1D::operator=(Texture1D &&rhs) noexcept {
 
     Free();
 
-    buf_ = exchange(rhs.buf_, nullptr);
-    params_ = exchange(rhs.params_, {});
+    buf_ = std::exchange(rhs.buf_, nullptr);
+    params_ = std::exchange(rhs.params_, {});
     name_ = std::move(rhs.name_);
-    buf_view_ = exchange(rhs.buf_view_, {});
+    buf_view_ = std::exchange(rhs.buf_view_, {});
 
     return (*this);
 }
@@ -1259,13 +1259,13 @@ Ray::Dx::Texture3D &Ray::Dx::Texture3D::operator=(Texture3D &&rhs) noexcept {
 
     Free();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    handle_ = exchange(rhs.handle_, {});
-    alloc_ = exchange(rhs.alloc_, {});
-    params = exchange(rhs.params, {});
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    handle_ = std::exchange(rhs.handle_, {});
+    alloc_ = std::exchange(rhs.alloc_, {});
+    params = std::exchange(rhs.params, {});
     name_ = std::move(rhs.name_);
 
-    resource_state = exchange(rhs.resource_state, eResState::Undefined);
+    resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);
 }
