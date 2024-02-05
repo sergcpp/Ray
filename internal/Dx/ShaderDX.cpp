@@ -93,7 +93,7 @@ Ray::Dx::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_co
 Ray::Dx::Shader::~Shader() {}
 
 Ray::Dx::Shader &Ray::Dx::Shader::operator=(Shader &&rhs) noexcept {
-    device_ = exchange(rhs.device_, {});
+    device_ = std::exchange(rhs.device_, {});
     shader_code_ = std::move(rhs.shader_code_);
     type_ = rhs.type_;
     name_ = std::move(rhs.name_);

@@ -16,6 +16,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant
 
+namespace Ray {
 //
 // Useful macros for debugging
 //
@@ -26,16 +27,6 @@
 #define USE_STOCH_TEXTURE_FILTERING 1
 #define USE_SPHERICAL_AREA_LIGHT_SAMPLING 1
 #define USE_SAFE_MATH 1
-
-namespace Ray {
-#ifndef RAY_EXCHANGE_DEFINED
-template <class T, class U = T> T exchange(T &obj, U &&new_value) {
-    T old_value = std::move(obj);
-    obj = std::forward<U>(new_value);
-    return old_value;
-}
-#define RAY_EXCHANGE_DEFINED
-#endif
 
 namespace Cpu {
 class TexStorageBase;
@@ -2675,22 +2666,22 @@ simd_fvec<S> peek_ior_stack(const simd_fvec<S> stack[4], const simd_ivec<S> &_sk
     simd_fvec<S> skip_first = simd_cast(_skip_first);
     // 3
     simd_fvec<S> mask = (stack[3] > 0.0f);
-    mask &= ~exchange(skip_first, skip_first & ~mask);
+    mask &= ~std::exchange(skip_first, skip_first & ~mask);
     where(mask, ret) = stack[3];
     simd_fvec<S> active_lanes = ~mask;
     // 2
     mask = active_lanes & (stack[2] > 0.0f);
-    mask &= ~exchange(skip_first, skip_first & ~mask);
+    mask &= ~std::exchange(skip_first, skip_first & ~mask);
     where(mask, ret) = stack[2];
     active_lanes &= ~mask;
     // 1
     mask = active_lanes & (stack[1] > 0.0f);
-    mask &= ~exchange(skip_first, skip_first & ~mask);
+    mask &= ~std::exchange(skip_first, skip_first & ~mask);
     where(mask, ret) = stack[1];
     active_lanes &= ~mask;
     // 0
     mask = active_lanes & (stack[0] > 0.0f);
-    mask &= ~exchange(skip_first, skip_first & ~mask);
+    mask &= ~std::exchange(skip_first, skip_first & ~mask);
     where(mask, ret) = stack[0];
 
     return ret;

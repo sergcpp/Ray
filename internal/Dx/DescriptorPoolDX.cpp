@@ -34,9 +34,9 @@ Ray::Dx::DescrPool<Allocator> &Ray::Dx::DescrPool<Allocator>::operator=(DescrPoo
     Destroy();
 
     alloc_ = std::move(rhs.alloc_);
-    ctx_ = exchange(rhs.ctx_, nullptr);
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
     type_ = rhs.type_;
-    heap_ = exchange(rhs.heap_, nullptr);
+    heap_ = std::exchange(rhs.heap_, nullptr);
 
     return (*this);
 }

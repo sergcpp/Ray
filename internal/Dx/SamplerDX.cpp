@@ -53,9 +53,9 @@ Ray::Dx::Sampler &Ray::Dx::Sampler::operator=(Sampler &&rhs) noexcept {
 
     Free();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    ref_ = exchange(rhs.ref_, {});
-    params_ = exchange(rhs.params_, {});
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    ref_ = std::exchange(rhs.ref_, {});
+    params_ = std::exchange(rhs.params_, {});
 
     return (*this);
 }

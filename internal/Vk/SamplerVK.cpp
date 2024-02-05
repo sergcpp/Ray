@@ -54,9 +54,9 @@ Ray::Vk::Sampler &Ray::Vk::Sampler::operator=(Sampler &&rhs) noexcept {
 
     Free();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    handle_ = exchange(rhs.handle_, {});
-    params_ = exchange(rhs.params_, {});
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    handle_ = std::exchange(rhs.handle_, {});
+    params_ = std::exchange(rhs.params_, {});
 
     return (*this);
 }

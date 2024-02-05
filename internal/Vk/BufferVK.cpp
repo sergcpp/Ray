@@ -69,18 +69,18 @@ Ray::Vk::Buffer &Ray::Vk::Buffer::operator=(Buffer &&rhs) noexcept {
     assert(!mapped_ptr_);
     assert(mapped_offset_ == 0xffffffff);
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    handle_ = exchange(rhs.handle_, {});
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    handle_ = std::exchange(rhs.handle_, {});
     name_ = std::move(rhs.name_);
-    mem_ = exchange(rhs.mem_, {});
+    mem_ = std::exchange(rhs.mem_, {});
 
-    type_ = exchange(rhs.type_, eBufType::Undefined);
+    type_ = std::exchange(rhs.type_, eBufType::Undefined);
 
-    size_ = exchange(rhs.size_, 0);
-    mapped_ptr_ = exchange(rhs.mapped_ptr_, nullptr);
-    mapped_offset_ = exchange(rhs.mapped_offset_, 0xffffffff);
+    size_ = std::exchange(rhs.size_, 0);
+    mapped_ptr_ = std::exchange(rhs.mapped_ptr_, nullptr);
+    mapped_offset_ = std::exchange(rhs.mapped_offset_, 0xffffffff);
 
-    resource_state = exchange(rhs.resource_state, eResState::Undefined);
+    resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);
 }

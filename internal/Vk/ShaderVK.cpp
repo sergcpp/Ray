@@ -52,8 +52,8 @@ Ray::Vk::Shader &Ray::Vk::Shader::operator=(Shader &&rhs) noexcept {
         ctx_->api().vkDestroyShaderModule(ctx_->device(), module_, nullptr);
     }
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    module_ = exchange(rhs.module_, VkShaderModule(VK_NULL_HANDLE));
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    module_ = std::exchange(rhs.module_, VkShaderModule(VK_NULL_HANDLE));
     type_ = rhs.type_;
     name_ = std::move(rhs.name_);
 

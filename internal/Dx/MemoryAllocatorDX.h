@@ -28,7 +28,7 @@ struct MemAllocation {
     MemAllocation() = default;
     MemAllocation(const MemAllocation &rhs) = delete;
     MemAllocation(MemAllocation &&rhs) noexcept
-        : offset(rhs.offset), block(rhs.block), pool(rhs.pool), owner(exchange(rhs.owner, nullptr)) {}
+        : offset(rhs.offset), block(rhs.block), pool(rhs.pool), owner(std::exchange(rhs.owner, nullptr)) {}
 
     MemAllocation &operator=(const MemAllocation &rhs) = delete;
     MemAllocation &operator=(MemAllocation &&rhs) noexcept {
@@ -37,7 +37,7 @@ struct MemAllocation {
         offset = rhs.offset;
         block = rhs.block;
         pool = rhs.pool;
-        owner = exchange(rhs.owner, nullptr);
+        owner = std::exchange(rhs.owner, nullptr);
 
         return (*this);
     }

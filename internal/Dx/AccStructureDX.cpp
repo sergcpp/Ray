@@ -11,16 +11,16 @@
 #include "ContextDX.h"
 
 Ray::Dx::AccStructure::AccStructure(AccStructure &&rhs) noexcept
-    : ctx_(exchange(rhs.ctx_, nullptr)), gpu_virtual_address_(exchange(rhs.gpu_virtual_address_, {})),
-      view_ref_(exchange(rhs.view_ref_, {})) {}
+    : ctx_(std::exchange(rhs.ctx_, nullptr)), gpu_virtual_address_(std::exchange(rhs.gpu_virtual_address_, {})),
+      view_ref_(std::exchange(rhs.view_ref_, {})) {}
 
 Ray::Dx::AccStructure &Ray::Dx::AccStructure::operator=(AccStructure &&rhs) noexcept {
     Free();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    gpu_virtual_address_ = exchange(rhs.gpu_virtual_address_, 0);
-    view_ref_ = exchange(rhs.view_ref_, {});
-    resource_state = exchange(rhs.resource_state, eResState::Undefined);
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    gpu_virtual_address_ = std::exchange(rhs.gpu_virtual_address_, 0);
+    view_ref_ = std::exchange(rhs.view_ref_, {});
+    resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);
 }

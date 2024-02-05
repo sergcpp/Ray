@@ -26,10 +26,10 @@ Ray::Vk::DescrPool &Ray::Vk::DescrPool::operator=(DescrPool &&rhs) noexcept {
 
     Destroy();
 
-    ctx_ = exchange(rhs.ctx_, nullptr);
-    handle_ = exchange(rhs.handle_, {});
-    sets_count_ = exchange(rhs.sets_count_, 0);
-    next_free_ = exchange(rhs.next_free_, 0);
+    ctx_ = std::exchange(rhs.ctx_, nullptr);
+    handle_ = std::exchange(rhs.handle_, {});
+    sets_count_ = std::exchange(rhs.sets_count_, 0);
+    next_free_ = std::exchange(rhs.next_free_, 0);
     for (int i = 0; i < int(eDescrType::_Count); ++i) {
         descr_counts_[i] = rhs.descr_counts_[i];
     }
