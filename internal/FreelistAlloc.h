@@ -27,6 +27,8 @@ template <typename OffsetType, bool InPlace> struct tlsf_index_t {
     // Free blocks arranged by size
     OffsetType free_heads[FL_INDEX_COUNT][SL_INDEX_COUNT] = {}; // block 0 is a fake 'null block'
 
+    static OffsetType rounded_size(OffsetType size);
+
     static std::pair<int, int> mapping_insert(OffsetType size);
     static std::pair<int, int> mapping_search(OffsetType size);
 
@@ -151,5 +153,7 @@ class FreelistAlloc {
     Range GetBlockRange(const uint32_t block) const { return {block, all_blocks_[block].offset, all_blocks_[block].size}; }
 
     bool IntegrityCheck() const;
+
+    static uint32_t rounded_size(const uint32_t size) { return tlsf_index_t<uint32_t, false>::rounded_size(size); }
 };
 } // namespace Ray
