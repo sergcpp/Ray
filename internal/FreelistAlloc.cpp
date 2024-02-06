@@ -37,6 +37,15 @@ force_inline int ffs(uint32_t word) {
 } // namespace Ray
 
 template <typename OffsetType, bool InPlace>
+OffsetType Ray::tlsf_index_t<OffsetType, InPlace>::rounded_size(OffsetType size) {
+    if (size >= SMALL_BLOCK_SIZE) {
+        const uint32_t round = (1 << (fls(size) - SL_INDEX_COUNT_LOG2)) - 1;
+        size += round;
+    }
+    return size;
+}
+
+template <typename OffsetType, bool InPlace>
 std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_insert(const OffsetType size) {
     if (size < SMALL_BLOCK_SIZE) {
         return std::make_pair(0, int(size / (SMALL_BLOCK_SIZE / SL_INDEX_COUNT)));
@@ -49,11 +58,7 @@ std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_insert(const
 
 template <typename OffsetType, bool InPlace>
 std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_search(OffsetType size) {
-    if (size >= SMALL_BLOCK_SIZE) {
-        const uint32_t round = (1 << (fls(size) - SL_INDEX_COUNT_LOG2)) - 1;
-        size += round;
-    }
-    return mapping_insert(size);
+    return mapping_insert(rounded_size(size));
 }
 
 template <typename OffsetType, bool InPlace>
