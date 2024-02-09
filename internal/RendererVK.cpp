@@ -58,55 +58,55 @@ extern const uint32_t *transform_luts[];
 namespace Vk {
 #include "shaders/output/convolution_112_112_fp16.comp.spv.inl"
 #include "shaders/output/convolution_112_112_fp32.comp.spv.inl"
-#include "shaders/output/convolution_112_112_nv.comp.spv.inl"
+#include "shaders/output/convolution_112_112_coop.comp.spv.inl"
 #include "shaders/output/convolution_32_32_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_32_32_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_32_32_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_32_32_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_32_3_img_fp16.comp.spv.inl"
 #include "shaders/output/convolution_32_3_img_fp32.comp.spv.inl"
-#include "shaders/output/convolution_32_3_img_nv.comp.spv.inl"
+#include "shaders/output/convolution_32_3_img_coop.comp.spv.inl"
 #include "shaders/output/convolution_32_48_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_32_48_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_32_48_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_32_48_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_48_64_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_48_64_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_48_64_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_48_64_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_64_32_fp16.comp.spv.inl"
 #include "shaders/output/convolution_64_32_fp32.comp.spv.inl"
-#include "shaders/output/convolution_64_32_nv.comp.spv.inl"
+#include "shaders/output/convolution_64_32_coop.comp.spv.inl"
 #include "shaders/output/convolution_64_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_64_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_64_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_64_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_64_80_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_64_80_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_64_80_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_64_80_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_80_96_fp16.comp.spv.inl"
 #include "shaders/output/convolution_80_96_fp32.comp.spv.inl"
-#include "shaders/output/convolution_80_96_nv.comp.spv.inl"
+#include "shaders/output/convolution_80_96_coop.comp.spv.inl"
 #include "shaders/output/convolution_96_96_fp16.comp.spv.inl"
 #include "shaders/output/convolution_96_96_fp32.comp.spv.inl"
-#include "shaders/output/convolution_96_96_nv.comp.spv.inl"
+#include "shaders/output/convolution_96_96_coop.comp.spv.inl"
 #include "shaders/output/convolution_Img_9_32_fp16.comp.spv.inl"
 #include "shaders/output/convolution_Img_9_32_fp32.comp.spv.inl"
-#include "shaders/output/convolution_Img_9_32_nv.comp.spv.inl"
+#include "shaders/output/convolution_Img_9_32_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_112_48_96_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_112_48_96_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_112_48_96_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_112_48_96_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_3_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_3_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_64_3_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_3_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_6_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_6_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_64_6_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_6_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_9_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_9_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_64_9_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_9_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_32_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_32_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_96_32_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_32_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_64_112_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_64_112_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_96_64_112_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_64_112_coop.comp.spv.inl"
 #include "shaders/output/debug_rt.comp.spv.inl"
 #include "shaders/output/filter_variance.comp.spv.inl"
 #include "shaders/output/intersect_area_lights.comp.spv.inl"
@@ -205,13 +205,13 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
     use_tex_compression_ = s.use_tex_compression;
     use_fp16_ = ctx_->fp16_supported();
     use_subgroup_ = ctx_->subgroup_supported();
-    use_nv_coop_matrix_ = ctx_->nv_coop_matrix_supported();
+    use_coop_matrix_ = ctx_->coop_matrix_supported();
     log->Info("HWRT        is %s", use_hwrt_ ? "enabled" : "disabled");
     log->Info("Bindless    is %s", use_bindless_ ? "enabled" : "disabled");
     log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
     log->Info("Float16     is %s", use_fp16_ ? "enabled" : "disabled");
     log->Info("Subgroup    is %s", use_subgroup_ ? "enabled" : "disabled");
-    log->Info("CoopMatrix  is %s", use_nv_coop_matrix_ ? "enabled" : "disabled");
+    log->Info("CoopMatrix  is %s", use_coop_matrix_ ? "enabled" : "disabled");
     log->Info("===========================================");
 
     sh_prim_rays_gen_simple_ =
@@ -1401,108 +1401,108 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
     return {((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_), w_};
 }
 
-bool Ray::Vk::Renderer::InitUNetPipelines() {
+bool Ray::Vk::Renderer::InitUNetFilterPipelines() {
     ILog *log = ctx_->log();
 
     auto select_unpack_shader = [this](Span<const uint8_t> default_shader, Span<const uint8_t> fp16_shader,
-                                       Span<const uint8_t> nv_coop_shader) {
-        return Inflate(use_fp16_ ? (use_nv_coop_matrix_ ? nv_coop_shader : fp16_shader) : default_shader);
+                                       Span<const uint8_t> coop_shader) {
+        return Inflate(use_fp16_ ? (use_coop_matrix_ ? coop_shader : fp16_shader) : default_shader);
     };
 
     sh_convolution_Img_9_32_ = Shader{"Convolution Img 9 32", ctx_.get(),
                                       select_unpack_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_spv,
                                                            internal_shaders_output_convolution_Img_9_32_fp16_comp_spv,
-                                                           internal_shaders_output_convolution_Img_9_32_nv_comp_spv),
+                                                           internal_shaders_output_convolution_Img_9_32_coop_comp_spv),
                                       eShaderType::Comp, log};
     sh_convolution_32_32_Downsample_ =
         Shader{"Convolution 32 32 Downsample", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_spv,
                                     internal_shaders_output_convolution_32_32_Downsample_fp16_comp_spv,
-                                    internal_shaders_output_convolution_32_32_Downsample_nv_comp_spv),
+                                    internal_shaders_output_convolution_32_32_Downsample_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_32_48_Downsample_ =
         Shader{"Convolution 32 48 Downsample", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_spv,
                                     internal_shaders_output_convolution_32_48_Downsample_fp16_comp_spv,
-                                    internal_shaders_output_convolution_32_48_Downsample_nv_comp_spv),
+                                    internal_shaders_output_convolution_32_48_Downsample_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_48_64_Downsample_ =
         Shader{"Convolution 48 64 Downsample", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_spv,
                                     internal_shaders_output_convolution_48_64_Downsample_fp16_comp_spv,
-                                    internal_shaders_output_convolution_48_64_Downsample_nv_comp_spv),
+                                    internal_shaders_output_convolution_48_64_Downsample_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_64_80_Downsample_ =
         Shader{"Convolution 64 80 Downsample", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_spv,
                                     internal_shaders_output_convolution_64_80_Downsample_fp16_comp_spv,
-                                    internal_shaders_output_convolution_64_80_Downsample_nv_comp_spv),
+                                    internal_shaders_output_convolution_64_80_Downsample_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_64_64_ = Shader{"Convolution 64 64", ctx_.get(),
                                    select_unpack_shader(internal_shaders_output_convolution_64_64_fp32_comp_spv,
                                                         internal_shaders_output_convolution_64_64_fp16_comp_spv,
-                                                        internal_shaders_output_convolution_64_64_nv_comp_spv),
+                                                        internal_shaders_output_convolution_64_64_coop_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_64_32_ = Shader{"Convolution 64 32", ctx_.get(),
                                    select_unpack_shader(internal_shaders_output_convolution_64_32_fp32_comp_spv,
                                                         internal_shaders_output_convolution_64_32_fp16_comp_spv,
-                                                        internal_shaders_output_convolution_64_32_nv_comp_spv),
+                                                        internal_shaders_output_convolution_64_32_coop_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_80_96_ = Shader{"Convolution 80 96", ctx_.get(),
                                    select_unpack_shader(internal_shaders_output_convolution_80_96_fp32_comp_spv,
                                                         internal_shaders_output_convolution_80_96_fp16_comp_spv,
-                                                        internal_shaders_output_convolution_80_96_nv_comp_spv),
+                                                        internal_shaders_output_convolution_80_96_coop_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_96_96_ = Shader{"Convolution 96 96", ctx_.get(),
                                    select_unpack_shader(internal_shaders_output_convolution_96_96_fp32_comp_spv,
                                                         internal_shaders_output_convolution_96_96_fp16_comp_spv,
-                                                        internal_shaders_output_convolution_96_96_nv_comp_spv),
+                                                        internal_shaders_output_convolution_96_96_coop_comp_spv),
                                    eShaderType::Comp, log};
     sh_convolution_112_112_ = Shader{"Convolution 112 112", ctx_.get(),
                                      select_unpack_shader(internal_shaders_output_convolution_112_112_fp32_comp_spv,
                                                           internal_shaders_output_convolution_112_112_fp16_comp_spv,
-                                                          internal_shaders_output_convolution_112_112_nv_comp_spv),
+                                                          internal_shaders_output_convolution_112_112_coop_comp_spv),
                                      eShaderType::Comp, log};
     sh_convolution_concat_96_64_112_ =
         Shader{"Convolution Concat 96 64 112", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_spv,
                                     internal_shaders_output_convolution_concat_96_64_112_fp16_comp_spv,
-                                    internal_shaders_output_convolution_concat_96_64_112_nv_comp_spv),
+                                    internal_shaders_output_convolution_concat_96_64_112_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_112_48_96_ =
         Shader{"Convolution Concat 112 48 96", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_spv,
                                     internal_shaders_output_convolution_concat_112_48_96_fp16_comp_spv,
-                                    internal_shaders_output_convolution_concat_112_48_96_nv_comp_spv),
+                                    internal_shaders_output_convolution_concat_112_48_96_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_96_32_64_ =
         Shader{"Convolution Concat 96 32 64", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_spv,
                                     internal_shaders_output_convolution_concat_96_32_64_fp16_comp_spv,
-                                    internal_shaders_output_convolution_concat_96_32_64_nv_comp_spv),
+                                    internal_shaders_output_convolution_concat_96_32_64_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_64_3_64_ =
         Shader{"Convolution Concat 64 3 64", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_concat_64_3_64_fp32_comp_spv,
                                     internal_shaders_output_convolution_concat_64_3_64_fp16_comp_spv,
-                                    internal_shaders_output_convolution_concat_64_3_64_nv_comp_spv),
+                                    internal_shaders_output_convolution_concat_64_3_64_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_64_6_64_ =
         Shader{"Convolution Concat 64 6 64", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_concat_64_6_64_fp32_comp_spv,
                                     internal_shaders_output_convolution_concat_64_6_64_fp16_comp_spv,
-                                    internal_shaders_output_convolution_concat_64_6_64_nv_comp_spv),
+                                    internal_shaders_output_convolution_concat_64_6_64_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_concat_64_9_64_ =
         Shader{"Convolution Concat 64 9 64", ctx_.get(),
                select_unpack_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_spv,
                                     internal_shaders_output_convolution_concat_64_9_64_fp16_comp_spv,
-                                    internal_shaders_output_convolution_concat_64_9_64_nv_comp_spv),
+                                    internal_shaders_output_convolution_concat_64_9_64_coop_comp_spv),
                eShaderType::Comp, log};
     sh_convolution_32_3_img_ = Shader{"Convolution 32 3 Img", ctx_.get(),
                                       select_unpack_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_spv,
                                                            internal_shaders_output_convolution_32_3_img_fp16_comp_spv,
-                                                           internal_shaders_output_convolution_32_3_img_nv_comp_spv),
+                                                           internal_shaders_output_convolution_32_3_img_coop_comp_spv),
                                       eShaderType::Comp, log};
 
     prog_convolution_Img_9_32_ = Program{"Convolution Img 9 32", ctx_.get(), &sh_convolution_Img_9_32_, log};

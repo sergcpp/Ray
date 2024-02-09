@@ -207,6 +207,8 @@ bool Ray::Vk::Api::LoadExtensions(VkInstance instance, ILog *log) {
         log->Error("Failed to load %s", #x);                                                                           \
         return false;                                                                                                  \
     }
+#define LOAD_OPTIONAL_INSTANCE_FUN(x)                                                                                  \
+    x = (PFN_##x)vkGetInstanceProcAddr(instance, #x);                                                                  \
 
     LOAD_INSTANCE_FUN(vkCreateDebugReportCallbackEXT)
     LOAD_INSTANCE_FUN(vkDestroyDebugReportCallbackEXT)
@@ -236,14 +238,15 @@ bool Ray::Vk::Api::LoadExtensions(VkInstance instance, ILog *log) {
     LOAD_INSTANCE_FUN(vkGetAccelerationStructureDeviceAddressKHR)
     LOAD_INSTANCE_FUN(vkGetRayTracingShaderGroupHandlesKHR)
 
-    LOAD_INSTANCE_FUN(vkGetPhysicalDeviceCooperativeMatrixPropertiesNV)
+    // allowed to fail
+    LOAD_OPTIONAL_INSTANCE_FUN(vkCreateRayTracingPipelinesKHR)
+    LOAD_OPTIONAL_INSTANCE_FUN(vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR)
 
-    LOAD_INSTANCE_FUN(vkCreateRayTracingPipelinesKHR)
-
-    LOAD_INSTANCE_FUN(vkCmdBeginRenderingKHR)
-    LOAD_INSTANCE_FUN(vkCmdEndRenderingKHR)
+    LOAD_OPTIONAL_INSTANCE_FUN(vkCmdBeginRenderingKHR)
+    LOAD_OPTIONAL_INSTANCE_FUN(vkCmdEndRenderingKHR)
 
 #undef LOAD_INSTANCE_FUN
+#undef LOAD_OPTIONAL_INSTANCE_FUN
 
     return true;
 }

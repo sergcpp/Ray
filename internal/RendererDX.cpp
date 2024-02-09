@@ -1285,7 +1285,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
             round_up(w_, TextureDataPitchAlignment / sizeof(color_rgba_t))};
 }
 
-bool Ray::Dx::Renderer::InitUNetPipelines() {
+bool Ray::Dx::Renderer::InitUNetFilterPipelines() {
     ILog *log = ctx_->log();
 
     auto select_unpack_shader = [this](Span<const uint8_t> default_shader, Span<const uint8_t> fp16_shader) {
