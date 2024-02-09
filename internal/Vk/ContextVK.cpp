@@ -132,7 +132,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 
     if (!ChooseVkPhysicalDevice(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
                                 raytracing_supported_, ray_query_supported_, dynamic_rendering_supported_,
-                                fp16_supported_, nv_coop_matrix_supported_, preferred_device, instance_, log)) {
+                                fp16_supported_, coop_matrix_supported_, preferred_device, instance_, log)) {
         return false;
     }
 
@@ -151,9 +151,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         fp16_supported_ &= (fp16_features.shaderFloat16 != 0);
     }
 
-    if (nv_coop_matrix_supported_) {
-        VkPhysicalDeviceCooperativeMatrixFeaturesNV coop_matrix_features = {
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_NV};
+    if (coop_matrix_supported_) {
+        VkPhysicalDeviceCooperativeMatrixFeaturesKHR coop_matrix_features = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR};
 
         VkPhysicalDeviceFeatures2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         prop2.pNext = &coop_matrix_features;
@@ -161,16 +161,16 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         api_.vkGetPhysicalDeviceFeatures2KHR(physical_device_, &prop2);
 
         uint32_t props_count = 0;
-        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesNV(physical_device_, &props_count, nullptr);
+        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device_, &props_count, nullptr);
 
-        SmallVector<VkCooperativeMatrixPropertiesNV, 16> coop_matrix_props(
-            props_count, {VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_NV});
+        SmallVector<VkCooperativeMatrixPropertiesKHR, 16> coop_matrix_props(
+            props_count, {VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR});
 
-        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesNV(physical_device_, &props_count, coop_matrix_props.data());
+        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device_, &props_count, coop_matrix_props.data());
     }
 
     if (!InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
-                      ray_query_supported_, dynamic_rendering_supported_, fp16_supported_, nv_coop_matrix_supported_,
+                      ray_query_supported_, dynamic_rendering_supported_, fp16_supported_, coop_matrix_supported_,
                       g_enabled_layers, g_enabled_layers_count, log)) {
         return false;
     }
@@ -398,7 +398,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                                               VkPhysicalDeviceMemoryProperties &out_mem_properties,
                                               uint32_t &out_graphics_family_index, bool &out_raytracing_supported,
                                               bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
-                                              bool &out_fp16_supported, bool &out_nv_coop_matrix_supported,
+                                              bool &out_fp16_supported, bool &out_coop_matrix_supported,
                                               const char *preferred_device, VkInstance instance, ILog *log) {
     uint32_t physical_device_count = 0;
     api.vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
@@ -418,7 +418,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
 
         bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
              dynamic_rendering_supported = false, shader_fp16_supported = false, storage_fp16_supported = false,
-             nv_coop_matrix_supported = false;
+             coop_matrix_supported = false;
 
         { // check for features support
             uint32_t extension_count;
@@ -443,8 +443,8 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                     shader_fp16_supported = true;
                 } else if (strcmp(ext.extensionName, VK_KHR_16BIT_STORAGE_EXTENSION_NAME) == 0) {
                     storage_fp16_supported = true;
-                } else if (strcmp(ext.extensionName, VK_NV_COOPERATIVE_MATRIX_EXTENSION_NAME) == 0) {
-                    nv_coop_matrix_supported = true;
+                } else if (strcmp(ext.extensionName, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME) == 0) {
+                    coop_matrix_supported = true;
                 }
             }
         }
@@ -504,7 +504,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                 out_ray_query_supported = ray_query_supported;
                 out_dynamic_rendering_supported = dynamic_rendering_supported;
                 out_fp16_supported = (shader_fp16_supported && storage_fp16_supported);
-                out_nv_coop_matrix_supported = nv_coop_matrix_supported;
+                out_coop_matrix_supported = coop_matrix_supported;
             }
         }
     }
@@ -576,7 +576,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
 
     if (enable_coop_matrix) {
         device_extensions.push_back(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME);
-        device_extensions.push_back(VK_NV_COOPERATIVE_MATRIX_EXTENSION_NAME);
+        device_extensions.push_back(VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
     }
 
     device_info.enabledExtensionCount = uint32_t(device_extensions.size());
@@ -660,8 +660,8 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
     mem_model_features.vulkanMemoryModel = VK_TRUE;
     mem_model_features.vulkanMemoryModelDeviceScope = VK_TRUE;
 
-    VkPhysicalDeviceCooperativeMatrixFeaturesNV coop_matrix_features = {
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_NV};
+    VkPhysicalDeviceCooperativeMatrixFeaturesKHR coop_matrix_features = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR};
     coop_matrix_features.cooperativeMatrix = VK_TRUE;
 
     if (enable_coop_matrix) {

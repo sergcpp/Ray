@@ -10,7 +10,7 @@ Features:
 - Automatic texture compression
 - CPU backend accelerated using SSE/AVX/NEON extensions
 - GPU backends (Vulkan, DirectX 12) with optional HW raytracing
-- DNN denoising (manual port of OpenImageDenoise UNet), accelerated using VK_NV_cooperative_matrix if available
+- DNN denoising (manual port of OpenImageDenoise), accelerated using VK_KHR_cooperative_matrix
 - Compatible with Windows (including ARM), Linux, and macOS
 
 <details>

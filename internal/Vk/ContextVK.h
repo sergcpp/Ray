@@ -46,7 +46,7 @@ class Context {
 
     bool subgroup_supported_ = false;
 
-    bool nv_coop_matrix_supported_ = false;
+    bool coop_matrix_supported_ = false;
 
     VkQueue graphics_queue_ = {};
 
@@ -87,7 +87,7 @@ class Context {
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
     bool fp16_supported() const { return fp16_supported_; }
     bool subgroup_supported() const { return subgroup_supported_; }
-    bool nv_coop_matrix_supported() const { return nv_coop_matrix_supported_; }
+    bool coop_matrix_supported() const { return coop_matrix_supported_; }
 
     bool image_blit_supported() const { return true; }
 

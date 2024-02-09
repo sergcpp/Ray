@@ -76,7 +76,7 @@ class Renderer : public RendererBase {
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
-         use_nv_coop_matrix_ = false, use_subgroup_ = false;
+         use_coop_matrix_ = false, use_subgroup_ = false;
 
     ePixelFilter filter_table_filter_ = ePixelFilter(-1);
     float filter_table_width_ = 0.0f;
@@ -111,7 +111,7 @@ class Renderer : public RendererBase {
     Buffer unet_tensors_heap_;
     unet_filter_tensors_t unet_tensors_ = {};
     SmallVector<int, 2> unet_alias_dependencies_[UNetFilterPasses];
-    bool InitUNetPipelines();
+    bool InitUNetFilterPipelines();
     void UpdateUNetFilterMemory(CommandBuffer cmd_buf);
 
     struct {
@@ -546,7 +546,7 @@ inline void Ray::NS::Renderer::InitUNetFilter(const bool alias_memory, unet_filt
     }
 
     if (!pi_convolution_Img_9_32_) {
-        if (!InitUNetPipelines()) {
+        if (!InitUNetFilterPipelines()) {
             throw std::runtime_error("Error initializing pipeline!");
         }
     }
