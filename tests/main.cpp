@@ -148,7 +148,7 @@ int main(int argc, char *argv[]) {
     const char *device_name = nullptr;
     const char *preferred_arch[] = {nullptr, nullptr};
     double time_limit_m = DBL_MAX;
-    bool multithreaded = false;
+    int threads_count = 1;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--nogpu") == 0) {
@@ -163,9 +163,10 @@ int main(int argc, char *argv[]) {
             run_detail_tests_on_fail = true;
         } else if (strcmp(argv[i], "--arch") == 0 && (++i != argc)) {
             preferred_arch[0] = argv[i];
-        } else if (strcmp(argv[i], "--mt") == 0) {
-            multithreaded = true;
-            g_minimal_output = true;
+        } else if (strcmp(argv[i], "-j") == 0 && (++i != argc)) {
+            threads_count = atoi(argv[++i]);
+        } else if (strncmp(argv[i], "-j", 2) == 0) {
+            threads_count = atoi(&argv[i][2]);
         } else if (strcmp(argv[i], "--time_limit") == 0 && (++i != argc)) {
             time_limit_m = atof(argv[i]);
 #ifdef _WIN32
@@ -174,7 +175,13 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    multithreaded &= !g_determine_sample_count;
+    if (g_determine_sample_count) {
+        threads_count = 1;
+    }
+
+    if (threads_count > 1) {
+        g_minimal_output = true;
+    }
 
 #if defined(_WIN32) && !defined(__clang__)
     const bool enable_fp_exceptions = !nocpu || full_tests;
@@ -227,7 +234,7 @@ int main(int argc, char *argv[]) {
         arch_list = ArchListDefaultNoGPU;
     }
 
-    ThreadPool mt_run_pool(multithreaded ? 4 : 1);
+    ThreadPool mt_run_pool(threads_count);
 
     if (g_tests_success) {
         const auto t2 = high_resolution_clock::now();
