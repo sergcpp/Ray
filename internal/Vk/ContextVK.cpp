@@ -166,7 +166,19 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         SmallVector<VkCooperativeMatrixPropertiesKHR, 16> coop_matrix_props(
             props_count, {VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR});
 
-        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device_, &props_count, coop_matrix_props.data());
+        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device_, &props_count,
+                                                               coop_matrix_props.data());
+
+        bool found = false;
+        for (const VkCooperativeMatrixPropertiesKHR &p : coop_matrix_props) {
+            if (p.AType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.BType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
+                p.CType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.ResultType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
+                p.MSize == 16 && p.NSize == 8 && p.KSize == 8 && p.scope == VK_SCOPE_SUBGROUP_KHR) {
+                found = true;
+                break;
+            }
+        }
+        coop_matrix_supported_ &= found;
     }
 
     if (!InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
