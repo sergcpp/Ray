@@ -37,13 +37,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(const VkDebugReportFlagsEXT f
     return VK_FALSE;
 }
 
-#ifndef NDEBUG
 const char *g_enabled_layers[] = {"VK_LAYER_KHRONOS_validation"};
 const int g_enabled_layers_count = COUNT_OF(g_enabled_layers);
-#else
-const char **g_enabled_layers = nullptr;
-const int g_enabled_layers_count = 0;
-#endif
 } // namespace Vk
 } // namespace Ray
 
@@ -88,15 +83,15 @@ void Ray::Vk::Context::Destroy() {
 
         api_.vkDestroyDevice(device_, nullptr);
         // vkDestroySurfaceKHR(instance_, surface_, nullptr);
-#ifndef NDEBUG
-        api_.vkDestroyDebugReportCallbackEXT(instance_, debug_callback_, nullptr);
-#endif
+        if (debug_callback_) {
+            api_.vkDestroyDebugReportCallbackEXT(instance_, debug_callback_, nullptr);
+        }
 
         api_.vkDestroyInstance(instance_, nullptr);
     }
 }
 
-bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
+bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int validation_level) {
     log_ = log;
 
     if (!api_.Load(log)) {
@@ -105,7 +100,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 
     std::lock_guard<std::mutex> _(g_device_mtx);
 
-    if (!InitVkInstance(api_, instance_, g_enabled_layers, g_enabled_layers_count, log)) {
+    if (!InitVkInstance(api_, instance_, g_enabled_layers, g_enabled_layers_count, validation_level, log)) {
         return false;
     }
 
@@ -113,8 +108,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         return false;
     }
 
-#ifndef NDEBUG
-    { // Sebug debug report callback
+    if (validation_level) { // Sebug debug report callback
         VkDebugReportCallbackCreateInfoEXT callback_create_info = {VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT};
         callback_create_info.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT |
                                      VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
@@ -128,7 +122,6 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
             return false;
         }
     }
-#endif
 
     if (!ChooseVkPhysicalDevice(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
                                 raytracing_supported_, ray_query_supported_, dynamic_rendering_supported_,
@@ -294,10 +287,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 }
 
 bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
-                                      const int enabled_layers_count, ILog *log) {
-    bool enable_validation = false;
-#ifndef NDEBUG
-    { // Find validation layer
+                                      const int enabled_layers_count, int validation_level, ILog *log) {
+    if (validation_level) { // Find validation layer
         uint32_t layers_count = 0;
         api.vkEnumerateInstanceLayerProperties(&layers_count, nullptr);
 
@@ -309,26 +300,26 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
         SmallVector<VkLayerProperties, 16> layers_available(layers_count);
         api.vkEnumerateInstanceLayerProperties(&layers_count, &layers_available[0]);
 
+        bool found_validation = false;
         for (uint32_t i = 0; i < layers_count; i++) {
             if (strcmp(layers_available[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
-                enable_validation = true;
+                found_validation = true;
+                break;
             }
         }
 
-        if (!enable_validation) {
+        if (!found_validation) {
             log->Warning("Could not find validation layer");
+            validation_level = 0;
         }
     }
-#endif
 
     SmallVector<const char *, 8> desired_extensions = {VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
                                                        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
                                                        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
-#ifndef NDEBUG
-    if (enable_validation) {
+    if (validation_level) {
         desired_extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
     }
-#endif
 
     const uint32_t number_required_extensions = 0;
     const uint32_t number_optional_extensions = uint32_t(desired_extensions.size()) - number_required_extensions;
@@ -373,14 +364,13 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
 
     VkInstanceCreateInfo instance_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instance_info.pApplicationInfo = &app_info;
-    if (enable_validation) {
+    if (validation_level) {
         instance_info.enabledLayerCount = enabled_layers_count;
         instance_info.ppEnabledLayerNames = enabled_layers;
     }
     instance_info.enabledExtensionCount = number_required_extensions + number_optional_extensions;
     instance_info.ppEnabledExtensionNames = desired_extensions.data();
 
-#ifndef NDEBUG
     static const VkValidationFeatureEnableEXT enabled_validation_features[] = {
         VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
@@ -388,13 +378,12 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
         //  VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT
     };
     VkValidationFeaturesEXT validation_features = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-    if (enable_validation) {
-        validation_features.enabledValidationFeatureCount = COUNT_OF(enabled_validation_features);
-        validation_features.pEnabledValidationFeatures = enabled_validation_features;
+    validation_features.enabledValidationFeatureCount = COUNT_OF(enabled_validation_features);
+    validation_features.pEnabledValidationFeatures = enabled_validation_features;
 
+    if (validation_level > 1) {
         instance_info.pNext = &validation_features;
     }
-#endif
 
     const VkResult res = api.vkCreateInstance(&instance_info, nullptr, &instance);
     if (res != VK_SUCCESS) {
@@ -923,7 +912,7 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
     }
 
     VkInstance instance;
-    if (!InitVkInstance(api, instance, g_enabled_layers, g_enabled_layers_count, log)) {
+    if (!InitVkInstance(api, instance, g_enabled_layers, g_enabled_layers_count, 0, log)) {
         log->Error("Failed to initialize VkInstance!");
         return 0;
     }

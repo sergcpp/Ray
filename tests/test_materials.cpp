@@ -17,6 +17,7 @@
 extern bool g_determine_sample_count;
 extern bool g_minimal_output;
 std::mutex g_stdout_mtx;
+extern int g_validation_level;
 
 template <typename MatDesc>
 void run_material_test(const char *arch_list[], const char *preferred_device, const char *test_name,
@@ -46,6 +47,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
     s.w = test_img_w;
     s.h = test_img_h;
     s.preferred_device = preferred_device;
+    s.validation_level = g_validation_level;
 
     ThreadPool threads(std::thread::hardware_concurrency());
 

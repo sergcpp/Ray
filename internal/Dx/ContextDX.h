@@ -40,9 +40,8 @@ using CommandBuffer = ID3D12GraphicsCommandList *;
 
 class Context {
     ILog *log_ = nullptr;
-#ifndef NDEBUG
     unsigned long debug_callback_cookie_ = {};
-#endif
+    int validation_level_ = 0;
     ID3D12Device *device_ = {};
     ID3D12Device4 *device4_ = {};
     ID3D12Device5 *device5_ = {};
@@ -87,7 +86,7 @@ class Context {
     Context();
     ~Context();
 
-    bool Init(ILog *log, const char *preferred_device);
+    bool Init(ILog *log, const char *preferred_device, int validation_level);
     void Destroy();
 
     ID3D12Device *device() const { return device_; }

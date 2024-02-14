@@ -49,6 +49,7 @@ struct settings_t {
     bool use_tex_compression = true;
     bool use_hwrt = true;
     bool use_bindless = true;
+    int validation_level = 0;
 };
 
 /** Render region context,

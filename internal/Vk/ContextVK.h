@@ -23,9 +23,7 @@ class Context {
     ILog *log_ = nullptr;
     Api api_;
     VkInstance instance_ = {};
-#ifndef NDEBUG
     VkDebugReportCallbackEXT debug_callback_ = {};
-#endif
     VkPhysicalDevice physical_device_ = {};
     VkPhysicalDeviceLimits phys_device_limits_ = {};
     VkPhysicalDeviceProperties device_properties_ = {};
@@ -69,7 +67,7 @@ class Context {
   public:
     ~Context();
 
-    bool Init(ILog *log, const char *preferred_device);
+    bool Init(ILog *log, const char *preferred_device, int validation_level);
     void Destroy();
 
     VkDevice device() const { return device_; }
@@ -138,7 +136,7 @@ class Context {
 
   private:
     static bool InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
-                               int enabled_layers_count, ILog *log);
+                               int enabled_layers_count, int validation_level, ILog *log);
     static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device,
                                        VkPhysicalDeviceProperties &device_properties,
                                        VkPhysicalDeviceMemoryProperties &mem_properties,

@@ -13,6 +13,7 @@
 
 extern bool g_minimal_output;
 extern std::mutex g_stdout_mtx;
+extern int g_validation_level;
 
 void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     using namespace std::chrono;
@@ -59,6 +60,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     s.w = test_img_w;
     s.h = test_img_h;
     s.preferred_device = preferred_device;
+    s.validation_level = g_validation_level;
 
     ThreadPool threads(std::thread::hardware_concurrency());
 
