@@ -192,7 +192,7 @@ std::vector<uint8_t> deflate_data(const uint8_t *data, const int len) {
 
 Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
     ctx_ = std::make_unique<Context>();
-    const bool res = ctx_->Init(log, s.preferred_device);
+    const bool res = ctx_->Init(log, s.preferred_device, s.validation_level);
     if (!res) {
         throw std::runtime_error("Error initializing vulkan context!");
     }

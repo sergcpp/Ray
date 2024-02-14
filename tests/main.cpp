@@ -118,6 +118,7 @@ std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
 bool g_determine_sample_count = false;
 bool g_minimal_output = false;
+int g_validation_level = 0;
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -172,6 +173,8 @@ int main(int argc, char *argv[]) {
 #ifdef _WIN32
             SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
 #endif
+        } else if ((strcmp(argv[i], "--validation_level") == 0 || strcmp(argv[i], "-vl") == 0) && (++i != argc)) {
+            g_validation_level = atoi(argv[i]);
         }
     }
 

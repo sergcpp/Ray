@@ -54,7 +54,6 @@ void Ray::Dx::Context::Destroy() {
         (p) = 0;                                                                                                       \
     }
 
-#ifndef NDEBUG
     if (debug_callback_cookie_) {
         ID3D12InfoQueue1 *info_queue;
         HRESULT hr = device_->QueryInterface(IID_PPV_ARGS(&info_queue));
@@ -63,7 +62,6 @@ void Ray::Dx::Context::Destroy() {
             debug_callback_cookie_ = {};
         }
     }
-#endif
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         SAFE_RELEASE(command_allocators_[i]);
@@ -90,12 +88,12 @@ void Ray::Dx::Context::Destroy() {
     SAFE_RELEASE(temp_command_allocator_);
     SAFE_RELEASE(indirect_dispatch_cmd_signature_);
 
-#ifndef NDEBUG
-    ID3D12DebugDevice *debug_device = nullptr;
-    if (device_ && SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&debug_device)))) {
-        debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+    if (validation_level_) {
+        ID3D12DebugDevice *debug_device = nullptr;
+        if (device_ && SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&debug_device)))) {
+            debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+        }
     }
-#endif
 
     SAFE_RELEASE(device_);
 
@@ -104,17 +102,16 @@ void Ray::Dx::Context::Destroy() {
 #undef SAFE_RELEASE
 }
 
-bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
+bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int validation_level) {
     log_ = log;
+    validation_level_ = validation_level;
 
-#ifndef NDEBUG
-    { // Enable debug layer
+    if (validation_level) { // Enable debug layer
         ID3D12Debug *debug_controller = nullptr;
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug_controller)))) {
             debug_controller->EnableDebugLayer();
         }
     }
-#endif
 
     std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> str_converter;
 
@@ -202,18 +199,18 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
 
     command_list_->Close();
 
-#ifndef NDEBUG
-    ID3D12InfoQueue1 *info_queue;
-    hr = device_->QueryInterface(IID_PPV_ARGS(&info_queue));
-    if (SUCCEEDED(hr)) {
-        hr = info_queue->RegisterMessageCallback(DebugReportCallback,
-                                                 D3D12_MESSAGE_CALLBACK_FLAGS::D3D12_MESSAGE_CALLBACK_FLAG_NONE, this,
-                                                 &debug_callback_cookie_);
-        if (FAILED(hr)) {
-            log->Error("Failed to register message callback!");
+    if (validation_level) {
+        ID3D12InfoQueue1 *info_queue;
+        hr = device_->QueryInterface(IID_PPV_ARGS(&info_queue));
+        if (SUCCEEDED(hr)) {
+            hr = info_queue->RegisterMessageCallback(DebugReportCallback,
+                                                     D3D12_MESSAGE_CALLBACK_FLAGS::D3D12_MESSAGE_CALLBACK_FLAG_NONE,
+                                                     this, &debug_callback_cookie_);
+            if (FAILED(hr)) {
+                log->Error("Failed to register message callback!");
+            }
         }
     }
-#endif
 
     UINT64 timestamp_frequency = 0;
     hr = command_queue_->GetTimestampFrequency(&timestamp_frequency);
