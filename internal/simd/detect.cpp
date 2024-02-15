@@ -1,50 +1,41 @@
 #include "detect.h"
 
+#include <mutex>
+
 namespace Ray {
-bool g_cpu_features_initialized = false;
+std::once_flag g_cpu_features_init_flag;
 CpuFeatures g_cpu_features;
-}
+} // namespace Ray
 
 #if defined(_WIN32) && !defined(_M_ARM) && !defined(_M_ARM64)
 //  Windows
 #include <intrin.h>
 #ifdef __GNUC__
 #include <cpuid.h>
-inline void cpuid(int info[4], int InfoType) {
-    __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
-}
+inline void cpuid(int info[4], int InfoType) { __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]); }
 #if defined(__GNUC__) && (__GNUC__ < 9)
 inline unsigned long long _xgetbv(unsigned int index) {
     unsigned int eax, edx;
-    __asm__ __volatile__(
-        "xgetbv;"
-        : "=a" (eax), "=d"(edx)
-        : "c" (index)
-    );
+    __asm__ __volatile__("xgetbv;" : "=a"(eax), "=d"(edx) : "c"(index));
     return ((unsigned long long)edx << 32) | eax;
 }
 #endif
 #else
-#define cpuid(info, x)    __cpuidex(info, x, 0)
+#define cpuid(info, x) __cpuidex(info, x, 0)
 #endif
 
 #else
 
-#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64) &&                            \
+    !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
 //  GCC Intrinsics
 #include <cpuid.h>
 #include <immintrin.h>
-inline void cpuid(int info[4], int InfoType) {
-    __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
-}
+inline void cpuid(int info[4], int InfoType) { __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]); }
 #if defined(__GNUC__) && (__GNUC__ < 9) && !defined(__APPLE__) && !defined(_xgetbv)
 inline unsigned long long _xgetbv(unsigned int index) {
     unsigned int eax, edx;
-    __asm__ __volatile__(
-        "xgetbv;"
-        : "=a" (eax), "=d"(edx)
-        : "c" (index)
-    );
+    __asm__ __volatile__("xgetbv;" : "=a"(eax), "=d"(edx) : "c"(index));
     return ((unsigned long long)edx << 32) | eax;
 }
 #endif
@@ -53,7 +44,7 @@ inline unsigned long long _xgetbv(unsigned int index) {
 #endif
 
 Ray::CpuFeatures Ray::GetCpuFeatures() {
-    if (!g_cpu_features_initialized) {
+    std::call_once(g_cpu_features_init_flag, []() {
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(__ANDROID__)
         int info[4];
         cpuid(info, 0);
@@ -105,8 +96,7 @@ Ray::CpuFeatures Ray::GetCpuFeatures() {
 #elif defined(__i386__) || defined(__x86_64__)
         g_cpu_features.sse2_supported = true;
 #endif
-        g_cpu_features_initialized = true;
-    }
+    });
     return g_cpu_features;
 }
 
