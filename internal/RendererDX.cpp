@@ -445,7 +445,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                 LUT_DIMS * LUT_DIMS * round_up(LUT_DIMS * sizeof(uint32_t), TextureDataPitchAlignment);
             Buffer temp_upload_buf{"Temp tonemap LUT upload", ctx_.get(), eBufType::Upload, data_len};
             { // update stage buffer
-                uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_upload_buf.Map(BufMapWrite));
+                uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_upload_buf.Map());
                 const uint32_t *lut = transform_luts[int(cam.view_transform)];
 
                 int i = 0;

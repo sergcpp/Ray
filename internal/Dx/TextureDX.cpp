@@ -189,7 +189,7 @@ void Ray::Dx::Texture2D::Init(const Tex2DParams &p, MemoryAllocators *mem_allocs
 void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf, void *_cmd_buf,
                               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
     if (!data) {
-        uint8_t *stage_data = sbuf.Map(BufMapWrite);
+        uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
         sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
         sbuf.Unmap();
@@ -205,7 +205,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         ready_ = false;
         (*load_status) = eTexLoadStatus::CreatedDefault;
     } else {
-        uint8_t *stage_data = sbuf.Map(BufMapWrite);
+        uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, data, size);
         sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(size));
         sbuf.Unmap();
@@ -220,7 +220,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
 void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &sbuf,
                               void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
     if (!data) {
-        uint8_t *stage_data = sbuf.Map(BufMapWrite);
+        uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
         sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
         sbuf.Unmap();
@@ -238,7 +238,7 @@ void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2
         cubemap_ready_ = 0;
         (*load_status) = eTexLoadStatus::CreatedDefault;
     } else {
-        uint8_t *stage_data = sbuf.Map(BufMapWrite);
+        uint8_t *stage_data = sbuf.Map();
         uint32_t stage_off = 0;
 
         int data_off[6];
