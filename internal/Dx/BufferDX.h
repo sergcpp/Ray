@@ -42,9 +42,6 @@ enum class eBufType : uint8_t {
     _Count
 };
 
-const uint8_t BufMapRead = (1u << 0u);
-const uint8_t BufMapWrite = (1u << 1u);
-
 struct BufHandle {
     ID3D12Resource *buf = nullptr;
     PoolRef srv_uav_ref;
