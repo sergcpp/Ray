@@ -149,13 +149,6 @@ void CopyImageToBuffer(const Texture2D &src_tex, int level, int x, int y, int w,
 void ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf);
 void ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd_buf);
 
-struct Texture1DParams {
-    uint16_t offset = 0, size = 0;
-    eTexFormat format = eTexFormat::Undefined;
-    uint8_t _padding = 0;
-};
-static_assert(sizeof(Texture1DParams) == 6, "!");
-
 class Texture1D {
     Buffer *buf_ = nullptr;
     Texture1DParams params_;
@@ -182,16 +175,6 @@ class Texture1D {
 
     void Init(Buffer *buf, eTexFormat format, uint32_t offset, uint32_t size, ILog *log);
 };
-
-struct Tex3DParams {
-    uint16_t w = 0, h = 0, d = 0;
-    eTexFlags flags = {};
-    eTexUsage usage = {};
-    eTexFormat format = eTexFormat::Undefined;
-    eTexBlock block = eTexBlock::_None;
-    SamplingParams sampling;
-};
-static_assert(sizeof(Tex2DParams) == 22, "!");
 
 class Texture3D {
     std::string name_;
