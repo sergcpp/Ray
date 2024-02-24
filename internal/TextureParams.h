@@ -128,6 +128,13 @@ inline eTexUsage &operator|=(eTexUsage &a, eTexUsage b) { return a = eTexUsage(u
 inline eTexUsage operator&(eTexUsage a, eTexUsage b) { return eTexUsage(uint8_t(a) & uint8_t(b)); }
 inline eTexUsage &operator&=(eTexUsage &a, eTexUsage b) { return a = eTexUsage(uint8_t(a) & uint8_t(b)); }
 
+struct Texture1DParams {
+    uint16_t offset = 0, size = 0;
+    eTexFormat format = eTexFormat::Undefined;
+    uint8_t _padding = 0;
+};
+static_assert(sizeof(Texture1DParams) == 6, "!");
+
 struct Tex2DParams {
     uint16_t w = 0, h = 0;
     eTexFlags flags = {};
@@ -150,6 +157,16 @@ inline bool operator==(const Tex2DParams &lhs, const Tex2DParams &rhs) {
            lhs.format == rhs.format && lhs.sampling == rhs.sampling;
 }
 inline bool operator!=(const Tex2DParams &lhs, const Tex2DParams &rhs) { return !operator==(lhs, rhs); }
+
+struct Tex3DParams {
+    uint16_t w = 0, h = 0, d = 0;
+    eTexFlags flags = {};
+    eTexUsage usage = {};
+    eTexFormat format = eTexFormat::Undefined;
+    eTexBlock block = eTexBlock::_None;
+    SamplingParams sampling;
+};
+static_assert(sizeof(Tex2DParams) == 22, "!");
 
 enum class eTexLoadStatus { Found, Reinitialized, CreatedDefault, CreatedFromData };
 
