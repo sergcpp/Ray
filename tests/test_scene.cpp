@@ -238,8 +238,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         Ray::camera_desc_t cam_desc;
         cam_desc.type = Ray::eCamType::Persp;
         cam_desc.filter = Ray::ePixelFilter::Box;
-        if (test_scene == eTestScene::Standard_DirLight || test_scene == eTestScene::Standard_SunLight ||
-            test_scene == eTestScene::Standard_MoonLight) {
+        if (test_scene == eTestScene::Standard_SunLight || test_scene == eTestScene::Standard_MoonLight) {
+            cam_desc.view_transform = Ray::eViewTransform::AgX;
+        } else if (test_scene == eTestScene::Standard_DirLight) {
             cam_desc.view_transform = Ray::eViewTransform::Filmic_HighContrast;
         } else {
             cam_desc.view_transform = Ray::eViewTransform::Standard;
