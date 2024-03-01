@@ -19,7 +19,7 @@ def GenerateIdentityCube(res):
     return data
 
 def WriteAsCArray(lut_name, data, res):
-    with open(os.path.join('internal', 'luts', lut_name + '.inl'), 'w') as f:
+    with open(os.path.join('internal', 'precomputed', lut_name + '.inl'), 'w') as f:
         f.write('const long int %s_size = %d * %d * %d * sizeof(uint32_t);\n' % (lut_name, res, res, res))
         f.write('const uint32_t %s[%d * %d * %d] = {\n' % (lut_name, res, res, res))
         for iz in range(res):
@@ -40,7 +40,7 @@ def SaveLUT(name, color_space, looks):
     if looks is not None:
         transform.setLooks(looks)
 
-    config = OCIO.GetCurrentConfig()
+    config = OCIO.Config.CreateFromFile("third-party/blender_colormanagement/config.ocio")
     processor = config.getProcessor(transform).getDefaultCPUProcessor()
 
     data = GenerateIdentityCube(LUT_RES)
@@ -48,6 +48,8 @@ def SaveLUT(name, color_space, looks):
     WriteAsCArray(name, data, LUT_RES)
 
 def main():
+    SaveLUT("__agx", "AgX Base sRGB", None)
+    SaveLUT("__agx_punchy", "AgX Base sRGB", "AgX - Punchy")
     SaveLUT("__filmic_very_low_contrast", "Filmic sRGB", "Very Low Contrast")
     SaveLUT("__filmic_low_contrast", "Filmic sRGB", "Low Contrast")
     SaveLUT("__filmic_med_low_contrast", "Filmic sRGB", "Medium Low Contrast")

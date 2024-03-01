@@ -69,6 +69,8 @@ enum class eLensUnits : uint8_t { FOV, FLength };
 /// View transform (affects tonemapping)
 enum class eViewTransform : uint8_t {
     Standard,
+    AgX,
+    AgX_Punchy,
     Filmic_VeryLowContrast,
     Filmic_LowContrast,
     Filmic_MediumLowContrast,
