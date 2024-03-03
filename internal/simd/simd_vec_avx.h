@@ -4,17 +4,6 @@
 
 #include <immintrin.h>
 
-#ifdef __GNUC__
-#pragma GCC push_options
-#if defined(USE_AVX2) || defined(USE_AVX512)
-#pragma GCC target("avx2")
-#pragma clang attribute push(__attribute__((target("avx2"))), apply_to = function)
-#else
-#pragma GCC target("avx")
-#pragma clang attribute push(__attribute__((target("avx"))), apply_to = function)
-#endif
-#endif
-
 #if defined(__GNUC__) || defined(__clang__)
 #define _mm256_test_all_zeros(mask, val) _mm256_testz_si256((mask), (val))
 #endif
@@ -31,6 +20,12 @@
 
 #pragma warning(push)
 #pragma warning(disable : 4752)
+
+#if defined(USE_AVX2) || defined(USE_AVX512)
+#define avx2_inline force_inline
+#else
+#define avx2_inline inline
+#endif
 
 namespace Ray {
 namespace NS {
@@ -137,7 +132,7 @@ template <> class simd_vec<float, 8> {
 
     force_inline float length() const { return sqrtf(length2()); }
 
-    force_inline float length2() const {
+    float length2() const {
         float ret = 0;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 8, { ret += vec_.m256_f32[i] * vec_.m256_f32[i]; })
@@ -318,7 +313,7 @@ template <> class simd_vec<int, 8> {
 #endif
     }
 
-    force_inline simd_vec<int, 8> &vectorcall operator+=(const simd_vec<int, 8> rhs) {
+    avx2_inline simd_vec<int, 8> &vectorcall operator+=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -335,7 +330,7 @@ template <> class simd_vec<int, 8> {
 
     force_inline simd_vec<int, 8> &vectorcall operator+=(const int rhs) { return operator+=(simd_vec<int, 8>{rhs}); }
 
-    force_inline simd_vec<int, 8> &vectorcall operator-=(const simd_vec<int, 8> rhs) {
+    avx2_inline simd_vec<int, 8> &vectorcall operator-=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -350,7 +345,7 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &vectorcall operator*=(const simd_vec<int, 8> rhs) {
+    avx2_inline simd_vec<int, 8> &vectorcall operator*=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -365,7 +360,7 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &vectorcall operator/=(const simd_vec<int, 8> rhs) {
+    avx2_inline simd_vec<int, 8> &vectorcall operator/=(const simd_vec<int, 8> rhs) {
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] /= rhs.vec_.m256i_i32[i]; })
 #else
@@ -378,7 +373,7 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &vectorcall operator|=(const simd_vec<int, 8> rhs) {
+    avx2_inline simd_vec<int, 8> &vectorcall operator|=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_or_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -393,7 +388,7 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &vectorcall operator^=(const simd_vec<int, 8> rhs) {
+    avx2_inline simd_vec<int, 8> &vectorcall operator^=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_xor_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -408,7 +403,7 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> vectorcall operator-() const {
+    avx2_inline simd_vec<int, 8> vectorcall operator-() const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sub_epi32(_mm256_setzero_si256(), vec_);
@@ -423,7 +418,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline simd_vec<int, 8> vectorcall operator==(const simd_vec<int, 8> rhs) const {
+    avx2_inline simd_vec<int, 8> vectorcall operator==(const simd_vec<int, 8> rhs) const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
@@ -439,7 +434,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline simd_vec<int, 8> vectorcall operator!=(const simd_vec<int, 8> rhs) const {
+    avx2_inline simd_vec<int, 8> vectorcall operator!=(const simd_vec<int, 8> rhs) const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
@@ -455,7 +450,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline simd_vec<int, 8> &vectorcall operator&=(const simd_vec<int, 8> rhs) {
+    avx2_inline simd_vec<int, 8> &vectorcall operator&=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -478,7 +473,7 @@ template <> class simd_vec<int, 8> {
 
     force_inline explicit vectorcall operator simd_vec<unsigned, 8>() const;
 
-    force_inline int hsum() const {
+    avx2_inline int hsum() const {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i temp = _mm256_hadd_epi32(vec_, vec_);
         temp = _mm256_hadd_epi32(temp, temp);
@@ -526,7 +521,7 @@ template <> class simd_vec<int, 8> {
         return res == 0;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall min(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall min(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_min_epi32(v1.vec_, v2.vec_);
@@ -542,7 +537,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline static simd_vec<int, 8> vectorcall max(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    avx2_inline static simd_vec<int, 8> vectorcall max(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_max_epi32(v1.vec_, v2.vec_);
@@ -587,7 +582,7 @@ template <> class simd_vec<int, 8> {
         return temp;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator+(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator+(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_add_epi32(v1.vec_, v2.vec_);
@@ -603,7 +598,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator-(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator-(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sub_epi32(v1.vec_, v2.vec_);
@@ -619,7 +614,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator*(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator*(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_mullo_epi32(v1.vec_, v2.vec_);
@@ -635,7 +630,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator/(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend simd_vec<int, 8> vectorcall operator/(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (v1.vec_.m256i_i32[i] / v2.vec_.m256i_i32[i]); })
@@ -649,7 +644,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator<(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator<(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v2.vec_, v1.vec_);
@@ -665,7 +660,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator>(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator>(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, v2.vec_);
@@ -681,7 +676,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator>=(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator>=(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpgt_epi32(v2.vec_, v1.vec_), _mm256_set1_epi32(-1));
@@ -697,7 +692,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator>>(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator>>(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srlv_epi32(v1.vec_, v2.vec_);
@@ -713,7 +708,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator>>(const simd_vec<int, 8> v1, const int v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator>>(const simd_vec<int, 8> v1, const int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
@@ -728,7 +723,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator<<(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator<<(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sllv_epi32(v1.vec_, v2.vec_);
@@ -744,7 +739,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall operator<<(const simd_vec<int, 8> v1, const int v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall operator<<(const simd_vec<int, 8> v1, const int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_slli_epi32(v1.vec_, v2);
@@ -759,7 +754,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline simd_vec<int, 8> operator~() const {
+    avx2_inline simd_vec<int, 8> operator~() const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
@@ -774,7 +769,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> vectorcall srai(const simd_vec<int, 8> v1, const int v2) {
+    friend avx2_inline simd_vec<int, 8> vectorcall srai(const simd_vec<int, 8> v1, const int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srai_epi32(v1.vec_, v2);
@@ -789,7 +784,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline bool vectorcall is_equal(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
+    friend avx2_inline bool vectorcall is_equal(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
@@ -919,7 +914,7 @@ template <> class simd_vec<unsigned, 8> {
 #endif
     }
 
-    force_inline simd_vec<unsigned, 8> &vectorcall operator+=(const simd_vec<unsigned, 8> rhs) {
+    avx2_inline simd_vec<unsigned, 8> &vectorcall operator+=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -938,7 +933,7 @@ template <> class simd_vec<unsigned, 8> {
         return operator+=(simd_vec<unsigned, 8>{rhs});
     }
 
-    force_inline simd_vec<unsigned, 8> &vectorcall operator-=(const simd_vec<unsigned, 8> rhs) {
+    avx2_inline simd_vec<unsigned, 8> &vectorcall operator-=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -957,10 +952,8 @@ template <> class simd_vec<unsigned, 8> {
         return operator-=(simd_vec<unsigned, 8>{rhs});
     }
 
-    force_inline simd_vec<unsigned, 8> &vectorcall operator*=(const simd_vec<unsigned, 8> rhs) {
-#if 0 // defined(USE_AVX2) || defined(USE_AVX512)
-        vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
+    simd_vec<unsigned, 8> &vectorcall operator*=(const simd_vec<unsigned, 8> rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] *= rhs.vec_.m256i_u32[i]; })
 #else
         alignas(32) unsigned comp1[8], comp2[8];
@@ -976,7 +969,7 @@ template <> class simd_vec<unsigned, 8> {
         return operator*=(simd_vec<unsigned, 8>{rhs});
     }
 
-    force_inline simd_vec<unsigned, 8> &vectorcall operator/=(const simd_vec<unsigned, 8> rhs) {
+    simd_vec<unsigned, 8> &vectorcall operator/=(const simd_vec<unsigned, 8> rhs) {
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] /= rhs.vec_.m256i_u32[i]; })
 #else
@@ -993,7 +986,7 @@ template <> class simd_vec<unsigned, 8> {
         return operator/=(simd_vec<unsigned, 8>{rhs});
     }
 
-    force_inline simd_vec<unsigned, 8> &vectorcall operator|=(const simd_vec<unsigned, 8> rhs) {
+    avx2_inline simd_vec<unsigned, 8> &vectorcall operator|=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_or_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -1008,7 +1001,7 @@ template <> class simd_vec<unsigned, 8> {
         return *this;
     }
 
-    force_inline simd_vec<unsigned, 8> &vectorcall operator^=(const simd_vec<unsigned, 8> rhs) {
+    avx2_inline simd_vec<unsigned, 8> &vectorcall operator^=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_xor_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -1023,7 +1016,7 @@ template <> class simd_vec<unsigned, 8> {
         return *this;
     }
 
-    force_inline simd_vec<unsigned, 8> vectorcall operator==(const simd_vec<unsigned, 8> rhs) const {
+    avx2_inline simd_vec<unsigned, 8> vectorcall operator==(const simd_vec<unsigned, 8> rhs) const {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
@@ -1039,7 +1032,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    force_inline simd_vec<unsigned, 8> vectorcall operator!=(const simd_vec<unsigned, 8> rhs) const {
+    avx2_inline simd_vec<unsigned, 8> vectorcall operator!=(const simd_vec<unsigned, 8> rhs) const {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
@@ -1055,7 +1048,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    force_inline simd_vec<unsigned, 8> &vectorcall operator&=(const simd_vec<unsigned, 8> rhs) {
+    avx2_inline simd_vec<unsigned, 8> &vectorcall operator&=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -1082,7 +1075,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    force_inline unsigned hsum() const {
+    avx2_inline unsigned hsum() const {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i temp = _mm256_hadd_epi32(vec_, vec_);
         temp = _mm256_hadd_epi32(temp, temp);
@@ -1130,7 +1123,7 @@ template <> class simd_vec<unsigned, 8> {
         return res == 0;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall min(const simd_vec<unsigned, 8> v1,
+    friend avx2_inline simd_vec<unsigned, 8> vectorcall min(const simd_vec<unsigned, 8> v1,
                                                              const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -1147,7 +1140,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    force_inline static simd_vec<unsigned, 8> vectorcall max(const simd_vec<unsigned, 8> v1,
+    avx2_inline static simd_vec<unsigned, 8> vectorcall max(const simd_vec<unsigned, 8> v1,
                                                              const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -1198,7 +1191,7 @@ template <> class simd_vec<unsigned, 8> {
         return temp;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator+(const simd_vec<unsigned, 8> v1,
+    friend avx2_inline simd_vec<unsigned, 8> vectorcall operator+(const simd_vec<unsigned, 8> v1,
                                                                    const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -1215,7 +1208,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator-(const simd_vec<unsigned, 8> v1,
+    friend avx2_inline simd_vec<unsigned, 8> vectorcall operator-(const simd_vec<unsigned, 8> v1,
                                                                    const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -1232,12 +1225,10 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator*(const simd_vec<unsigned, 8> v1,
+    friend simd_vec<unsigned, 8> vectorcall operator*(const simd_vec<unsigned, 8> v1,
                                                                    const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
-#if 0 // defined(USE_AVX2) || defined(USE_AVX512)
-        ret.vec_ = _mm256_mullo_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
+#if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = v1.vec_.m256i_u32[i] * v2.vec_.m256i_u32[i]; })
 #else
         alignas(32) unsigned comp1[8], comp2[8];
@@ -1249,7 +1240,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator/(const simd_vec<unsigned, 8> v1,
+    friend simd_vec<unsigned, 8> vectorcall operator/(const simd_vec<unsigned, 8> v1,
                                                                    const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -1264,7 +1255,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator>>(const simd_vec<unsigned, 8> v1,
+    friend avx2_inline simd_vec<unsigned, 8> vectorcall operator>>(const simd_vec<unsigned, 8> v1,
                                                                     const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -1281,7 +1272,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator>>(const simd_vec<unsigned, 8> v1, const unsigned v2) {
+    friend avx2_inline simd_vec<unsigned, 8> vectorcall operator>>(const simd_vec<unsigned, 8> v1, const unsigned v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
@@ -1296,7 +1287,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator<<(const simd_vec<unsigned, 8> v1,
+    friend avx2_inline simd_vec<unsigned, 8> vectorcall operator<<(const simd_vec<unsigned, 8> v1,
                                                                     const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -1313,7 +1304,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 8> vectorcall operator<<(const simd_vec<unsigned, 8> v1, const unsigned v2) {
+    friend avx2_inline simd_vec<unsigned, 8> vectorcall operator<<(const simd_vec<unsigned, 8> v1, const unsigned v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_slli_epi32(v1.vec_, v2);
@@ -1328,7 +1319,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    force_inline simd_vec<unsigned, 8> operator~() const {
+    avx2_inline simd_vec<unsigned, 8> operator~() const {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
@@ -1343,7 +1334,7 @@ template <> class simd_vec<unsigned, 8> {
         return ret;
     }
 
-    friend force_inline bool vectorcall is_equal(const simd_vec<unsigned, 8> v1, const simd_vec<unsigned, 8> v2) {
+    friend avx2_inline bool vectorcall is_equal(const simd_vec<unsigned, 8> v1, const simd_vec<unsigned, 8> v2) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
@@ -1426,7 +1417,7 @@ template <> class simd_vec<unsigned, 8> {
     }
 };
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::operator~() const {
+avx2_inline simd_vec<float, 8> simd_vec<float, 8>::operator~() const {
 #if defined(USE_AVX2) || defined(USE_AVX512)
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_castsi256_ps(_mm256_andnot_si256(_mm256_castps_si256(vec_), _mm256_set1_epi32(~0)));
@@ -1470,7 +1461,7 @@ force_inline simd_vec<float, 8> simd_vec<float, 8>::sqrt() const {
     return temp;
 }
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::log() const {
+avx2_inline simd_vec<float, 8> simd_vec<float, 8>::log() const {
     alignas(32) float comp[8];
     _mm256_store_ps(comp, vec_);
     UNROLLED_FOR(i, 8, { comp[i] = logf(comp[i]); })
@@ -1592,7 +1583,7 @@ force_inline simd_vec<float, 8> vectorcall operator!=(const simd_vec<float, 8> v
     return ret;
 }
 
-force_inline simd_vec<float, 8> vectorcall pow(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
+inline simd_vec<float, 8> vectorcall pow(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     alignas(32) float comp1[8], comp2[8];
     _mm256_store_ps(comp1, v1.vec_);
     _mm256_store_ps(comp2, v2.vec_);
@@ -1699,9 +1690,6 @@ force_inline simd_vec<unsigned, 8> vectorcall select(const simd_vec<U, 8> mask, 
 
 #pragma warning(pop)
 
-#undef validate_mask
+#undef avx2_inline
 
-#ifdef __GNUC__
-#pragma GCC pop_options
-#pragma clang attribute pop
-#endif
+#undef validate_mask
