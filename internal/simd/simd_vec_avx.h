@@ -37,7 +37,10 @@ template <> class simd_vec<int, 8>;
 template <> class simd_vec<unsigned, 8>;
 
 template <> class simd_vec<float, 8> {
-    __m256 vec_;
+    union {
+        __m256 vec_;
+        float comp_[8];
+    };
 
     friend class simd_vec<int, 8>;
     friend class simd_vec<unsigned, 8>;
@@ -52,45 +55,12 @@ template <> class simd_vec<float, 8> {
     force_inline explicit simd_vec(const float *f) { vec_ = _mm256_loadu_ps(f); }
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) { vec_ = _mm256_load_ps(f); }
 
-    force_inline float operator[](const int i) const {
-#if defined(_MSC_VER) && !defined(__clang__)
-        return vec_.m256_f32[i];
-#else
-        alignas(32) float comp[8];
-        _mm256_store_ps(comp, vec_);
-        return comp[i];
-#endif
-    }
-
+    force_inline float operator[](const int i) const { return comp_[i]; }
     force_inline float operator[](const long i) const { return operator[](int(i)); }
 
-    template <int _i> force_inline float get() const {
-#if defined(_MSC_VER) && !defined(__clang__)
-        return vec_.m256_f32[_i & 7];
-#else
-        __m128 temp = _mm256_extractf128_ps(vec_, (_i & 7) / 4);
-        const int ndx = (_i & 7) % 4;
-        return _mm_cvtss_f32(_mm_shuffle_ps(temp, temp, _MM_SHUFFLE(ndx, ndx, ndx, ndx)));
-#endif
-    }
-    template <int i> force_inline void set(const float v) {
-#if defined(_MSC_VER) && !defined(__clang__)
-        vec_.m256_f32[i & 7] = v;
-#else
-        __m256 temp = _mm256_set1_ps(v);
-        vec_ = _mm256_blend_ps(vec_, temp, 1u << (i & 7));
-#endif
-    }
-    force_inline void set(const int i, const float v) {
-#if defined(_MSC_VER) && !defined(__clang__)
-        vec_.m256_f32[i] = v;
-#else
-        __m256 broad = _mm256_set1_ps(v);
-        static const int maskl[16] = {0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0};
-        __m256 mask = _mm256_castsi256_ps(_mm256_loadu_si256((const __m256i *)(maskl + 8 - i)));
-        vec_ = _mm256_blendv_ps(vec_, broad, mask);
-#endif
-    }
+    template <int i> force_inline float get() const { return comp_[i & 7]; }
+    template <int i> force_inline void set(const float v) { comp_[i & 7] = v; }
+    force_inline void set(const int i, const float v) { comp_[i] = v; }
 
     force_inline simd_vec<float, 8> &vectorcall operator+=(const simd_vec<float, 8> rhs) {
         vec_ = _mm256_add_ps(vec_, rhs.vec_);
@@ -134,14 +104,7 @@ template <> class simd_vec<float, 8> {
 
     float length2() const {
         float ret = 0;
-#if defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret += vec_.m256_f32[i] * vec_.m256_f32[i]; })
-#else
-        alignas(32) float comp[8];
-        _mm256_store_ps(comp, vec_);
-
-        UNROLLED_FOR(i, 8, { ret += comp[i] * comp[i]; })
-#endif
+        UNROLLED_FOR(i, 8, { ret += comp_[i] * comp_[i]; })
         return ret;
     }
 
@@ -268,7 +231,10 @@ template <> class simd_vec<float, 8> {
 };
 
 template <> class simd_vec<int, 8> {
-    __m256i vec_;
+    union {
+        __m256i vec_;
+        int comp_[8];
+    };
 
     friend class simd_vec<float, 8>;
     friend class simd_vec<unsigned, 8>;
@@ -283,47 +249,18 @@ template <> class simd_vec<int, 8> {
     force_inline explicit simd_vec(const int *f) { vec_ = _mm256_loadu_si256((const __m256i *)f); }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) { vec_ = _mm256_load_si256((const __m256i *)f); }
 
-    force_inline int operator[](const int i) const {
-#if defined(_MSC_VER) && !defined(__clang__)
-        return vec_.m256i_i32[i];
-#else
-        alignas(32) int comp[8];
-        _mm256_store_si256((__m256i *)comp, vec_);
-        return comp[i];
-#endif
-    }
-
+    force_inline int operator[](const int i) const { return comp_[i]; }
     force_inline int operator[](const long i) const { return operator[](int(i)); }
 
     template <int i> force_inline int get() const { return _mm256_extract_epi32(vec_, i & 7); }
     template <int i> force_inline void set(const int v) { vec_ = _mm256_insert_epi32(vec_, v, i & 7); }
-    force_inline void set(const int i, const int v) {
-#if defined(_MSC_VER) && !defined(__clang__)
-        vec_.m256i_i32[i] = v;
-#else
-        static const int maskl[16] = {0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0};
-        __m256i mask = _mm256_loadu_si256((const __m256i *)(maskl + 8 - i));
-#if defined(USE_AVX2) || defined(USE_AVX512)
-        vec_ = _mm256_blendv_epi8(vec_, _mm256_set1_epi32(v), mask);
-#else
-        __m256 temp1 = _mm256_and_ps(_mm256_castsi256_ps(mask), _mm256_castsi256_ps(_mm256_set1_epi32(v)));
-        __m256 temp2 = _mm256_andnot_ps(_mm256_castsi256_ps(mask), _mm256_castsi256_ps(vec_));
-        vec_ = _mm256_castps_si256(_mm256_or_ps(temp1, temp2));
-#endif
-#endif
-    }
+    force_inline void set(const int i, const int v) { comp_[i] = v; }
 
     avx2_inline simd_vec<int, 8> &vectorcall operator+=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] += rhs.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] += comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] += rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -333,14 +270,8 @@ template <> class simd_vec<int, 8> {
     avx2_inline simd_vec<int, 8> &vectorcall operator-=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] -= rhs.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] -= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] -= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -348,42 +279,22 @@ template <> class simd_vec<int, 8> {
     avx2_inline simd_vec<int, 8> &vectorcall operator*=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] *= rhs.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] *= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] *= rhs.comp_[i]; })
 #endif
         return *this;
     }
 
-    avx2_inline simd_vec<int, 8> &vectorcall operator/=(const simd_vec<int, 8> rhs) {
-#if defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] /= rhs.vec_.m256i_i32[i]; })
-#else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] /= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
-#endif
+    simd_vec<int, 8> &vectorcall operator/=(const simd_vec<int, 8> rhs) {
+        UNROLLED_FOR(i, 8, { comp_[i] /= rhs.comp_[i]; })
         return *this;
     }
 
     avx2_inline simd_vec<int, 8> &vectorcall operator|=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_or_si256(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] |= rhs.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] |= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] |= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -391,14 +302,8 @@ template <> class simd_vec<int, 8> {
     avx2_inline simd_vec<int, 8> &vectorcall operator^=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_xor_si256(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] ^= rhs.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] ^= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] ^= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -407,13 +312,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sub_epi32(_mm256_setzero_si256(), vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = -vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp[8];
-        _mm256_store_si256((__m256i *)comp, vec_);
-        UNROLLED_FOR(i, 8, { comp[i] = -comp[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = -comp_[i]; })
 #endif
         return ret;
     }
@@ -422,14 +322,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (vec_.m256i_i32[i] == rhs.vec_.m256i_i32[i]) ? -1 : 0; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = (comp1[i] == comp2[i]) ? -1 : 0; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] == rhs.comp_[i]) ? -1 : 0; })
 #endif
         return ret;
     }
@@ -438,14 +332,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (vec_.m256i_i32[i] != rhs.vec_.m256i_i32[i]) ? -1 : 0; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = (comp1[i] != comp2[i]) ? -1 : 0; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] != rhs.comp_[i]) ? -1 : 0; })
 #endif
         return ret;
     }
@@ -453,14 +341,8 @@ template <> class simd_vec<int, 8> {
     avx2_inline simd_vec<int, 8> &vectorcall operator&=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_i32[i] &= rhs.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] &= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] &= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -482,15 +364,10 @@ template <> class simd_vec<int, 8> {
         ret = _mm256_add_epi32(ret, temp);
 
         return _mm256_cvtsi256_si32(ret);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        int ret = vec_.m256i_i32[0];
-        UNROLLED_FOR(i, 7, { ret += vec_.m256i_i32[i + 1]; })
-        return ret;
 #else
-        alignas(32) int comp1[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        UNROLLED_FOR(i, 7, { comp1[0] += comp1[i + 1]; })
-        return comp1[0];
+        int ret = comp_[0];
+        UNROLLED_FOR(i, 7, { ret += comp_[i + 1]; })
+        return ret;
 #endif
     }
 
@@ -525,14 +402,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_min_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = std::min(v1.vec_.m256i_i32[i], v2.vec_.m256i_i32[i]); })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = std::min(comp1[i], comp2[i]); })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = std::min(v1.comp_[i], v2.comp_[i]); })
 #endif
         return ret;
     }
@@ -541,14 +412,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_max_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = std::max(v1.vec_.m256i_i32[i], v2.vec_.m256i_i32[i]); })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = std::max(comp1[i], comp2[i]); })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
 #endif
         return ret;
     }
@@ -586,14 +451,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_add_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = v1.vec_.m256i_i32[i] + v2.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] += comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
 #endif
         return ret;
     }
@@ -602,14 +461,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sub_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = v1.vec_.m256i_i32[i] - v2.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] -= comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
 #endif
         return ret;
     }
@@ -618,29 +471,15 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_mullo_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = v1.vec_.m256i_i32[i] * v2.vec_.m256i_i32[i]; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] *= comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
 #endif
         return ret;
     }
 
     friend simd_vec<int, 8> vectorcall operator/(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
-#if defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (v1.vec_.m256i_i32[i] / v2.vec_.m256i_i32[i]); })
-#else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] /= comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
-#endif
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] / v2.comp_[i]); })
         return ret;
     }
 
@@ -648,14 +487,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v2.vec_, v1.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (v1.vec_.m256i_i32[i] < v2.vec_.m256i_i32[i]) ? -1 : 0; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = comp1[i] < comp2[i] ? -1 : 0; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] < v2.comp_[i]) ? -1 : 0; })
 #endif
         return ret;
     }
@@ -664,14 +497,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (v1.vec_.m256i_i32[i] > v2.vec_.m256i_i32[i]) ? -1 : 0; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = comp1[i] > comp2[i] ? -1 : 0; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] > v2.comp_[i]) ? -1 : 0; })
 #endif
         return ret;
     }
@@ -680,14 +507,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpgt_epi32(v2.vec_, v1.vec_), _mm256_set1_epi32(-1));
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (v1.vec_.m256i_i32[i] >= v2.vec_.m256i_i32[i]) ? -1 : 0; })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = comp1[i] >= comp2[i] ? -1 : 0; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >= v2.comp_[i]) ? -1 : 0; })
 #endif
         return ret;
     }
@@ -696,14 +517,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srlv_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] >> v2.vec_.m256i_u32[i]); })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = reinterpret_cast<const unsigned &>(comp1[i]) >> comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) >> unsigned(v2.comp_[i])); })
 #endif
         return ret;
     }
@@ -712,13 +527,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] >> v2); })
 #else
-        alignas(32) int comp1[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = reinterpret_cast<const unsigned &>(comp1[i]) >> v2; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) >> v2); })
 #endif
         return ret;
     }
@@ -727,14 +537,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sllv_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] << v2.vec_.m256i_u32[i]); })
 #else
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = comp1[i] << comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) << unsigned(v2.comp_[i])); })
 #endif
         return ret;
     }
@@ -743,13 +547,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_slli_epi32(v1.vec_, v2);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] << v2); })
 #else
-        alignas(32) int comp1[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = comp1[i] << v2; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) << v2); })
 #endif
         return ret;
     }
@@ -758,13 +557,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = ~vec_.m256i_u32[i]; })
 #else
-        alignas(32) int comp[8];
-        _mm256_store_si256((__m256i *)comp, vec_);
-        UNROLLED_FOR(i, 8, { comp[i] = ~comp[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = ~comp_[i]; })
 #endif
         return ret;
     }
@@ -773,13 +567,8 @@ template <> class simd_vec<int, 8> {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srai_epi32(v1.vec_, v2);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_i32[i] = (v1.vec_.m256i_i32[i] >> v2); })
 #else
-        alignas(32) int comp[8];
-        _mm256_store_si256((__m256i *)comp, v1.vec_);
-        UNROLLED_FOR(i, 8, { comp[i] >>= v2; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2); })
 #endif
         return ret;
     }
@@ -788,20 +577,9 @@ template <> class simd_vec<int, 8> {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        bool ret = true;
-
-        UNROLLED_FOR(i, 8, { ret &= (v1.vec_.m256i_i32[i] == v2.vec_.m256i_i32[i]); })
-
-        return ret;
 #else
         bool ret = true;
-
-        alignas(32) int comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { ret &= (comp1[i] == comp2[i]); })
-
+        UNROLLED_FOR(i, 8, { ret &= (v1.comp_[i] == v2.comp_[i]); })
         return ret;
 #endif
     }
@@ -869,7 +647,10 @@ template <> class simd_vec<int, 8> {
 };
 
 template <> class simd_vec<unsigned, 8> {
-    __m256i vec_;
+    union {
+        __m256i vec_;
+        unsigned comp_[8];
+    };
 
     friend class simd_vec<float, 8>;
     friend class simd_vec<int, 8>;
@@ -884,47 +665,18 @@ template <> class simd_vec<unsigned, 8> {
     force_inline explicit simd_vec(const unsigned *f) { vec_ = _mm256_loadu_si256((const __m256i *)f); }
     force_inline simd_vec(const unsigned *f, simd_mem_aligned_tag) { vec_ = _mm256_load_si256((const __m256i *)f); }
 
-    force_inline unsigned operator[](const int i) const {
-#if defined(_MSC_VER) && !defined(__clang__)
-        return vec_.m256i_u32[i];
-#else
-        alignas(32) unsigned comp[8];
-        _mm256_store_si256((__m256i *)comp, vec_);
-        return comp[i];
-#endif
-    }
-
+    force_inline unsigned operator[](const int i) const { return comp_[i]; }
     force_inline unsigned operator[](const long i) const { return operator[](int(i)); }
 
     template <int i> force_inline unsigned get() const { return _mm256_extract_epi32(vec_, i & 7); }
     template <int i> force_inline void set(const unsigned v) { vec_ = _mm256_insert_epi32(vec_, v, i & 7); }
-    force_inline void set(const int i, const unsigned v) {
-#if defined(_MSC_VER) && !defined(__clang__)
-        vec_.m256i_u32[i] = v;
-#else
-        static const int maskl[16] = {0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0};
-        __m256i mask = _mm256_loadu_si256((const __m256i *)(maskl + 8 - i));
-#if defined(USE_AVX2) || defined(USE_AVX512)
-        vec_ = _mm256_blendv_epi8(vec_, _mm256_set1_epi32(v), mask);
-#else
-        __m256 temp1 = _mm256_and_ps(_mm256_castsi256_ps(mask), _mm256_castsi256_ps(_mm256_set1_epi32(v)));
-        __m256 temp2 = _mm256_andnot_ps(_mm256_castsi256_ps(mask), _mm256_castsi256_ps(vec_));
-        vec_ = _mm256_castps_si256(_mm256_or_ps(temp1, temp2));
-#endif
-#endif
-    }
+    force_inline void set(const int i, const unsigned v) { comp_[i] = v; }
 
     avx2_inline simd_vec<unsigned, 8> &vectorcall operator+=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] += rhs.vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] += comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] += rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -936,14 +688,8 @@ template <> class simd_vec<unsigned, 8> {
     avx2_inline simd_vec<unsigned, 8> &vectorcall operator-=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] -= rhs.vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] -= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] -= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -953,15 +699,7 @@ template <> class simd_vec<unsigned, 8> {
     }
 
     simd_vec<unsigned, 8> &vectorcall operator*=(const simd_vec<unsigned, 8> rhs) {
-#if defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] *= rhs.vec_.m256i_u32[i]; })
-#else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] *= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
-#endif
+        UNROLLED_FOR(i, 8, { comp_[i] *= rhs.comp_[i]; })
         return *this;
     }
 
@@ -970,15 +708,7 @@ template <> class simd_vec<unsigned, 8> {
     }
 
     simd_vec<unsigned, 8> &vectorcall operator/=(const simd_vec<unsigned, 8> rhs) {
-#if defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] /= rhs.vec_.m256i_u32[i]; })
-#else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] /= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
-#endif
+        UNROLLED_FOR(i, 8, { comp_[i] /= rhs.comp_[i]; })
         return *this;
     }
 
@@ -989,14 +719,8 @@ template <> class simd_vec<unsigned, 8> {
     avx2_inline simd_vec<unsigned, 8> &vectorcall operator|=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_or_si256(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] |= rhs.vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] |= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] |= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -1004,14 +728,8 @@ template <> class simd_vec<unsigned, 8> {
     avx2_inline simd_vec<unsigned, 8> &vectorcall operator^=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_xor_si256(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] ^= rhs.vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] ^= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] ^= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -1020,14 +738,8 @@ template <> class simd_vec<unsigned, 8> {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (vec_.m256i_u32[i] == rhs.vec_.m256i_u32[i]) ? 0xffffffff : 0; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = (comp1[i] == comp2[i]) ? -1 : 0; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] == rhs.comp_[i]) ? 0xffffffff : 0; })
 #endif
         return ret;
     }
@@ -1036,14 +748,8 @@ template <> class simd_vec<unsigned, 8> {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (vec_.m256i_u32[i] != rhs.vec_.m256i_u32[i]) ? 0xffffffff : 0; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = (comp1[i] != comp2[i]) ? -1 : 0; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] != rhs.comp_[i]) ? 0xffffffff : 0; })
 #endif
         return ret;
     }
@@ -1051,14 +757,8 @@ template <> class simd_vec<unsigned, 8> {
     avx2_inline simd_vec<unsigned, 8> &vectorcall operator&=(const simd_vec<unsigned, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { vec_.m256i_u32[i] &= rhs.vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        _mm256_store_si256((__m256i *)comp2, rhs.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] &= comp2[i]; })
-        vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { comp_[i] &= rhs.comp_[i]; })
 #endif
         return *this;
     }
@@ -1084,15 +784,10 @@ template <> class simd_vec<unsigned, 8> {
         ret = _mm256_add_epi32(ret, temp);
 
         return _mm256_cvtsi256_si32(ret);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        unsigned ret = vec_.m256i_u32[0];
-        UNROLLED_FOR(i, 7, { ret += vec_.m256i_u32[i + 1]; })
-        return ret;
 #else
-        alignas(32) unsigned comp1[8];
-        _mm256_store_si256((__m256i *)comp1, vec_);
-        UNROLLED_FOR(i, 7, { comp1[0] += comp1[i + 1]; })
-        return comp1[0];
+        unsigned ret = comp_[0];
+        UNROLLED_FOR(i, 7, { ret += comp_[i + 1]; })
+        return ret;
 #endif
     }
 
@@ -1124,35 +819,23 @@ template <> class simd_vec<unsigned, 8> {
     }
 
     friend avx2_inline simd_vec<unsigned, 8> vectorcall min(const simd_vec<unsigned, 8> v1,
-                                                             const simd_vec<unsigned, 8> v2) {
+                                                            const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_min_epu32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = std::min(v1.vec_.m256i_u32[i], v2.vec_.m256i_u32[i]); })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = std::min(comp1[i], comp2[i]); })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = std::min(v1.comp_[i], v2.comp_[i]); })
 #endif
         return ret;
     }
 
     avx2_inline static simd_vec<unsigned, 8> vectorcall max(const simd_vec<unsigned, 8> v1,
-                                                             const simd_vec<unsigned, 8> v2) {
+                                                            const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_max_epu32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = std::max(v1.vec_.m256i_u32[i], v2.vec_.m256i_u32[i]); })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = std::max(comp1[i], comp2[i]); })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
 #endif
         return ret;
     }
@@ -1192,82 +875,46 @@ template <> class simd_vec<unsigned, 8> {
     }
 
     friend avx2_inline simd_vec<unsigned, 8> vectorcall operator+(const simd_vec<unsigned, 8> v1,
-                                                                   const simd_vec<unsigned, 8> v2) {
+                                                                  const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_add_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = v1.vec_.m256i_u32[i] + v2.vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] += comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
 #endif
         return ret;
     }
 
     friend avx2_inline simd_vec<unsigned, 8> vectorcall operator-(const simd_vec<unsigned, 8> v1,
-                                                                   const simd_vec<unsigned, 8> v2) {
+                                                                  const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sub_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = v1.vec_.m256i_u32[i] - v2.vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] -= comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
 #endif
         return ret;
     }
 
-    friend simd_vec<unsigned, 8> vectorcall operator*(const simd_vec<unsigned, 8> v1,
-                                                                   const simd_vec<unsigned, 8> v2) {
+    friend simd_vec<unsigned, 8> vectorcall operator*(const simd_vec<unsigned, 8> v1, const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
-#if defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = v1.vec_.m256i_u32[i] * v2.vec_.m256i_u32[i]; })
-#else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] *= comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
-#endif
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
         return ret;
     }
 
-    friend simd_vec<unsigned, 8> vectorcall operator/(const simd_vec<unsigned, 8> v1,
-                                                                   const simd_vec<unsigned, 8> v2) {
+    friend simd_vec<unsigned, 8> vectorcall operator/(const simd_vec<unsigned, 8> v1, const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
-#if defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] / v2.vec_.m256i_u32[i]); })
-#else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] /= comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
-#endif
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] / v2.comp_[i]); })
         return ret;
     }
 
     friend avx2_inline simd_vec<unsigned, 8> vectorcall operator>>(const simd_vec<unsigned, 8> v1,
-                                                                    const simd_vec<unsigned, 8> v2) {
+                                                                   const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srlv_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] >> v2.vec_.m256i_u32[i]); })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = reinterpret_cast<const unsigned &>(comp1[i]) >> comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2.comp_[i]); })
 #endif
         return ret;
     }
@@ -1276,30 +923,19 @@ template <> class simd_vec<unsigned, 8> {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] >> v2); })
 #else
-        alignas(32) unsigned comp1[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = reinterpret_cast<const unsigned &>(comp1[i]) >> v2; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2); })
 #endif
         return ret;
     }
 
     friend avx2_inline simd_vec<unsigned, 8> vectorcall operator<<(const simd_vec<unsigned, 8> v1,
-                                                                    const simd_vec<unsigned, 8> v2) {
+                                                                   const simd_vec<unsigned, 8> v2) {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sllv_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] << v2.vec_.m256i_u32[i]); })
 #else
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = comp1[i] << comp2[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] << v2.comp_[i]); })
 #endif
         return ret;
     }
@@ -1308,13 +944,8 @@ template <> class simd_vec<unsigned, 8> {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_slli_epi32(v1.vec_, v2);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = (v1.vec_.m256i_u32[i] << v2); })
 #else
-        alignas(32) unsigned comp1[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        UNROLLED_FOR(i, 8, { comp1[i] = comp1[i] << v2; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp1);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] << v2); })
 #endif
         return ret;
     }
@@ -1323,13 +954,8 @@ template <> class simd_vec<unsigned, 8> {
         simd_vec<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
-#elif defined(_MSC_VER) && !defined(__clang__)
-        UNROLLED_FOR(i, 8, { ret.vec_.m256i_u32[i] = ~vec_.m256i_u32[i]; })
 #else
-        alignas(32) unsigned comp[8];
-        _mm256_store_si256((__m256i *)comp, vec_);
-        UNROLLED_FOR(i, 8, { comp[i] = ~comp[i]; })
-        ret.vec_ = _mm256_load_si256((const __m256i *)comp);
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = ~comp_[i]; })
 #endif
         return ret;
     }
@@ -1338,20 +964,9 @@ template <> class simd_vec<unsigned, 8> {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
-#elif defined(_MSC_VER) && !defined(__clang__)
-        bool ret = true;
-
-        UNROLLED_FOR(i, 8, { ret &= (v1.vec_.m256i_u32[i] == v2.vec_.m256i_u32[i]); })
-
-        return ret;
 #else
         bool ret = true;
-
-        alignas(32) unsigned comp1[8], comp2[8];
-        _mm256_store_si256((__m256i *)comp1, v1.vec_);
-        _mm256_store_si256((__m256i *)comp2, v2.vec_);
-        UNROLLED_FOR(i, 8, { ret &= (comp1[i] == comp2[i]); })
-
+        UNROLLED_FOR(i, 8, { ret &= (v1.comp_[i] == v2.comp_[i]); })
         return ret;
 #endif
     }
@@ -1462,10 +1077,9 @@ force_inline simd_vec<float, 8> simd_vec<float, 8>::sqrt() const {
 }
 
 avx2_inline simd_vec<float, 8> simd_vec<float, 8>::log() const {
-    alignas(32) float comp[8];
-    _mm256_store_ps(comp, vec_);
-    UNROLLED_FOR(i, 8, { comp[i] = logf(comp[i]); })
-    return simd_vec<float, 8>{comp, simd_mem_aligned};
+    simd_vec<float, 8> ret;
+    UNROLLED_FOR(i, 8, { ret.comp_[i] = logf(comp_[i]); })
+    return ret;
 }
 
 force_inline simd_vec<float, 8> vectorcall min(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
