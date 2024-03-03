@@ -6,12 +6,6 @@
 #include <smmintrin.h>
 #include <xmmintrin.h>
 
-#ifdef __GNUC__
-#pragma GCC push_options
-#pragma GCC target("sse2")
-#pragma clang attribute push(__attribute__((target("sse2"))), apply_to = function)
-#endif
-
 #ifndef NDEBUG
 #define validate_mask(m) __assert_valid_mask(m)
 #else
@@ -170,14 +164,14 @@ template <> class simd_vec<float, 4> {
         return temp;
     }
 
-    force_inline simd_vec<float, 4> vectorcall log() const {
+    simd_vec<float, 4> vectorcall log() const {
         alignas(16) float comp[4];
         _mm_store_ps(comp, vec_);
         UNROLLED_FOR(i, 4, { comp[i] = logf(comp[i]); })
         return simd_vec<float, 4>{comp, simd_mem_aligned};
     }
 
-    force_inline float vectorcall length() const {
+    float vectorcall length() const {
         __m128 r1, r2;
         r1 = _mm_mul_ps(vec_, vec_);
 
@@ -189,7 +183,7 @@ template <> class simd_vec<float, 4> {
         return _mm_cvtss_f32(_mm_sqrt_ss(r1));
     }
 
-    force_inline float vectorcall length2() const {
+    float vectorcall length2() const {
         __m128 r1, r2;
         r1 = _mm_mul_ps(vec_, vec_);
 
@@ -359,7 +353,7 @@ template <> class simd_vec<float, 4> {
         return clamp(v1, 0.0f, 1.0f);
     }
 
-    friend force_inline simd_vec<float, 4> vectorcall pow(const simd_vec<float, 4> v1, const simd_vec<float, 4> v2) {
+    friend simd_vec<float, 4> vectorcall pow(const simd_vec<float, 4> v1, const simd_vec<float, 4> v2) {
         alignas(16) float comp1[4], comp2[4];
         _mm_store_ps(comp1, v1.vec_);
         _mm_store_ps(comp2, v2.vec_);
@@ -489,7 +483,7 @@ template <> class simd_vec<int, 4> {
         return *this;
     }
 
-    force_inline simd_vec<int, 4> &vectorcall operator*=(const simd_vec<int, 4> rhs) {
+    simd_vec<int, 4> &vectorcall operator*=(const simd_vec<int, 4> rhs) {
 #if defined(USE_SSE41)
         vec_ = _mm_mullo_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -504,7 +498,7 @@ template <> class simd_vec<int, 4> {
         return *this;
     }
 
-    force_inline simd_vec<int, 4> &vectorcall operator/=(const simd_vec<int, 4> rhs) {
+    simd_vec<int, 4> &vectorcall operator/=(const simd_vec<int, 4> rhs) {
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { vec_.m128i_i32[i] /= rhs.vec_.m128i_i32[i]; })
 #else
@@ -553,7 +547,7 @@ template <> class simd_vec<int, 4> {
 
     force_inline simd_vec<int, 4> vectorcall operator<=(const simd_vec<int, 4> rhs) const {
         simd_vec<int, 4> ret;
-        ret.vec_ = _mm_andnot_si128(_mm_cmpgt_epi32(vec_, rhs.vec_), _mm_set_epi32(~0, ~0, ~0, ~0));
+        ret.vec_ = _mm_andnot_si128(_mm_cmpgt_epi32(vec_, rhs.vec_), _mm_set1_epi32(~0));
         return ret;
     }
 
@@ -565,7 +559,7 @@ template <> class simd_vec<int, 4> {
 
     force_inline simd_vec<int, 4> vectorcall operator>=(const simd_vec<int, 4> rhs) const {
         simd_vec<int, 4> ret;
-        ret.vec_ = _mm_andnot_si128(_mm_cmplt_epi32(vec_, rhs.vec_), _mm_set_epi32(~0, ~0, ~0, ~0));
+        ret.vec_ = _mm_andnot_si128(_mm_cmplt_epi32(vec_, rhs.vec_), _mm_set1_epi32(~0));
         return ret;
     }
 
@@ -646,7 +640,7 @@ template <> class simd_vec<int, 4> {
 
     force_inline bool not_all_zeros() const { return !all_zeros(); }
 
-    friend force_inline simd_vec<int, 4> vectorcall min(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
+    friend simd_vec<int, 4> vectorcall min(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> temp;
 #if defined(USE_SSE41)
         temp.vec_ = _mm_min_epi32(v1.vec_, v2.vec_);
@@ -665,7 +659,7 @@ template <> class simd_vec<int, 4> {
         return temp;
     }
 
-    force_inline static simd_vec<int, 4> vectorcall max(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
+    static simd_vec<int, 4> vectorcall max(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> temp;
 #if defined(USE_SSE41)
         temp.vec_ = _mm_max_epi32(v1.vec_, v2.vec_);
@@ -710,7 +704,6 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> vectorcall operator^(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> temp;
         temp.vec_ = _mm_xor_si128(v1.vec_, v2.vec_);
-        ;
         return temp;
     }
 
@@ -726,7 +719,7 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> vectorcall operator*(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
+    friend simd_vec<int, 4> vectorcall operator*(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(USE_SSE41)
         ret.vec_ = _mm_mullo_epi32(v1.vec_, v2.vec_);
@@ -742,7 +735,7 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> vectorcall operator/(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
+    friend simd_vec<int, 4> vectorcall operator/(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] / v2.vec_.m128i_i32[i]; })
@@ -756,7 +749,7 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> vectorcall operator>>(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
+    friend simd_vec<int, 4> vectorcall operator>>(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] >> v2.vec_.m128i_i32[i]; })
@@ -776,7 +769,7 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> vectorcall operator<<(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
+    friend simd_vec<int, 4> vectorcall operator<<(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] << v2.vec_.m128i_i32[i]; })
@@ -918,7 +911,7 @@ template <> class simd_vec<unsigned, 4> {
         return *this;
     }
 
-    force_inline simd_vec<unsigned, 4> &vectorcall operator*=(const simd_vec<unsigned, 4> rhs) {
+    simd_vec<unsigned, 4> &vectorcall operator*=(const simd_vec<unsigned, 4> rhs) {
 #if 0 // defined(USE_SSE41)
         vec_ = _mm_mul_epu32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -933,7 +926,7 @@ template <> class simd_vec<unsigned, 4> {
         return *this;
     }
 
-    force_inline simd_vec<unsigned, 4> &vectorcall operator/=(const simd_vec<unsigned, 4> rhs) {
+    simd_vec<unsigned, 4> &vectorcall operator/=(const simd_vec<unsigned, 4> rhs) {
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { vec_.m128i_u32[i] /= rhs.vec_.m128i_u32[i]; })
 #else
@@ -995,7 +988,6 @@ template <> class simd_vec<unsigned, 4> {
 #if defined(USE_SSE41)
         __m128i temp = _mm_hadd_epi32(vec_, vec_);
         temp = _mm_hadd_epi32(temp, temp);
-
         return _mm_cvtsi128_si32(temp);
 #else
         alignas(16) unsigned comp[4];
@@ -1049,8 +1041,7 @@ template <> class simd_vec<unsigned, 4> {
 
     force_inline bool not_all_zeros() const { return !all_zeros(); }
 
-    force_inline static simd_vec<unsigned, 4> vectorcall min(const simd_vec<unsigned, 4> v1,
-                                                             const simd_vec<unsigned, 4> v2) {
+    static simd_vec<unsigned, 4> vectorcall min(const simd_vec<unsigned, 4> v1, const simd_vec<unsigned, 4> v2) {
         simd_vec<unsigned, 4> temp;
 #if defined(USE_SSE41)
         temp.vec_ = _mm_min_epu32(v1.vec_, v2.vec_);
@@ -1069,8 +1060,7 @@ template <> class simd_vec<unsigned, 4> {
         return temp;
     }
 
-    force_inline static simd_vec<unsigned, 4> vectorcall max(const simd_vec<unsigned, 4> v1,
-                                                             const simd_vec<unsigned, 4> v2) {
+    static simd_vec<unsigned, 4> vectorcall max(const simd_vec<unsigned, 4> v1, const simd_vec<unsigned, 4> v2) {
         simd_vec<unsigned, 4> temp;
 #if defined(USE_SSE41)
         temp.vec_ = _mm_max_epu32(v1.vec_, v2.vec_);
@@ -1132,12 +1122,9 @@ template <> class simd_vec<unsigned, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 4> vectorcall operator*(const simd_vec<unsigned, 4> v1,
-                                                                   const simd_vec<unsigned, 4> v2) {
+    friend simd_vec<unsigned, 4> vectorcall operator*(const simd_vec<unsigned, 4> v1, const simd_vec<unsigned, 4> v2) {
         simd_vec<unsigned, 4> ret;
-#if 0 // defined(USE_SSE41)
-        ret.vec_ = _mm_mul_epu32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__)
+#if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { ret.vec_.m128i_u32[i] = v1.vec_.m128i_u32[i] * v2.vec_.m128i_u32[i]; })
 #else
         alignas(16) unsigned comp1[4], comp2[4];
@@ -1149,8 +1136,7 @@ template <> class simd_vec<unsigned, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 4> vectorcall operator/(const simd_vec<unsigned, 4> v1,
-                                                                   const simd_vec<unsigned, 4> v2) {
+    friend simd_vec<unsigned, 4> vectorcall operator/(const simd_vec<unsigned, 4> v1, const simd_vec<unsigned, 4> v2) {
         simd_vec<unsigned, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { ret.vec_.m128i_u32[i] = v1.vec_.m128i_u32[i] / v2.vec_.m128i_u32[i]; })
@@ -1164,8 +1150,7 @@ template <> class simd_vec<unsigned, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 4> vectorcall operator>>(const simd_vec<unsigned, 4> v1,
-                                                                    const simd_vec<unsigned, 4> v2) {
+    friend simd_vec<unsigned, 4> vectorcall operator>>(const simd_vec<unsigned, 4> v1, const simd_vec<unsigned, 4> v2) {
         simd_vec<unsigned, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { ret.vec_.m128i_u32[i] = v1.vec_.m128i_u32[i] >> v2.vec_.m128i_u32[i]; })
@@ -1185,8 +1170,7 @@ template <> class simd_vec<unsigned, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<unsigned, 4> vectorcall operator<<(const simd_vec<unsigned, 4> v1,
-                                                                    const simd_vec<unsigned, 4> v2) {
+    friend simd_vec<unsigned, 4> vectorcall operator<<(const simd_vec<unsigned, 4> v1, const simd_vec<unsigned, 4> v2) {
         simd_vec<unsigned, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         UNROLLED_FOR(i, 4, { ret.vec_.m128i_u32[i] = v1.vec_.m128i_u32[i] << v2.vec_.m128i_u32[i]; })
@@ -1315,8 +1299,3 @@ force_inline simd_vec<unsigned, 4> vectorcall select(const simd_vec<U, 4> mask, 
 } // namespace Ray
 
 #undef validate_mask
-
-#ifdef __GNUC__
-#pragma GCC pop_options
-#pragma clang attribute pop
-#endif
