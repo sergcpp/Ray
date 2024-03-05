@@ -56,6 +56,7 @@ bool Ray::Dx::MemoryAllocator::AllocateNewPool(const uint32_t size) {
 
         const uint16_t pool_ndx = alloc_.AddPool(size);
         assert(pool_ndx == pools_.size() - 1);
+        (void)pool_ndx;
     }
     return SUCCEEDED(hr);
 }

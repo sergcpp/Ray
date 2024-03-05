@@ -2068,6 +2068,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     aligned_vector<light_wbvh_node_t> temp_light_wnodes;
     const uint32_t root_node = FlattenBVH_r(temp_lnodes.data(), 0, 0xffffffff, temp_light_wnodes);
     assert(root_node == 0);
+    (void)root_node;
 
     light_wnodes_.Append(temp_light_wnodes.data(), temp_light_wnodes.size());
 }
