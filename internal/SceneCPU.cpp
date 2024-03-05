@@ -1390,6 +1390,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     if (use_wide_bvh_) {
         const uint32_t root_node = FlattenBVH_r(light_nodes_.data(), 0, 0xffffffff, light_wnodes_);
         assert(root_node == 0);
+        (void)root_node;
         light_nodes_.clear();
     }
 }

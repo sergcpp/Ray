@@ -714,9 +714,8 @@ template <> class simd_vec<unsigned, 4> {
 #endif
     }
     template <int i> force_inline void set(const unsigned v) {
-        const int ndx = (i & 3);
 #if defined(USE_SSE41)
-        vec_ = _mm_insert_epi32(vec_, v, ndx);
+        vec_ = _mm_insert_epi32(vec_, v, i & 3);
 #else
         comp_[i] = v;
 #endif
