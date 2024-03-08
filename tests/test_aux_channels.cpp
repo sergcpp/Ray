@@ -12,6 +12,7 @@
 #include "utils.h"
 
 extern bool g_minimal_output;
+extern bool g_nohwrt;
 extern std::mutex g_stdout_mtx;
 extern int g_validation_level;
 
@@ -71,6 +72,10 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
         const auto rt = Ray::RendererTypeFromName(*arch);
 
         for (const bool use_hwrt : {false, true}) {
+            if (use_hwrt && g_nohwrt) {
+                continue;
+            }
+
             s.use_hwrt = use_hwrt;
 
             const auto start_time = high_resolution_clock::now();

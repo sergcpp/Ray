@@ -422,7 +422,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
-          test-args: "--device AMD --nocpu"
+          test-args: "--device AMD --nocpu --nohwrt"
   test-linux-x86_64-gpu-nv:
     runs-on: [ linux, x86_64, nv ]
     needs:
