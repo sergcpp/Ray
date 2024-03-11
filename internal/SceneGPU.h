@@ -21,8 +21,8 @@ template <class T> force_inline T clamp(const T &val, const T &min_val, const T 
 
 inline Ref::fvec4 cross(const Ref::fvec4 &v1, const Ref::fvec4 &v2) {
     return Ref::fvec4{v1.get<1>() * v2.get<2>() - v1.get<2>() * v2.get<1>(),
-                           v1.get<2>() * v2.get<0>() - v1.get<0>() * v2.get<2>(),
-                           v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
+                      v1.get<2>() * v2.get<0>() - v1.get<0>() * v2.get<2>(),
+                      v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
 }
 
 const eTexFormat g_to_internal_format[] = {
@@ -937,7 +937,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
         memcpy(value_ptr(bbox_max), new_nodes[0].bbox_max, 3 * sizeof(float));
     }
 
-    std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices.size() / 3);
+    std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices.size() / 3, {0xffff, 0xffff});
 
     // init triangle materials
     for (const mat_group_desc_t &grp : _m.groups) {
@@ -959,8 +959,10 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        material_stack[0] = grp.back_mat._index;
-        material_count = 1;
+        if (grp.back_mat != InvalidMaterialHandle) {
+            material_stack[0] = grp.back_mat._index;
+            material_count = 1;
+        }
 
         while (material_count) {
             const material_t &mat = materials_[material_stack[--material_count]];
@@ -978,16 +980,16 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
             tri_mat_data_t &tri_mat = new_tri_materials[i / 3];
 
             assert(grp.front_mat._index < (1 << 14) && "Not enough bits to reference material!");
-            assert(grp.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
-
             tri_mat.front_mi = uint16_t(grp.front_mat._index);
             if (is_front_solid) {
                 tri_mat.front_mi |= MATERIAL_SOLID_BIT;
             }
-
-            tri_mat.back_mi = uint16_t(grp.back_mat._index);
-            if (is_back_solid) {
-                tri_mat.back_mi |= MATERIAL_SOLID_BIT;
+            if (grp.back_mat != InvalidMaterialHandle) {
+                assert(grp.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
+                tri_mat.back_mi = uint16_t(grp.back_mat._index);
+                if (is_back_solid) {
+                    tri_mat.back_mi |= MATERIAL_SOLID_BIT;
+                }
             }
         }
     }
@@ -1327,7 +1329,9 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
             }
 
             mat_indices.clear();
-            mat_indices.push_back(tri_mat.back_mi & MATERIAL_INDEX_BITS);
+            if (tri_mat.back_mi != 0xffff) {
+                mat_indices.push_back(tri_mat.back_mi & MATERIAL_INDEX_BITS);
+            }
 
             uint16_t back_emissive = 0xffff;
             for (int i = 0; i < int(mat_indices.size()); ++i) {
@@ -1654,7 +1658,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
                     for (int ii = -1; ii <= 1; ++ii) {
                         const float phi = 2.0f * PI * float(x + ii) / float(size[0]);
                         auto dir = fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
-                                              std::sin(theta) * std::sin(phi), 0.0f};
+                                         std::sin(theta) * std::sin(phi), 0.0f};
 
                         fvec2 q;
                         DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
@@ -1876,9 +1880,9 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             light_dir *= 0.5f * l.line.height;
 
             const Ref::fvec4 p0 = pos + light_dir + light_u + light_v, p1 = pos + light_dir + light_u - light_v,
-                                  p2 = pos + light_dir - light_u + light_v, p3 = pos + light_dir - light_u - light_v,
-                                  p4 = pos - light_dir + light_u + light_v, p5 = pos - light_dir + light_u - light_v,
-                                  p6 = pos - light_dir - light_u + light_v, p7 = pos - light_dir - light_u - light_v;
+                             p2 = pos + light_dir - light_u + light_v, p3 = pos + light_dir - light_u - light_v,
+                             p4 = pos - light_dir + light_u + light_v, p5 = pos - light_dir + light_u - light_v,
+                             p6 = pos - light_dir - light_u + light_v, p7 = pos - light_dir - light_u - light_v;
 
             bbox_min = min(min(min(p0, p1), min(p2, p3)), min(min(p4, p5), min(p6, p7)));
             bbox_max = max(max(max(p0, p1), max(p2, p3)), max(max(p4, p5), max(p6, p7)));
@@ -1922,8 +1926,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             const vertex_t &v2 = vertices_[vtx_indices_[ltri_index * 3 + 1]];
             const vertex_t &v3 = vertices_[vtx_indices_[ltri_index * 3 + 2]];
 
-            auto p1 = Ref::fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
-                 p2 = Ref::fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
+            auto p1 = Ref::fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f), p2 = Ref::fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
                  p3 = Ref::fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
 
             p1 = TransformPoint(p1, lmi.xform);
