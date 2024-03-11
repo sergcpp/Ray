@@ -50,7 +50,6 @@ int main() {
     memcpy(&cam_desc.origin[0], &view_origin[0], 3 * sizeof(float));
     memcpy(&cam_desc.fwd[0], &view_dir[0], 3 * sizeof(float));
     cam_desc.fov = 45.0f;
-    cam_desc.gamma = 2.2f;
     cam_desc.exposure = -1.0f;
 
     const Ray::CameraHandle cam = scene->AddCamera(cam_desc);
