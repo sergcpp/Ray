@@ -9,7 +9,7 @@
 
 #define NS Avx
 #define USE_AVX
-#include "../internal/simd/simd_vec.h"
+#include "../internal/simd/simd.h"
 
 void test_simd_avx() {
 #include "test_simd.ipp"

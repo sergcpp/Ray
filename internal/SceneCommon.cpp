@@ -4,16 +4,16 @@
 #include "Core.h"
 
 namespace Ray {
-Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
+Ref::fvec4 rgb_to_rgbe(const Ref::fvec4 &rgb) {
     float max_component = fmaxf(fmaxf(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
     if (max_component < 1e-32) {
-        return Ref::simd_fvec4{0.0f};
+        return Ref::fvec4{0.0f};
     }
 
     int exponent;
     const float factor = frexpf(max_component, &exponent) * 256.0f / max_component;
 
-    return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
+    return Ref::fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
 }
 } // namespace Ray
 
@@ -190,19 +190,19 @@ void Ray::SceneCommon::UpdateSkyTransmittanceLUT(const atmosphere_params_t &para
         for (int x = 0; x < TRANSMITTANCE_LUT_W; ++x) {
             const float u = float(x) / TRANSMITTANCE_LUT_W;
 
-            const Ref::simd_fvec2 uv = {u, v};
+            const Ref::fvec2 uv = {u, v};
 
             float view_height, view_zenith_cos_angle;
             UvToLutTransmittanceParams(params, uv, view_height, view_zenith_cos_angle);
 
-            const Ref::simd_fvec4 world_pos = {0.0f, view_height - params.planet_radius, 0.0f, 0.0f};
-            const Ref::simd_fvec4 world_dir = {0.0f, view_zenith_cos_angle,
+            const Ref::fvec4 world_pos = {0.0f, view_height - params.planet_radius, 0.0f, 0.0f};
+            const Ref::fvec4 world_dir = {0.0f, view_zenith_cos_angle,
                                                -sqrtf(1.0f - view_zenith_cos_angle * view_zenith_cos_angle), 0.0f};
 
-            const Ref::simd_fvec4 optical_depthlight = IntegrateOpticalDepth(params, world_pos, world_dir);
-            const Ref::simd_fvec4 transmittance = exp(-optical_depthlight);
+            const Ref::fvec4 optical_depthlight = IntegrateOpticalDepth(params, world_pos, world_dir);
+            const Ref::fvec4 transmittance = exp(-optical_depthlight);
 
-            transmittance.store_to(&sky_transmittance_lut_[4 * (y * TRANSMITTANCE_LUT_W + x)], Ref::simd_mem_aligned);
+            transmittance.store_to(&sky_transmittance_lut_[4 * (y * TRANSMITTANCE_LUT_W + x)], Ref::vector_aligned);
         }
     }
 }
@@ -225,20 +225,20 @@ void Ray::SceneCommon::UpdateMultiscatterLUT(const atmosphere_params_t &params) 
         for (int i = 0; i < MULTISCATTER_LUT_RES; ++i) {
             const float x = (i + 0.5f) / MULTISCATTER_LUT_RES;
 
-            const Ref::simd_fvec2 uv = {from_sub_uvs_to_unit(x, MULTISCATTER_LUT_RES),
+            const Ref::fvec2 uv = {from_sub_uvs_to_unit(x, MULTISCATTER_LUT_RES),
                                         from_sub_uvs_to_unit(y, MULTISCATTER_LUT_RES)};
 
             const float cos_sun_zenith_angle = uv.get<0>() * 2.0f - 1.0f;
-            const Ref::simd_fvec4 sun_dir = {
+            const Ref::fvec4 sun_dir = {
                 0.0f, cos_sun_zenith_angle, -sqrtf(saturate(1.0f - cos_sun_zenith_angle * cos_sun_zenith_angle)), 0.0f};
 
             const float view_height =
                 saturate(uv.get<1>() + PlanetRadiusOffset) * (params.atmosphere_height - PlanetRadiusOffset);
 
-            const Ref::simd_fvec4 world_pos = {0.0f, view_height, 0.0f, 0.0f};
-            Ref::simd_fvec4 world_dir = {0.0f, 1.0f, 0.0f, 0.0f};
+            const Ref::fvec4 world_pos = {0.0f, view_height, 0.0f, 0.0f};
+            Ref::fvec4 world_dir = {0.0f, 1.0f, 0.0f, 0.0f};
 
-            std::pair<Ray::Ref::simd_fvec4, Ray::Ref::simd_fvec4> total_res = {};
+            std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> total_res = {};
 
             for (int rj = 0; rj < RaysCountSqrt; ++rj) {
                 const float rv = (rj + 0.5f) / RaysCountSqrt;
@@ -255,8 +255,8 @@ void Ray::SceneCommon::UpdateMultiscatterLUT(const atmosphere_params_t &params) 
                     world_dir.set<1>(cos_phi);
                     world_dir.set<2>(-sin_theta * sin_phi);
 
-                    Ref::simd_fvec4 transmittance = 1.0f;
-                    const std::pair<Ray::Ref::simd_fvec4, Ray::Ref::simd_fvec4> res =
+                    Ref::fvec4 transmittance = 1.0f;
+                    const std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> res =
                         IntegrateScatteringMain<false, true>(_params, world_pos, world_dir, MAX_DIST, sun_dir, {}, 1.0f,
                                                              sky_transmittance_lut_, {}, 0.0f, 32, transmittance);
 
@@ -268,16 +268,16 @@ void Ray::SceneCommon::UpdateMultiscatterLUT(const atmosphere_params_t &params) 
             total_res.first *= SphereSolidAngle / (RaysCountSqrt * RaysCountSqrt);
             total_res.second *= SphereSolidAngle / (RaysCountSqrt * RaysCountSqrt);
 
-            const Ref::simd_fvec4 in_scattered_luminance = total_res.first * IsotropicPhase;
-            const Ref::simd_fvec4 multi_scat_as_1 = total_res.second * IsotropicPhase;
+            const Ref::fvec4 in_scattered_luminance = total_res.first * IsotropicPhase;
+            const Ref::fvec4 multi_scat_as_1 = total_res.second * IsotropicPhase;
 
             // For a serie, sum_{n=0}^{n=+inf} = 1 + r + r^2 + r^3 + ... + r^n = 1 / (1.0 - r), see
             // https://en.wikipedia.org/wiki/Geometric_series
-            const Ref::simd_fvec4 r = multi_scat_as_1;
-            const Ref::simd_fvec4 sum_of_all_multiscattering_events_contribution = 1.0f / (1.0f - r);
-            const Ref::simd_fvec4 L = in_scattered_luminance * sum_of_all_multiscattering_events_contribution;
+            const Ref::fvec4 r = multi_scat_as_1;
+            const Ref::fvec4 sum_of_all_multiscattering_events_contribution = 1.0f / (1.0f - r);
+            const Ref::fvec4 L = in_scattered_luminance * sum_of_all_multiscattering_events_contribution;
 
-            L.store_to(&sky_multiscatter_lut_[4 * (j * MULTISCATTER_LUT_RES + i)], Ref::simd_mem_aligned);
+            L.store_to(&sky_multiscatter_lut_[4 * (j * MULTISCATTER_LUT_RES + i)], Ref::vector_aligned);
         }
     }
 }
@@ -297,32 +297,32 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
             const uint32_t px_hash = Ref::hash(y * res[0] + x);
 
             const float phi = 2.0f * PI * (x + 0.5f) / float(res[0]);
-            auto ray_dir = Ref::simd_fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
+            auto ray_dir = Ref::fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
 
-            Ref::simd_fvec4 color = 0.0f;
+            Ref::fvec4 color = 0.0f;
 
             // Evaluate light sources
             if (!dir_lights.empty()) {
                 for (const uint32_t li_index : dir_lights) {
                     const light_t &l = lights[li_index];
 
-                    const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
-                    Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                    const Ref::fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
+                    Ref::fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
                     if (l.dir.angle != 0.0f) {
                         const float radius = tanf(l.dir.angle);
                         light_col *= (PI * radius * radius);
                     }
 
-                    color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
+                    color += IntegrateScattering(params, Ref::fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
                                                  ray_dir, MAX_DIST, light_dir, l.dir.angle, light_col,
                                                  sky_transmittance_lut_, sky_multiscatter_lut_, px_hash);
                 }
             } else if (params.stars_brightness > 0.0f) {
                 // Use fake lightsource (to light up the moon)
-                const Ref::simd_fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
+                const Ref::fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
                                       light_col = {144809.866891f, 129443.618266f, 127098.894121f, 0.0f};
 
-                color += IntegrateScattering(params, Ref::simd_fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
+                color += IntegrateScattering(params, Ref::fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f},
                                              ray_dir, MAX_DIST, light_dir, 0.0f, light_col, sky_transmittance_lut_,
                                              sky_multiscatter_lut_, px_hash);
             }

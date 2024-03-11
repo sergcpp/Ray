@@ -22,7 +22,7 @@
 #pragma message("Ray::Ref::simd_vec will not use SIMD")
 #endif
 
-#include "simd/simd_vec.h"
+#include "simd/simd.h"
 
 #undef USE_SSE2
 #undef USE_NEON
@@ -96,21 +96,21 @@ struct hit_data_t {
 // Surface at the hit point
 struct surface_t {
     // position, tangent, bitangent, smooth normal and planar normal
-    simd_fvec4 P, T, B, N, plane_N;
+    fvec4 P, T, B, N, plane_N;
     // texture coordinates
-    simd_fvec2 uvs;
+    fvec2 uvs;
 };
 
 // Surface derivatives at the hit point
 struct derivatives_t {
-    simd_fvec4 do_dx, do_dy, dd_dx, dd_dy;
-    simd_fvec2 duv_dx, duv_dy;
-    simd_fvec4 dndx, dndy;
+    fvec4 do_dx, do_dy, dd_dx, dd_dy;
+    fvec2 duv_dx, duv_dy;
+    fvec4 dndx, dndy;
     float ddn_dx, ddn_dy;
 };
 
 struct light_sample_t {
-    simd_fvec4 col, L, lp;
+    fvec4 col, L, lp;
     float area = 0, dist_mul = 1, pdf = 0;
     uint32_t cast_shadow : 1;
     uint32_t from_env : 1;
@@ -143,13 +143,13 @@ force_inline float construct_float(uint32_t m) {
 }
 
 force_inline float fract(const float v) {
-    //float _unused;
-    //return modff(v, &_unused);
+    // float _unused;
+    // return modff(v, &_unused);
     return v - floorf(v);
 }
 
-force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
-    simd_fvec4 ret;
+force_inline fvec4 srgb_to_rgb(const fvec4 &col) {
+    fvec4 ret;
     UNROLLED_FOR(i, 3, {
         if (col.get<i>() > 0.04045f) {
             ret.set<i>(powf((col.get<i>() + 0.055f) / 1.055f, 2.4f));
@@ -162,8 +162,8 @@ force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
     return ret;
 }
 
-force_inline simd_fvec2 srgb_to_rgb(const simd_fvec2 &col) {
-    simd_fvec2 ret;
+force_inline fvec2 srgb_to_rgb(const fvec2 &col) {
+    fvec2 ret;
     UNROLLED_FOR(i, 2, {
         if (col.get<i>() > 0.04045f) {
             ret.set<i>(powf((col.get<i>() + 0.055f) / 1.055f, 2.4f));
@@ -174,9 +174,9 @@ force_inline simd_fvec2 srgb_to_rgb(const simd_fvec2 &col) {
     return ret;
 }
 
-force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
+force_inline fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
     const float f = exp2f(float(rgbe.v[3]) - 128.0f);
-    return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
+    return fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
 }
 
 force_inline uint32_t mask_ray_depth(const uint32_t depth) { return depth & 0x0fffffff; }
@@ -274,78 +274,72 @@ bool Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const 
                                     hit_data_t &inter);
 
 // BRDFs
-float BRDF_PrincipledDiffuse(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L, const simd_fvec4 &H,
-                             float roughness);
+float BRDF_PrincipledDiffuse(const fvec4 &V, const fvec4 &N, const fvec4 &L, const fvec4 &H, float roughness);
 
-simd_fvec4 Evaluate_OrenDiffuse_BSDF(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L, float roughness,
-                                     const simd_fvec4 &base_color);
-simd_fvec4 Sample_OrenDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                   float roughness, const simd_fvec4 &base_color, simd_fvec2 rand, simd_fvec4 &out_V);
+fvec4 Evaluate_OrenDiffuse_BSDF(const fvec4 &V, const fvec4 &N, const fvec4 &L, float roughness,
+                                const fvec4 &base_color);
+fvec4 Sample_OrenDiffuse_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I, float roughness,
+                              const fvec4 &base_color, fvec2 rand, fvec4 &out_V);
 
-simd_fvec4 Evaluate_PrincipledDiffuse_BSDF(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L,
-                                           float roughness, const simd_fvec4 &base_color, const simd_fvec4 &sheen_color,
-                                           bool uniform_sampling);
-simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
-                                         const simd_fvec4 &I, float roughness, const simd_fvec4 &base_color,
-                                         const simd_fvec4 &sheen_color, bool uniform_sampling, simd_fvec2 rand,
-                                         simd_fvec4 &out_V);
+fvec4 Evaluate_PrincipledDiffuse_BSDF(const fvec4 &V, const fvec4 &N, const fvec4 &L, float roughness,
+                                      const fvec4 &base_color, const fvec4 &sheen_color, bool uniform_sampling);
+fvec4 Sample_PrincipledDiffuse_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I, float roughness,
+                                    const fvec4 &base_color, const fvec4 &sheen_color, bool uniform_sampling,
+                                    fvec2 rand, fvec4 &out_V);
 
-simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
-                                     const simd_fvec4 &reflected_dir_ts, simd_fvec2 alpha, float spec_ior,
-                                     float spec_F0, const simd_fvec4 &spec_col, const simd_fvec4 &spec_col_90);
-simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                   simd_fvec2 alpha, float spec_ior, float spec_F0, const simd_fvec4 &spec_col,
-                                   const simd_fvec4 &spec_col_90, simd_fvec2 rand, simd_fvec4 &out_V);
+fvec4 Evaluate_GGXSpecular_BSDF(const fvec4 &view_dir_ts, const fvec4 &sampled_normal_ts, const fvec4 &reflected_dir_ts,
+                                fvec2 alpha, float spec_ior, float spec_F0, const fvec4 &spec_col,
+                                const fvec4 &spec_col_90);
+fvec4 Sample_GGXSpecular_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I, fvec2 alpha,
+                              float spec_ior, float spec_F0, const fvec4 &spec_col, const fvec4 &spec_col_90,
+                              fvec2 rand, fvec4 &out_V);
 
-simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
-                                       const simd_fvec4 &refr_dir_ts, simd_fvec2 slpha, float eta,
-                                       const simd_fvec4 &refr_col);
-simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                     simd_fvec2 alpha, float eta, const simd_fvec4 &refr_col, simd_fvec2 rand,
-                                     simd_fvec4 &out_V);
+fvec4 Evaluate_GGXRefraction_BSDF(const fvec4 &view_dir_ts, const fvec4 &sampled_normal_ts, const fvec4 &refr_dir_ts,
+                                  fvec2 slpha, float eta, const fvec4 &refr_col);
+fvec4 Sample_GGXRefraction_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I, fvec2 alpha, float eta,
+                                const fvec4 &refr_col, fvec2 rand, fvec4 &out_V);
 
-simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
-                                             const simd_fvec4 &reflected_dir_ts, float clearcoat_roughness2,
-                                             float clearcoat_ior, float clearcoat_F0);
-simd_fvec4 Sample_PrincipledClearcoat_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
-                                           const simd_fvec4 &I, float clearcoat_roughness2, float clearcoat_ior,
-                                           float clearcoat_F0, simd_fvec2 rand, simd_fvec4 &out_V);
+fvec4 Evaluate_PrincipledClearcoat_BSDF(const fvec4 &view_dir_ts, const fvec4 &sampled_normal_ts,
+                                        const fvec4 &reflected_dir_ts, float clearcoat_roughness2, float clearcoat_ior,
+                                        float clearcoat_F0);
+fvec4 Sample_PrincipledClearcoat_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I,
+                                      float clearcoat_roughness2, float clearcoat_ior, float clearcoat_F0, fvec2 rand,
+                                      fvec4 &out_V);
 
-float Evaluate_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels, const simd_fvec4 &L);
-simd_fvec4 Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels, float rand,
-                           float rx, float ry);
+float Evaluate_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, int qtree_levels, const fvec4 &L);
+fvec4 Sample_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, int qtree_levels, float rand, float rx,
+                      float ry);
 
 // Transform
 void TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3], float out_rd[3]);
-simd_fvec4 TransformPoint(const simd_fvec4 &p, const float *xform);
-simd_fvec4 TransformDirection(const simd_fvec4 &p, const float *xform);
-simd_fvec4 TransformNormal(const simd_fvec4 &n, const float *inv_xform);
+fvec4 TransformPoint(const fvec4 &p, const float *xform);
+fvec4 TransformDirection(const fvec4 &p, const float *xform);
+fvec4 TransformNormal(const fvec4 &n, const float *inv_xform);
 
 // Sample Texture
-simd_fvec4 SampleNearest(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleBilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, int lod,
-                          const simd_fvec2 &rand);
-simd_fvec4 SampleBilinear(const Cpu::TexStorageBase &storage, uint32_t tex, const simd_fvec2 &iuvs, int lod,
-                          const simd_fvec2 &rand);
-simd_fvec4 SampleTrilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs,
-                           float lod, const simd_fvec2 &rand);
-simd_fvec4 SampleAnisotropic(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs,
-                             const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
-simd_fvec4 SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, uint32_t index, const simd_fvec4 &dir,
-                              float y_rotation, const simd_fvec2 &rand);
+fvec4 SampleNearest(const Cpu::TexStorageBase *const textures[], uint32_t index, const fvec2 &uvs, int lod);
+fvec4 SampleBilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const fvec2 &uvs, int lod,
+                     const fvec2 &rand);
+fvec4 SampleBilinear(const Cpu::TexStorageBase &storage, uint32_t tex, const fvec2 &iuvs, int lod, const fvec2 &rand);
+fvec4 SampleTrilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const fvec2 &uvs, float lod,
+                      const fvec2 &rand);
+fvec4 SampleAnisotropic(const Cpu::TexStorageBase *const textures[], uint32_t index, const fvec2 &uvs,
+                        const fvec2 &duv_dx, const fvec2 &duv_dy);
+fvec4 SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, uint32_t index, const fvec4 &dir, float y_rotation,
+                         const fvec2 &rand);
 
 // Trace rays through scene hierarchy
 void IntersectScene(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const uint32_t rand_seq[],
                     uint32_t random_seed, int iteration, const scene_data_t &sc, uint32_t root_index,
                     const Cpu::TexStorageBase *const textures[], Span<hit_data_t> out_inter);
-simd_fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const scene_data_t &sc, uint32_t node_index,
-                          const uint32_t rand_seq[], uint32_t random_seed, int iteration,
-                          const Cpu::TexStorageBase *const textures[]);
+fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const scene_data_t &sc, uint32_t node_index,
+                     const uint32_t rand_seq[], uint32_t random_seed, int iteration,
+                     const Cpu::TexStorageBase *const textures[]);
 
 // Pick point on any light source for evaluation
-void SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
-                       const scene_data_t &sc, const Cpu::TexStorageBase *const textures[], float rand_pick_light,
-                       simd_fvec2 rand_light_uv, simd_fvec2 rand_tex_uv, light_sample_t &ls);
+void SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fvec4 &N, const scene_data_t &sc,
+                       const Cpu::TexStorageBase *const textures[], float rand_pick_light, fvec2 rand_light_uv,
+                       fvec2 rand_tex_uv, light_sample_t &ls);
 
 // Account for visible lights contribution
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes,
@@ -353,9 +347,9 @@ void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_bvh_node_t> nodes,
                          Span<hit_data_t> inout_inters);
 float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes);
-float EvalTriLightFactor(const simd_fvec4 &P, const simd_fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
+float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_bvh_node_t> nodes);
-float EvalTriLightFactor(const simd_fvec4 &P, const simd_fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
+float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_wbvh_node_t> nodes);
 
 void TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
@@ -366,42 +360,42 @@ void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float 
                      const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color);
 
 // Get environment collor at direction
-simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
-                             float pdf_factor, const simd_fvec2 &rand);
+fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
+                        float pdf_factor, const fvec2 &rand);
 // Get light color at intersection point
-simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
-                               const Cpu::TexStorageRGBA &tex_storage, Span<const light_t> lights,
-                               uint32_t lights_count, const simd_fvec2 &rand);
+fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
+                          const Cpu::TexStorageRGBA &tex_storage, Span<const light_t> lights, uint32_t lights_count,
+                          const fvec2 &rand);
 
 // Evaluate individual nodes
-simd_fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                const simd_fvec4 &base_color, float roughness, float mix_weight, bool use_mis,
-                                shadow_ray_t &sh_r);
-void Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                        simd_fvec2 rand, float mix_weight, ray_data_t &new_ray);
+fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                           const fvec4 &base_color, float roughness, float mix_weight, bool use_mis,
+                           shadow_ray_t &sh_r);
+void Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color, float roughness,
+                        fvec2 rand, float mix_weight, ray_data_t &new_ray);
 
-simd_fvec4 Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                               const simd_fvec4 &base_color, float roughness, float regularize_alpha, float spec_ior,
-                               float spec_F0, float mix_weight, bool use_mis, shadow_ray_t &sh_r);
-void Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                       float regularize_alpha, float spec_ior, float spec_F0, simd_fvec2 rand, float mix_weight,
+fvec4 Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                          const fvec4 &base_color, float roughness, float regularize_alpha, float spec_ior,
+                          float spec_F0, float mix_weight, bool use_mis, shadow_ray_t &sh_r);
+void Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color, float roughness,
+                       float regularize_alpha, float spec_ior, float spec_F0, fvec2 rand, float mix_weight,
                        ray_data_t &new_ray);
 
-simd_fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                   const simd_fvec4 &base_color, float roughness, float regularize_alpha, float eta,
-                                   float mix_weight, bool use_mis, shadow_ray_t &sh_r);
-void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
-                           float regularize_alpha, bool is_backfacing, float int_ior, float ext_ior, simd_fvec2 rand,
+fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                              const fvec4 &base_color, float roughness, float regularize_alpha, float eta,
+                              float mix_weight, bool use_mis, shadow_ray_t &sh_r);
+void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color, float roughness,
+                           float regularize_alpha, bool is_backfacing, float int_ior, float ext_ior, fvec2 rand,
                            float mix_weight, ray_data_t &new_ray);
 
 struct diff_params_t {
-    simd_fvec4 base_color;
-    simd_fvec4 sheen_color;
+    fvec4 base_color;
+    fvec4 sheen_color;
     float roughness;
 };
 
 struct spec_params_t {
-    simd_fvec4 tmp_col;
+    fvec4 tmp_col;
     float roughness;
     float ior;
     float F0;
@@ -426,17 +420,16 @@ struct lobe_weights_t {
     float diffuse, specular, clearcoat, refraction;
 };
 
-simd_fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                   const lobe_weights_t &lobe_weights, const diff_params_t &diff,
-                                   const spec_params_t &spec, const clearcoat_params_t &coat,
-                                   const transmission_params_t &trans, float metallic, float transmission,
-                                   float N_dot_L, float mix_weight, bool use_mis, float regularize_alpha,
-                                   shadow_ray_t &sh_r);
+fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                              const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
+                              const clearcoat_params_t &coat, const transmission_params_t &trans, float metallic,
+                              float transmission, float N_dot_L, float mix_weight, bool use_mis, float regularize_alpha,
+                              shadow_ray_t &sh_r);
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
                            const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
                            const clearcoat_params_t &coat, const transmission_params_t &trans, float metallic,
-                           float transmission, simd_fvec2 rand, float mix_rand, float mix_weight,
-                           float regularize_alpha, ray_data_t &new_ray);
+                           float transmission, fvec2 rand, float mix_rand, float mix_weight, float regularize_alpha,
+                           ray_data_t &new_ray);
 
 // Shade
 color_rgba_t ShadeSurface(const pass_settings_t &ps, const float limits[2], const hit_data_t &inter,
@@ -495,11 +488,11 @@ void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_cha
 // Tonemap
 
 // https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
-force_inline simd_fvec4 vectorcall reversible_tonemap(const simd_fvec4 c) {
+force_inline fvec4 vectorcall reversible_tonemap(const fvec4 c) {
     return c / (fmaxf(c.get<0>(), fmaxf(c.get<1>(), c.get<2>())) + 1.0f);
 }
 
-force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c) {
+force_inline fvec4 vectorcall reversible_tonemap_invert(const fvec4 c) {
     return c / (1.0f - fmaxf(c.get<0>(), fmaxf(c.get<1>(), c.get<2>())));
 }
 
@@ -508,7 +501,7 @@ struct tonemap_params_t {
     float inv_gamma;
 };
 
-force_inline simd_fvec4 vectorcall TonemapStandard(simd_fvec4 c) {
+force_inline fvec4 vectorcall TonemapStandard(fvec4 c) {
     UNROLLED_FOR(i, 3, {
         if (c.get<i>() < 0.0031308f) {
             c.set<i>(12.92f * c.get<i>());
@@ -519,9 +512,9 @@ force_inline simd_fvec4 vectorcall TonemapStandard(simd_fvec4 c) {
     return c;
 }
 
-simd_fvec4 vectorcall TonemapFilmic(eViewTransform view_transform, simd_fvec4 color);
+fvec4 vectorcall TonemapFilmic(eViewTransform view_transform, fvec4 color);
 
-force_inline simd_fvec4 vectorcall Tonemap(const tonemap_params_t &params, simd_fvec4 c) {
+force_inline fvec4 vectorcall Tonemap(const tonemap_params_t &params, fvec4 c) {
     if (params.view_transform == eViewTransform::Standard) {
         c = TonemapStandard(c);
     } else {
@@ -529,7 +522,7 @@ force_inline simd_fvec4 vectorcall Tonemap(const tonemap_params_t &params, simd_
     }
 
     if (params.inv_gamma != 1.0f) {
-        c = pow(c, simd_fvec4{params.inv_gamma, params.inv_gamma, params.inv_gamma, 1.0f});
+        c = pow(c, fvec4{params.inv_gamma, params.inv_gamma, params.inv_gamma, 1.0f});
     }
 
     return saturate(c);

@@ -474,7 +474,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
             &p.hash_values[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
 
 #if 0 // debug hash values
-        static std::vector<simd_fvec3> color_table;
+        static std::vector<fvec3> color_table;
         if (color_table.empty()) {
             for (int i = 0; i < 1024; i++) {
                 color_table.emplace_back(float(rand()) / RAND_MAX, float(rand()) / RAND_MAX, float(rand()) / RAND_MAX);
@@ -487,7 +487,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
             const int x = r.id.x;
             const int y = r.id.y;
 
-            const simd_fvec3 &c = color_table[hash(p.hash_values[i]) % 1024];
+            const fvec3 &c = color_table[hash(p.hash_values[i]) % 1024];
 
             color_rgba_t col = { c[0], c[1], c[2], 1.0f };
             temp_buf_.SetPixel(x, y, col);
@@ -540,7 +540,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     tonemap_params.view_transform = cam.view_transform;
     tonemap_params.inv_gamma = (1.0f / cam.gamma);
 
-    Ref::simd_fvec4 exposure = std::pow(2.0f, cam.exposure);
+    Ref::fvec4 exposure = std::pow(2.0f, cam.exposure);
     exposure.set<3>(1.0f);
 
     const float variance_threshold =
@@ -576,36 +576,36 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
                 continue;
             }
 
-            const auto new_val = Ref::simd_fvec4{temp_buf_[y * w_ + x].v, Ref::simd_mem_aligned} * exposure;
+            const auto new_val = Ref::fvec4{temp_buf_[y * w_ + x].v, Ref::vector_aligned} * exposure;
             // accumulate full buffer
-            Ref::simd_fvec4 cur_val_full = {full_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
+            Ref::fvec4 cur_val_full = {full_buf_[y * w_ + x].v, Ref::vector_aligned};
             cur_val_full += (new_val - cur_val_full) * mix_factor;
-            cur_val_full.store_to(full_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            cur_val_full.store_to(full_buf_[y * w_ + x].v, Ref::vector_aligned);
             if (is_class_a) {
                 // accumulate half buffer
-                Ref::simd_fvec4 cur_val_half = {half_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
+                Ref::fvec4 cur_val_half = {half_buf_[y * w_ + x].v, Ref::vector_aligned};
                 cur_val_half += (new_val - cur_val_half) * half_mix_factor;
-                cur_val_half.store_to(half_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+                cur_val_half.store_to(half_buf_[y * w_ + x].v, Ref::vector_aligned);
             }
         }
     }
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            auto full_val = Ref::simd_fvec4{full_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
-            auto half_val = Ref::simd_fvec4{half_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
+            auto full_val = Ref::fvec4{full_buf_[y * w_ + x].v, Ref::vector_aligned};
+            auto half_val = Ref::fvec4{half_buf_[y * w_ + x].v, Ref::vector_aligned};
 
             // Store as denosed result until DenoiseImage method will be called
-            full_val.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            full_val.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::vector_aligned);
 
-            const Ref::simd_fvec4 tonemapped_res = Tonemap(tonemap_params, full_val);
-            tonemapped_res.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            const Ref::fvec4 tonemapped_res = Tonemap(tonemap_params, full_val);
+            tonemapped_res.store_to(final_buf_[y * w_ + x].v, Ref::vector_aligned);
 
-            const Ref::simd_fvec4 p1 = reversible_tonemap(2.0f * full_val - half_val);
-            const Ref::simd_fvec4 p2 = reversible_tonemap(half_val);
+            const Ref::fvec4 p1 = reversible_tonemap(2.0f * full_val - half_val);
+            const Ref::fvec4 p2 = reversible_tonemap(half_val);
 
-            const Ref::simd_fvec4 variance = 0.5f * (p1 - p2) * (p1 - p2);
-            variance.store_to(temp_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            const Ref::fvec4 variance = 0.5f * (p1 - p2) * (p1 - p2);
+            variance.store_to(temp_buf_[y * w_ + x].v, Ref::vector_aligned);
 
 #if DEBUG_ADAPTIVE_SAMPLING
             if (cam.pass_settings.variance_threshold != 0.0f && required_samples_[y * w_ + x] >= region.iteration &&
@@ -641,11 +641,11 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
     p.feature_buf2.resize(rect_ext.w * rect_ext.h);
 
 #define FETCH_FINAL_BUF(_x, _y)                                                                                        \
-    Ref::simd_fvec4(full_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
-                    Ref::simd_mem_aligned)
+    Ref::fvec4(full_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
+                    Ref::vector_aligned)
 #define FETCH_VARIANCE(_x, _y)                                                                                         \
-    Ref::simd_fvec4(temp_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
-                    Ref::simd_mem_aligned)
+    Ref::fvec4(temp_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
+                    Ref::vector_aligned)
 
     static const float GaussWeights[] = {0.2270270270f, 0.1945945946f, 0.1216216216f, 0.0540540541f, 0.0162162162f};
 
@@ -653,19 +653,19 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
         const int yy = rect_ext.y + y;
         for (int x = 0; x < rect_ext.w; ++x) {
             const int xx = rect_ext.x + x;
-            const Ref::simd_fvec4 center_col = reversible_tonemap(FETCH_FINAL_BUF(xx, yy));
-            center_col.store_to(p.temp_final_buf[y * rect_ext.w + x].v, Ref::simd_mem_aligned);
+            const Ref::fvec4 center_col = reversible_tonemap(FETCH_FINAL_BUF(xx, yy));
+            center_col.store_to(p.temp_final_buf[y * rect_ext.w + x].v, Ref::vector_aligned);
 
-            const Ref::simd_fvec4 center_val = FETCH_VARIANCE(xx, yy);
+            const Ref::fvec4 center_val = FETCH_VARIANCE(xx, yy);
 
-            Ref::simd_fvec4 res = center_val * GaussWeights[0];
+            Ref::fvec4 res = center_val * GaussWeights[0];
             UNROLLED_FOR(i, 4, {
                 res += FETCH_VARIANCE(xx - i + 1, yy) * GaussWeights[i + 1];
                 res += FETCH_VARIANCE(xx + i + 1, yy) * GaussWeights[i + 1];
             })
 
             res = max(res, center_val);
-            res.store_to(p.variance_buf[y * rect_ext.w + x].v, Ref::simd_mem_aligned);
+            res.store_to(p.variance_buf[y * rect_ext.w + x].v, Ref::vector_aligned);
         }
     }
 
@@ -679,18 +679,18 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
 
     for (int y = 4; y < rect_ext.h - 4; ++y) {
         for (int x = 4; x < rect_ext.w - 4; ++x) {
-            const Ref::simd_fvec4 center_val = {p.variance_buf[(y + 0) * rect_ext.w + x].v, Ref::simd_mem_aligned};
+            const Ref::fvec4 center_val = {p.variance_buf[(y + 0) * rect_ext.w + x].v, Ref::vector_aligned};
 
-            Ref::simd_fvec4 res = center_val * GaussWeights[0];
+            Ref::fvec4 res = center_val * GaussWeights[0];
             UNROLLED_FOR(i, 4, {
-                res += Ref::simd_fvec4(p.variance_buf[(y - i + 1) * rect_ext.w + x].v, Ref::simd_mem_aligned) *
+                res += Ref::fvec4(p.variance_buf[(y - i + 1) * rect_ext.w + x].v, Ref::vector_aligned) *
                        GaussWeights[i + 1];
-                res += Ref::simd_fvec4(p.variance_buf[(y + i + 1) * rect_ext.w + x].v, Ref::simd_mem_aligned) *
+                res += Ref::fvec4(p.variance_buf[(y + i + 1) * rect_ext.w + x].v, Ref::vector_aligned) *
                        GaussWeights[i + 1];
             })
 
             res = max(res, center_val);
-            res.store_to(p.filtered_variance_buf[y * rect_ext.w + x].v, Ref::simd_mem_aligned);
+            res.store_to(p.filtered_variance_buf[y * rect_ext.w + x].v, Ref::vector_aligned);
 
             p.feature_buf1[y * rect_ext.w + x] = FETCH_BASE_COLOR(rect_ext.x + x, rect_ext.y + y);
             p.feature_buf2[y * rect_ext.w + x] = FETCH_DEPTH_NORMALS(rect_ext.x + x, rect_ext.y + y);
@@ -714,8 +714,8 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
         for (int x = 0; x < rect.w; ++x) {
             const int xx = rect.x + x;
 
-            const Ref::simd_fvec4 variance = {
-                p.filtered_variance_buf[(y + EXT_RADIUS) * rect_ext.w + (x + EXT_RADIUS)].v, Ref::simd_mem_aligned};
+            const Ref::fvec4 variance = {
+                p.filtered_variance_buf[(y + EXT_RADIUS) * rect_ext.w + (x + EXT_RADIUS)].v, Ref::vector_aligned};
             if (simd_cast(variance >= variance_threshold).not_all_zeros()) {
                 required_samples_[yy * w_ + xx] = region.iteration + 1;
             }
@@ -734,11 +734,11 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            auto col = Ref::simd_fvec4(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            auto col = Ref::fvec4(raw_filtered_buf_[y * w_ + x].v, Ref::vector_aligned);
             col = Ref::reversible_tonemap_invert(col);
-            col.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            col.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::vector_aligned);
             col = Tonemap(tonemap_params, col);
-            col.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            col.store_to(final_buf_[y * w_ + x].v, Ref::vector_aligned);
         }
     }
 
@@ -951,9 +951,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
 
         for (int y = r.y; y < r.y + r.h; ++y) {
             for (int x = r.x; x < r.x + r.w; ++x) {
-                auto col = Ref::simd_fvec4(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+                auto col = Ref::fvec4(raw_filtered_buf_[y * w_ + x].v, Ref::vector_aligned);
                 col = Tonemap(tonemap_params, col);
-                col.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+                col.store_to(final_buf_[y * w_ + x].v, Ref::vector_aligned);
             }
         }
 

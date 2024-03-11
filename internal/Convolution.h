@@ -134,43 +134,40 @@ void Convolution3x3_Direct_ProcessRows(int y, const float *__restrict data, cons
                           index(y + 8, x - 1)};
 
         for (int i = 0; i < OutChannels; ++i) {
-            simd_fvec<S> val[RowsPortion] = {};
+            fvec<S> val[RowsPortion] = {};
             for (int j = 0; j < 3 * InChannels; j += S) {
                 if (RowsPortion == 8) {
                     UNROLLED_FOR(k, 8, {
                         val[k % RowsPortion] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 0] + j]}, val[k % RowsPortion]);
+                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], vector_aligned},
+                                  fvec<S>{&data[ii[k + 0] + j]}, val[k % RowsPortion]);
                         val[k % RowsPortion] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 1] + j]}, val[k % RowsPortion]);
+                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], vector_aligned},
+                                  fvec<S>{&data[ii[k + 1] + j]}, val[k % RowsPortion]);
                         val[k % RowsPortion] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 2] + j]}, val[k % RowsPortion]);
+                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], vector_aligned},
+                                  fvec<S>{&data[ii[k + 2] + j]}, val[k % RowsPortion]);
                     })
                 } else if (RowsPortion == 4) {
                     UNROLLED_FOR(k, 4, {
                         val[k % RowsPortion] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 0] + j]}, val[k % RowsPortion]);
+                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], vector_aligned},
+                                  fvec<S>{&data[ii[k + 0] + j]}, val[k % RowsPortion]);
                         val[k % RowsPortion] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 1] + j]}, val[k % RowsPortion]);
+                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], vector_aligned},
+                                  fvec<S>{&data[ii[k + 1] + j]}, val[k % RowsPortion]);
                         val[k % RowsPortion] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 2] + j]}, val[k % RowsPortion]);
+                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], vector_aligned},
+                                  fvec<S>{&data[ii[k + 2] + j]}, val[k % RowsPortion]);
                     })
                 } else {
                     for (int k = 0; k < RowsPortion; ++k) {
-                        val[k] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 0] + j]}, val[k]);
-                        val[k] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 1] + j]}, val[k]);
-                        val[k] =
-                            fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], simd_mem_aligned},
-                                  simd_fvec<S>{&data[ii[k + 2] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], vector_aligned},
+                                       fvec<S>{&data[ii[k + 0] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], vector_aligned},
+                                       fvec<S>{&data[ii[k + 1] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], vector_aligned},
+                                       fvec<S>{&data[ii[k + 2] + j]}, val[k]);
                     }
                 }
             }
@@ -238,32 +235,32 @@ void ConvolutionConcat3x3_Direct_ProcessRows(int y, const float *__restrict data
         };
 
         for (int i = 0; i < OutChannels; ++i) {
-            simd_fvec<S> val[8] = {};
+            fvec<S> val[8] = {};
 
             const float *p_weights = &weights[i * (InChannels1 + InChannels2) * 9];
             for (int j = 0; j < InChannels1; j += S) {
                 UNROLLED_FOR(k, 8, {
                     if (k < RowsPortion) {
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[0 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 0] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[1 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 0] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[2 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 0] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 0] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[1 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 0] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[2 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 0] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
 
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[3 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 1] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[4 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 1] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[5 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 1] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 1] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[4 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 1] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[5 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 1] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
 
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[6 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 2] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[7 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 2] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[8 * InChannels1 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data1[ii1[k + 2] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 2] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[7 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 2] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[8 * InChannels1 + j], vector_aligned},
+                                       fvec<S>{&data1[ii1[k + 2] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
                     }
                 })
             }
@@ -271,30 +268,30 @@ void ConvolutionConcat3x3_Direct_ProcessRows(int y, const float *__restrict data
             for (int j = 0; j < 3 * InChannels2; j += S) {
                 if (RowsPortion == 8) {
                     UNROLLED_FOR(k, 8, {
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[0 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[3 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[6 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
                     })
                 } else if (RowsPortion == 4) {
                     UNROLLED_FOR(k, 4, {
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[0 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[3 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[6 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
                     })
                 } else {
                     for (int k = 0; k < RowsPortion; ++k) {
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[0 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[3 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[6 * InChannels2 + j], simd_mem_aligned},
-                                       simd_fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels2 + j], vector_aligned},
+                                       fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
                     }
                 }
             }
@@ -400,12 +397,11 @@ void Convolution3x3_GEMM(const float data1[], const float data2[], const float d
             }
 
             for (int i = 0; i < OutChannels; ++i) {
-                simd_fvec<S> val = 0.0f;
+                fvec<S> val = 0.0f;
 
                 int j = 0;
                 for (; j < InChannels * 9 - S + 1; j += S) {
-                    val = fmadd(simd_fvec<S>{&weights[i * InChannels * 9 + j]},
-                                simd_fvec<S>{&input[j], simd_mem_aligned}, val);
+                    val = fmadd(fvec<S>{&weights[i * InChannels * 9 + j]}, fvec<S>{&input[j], vector_aligned}, val);
                 }
 
                 float final_val = biases[i];
@@ -493,73 +489,73 @@ void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__res
 
             if ((InChannels1 % S) == 0 && InChannels1 >= S && (InChannels2 % S) == 0 && InChannels2 >= S) {
                 for (int i = 0; i < OutChannels; ++i) {
-                    simd_fvec<S> val[3] = {0.0f};
+                    fvec<S> val[3] = {0.0f};
                     for (int j = 0; j < InChannels1 * 9; j += S * 9) {
-                        val[0] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 0 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 0 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 1 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 1 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 2 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 2 * S], simd_mem_aligned}, val[2]);
-                        val[0] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 3 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 3 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 4 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 4 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 5 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 5 * S], simd_mem_aligned}, val[2]);
-                        val[0] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 6 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 6 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 7 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 7 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 8 * S], simd_mem_aligned},
-                            simd_fvec<S>{&input1[j + 8 * S], simd_mem_aligned}, val[2]);
+                        val[0] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 0 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 0 * S], vector_aligned}, val[0]);
+                        val[1] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 1 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 1 * S], vector_aligned}, val[1]);
+                        val[2] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 2 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 2 * S], vector_aligned}, val[2]);
+                        val[0] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 3 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 3 * S], vector_aligned}, val[0]);
+                        val[1] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 4 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 4 * S], vector_aligned}, val[1]);
+                        val[2] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 5 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 5 * S], vector_aligned}, val[2]);
+                        val[0] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 6 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 6 * S], vector_aligned}, val[0]);
+                        val[1] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 7 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 7 * S], vector_aligned}, val[1]);
+                        val[2] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 8 * S], vector_aligned},
+                                  fvec<S>{&input1[j + 8 * S], vector_aligned}, val[2]);
                     }
                     for (int j = 0; j < InChannels2 * 9; j += S * 9) {
-                        val[0] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 0 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 0 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 1 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 1 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 2 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 2 * S], simd_mem_aligned}, val[2]);
-                        val[0] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 3 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 3 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 4 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 4 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 5 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 5 * S], simd_mem_aligned}, val[2]);
-                        val[0] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 6 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 6 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 7 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 7 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 8 * S],
-                                         simd_mem_aligned},
-                            simd_fvec<S>{&input2[j + 8 * S], simd_mem_aligned}, val[2]);
+                        val[0] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 0 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 0 * S], vector_aligned}, val[0]);
+                        val[1] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 1 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 1 * S], vector_aligned}, val[1]);
+                        val[2] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 2 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 2 * S], vector_aligned}, val[2]);
+                        val[0] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 3 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 3 * S], vector_aligned}, val[0]);
+                        val[1] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 4 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 4 * S], vector_aligned}, val[1]);
+                        val[2] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 5 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 5 * S], vector_aligned}, val[2]);
+                        val[0] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 6 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 6 * S], vector_aligned}, val[0]);
+                        val[1] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 7 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 7 * S], vector_aligned}, val[1]);
+                        val[2] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 8 * S],
+                                          vector_aligned},
+                                  fvec<S>{&input2[j + 8 * S], vector_aligned}, val[2]);
                     }
 
                     val[0] += val[1];
@@ -575,46 +571,46 @@ void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__res
                 }
             } else if ((InChannels1 % S) == 0 && InChannels1 >= S && InChannels2 == 3 && S <= 8) {
                 for (int i = 0; i < OutChannels; ++i) {
-                    simd_fvec<S> val[3] = {0.0f, 0.0f, 0.0f};
+                    fvec<S> val[3] = {0.0f, 0.0f, 0.0f};
                     for (int j = 0; j < InChannels1 * 9; j += S * 9) {
-                        val[0] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 0 * S]},
-                                       simd_fvec<S>{&input1[j + 0 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 1 * S]},
-                                       simd_fvec<S>{&input1[j + 1 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 2 * S]},
-                                       simd_fvec<S>{&input1[j + 2 * S], simd_mem_aligned}, val[2]);
-                        val[0] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 3 * S]},
-                                       simd_fvec<S>{&input1[j + 3 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 4 * S]},
-                                       simd_fvec<S>{&input1[j + 4 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 5 * S]},
-                                       simd_fvec<S>{&input1[j + 5 * S], simd_mem_aligned}, val[2]);
-                        val[0] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 6 * S]},
-                                       simd_fvec<S>{&input1[j + 6 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 7 * S]},
-                                       simd_fvec<S>{&input1[j + 7 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 8 * S]},
-                                       simd_fvec<S>{&input1[j + 8 * S], simd_mem_aligned}, val[2]);
+                        val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 0 * S]},
+                                       fvec<S>{&input1[j + 0 * S], vector_aligned}, val[0]);
+                        val[1] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 1 * S]},
+                                       fvec<S>{&input1[j + 1 * S], vector_aligned}, val[1]);
+                        val[2] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 2 * S]},
+                                       fvec<S>{&input1[j + 2 * S], vector_aligned}, val[2]);
+                        val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 3 * S]},
+                                       fvec<S>{&input1[j + 3 * S], vector_aligned}, val[0]);
+                        val[1] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 4 * S]},
+                                       fvec<S>{&input1[j + 4 * S], vector_aligned}, val[1]);
+                        val[2] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 5 * S]},
+                                       fvec<S>{&input1[j + 5 * S], vector_aligned}, val[2]);
+                        val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 6 * S]},
+                                       fvec<S>{&input1[j + 6 * S], vector_aligned}, val[0]);
+                        val[1] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 7 * S]},
+                                       fvec<S>{&input1[j + 7 * S], vector_aligned}, val[1]);
+                        val[2] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 8 * S]},
+                                       fvec<S>{&input1[j + 8 * S], vector_aligned}, val[2]);
                     }
 
                     int j = 0;
                     for (; j < InChannels2 * 9 - S; j += S * 3) {
-                        val[0] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 0 * S]},
-                            simd_fvec<S>{&input2[j + 0 * S], simd_mem_aligned}, val[0]);
-                        val[1] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 1 * S]},
-                            simd_fvec<S>{&input2[j + 1 * S], simd_mem_aligned}, val[1]);
-                        val[2] = fmadd(
-                            simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 2 * S]},
-                            simd_fvec<S>{&input2[j + 2 * S], simd_mem_aligned}, val[2]);
+                        val[0] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 0 * S]},
+                                  fvec<S>{&input2[j + 0 * S], vector_aligned}, val[0]);
+                        val[1] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 1 * S]},
+                                  fvec<S>{&input2[j + 1 * S], vector_aligned}, val[1]);
+                        val[2] =
+                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 2 * S]},
+                                  fvec<S>{&input2[j + 2 * S], vector_aligned}, val[2]);
                     }
-                    simd_fvec<S> last_input = 0.0f;
+                    fvec<S> last_input = 0.0f;
                     last_input.template set<0>(input2[j + 0]);
                     last_input.template set<1>(input2[j + 1]);
                     last_input.template set<2>(input2[j + 2]);
 
-                    val[0] = fmadd(simd_fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j]},
+                    val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j]},
                                    last_input, val[0]);
 
                     val[0] += val[1];
@@ -778,32 +774,32 @@ void ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows(int y, const float data1[], 
         const int InChannels234 = (InChannels2 + InChannels3 + InChannels4);
 
         for (int i = 0; i < OutChannels; ++i) {
-            simd_fvec<S> val[8] = {};
+            fvec<S> val[8] = {};
 
             const float *p_weights = &weights[i * (InChannels1 + InChannels234) * 9];
             for (int j = 0; j < InChannels1; j += S) {
                 UNROLLED_FOR(k, 8, {
                     if (k < RowsPortion) {
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[0 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 0] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[1 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 0] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[2 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 0] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 0] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[1 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 0] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[2 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 0] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
 
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[3 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 1] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[4 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 1] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[5 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 1] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 1] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[4 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 1] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[5 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 1] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
 
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[6 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 2] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[7 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 2] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[8 * InChannels1 + j]},
-                                       simd_fvec<S>{&data1[ii1[k + 2] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 2] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[7 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 2] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[8 * InChannels1 + j]},
+                                       fvec<S>{&data1[ii1[k + 2] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
                     }
                 })
             }
@@ -814,19 +810,19 @@ void ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows(int y, const float data1[], 
             for (; j < InChannels234 * 9 - S + 1; j += S) {
                 UNROLLED_FOR(k, 8, {
                     if (k < RowsPortion) {
-                        val[k] = fmadd(simd_fvec<S>{&p_weights[j]}, simd_fvec<S>{&input234[k][j]}, val[k]);
+                        val[k] = fmadd(fvec<S>{&p_weights[j]}, fvec<S>{&input234[k][j]}, val[k]);
                     }
                 })
             }
 
             for (int k = 0; k < RowsPortion; ++k) {
-                simd_fvec<S> last_input = 0.0f;
+                fvec<S> last_input = 0.0f;
                 UNROLLED_FOR(l, 16, {
                     if (l < ((InChannels234 * 9) % S)) {
                         last_input.template set<l>(input234[k][j + l]);
                     }
                 })
-                val[k] = fmadd(simd_fvec<S>{&p_weights[j]}, last_input, val[k]);
+                val[k] = fmadd(fvec<S>{&p_weights[j]}, last_input, val[k]);
 
                 float final_val = biases[i] + hsum(val[k]);
                 if (Activation == eActivation::ReLU) {

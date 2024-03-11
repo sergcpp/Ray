@@ -204,11 +204,11 @@ set(SOURCE_FILES Bitmask.h
 set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h
                internal/simd/detect.cpp
-               internal/simd/simd_vec.h
-               internal/simd/simd_vec_sse.h
-               internal/simd/simd_vec_avx.h
-               internal/simd/simd_vec_avx512.h
-               internal/simd/simd_vec_neon.h)
+               internal/simd/simd.h
+               internal/simd/simd_sse.h
+               internal/simd/simd_avx.h
+               internal/simd/simd_avx512.h
+               internal/simd/simd_neon.h)
 
 set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/AccStructureVK.cpp
