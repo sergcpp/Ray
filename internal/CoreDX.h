@@ -20,7 +20,7 @@
 #pragma message("Ray::Ref::simd_vec will not use SIMD")
 #endif
 
-#include "simd/simd_vec.h"
+#include "simd/simd.h"
 
 #undef USE_SSE2
 #undef USE_NEON

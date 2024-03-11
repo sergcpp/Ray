@@ -9,7 +9,7 @@
 
 #define NS Avx512
 #define USE_AVX512
-#include "../internal/simd/simd_vec.h"
+#include "../internal/simd/simd.h"
 
 void test_simd_avx512() {
 #include "test_simd.ipp"

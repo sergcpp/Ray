@@ -261,17 +261,17 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
-            Ref::simd_fvec4 val;
+            Ref::fvec4 val;
 
             if (channels == 3) {
-                val = Ref::simd_fvec4{image_data[3 * (y * w + x) + 0], image_data[3 * (y * w + x) + 1],
+                val = Ref::fvec4{image_data[3 * (y * w + x) + 0], image_data[3 * (y * w + x) + 1],
                                       image_data[3 * (y * w + x) + 2], 0.0f};
             } else if (channels == 4) {
-                val = Ref::simd_fvec4{image_data[4 * (y * w + x) + 0], image_data[4 * (y * w + x) + 1],
+                val = Ref::fvec4{image_data[4 * (y * w + x) + 0], image_data[4 * (y * w + x) + 1],
                                       image_data[4 * (y * w + x) + 2], 0.0f};
             }
 
-            auto exp = Ref::simd_fvec4{std::log2(val[0]), std::log2(val[1]), std::log2(val[2]), 0.0f};
+            auto exp = Ref::fvec4{std::log2(val[0]), std::log2(val[1]), std::log2(val[2]), 0.0f};
             for (int i = 0; i < 3; i++) {
                 exp.set(i, std::ceil(exp[i]));
                 if (exp[i] < -128.0f) {
@@ -284,7 +284,7 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
             const float common_exp = std::max(exp[0], std::max(exp[1], exp[2]));
             const float range = std::exp2(common_exp);
 
-            Ref::simd_fvec4 mantissa = val / range;
+            Ref::fvec4 mantissa = val / range;
             for (int i = 0; i < 3; i++) {
                 if (mantissa[i] < 0.0f) {
                     mantissa.set(i, 0.0f);
@@ -293,7 +293,7 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
                 }
             }
 
-            const auto res = Ref::simd_fvec4{mantissa[0], mantissa[1], mantissa[2], common_exp + 128.0f};
+            const auto res = Ref::fvec4{mantissa[0], mantissa[1], mantissa[2], common_exp + 128.0f};
 
             u8_data[(y * w + x) * 4 + 0] = (uint8_t)_CLAMP(int(res[0] * 255), 0, 255);
             u8_data[(y * w + x) * 4 + 1] = (uint8_t)_CLAMP(int(res[1] * 255), 0, 255);
@@ -1813,29 +1813,29 @@ template int Ray::Preprocess_BCn<4>(const uint8_t in_data[], const int tiles_w, 
 
 void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
                               Span<uint32_t> new_vtx_indices, Span<const uint32_t> indices) {
-    auto cross = [](const Ref::simd_fvec3 &v1, const Ref::simd_fvec3 &v2) -> Ref::simd_fvec3 {
-        return Ref::simd_fvec3{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2],
+    auto cross = [](const Ref::fvec3 &v1, const Ref::fvec3 &v2) -> Ref::fvec3 {
+        return Ref::fvec3{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2],
                                v1[0] * v2[1] - v1[1] * v2[0]};
     };
 
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), {0, 0, 0});
-    aligned_vector<Ref::simd_fvec3> binormals(vertices.size());
+    aligned_vector<Ref::fvec3> binormals(vertices.size());
     for (int i = 0; i < indices.size(); i += 3) {
         vertex_t *v0 = &vertices[indices[i + 0]];
         vertex_t *v1 = &vertices[indices[i + 1]];
         vertex_t *v2 = &vertices[indices[i + 2]];
 
-        Ref::simd_fvec3 &b0 = binormals[indices[i + 0]];
-        Ref::simd_fvec3 &b1 = binormals[indices[i + 1]];
-        Ref::simd_fvec3 &b2 = binormals[indices[i + 2]];
+        Ref::fvec3 &b0 = binormals[indices[i + 0]];
+        Ref::fvec3 &b1 = binormals[indices[i + 1]];
+        Ref::fvec3 &b2 = binormals[indices[i + 2]];
 
-        const Ref::simd_fvec3 dp1 = Ref::simd_fvec3(v1->p) - Ref::simd_fvec3(v0->p);
-        const Ref::simd_fvec3 dp2 = Ref::simd_fvec3(v2->p) - Ref::simd_fvec3(v0->p);
+        const Ref::fvec3 dp1 = Ref::fvec3(v1->p) - Ref::fvec3(v0->p);
+        const Ref::fvec3 dp2 = Ref::fvec3(v2->p) - Ref::fvec3(v0->p);
 
-        const Ref::simd_fvec2 dt1 = Ref::simd_fvec2(v1->t) - Ref::simd_fvec2(v0->t);
-        const Ref::simd_fvec2 dt2 = Ref::simd_fvec2(v2->t) - Ref::simd_fvec2(v0->t);
+        const Ref::fvec2 dt1 = Ref::fvec2(v1->t) - Ref::fvec2(v0->t);
+        const Ref::fvec2 dt2 = Ref::fvec2(v2->t) - Ref::fvec2(v0->t);
 
-        Ref::simd_fvec3 tangent, binormal;
+        Ref::fvec3 tangent, binormal;
 
         const float det = std::abs(dt1[0] * dt2[1] - dt1[1] * dt2[0]);
         if (det > FLT_EPS) {
@@ -1843,21 +1843,21 @@ void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<v
             tangent = (dp1 * dt2[1] - dp2 * dt1[1]) * inv_det;
             binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
         } else {
-            Ref::simd_fvec3 plane_N = cross(dp1, dp2);
+            Ref::fvec3 plane_N = cross(dp1, dp2);
 
             int w = 2;
-            tangent = Ref::simd_fvec3{0.0f, 1.0f, 0.0f};
+            tangent = Ref::fvec3{0.0f, 1.0f, 0.0f};
             if (std::abs(plane_N[0]) <= std::abs(plane_N[1]) && std::abs(plane_N[0]) <= std::abs(plane_N[2])) {
-                tangent = Ref::simd_fvec3{1.0f, 0.0f, 0.0f};
+                tangent = Ref::fvec3{1.0f, 0.0f, 0.0f};
                 w = 1;
             } else if (std::abs(plane_N[2]) <= std::abs(plane_N[0]) && std::abs(plane_N[2]) <= std::abs(plane_N[1])) {
-                tangent = Ref::simd_fvec3{0.0f, 0.0f, 1.0f};
+                tangent = Ref::fvec3{0.0f, 0.0f, 1.0f};
                 w = 0;
             }
 
             if (std::abs(plane_N[w]) > FLT_EPS) {
-                binormal = normalize(cross(Ref::simd_fvec3(plane_N), tangent));
-                tangent = normalize(cross(Ref::simd_fvec3(plane_N), binormal));
+                binormal = normalize(cross(Ref::fvec3(plane_N), tangent));
+                tangent = normalize(cross(Ref::fvec3(plane_N), binormal));
             } else {
                 binormal = {0.0f};
                 tangent = {0.0f};
@@ -1941,8 +1941,8 @@ void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<v
         vertex_t &v = vertices[i];
 
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
-            const auto tangent = Ref::simd_fvec3{v.b};
-            Ref::simd_fvec3 binormal = cross(Ref::simd_fvec3(v.n), tangent);
+            const auto tangent = Ref::fvec3{v.b};
+            Ref::fvec3 binormal = cross(Ref::fvec3(v.n), tangent);
             const float l = length(binormal);
             if (l > FLT_EPS) {
                 binormal /= l;

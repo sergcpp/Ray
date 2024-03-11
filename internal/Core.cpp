@@ -14,7 +14,7 @@
 namespace Ray {
 #include "precomputed/__pmj02_samples.inl"
 
-force_inline Ref::simd_fvec3 cross(const Ref::simd_fvec3 &v1, const Ref::simd_fvec3 &v2) {
+force_inline Ref::fvec3 cross(const Ref::fvec3 &v1, const Ref::fvec3 &v2) {
     return {v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
 }
 
@@ -243,7 +243,7 @@ uint32_t Ray::PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32
     real_indices.reserve(vtx_indices.size() / 3);
 
     for (int j = 0; j < int(vtx_indices.size()); j += 3) {
-        Ref::simd_fvec4 p[3] = {{0.0f}, {0.0f}, {0.0f}};
+        Ref::fvec4 p[3] = {{0.0f}, {0.0f}, {0.0f}};
 
         const uint32_t i0 = vtx_indices[j + 0] + base_vertex, i1 = vtx_indices[j + 1] + base_vertex,
                        i2 = vtx_indices[j + 2] + base_vertex;
@@ -260,7 +260,7 @@ uint32_t Ray::PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32
             continue;
         }
 
-        const Ref::simd_fvec4 _min = min(p[0], min(p[1], p[2])), _max = max(p[0], max(p[1], p[2]));
+        const Ref::fvec4 _min = min(p[0], min(p[1], p[2])), _max = max(p[0], max(p[1], p[2]));
 
         primitives.push_back({i0, i1, i2, _min, _max});
     }
@@ -303,7 +303,7 @@ uint32_t Ray::EmitLBVH_r(const prim_t *prims, const uint32_t *indices, const uin
                          uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
                          std::vector<bvh_node_t> &out_nodes) {
     if (bit_index == -1 || prim_count < 8) {
-        Ref::simd_fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
+        Ref::fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
 
         for (uint32_t i = prim_index; i < prim_index + prim_count; i++) {
             bbox_min = min(bbox_min, prims[indices[i]].bbox_min);
@@ -387,7 +387,7 @@ uint32_t Ray::EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint3
         proc_item_t &cur = proc_stack[stack_size - 1];
 
         if (cur.bit_index == -1 || cur.prim_count < 8) {
-            Ref::simd_fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
+            Ref::fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
 
             for (uint32_t i = cur.prim_index; i < cur.prim_index + cur.prim_count; i++) {
                 bbox_min = min(bbox_min, prims[indices[i]].bbox_min);
@@ -465,9 +465,9 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
                                   std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
-        Ref::simd_fvec4 min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
+        Ref::fvec4 min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
         prims_coll_t() = default;
-        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max)
+        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::fvec4 &_min, const Ref::fvec4 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {}
     };
 
@@ -483,7 +483,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
         prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
     }
 
-    Ref::simd_fvec4 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
+    Ref::fvec4 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
 
     while (!prim_lists.empty()) {
         split_data_t split_data =
@@ -492,7 +492,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
         prim_lists.pop_back();
 
         if (split_data.right_indices.empty()) {
-            Ref::simd_fvec4 bbox_min = split_data.left_bounds[0], bbox_max = split_data.left_bounds[1];
+            Ref::fvec4 bbox_min = split_data.left_bounds[0], bbox_max = split_data.left_bounds[1];
 
             out_nodes.emplace_back();
             bvh_node_t &n = out_nodes.back();
@@ -506,10 +506,10 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
             const auto index = uint32_t(num_nodes);
 
             uint32_t space_axis = 0;
-            const Ref::simd_fvec4 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2.0f,
+            const Ref::fvec4 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2.0f,
                                   c_right = (split_data.right_bounds[0] + split_data.right_bounds[1]) / 2.0f;
 
-            const Ref::simd_fvec4 dist = abs(c_left - c_right);
+            const Ref::fvec4 dist = abs(c_left - c_right);
 
             if (dist.get<0>() > dist.get<1>() && dist.get<0>() > dist.get<2>()) {
                 space_axis = 0;
@@ -519,7 +519,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
                 space_axis = 2;
             }
 
-            const Ref::simd_fvec4 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
+            const Ref::fvec4 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
                                   bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
             out_nodes.emplace_back();
@@ -544,7 +544,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
                                     std::vector<uint32_t> &out_indices) {
     std::vector<uint32_t> morton_codes(prims.size());
 
-    Ref::simd_fvec4 whole_min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, whole_max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
+    Ref::fvec4 whole_min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, whole_max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
 
     const auto indices_start = uint32_t(out_indices.size());
     out_indices.reserve(out_indices.size() + prims.size());
@@ -558,12 +558,12 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     uint32_t *indices = &out_indices[indices_start];
 
-    const Ref::simd_fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min + FLT_EPSILON);
+    const Ref::fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min + FLT_EPSILON);
 
     // compute morton codes
     for (int i = 0; i < int(prims.size()); i++) {
-        const Ref::simd_fvec4 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
-        const Ref::simd_fvec4 code = (center - whole_min) * scale;
+        const Ref::fvec4 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
+        const Ref::fvec4 code = (center - whole_min) * scale;
 
         const auto x = uint32_t(code.get<0>()), y = uint32_t(code.get<1>()), z = uint32_t(code.get<2>());
 
@@ -766,22 +766,22 @@ uint32_t Ray::FlattenBVH_r(const bvh_node_t *nodes, const uint32_t node_index, c
     }
 
     // Sort children in morton order
-    Ref::simd_fvec3 children_centers[8], whole_box_min = {FLT_MAX}, whole_box_max = {-FLT_MAX};
+    Ref::fvec3 children_centers[8], whole_box_min = {FLT_MAX}, whole_box_max = {-FLT_MAX};
     for (int i = 0; i < children_count; i++) {
         children_centers[i] =
-            0.5f * (Ref::simd_fvec3{nodes[children[i]].bbox_min} + Ref::simd_fvec3{nodes[children[i]].bbox_max});
+            0.5f * (Ref::fvec3{nodes[children[i]].bbox_min} + Ref::fvec3{nodes[children[i]].bbox_max});
         whole_box_min = min(whole_box_min, children_centers[i]);
         whole_box_max = max(whole_box_max, children_centers[i]);
     }
 
-    whole_box_max += Ref::simd_fvec3{0.001f};
+    whole_box_max += Ref::fvec3{0.001f};
 
-    const Ref::simd_fvec3 scale = 2.0f / (whole_box_max - whole_box_min);
+    const Ref::fvec3 scale = 2.0f / (whole_box_max - whole_box_min);
 
     uint32_t sorted_children[8] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
                                    0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
     for (int i = 0; i < children_count; i++) {
-        Ref::simd_fvec3 code = (children_centers[i] - whole_box_min) * scale;
+        Ref::fvec3 code = (children_centers[i] - whole_box_min) * scale;
 
         const auto x = uint32_t(code[0]), y = uint32_t(code[1]), z = uint32_t(code[2]);
 
@@ -910,22 +910,22 @@ uint32_t Ray::FlattenBVH_r(const light_bvh_node_t *nodes, const uint32_t node_in
     }
 
     // Sort children in morton order
-    Ref::simd_fvec3 children_centers[8], whole_box_min = {FLT_MAX}, whole_box_max = {-FLT_MAX};
+    Ref::fvec3 children_centers[8], whole_box_min = {FLT_MAX}, whole_box_max = {-FLT_MAX};
     for (int i = 0; i < children_count; i++) {
         children_centers[i] =
-            0.5f * (Ref::simd_fvec3{nodes[children[i]].bbox_min} + Ref::simd_fvec3{nodes[children[i]].bbox_max});
+            0.5f * (Ref::fvec3{nodes[children[i]].bbox_min} + Ref::fvec3{nodes[children[i]].bbox_max});
         whole_box_min = min(whole_box_min, children_centers[i]);
         whole_box_max = max(whole_box_max, children_centers[i]);
     }
 
-    whole_box_max += Ref::simd_fvec3{0.001f};
+    whole_box_max += Ref::fvec3{0.001f};
 
-    const Ref::simd_fvec3 scale = 2.0f / (whole_box_max - whole_box_min);
+    const Ref::fvec3 scale = 2.0f / (whole_box_max - whole_box_min);
 
     uint32_t sorted_children[8] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
                                    0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
     for (int i = 0; i < children_count; i++) {
-        Ref::simd_fvec3 code = (children_centers[i] - whole_box_min) * scale;
+        Ref::fvec3 code = (children_centers[i] - whole_box_min) * scale;
 
         const auto x = uint32_t(code[0]), y = uint32_t(code[1]), z = uint32_t(code[2]);
 
@@ -1023,7 +1023,7 @@ void Ray::ConstructCamera(const eCamType type, const ePixelFilter filter, const 
                           const float lens_rotation, const float lens_ratio, const int lens_blades,
                           const float clip_start, const float clip_end, camera_t *cam) {
     if (type == eCamType::Persp) {
-        auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
+        auto o = Ref::fvec3{origin}, f = Ref::fvec3{fwd}, u = Ref::fvec3{up};
 
         if (u.length2() < FLT_EPS) {
             if (fabsf(f[1]) >= 0.999f) {
@@ -1033,7 +1033,7 @@ void Ray::ConstructCamera(const eCamType type, const ePixelFilter filter, const 
             }
         }
 
-        const Ref::simd_fvec3 s = normalize(cross(f, u));
+        const Ref::fvec3 s = normalize(cross(f, u));
         u = cross(s, f);
 
         cam->type = type;

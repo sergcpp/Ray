@@ -4,7 +4,7 @@
 #include "../internal/simd/detect.h"
 
 #define NS Ref2
-#include "../internal/simd/simd_vec.h"
+#include "../internal/simd/simd.h"
 
 void test_simd_ref() {
 #include "test_simd.ipp"
@@ -14,7 +14,7 @@ void test_simd_ref() {
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #define NS Sse2
 #define USE_SSE2
-#include "../internal/simd/simd_vec.h"
+#include "../internal/simd/simd.h"
 
 void test_simd_sse2() {
 #include "test_simd.ipp"
@@ -31,7 +31,7 @@ void test_simd_avx512();
 
 #define NS Neon
 #define USE_NEON
-#include "../internal/simd/simd_vec.h"
+#include "../internal/simd/simd.h"
 
 void test_simd_neon() {
 #include "test_simd.ipp"

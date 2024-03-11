@@ -9,7 +9,7 @@
 
 #define NS Sse41
 #define USE_SSE41
-#include "../internal/simd/simd_vec.h"
+#include "../internal/simd/simd.h"
 
 void test_simd_sse41() {
 #include "test_simd.ipp"

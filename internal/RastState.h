@@ -139,10 +139,10 @@ struct RastState {
     DepthBias depth_bias;
 
     // mutable, because they are part of dynamic state
-    /*mutable simd_ivec4 viewport;
+    /*mutable ivec4 viewport;
     mutable struct {
         bool enabled = false;
-        simd_ivec4 rect;
+        ivec4 rect;
     } scissor;*/
 };
 

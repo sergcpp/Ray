@@ -15,8 +15,8 @@ namespace Ray {
 namespace Cpu {
 template <typename T> T clamp(T val, T min, T max) { return (val < min ? min : (val > max ? max : val)); }
 
-Ref::simd_fvec4 cross(const Ref::simd_fvec4 &v1, const Ref::simd_fvec4 &v2) {
-    return Ref::simd_fvec4{v1.get<1>() * v2.get<2>() - v1.get<2>() * v2.get<1>(),
+Ref::fvec4 cross(const Ref::fvec4 &v1, const Ref::fvec4 &v2) {
+    return Ref::fvec4{v1.get<1>() * v2.get<2>() - v1.get<2>() * v2.get<1>(),
                            v1.get<2>() * v2.get<0>() - v1.get<0>() * v2.get<2>(),
                            v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
 }
@@ -651,8 +651,8 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const fl
 
     l.rect.area = _l.width * _l.height;
 
-    const Ref::simd_fvec4 uvec = _l.width * TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const Ref::simd_fvec4 vvec = _l.height * TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    const Ref::fvec4 uvec = _l.width * TransformDirection(Ref::fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::fvec4 vvec = _l.height * TransformDirection(Ref::fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
 
     memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
@@ -680,8 +680,8 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const fl
 
     l.disk.area = 0.25f * PI * _l.size_x * _l.size_y;
 
-    const Ref::simd_fvec4 uvec = _l.size_x * TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const Ref::simd_fvec4 vvec = _l.size_y * TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    const Ref::fvec4 uvec = _l.size_x * TransformDirection(Ref::fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::fvec4 vvec = _l.size_y * TransformDirection(Ref::fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
 
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
@@ -709,8 +709,8 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const fl
 
     l.line.area = 2.0f * PI * _l.radius * _l.height;
 
-    const Ref::simd_fvec4 uvec = TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const Ref::simd_fvec4 vvec = TransformDirection(Ref::simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f}, xform);
+    const Ref::fvec4 uvec = TransformDirection(Ref::fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::fvec4 vvec = TransformDirection(Ref::fvec4{0.0f, 1.0f, 0.0f, 0.0f}, xform);
 
     memcpy(l.line.u, value_ptr(uvec), 3 * sizeof(float));
     l.line.radius = _l.radius;
@@ -903,8 +903,8 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     primitives.reserve(mesh_instances_.size());
 
     for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
-                              Ref::simd_fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
+        primitives.push_back({0, 0, 0, Ref::fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
+                              Ref::fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
     }
 
     std::vector<bvh_node_t> temp_nodes;
@@ -995,7 +995,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(
 
 void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     const int tex = int(env_.env_map & 0x00ffffff);
-    Ref::simd_ivec2 size;
+    Ref::ivec2 size;
     tex_storage_rgba_.GetIRes(tex, 0, value_ptr(size));
 
     const int lowest_dim = std::min(size[0], size[1]);
@@ -1016,7 +1016,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
         for (int y = 0; y < size[1]; ++y) {
             for (int x = 0; x < size[0]; ++x) {
                 const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, x, y, 0);
-                const Ref::simd_fvec4 col_rgb = Ref::rgbe_to_rgb(col_rgbe);
+                const Ref::fvec4 col_rgb = Ref::rgbe_to_rgb(col_rgbe);
 
                 const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
 
@@ -1025,9 +1025,9 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
                     for (int ii = -1; ii <= 1; ++ii) {
                         const float phi = 2.0f * PI * float(x + ii) / float(size[0]);
 
-                        auto dir = Ref::simd_fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
+                        auto dir = Ref::fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
 
-                        Ref::simd_fvec2 q;
+                        Ref::fvec2 q;
                         DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
                         int qx = clamp(int(cur_res * q[0]), 0, cur_res - 1);
@@ -1041,7 +1041,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
                         qy /= 2;
 
                         auto &qvec =
-                            reinterpret_cast<Ref::simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
+                            reinterpret_cast<Ref::fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
                         qvec.set(index, fmaxf(qvec[index], cur_lum));
                     }
                 }
@@ -1060,7 +1060,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     while (cur_res > 1) {
         env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
         const auto *prev_mip =
-            reinterpret_cast<const Ref::simd_fvec4 *>(env_map_qtree_.mips[env_map_qtree_.mips.size() - 2].data());
+            reinterpret_cast<const Ref::fvec4 *>(env_map_qtree_.mips[env_map_qtree_.mips.size() - 2].data());
 
         for (int y = 0; y < cur_res; ++y) {
             for (int x = 0; x < cur_res; ++x) {
@@ -1091,12 +1091,12 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     int the_last_required_lod = 0;
     for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
         the_last_required_lod = lod;
-        const auto *cur_mip = reinterpret_cast<const Ref::simd_fvec4 *>(env_map_qtree_.mips[lod].data());
+        const auto *cur_mip = reinterpret_cast<const Ref::fvec4 *>(env_map_qtree_.mips[lod].data());
 
         bool subdivision_required = false;
         for (int y = 0; y < (cur_res / 2) && !subdivision_required; ++y) {
             for (int x = 0; x < (cur_res / 2) && !subdivision_required; ++x) {
-                const Ref::simd_ivec4 mask = simd_cast(cur_mip[y * cur_res / 2 + x] > LumFractThreshold * total_lum);
+                const Ref::ivec4 mask = simd_cast(cur_mip[y * cur_res / 2 + x] > LumFractThreshold * total_lum);
                 subdivision_required |= mask.not_all_zeros();
             }
         }
@@ -1137,7 +1137,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     primitives.reserve(lights_.size());
 
     struct additional_data_t {
-        Ref::simd_fvec4 axis;
+        Ref::fvec4 axis;
         float flux, omega_n, omega_e;
     };
     aligned_vector<additional_data_t> additional_data;
@@ -1153,7 +1153,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             continue;
         }
 
-        Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
+        Ref::fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
         float area = 1.0f, omega_n = 0.0f, omega_e = 0.0f;
         float lum = l.col[0] + l.col[1] + l.col[2];
 
@@ -1167,10 +1167,10 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
         switch (l.type) {
         case LIGHT_TYPE_SPHERE: {
-            const auto pos = Ref::simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
+            const auto pos = Ref::fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
 
-            bbox_min = pos - Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
-            bbox_max = pos + Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
+            bbox_min = pos - Ref::fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
+            bbox_max = pos + Ref::fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
             if (l.sph.area != 0.0f) {
                 area = l.sph.area;
             }
@@ -1178,9 +1178,9 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_DIR: {
-            bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
-            bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
-            axis = Ref::simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
+            bbox_min = Ref::fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
+            bbox_max = Ref::fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+            axis = Ref::fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
             omega_n = 0.0f; // single normal
             omega_e = l.dir.angle;
             if (l.dir.angle != 0.0f) {
@@ -1189,16 +1189,16 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             }
         } break;
         case LIGHT_TYPE_LINE: {
-            const auto pos = Ref::simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
-            auto light_u = Ref::simd_fvec4{l.line.u[0], l.line.u[1], l.line.u[2], 0.0f},
-                 light_dir = Ref::simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
-            Ref::simd_fvec4 light_v = Ray::Cpu::cross(light_u, light_dir);
+            const auto pos = Ref::fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
+            auto light_u = Ref::fvec4{l.line.u[0], l.line.u[1], l.line.u[2], 0.0f},
+                 light_dir = Ref::fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+            Ref::fvec4 light_v = Ray::Cpu::cross(light_u, light_dir);
 
             light_u *= l.line.radius;
             light_v *= l.line.radius;
             light_dir *= 0.5f * l.line.height;
 
-            const Ref::simd_fvec4 p0 = pos + light_dir + light_u + light_v, p1 = pos + light_dir + light_u - light_v,
+            const Ref::fvec4 p0 = pos + light_dir + light_u + light_v, p1 = pos + light_dir + light_u - light_v,
                                   p2 = pos + light_dir - light_u + light_v, p3 = pos + light_dir - light_u - light_v,
                                   p4 = pos - light_dir + light_u + light_v, p5 = pos - light_dir + light_u - light_v,
                                   p6 = pos - light_dir - light_u + light_v, p7 = pos - light_dir - light_u - light_v;
@@ -1210,11 +1210,11 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_RECT: {
-            const auto pos = Ref::simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
-            const auto u = 0.5f * Ref::simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
-            const auto v = 0.5f * Ref::simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
+            const auto pos = Ref::fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
+            const auto u = 0.5f * Ref::fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
+            const auto v = 0.5f * Ref::fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
 
-            const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
+            const Ref::fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
             bbox_min = min(min(p0, p1), min(p2, p3));
             bbox_max = max(max(p0, p1), max(p2, p3));
             area = l.rect.area;
@@ -1224,11 +1224,11 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_DISK: {
-            const auto pos = Ref::simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
-            const auto u = 0.5f * Ref::simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
-            const auto v = 0.5f * Ref::simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
+            const auto pos = Ref::fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
+            const auto u = 0.5f * Ref::fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
+            const auto v = 0.5f * Ref::fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
 
-            const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
+            const Ref::fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
             bbox_min = min(min(p0, p1), min(p2, p3));
             bbox_max = max(max(p0, p1), max(p2, p3));
             area = l.disk.area;
@@ -1245,9 +1245,9 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             const vertex_t &v2 = vertices_[vtx_indices_[ltri_index * 3 + 1]];
             const vertex_t &v3 = vertices_[vtx_indices_[ltri_index * 3 + 2]];
 
-            auto p1 = Ref::simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
-                 p2 = Ref::simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
-                 p3 = Ref::simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
+            auto p1 = Ref::fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
+                 p2 = Ref::fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
+                 p3 = Ref::fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
 
             p1 = TransformPoint(p1, lmi.xform);
             p2 = TransformPoint(p2, lmi.xform);
@@ -1256,7 +1256,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             bbox_min = min(p1, min(p2, p3));
             bbox_max = max(p1, max(p2, p3));
 
-            Ref::simd_fvec4 light_forward = Ray::Cpu::cross(p2 - p1, p3 - p1);
+            Ref::fvec4 light_forward = Ray::Cpu::cross(p2 - p1, p3 - p1);
             area = 0.5f * length(light_forward);
 
             axis = normalize(light_forward);
@@ -1265,8 +1265,8 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
         } break;
         case LIGHT_TYPE_ENV: {
             lum = (lum / 3.0f) * env_map_qtree_.medium_lum;
-            bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
-            bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+            bbox_min = Ref::fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
+            bbox_max = Ref::fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
             omega_n = PI; // normals in all directions
             omega_e = PI / 2.0f;
         } break;
@@ -1351,7 +1351,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             memcpy(light_nodes_[parent].axis, light_nodes_[n].axis, 3 * sizeof(float));
             light_nodes_[parent].omega_n = light_nodes_[n].omega_n;
         } else {
-            auto axis1 = Ref::simd_fvec4{light_nodes_[parent].axis}, axis2 = Ref::simd_fvec4{light_nodes_[n].axis};
+            auto axis1 = Ref::fvec4{light_nodes_[parent].axis}, axis2 = Ref::fvec4{light_nodes_[n].axis};
             axis1.set<3>(0.0f);
             axis2.set<3>(0.0f);
 
@@ -1362,7 +1362,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             if (axis_length != 0.0f) {
                 axis1 /= axis_length;
             } else {
-                axis1 = Ref::simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f};
+                axis1 = Ref::fvec4{0.0f, 1.0f, 0.0f, 0.0f};
             }
 
             memcpy(light_nodes_[parent].axis, value_ptr(axis1), 3 * sizeof(float));

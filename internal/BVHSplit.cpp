@@ -15,27 +15,27 @@ const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 256;
 
 struct bbox_t {
-    Ref::simd_fvec4 min = {FLT_MAX}, max = {-FLT_MAX};
+    Ref::fvec4 min = {FLT_MAX}, max = {-FLT_MAX};
     bbox_t() = default;
-    bbox_t(const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max) : min(_min), max(_max) {}
+    bbox_t(const Ref::fvec4 &_min, const Ref::fvec4 &_max) : min(_min), max(_max) {}
 
     float surface_area() const { return surface_area(min, max); }
 
-    static float surface_area(const Ref::simd_fvec4 &min, const Ref::simd_fvec4 &max) {
-        const Ref::simd_fvec4 e = max - min;
+    static float surface_area(const Ref::fvec4 &min, const Ref::fvec4 &max) {
+        const Ref::fvec4 e = max - min;
         return 2 * (e.get<0>() + e.get<1>() + e.get<2>());
         // return e[0] * e[1] + e[0] * e[2] + e[1] * e[2];
     }
 };
 
 // stolen from Mitsuba
-static int sutherland_hodgman(const Ref::simd_dvec3 *input, const int in_count, Ref::simd_dvec3 *output, const int axis,
+static int sutherland_hodgman(const Ref::dvec3 *input, const int in_count, Ref::dvec3 *output, const int axis,
                               const double split_pos, const bool is_minimum) {
     if (in_count < 3) {
         return 0;
     }
 
-    Ref::simd_dvec3 cur = input[0];
+    Ref::dvec3 cur = input[0];
     const double sign = is_minimum ? 1.0 : -1.0;
     double distance = sign * (cur[axis] - split_pos);
     bool cur_is_inside = (distance >= 0);
@@ -46,7 +46,7 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, const int in_count, 
         if (nextIdx == in_count) {
             nextIdx = 0;
         }
-        const Ref::simd_dvec3 &next = input[nextIdx];
+        const Ref::dvec3 &next = input[nextIdx];
         distance = sign * (next[axis] - split_pos);
         bool next_is_inside = (distance >= 0);
 
@@ -56,13 +56,13 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, const int in_count, 
         } else if (cur_is_inside && !next_is_inside) {
             // Going outside -- add the intersection
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            Ref::simd_dvec3 p = cur + (next - cur) * t;
+            Ref::dvec3 p = cur + (next - cur) * t;
             p.set(axis, split_pos); // Avoid roundoff errors
             output[out_count++] = p;
         } else if (!cur_is_inside && next_is_inside) {
             // Coming back inside -- add the intersection + next vertex
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            Ref::simd_dvec3 &p = output[out_count++];
+            Ref::dvec3 &p = output[out_count++];
             p = cur + (next - cur) * t;
             p.set(axis, split_pos); // Avoid roundoff errors
             output[out_count++] = next;
@@ -105,9 +105,9 @@ force_inline float castflt_up(const double val) {
     return a;
 }
 
-bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, const Ref::simd_fvec3 &_v2,
+bbox_t GetClippedAABB(const Ref::fvec3 &_v0, const Ref::fvec3 &_v1, const Ref::fvec3 &_v2,
                       const bbox_t &limits) {
-    Ref::simd_dvec3 vertices1[9], vertices2[9];
+    Ref::dvec3 vertices1[9], vertices2[9];
     int vertex_count = 3;
 
     vertices1[0] = {double(_v0[0]), double(_v0[1]), double(_v0[2])};
@@ -134,9 +134,9 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
 } // namespace Ray
 
 Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
-                                           const vtx_attribute_t &positions, const Ref::simd_fvec4 &bbox_min,
-                                           const Ref::simd_fvec4 &bbox_max, const Ref::simd_fvec4 &root_min,
-                                           const Ref::simd_fvec4 &root_max, const bvh_settings_t &s) {
+                                           const vtx_attribute_t &positions, const Ref::fvec4 &bbox_min,
+                                           const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min,
+                                           const Ref::fvec4 &root_max, const bvh_settings_t &s) {
     const int num_prims = int(prim_indices.size());
     const bbox_t whole_box = {bbox_min, bbox_max};
 
@@ -148,9 +148,9 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
         for (int i = 0; i < num_prims; i++) {
             const prim_t &p = primitives[prim_indices[i]];
 
-            const auto v0 = Ref::simd_fvec3{&positions.data[positions.offset + p.i0 * positions.stride]},
-                       v1 = Ref::simd_fvec3{&positions.data[positions.offset + p.i1 * positions.stride]},
-                       v2 = Ref::simd_fvec3{&positions.data[positions.offset + p.i2 * positions.stride]};
+            const auto v0 = Ref::fvec3{&positions.data[positions.offset + p.i0 * positions.stride]},
+                       v1 = Ref::fvec3{&positions.data[positions.offset + p.i1 * positions.stride]},
+                       v2 = Ref::fvec3{&positions.data[positions.offset + p.i2 * positions.stride]};
 
             modified_prim_bounds[i] = GetClippedAABB(v0, v1, v2, whole_box);
         }
@@ -314,7 +314,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
 
             const bbox_t overlap = {max(res_left_bounds.min, res_right_bounds.min),
                                     min(res_left_bounds.max, res_right_bounds.max)};
-            Ref::simd_ivec4 test = simd_cast(overlap.max <= overlap.min);
+            Ref::ivec4 test = simd_cast(overlap.max <= overlap.min);
             test.set<3>(0);
 
             if (s.allow_spatial_splits && test.all_zeros() &&
@@ -379,9 +379,9 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                         bins[exit_index].exit_counter++;
 
                         if (!positions.data.empty()) {
-                            auto v0 = Ref::simd_fvec3{&positions.data[positions.offset + p.i0 * positions.stride]},
-                                 v1 = Ref::simd_fvec3{&positions.data[positions.offset + p.i1 * positions.stride]},
-                                 v2 = Ref::simd_fvec3{&positions.data[positions.offset + p.i2 * positions.stride]};
+                            auto v0 = Ref::fvec3{&positions.data[positions.offset + p.i0 * positions.stride]},
+                                 v1 = Ref::fvec3{&positions.data[positions.offset + p.i1 * positions.stride]},
+                                 v2 = Ref::fvec3{&positions.data[positions.offset + p.i2 * positions.stride]};
 
                             for (int j = enter_index; j <= exit_index; j++) {
                                 bbox_t box = GetClippedAABB(v0, v1, v2, bins[j].limits);
