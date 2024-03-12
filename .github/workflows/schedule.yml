@@ -65,7 +65,7 @@ jobs:
       - name: Compile the code
         uses: ./.github/actions/build-windows
         with:
-          cmake-args: ""
+          cmake-args: "-A x64"
           config: "Asan"
           bin-dir: "windows-x86_64-asan"
       - name: Upload artifacts
