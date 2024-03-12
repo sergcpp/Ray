@@ -109,7 +109,7 @@ bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
 
         bvh_node_t n = g_nodes[cur];
 
-        if (!_bbox_test_fma(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
+        if (!_bbox_test(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
@@ -151,7 +151,7 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
 
         bvh_node_t n = g_nodes[cur];
 
-        if (!_bbox_test_fma(orig_inv_rd, orig_neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
+        if (!_bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
@@ -169,7 +169,7 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
 
                 mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
 
-                if (!_bbox_test_fma(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
+                if (!_bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
                     continue;
                 }
 
@@ -392,9 +392,9 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
         if ((n.child[0] & LEAF_NODE_BIT) == 0) {
             // TODO: loop in morton order based on ray direction
             for (int j = 0; j < 8; ++j) {
-                if (_bbox_test_fma(inv_d, neg_inv_do, rdist,
-                                   vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
-                                   vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                if (_bbox_test(inv_d, neg_inv_do, rdist,
+                               vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
+                               vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
                     g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
                 }
             }
