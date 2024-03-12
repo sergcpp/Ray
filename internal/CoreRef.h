@@ -143,8 +143,6 @@ force_inline float construct_float(uint32_t m) {
 }
 
 force_inline float fract(const float v) {
-    // float _unused;
-    // return modff(v, &_unused);
     return v - floorf(v);
 }
 

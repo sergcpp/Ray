@@ -66,23 +66,11 @@ void Ray::Vk::Context::Destroy() {
         api_.vkFreeCommandBuffers(device_, command_pool_, 1, &setup_cmd_buf_);
         api_.vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);
 
-        // for (int i = 0; i < StageBufferCount; ++i) {
-        //     default_stage_bufs_.fences[i].ClientWaitSync();
-        //     default_stage_bufs_.fences[i] = {};
-        //     default_stage_bufs_.bufs[i] = {};
-        // }
-
         api_.vkDestroyCommandPool(device_, command_pool_, nullptr);
         api_.vkDestroyCommandPool(device_, temp_command_pool_, nullptr);
 
-        // for (size_t i = 0; i < api_ctx_->present_image_views.size(); ++i) {
-        //     vkDestroyImageView(api_ctx_->device, api_ctx_->present_image_views[i], nullptr);
-        // }
-
-        // vkDestroySwapchainKHR(device_, api_ctx_->swapchain, nullptr);
-
         api_.vkDestroyDevice(device_, nullptr);
-        // vkDestroySurfaceKHR(instance_, surface_, nullptr);
+
         if (debug_callback_) {
             api_.vkDestroyDebugReportCallbackEXT(instance_, debug_callback_, nullptr);
         }
