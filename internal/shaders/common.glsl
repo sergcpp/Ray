@@ -75,27 +75,15 @@ vec3 normalize_len(const vec3 v, out float len) {
 }
 
 vec3 safe_invert(vec3 v) {
-    vec3 inv_v = 1.0f / v;
-
-    if (v.x <= FLT_EPS && v.x >= 0) {
-        inv_v.x = FLT_MAX;
-    } else if (v.x >= -FLT_EPS && v.x < 0) {
-        inv_v.x = -FLT_MAX;
+    vec3 ret;
+    [[unroll]] for (int i = 0; i < 3; ++i) {
+        [[flatten]] if (abs(v[i]) > FLT_EPS) {
+            ret[i] = 1.0 / v[i];
+        } else {
+            ret[i] = (v[i] >= 0.0) ? FLT_MAX : -FLT_MAX;
+        }
     }
-
-    if (v.y <= FLT_EPS && v.y >= 0) {
-        inv_v.y = FLT_MAX;
-    } else if (v.y >= -FLT_EPS && v.y < 0) {
-        inv_v.y = -FLT_MAX;
-    }
-
-    if (v.z <= FLT_EPS && v.z >= 0) {
-        inv_v.z = FLT_MAX;
-    } else if (v.z >= -FLT_EPS && v.z < 0) {
-        inv_v.z = -FLT_MAX;
-    }
-
-    return inv_v;
+    return ret;
 }
 
 vec3 srgb_to_rgb(vec3 col) {
