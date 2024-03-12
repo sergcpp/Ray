@@ -100,9 +100,9 @@ void main() {
 
             // TODO: loop in morton order based on ray direction
             for (int j = 0; j < 8; ++j) {
-                if (importance[j] > 0.0 && _bbox_test_fma(inv_d, neg_inv_do, inter.t,
-                                                          vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
-                                                          vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                if (importance[j] > 0.0 && _bbox_test(inv_d, neg_inv_do, inter.t,
+                                                      vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
+                                                      vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
                     g_stack_factors[gl_LocalInvocationIndex][stack_size] = cur_factor * importance[j] / total_importance;
                     g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
                 }
