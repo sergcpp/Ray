@@ -185,6 +185,7 @@ struct tex_desc_t {
     int mips_count = 1;                ///< Count of mips provided in data
     bool is_srgb = true;               ///< Treat this texture as SRGB
     bool is_normalmap = false;         ///< Is this a normalmap
+    bool is_YCoCg = false;             ///< Texture is in YCoCg format
     bool force_no_compression = false; ///< Disable compression (guarantee the best quality)
     bool generate_mipmaps = false;     ///< Generate mipmaps for this texture
 };

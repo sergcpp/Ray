@@ -223,6 +223,9 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     if (_t.is_srgb) {
         t.width |= ATLAS_TEX_SRGB_BIT;
     }
+    if (_t.is_YCoCg) {
+        t.height |= ATLAS_TEX_YCOCG_BIT;
+    }
 
     if (((_t.generate_mipmaps && !IsCompressedFormat(_t.format)) || _t.mips_count > 1) &&
         _t.w > MIN_ATLAS_TEXTURE_SIZE && _t.h > MIN_ATLAS_TEXTURE_SIZE) {
@@ -433,7 +436,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     uint32_t data_size[16] = {};
 
     std::unique_ptr<uint8_t[]> repacked_data;
-    bool reconstruct_z = false, is_YCoCg = false;
+    bool reconstruct_z = false, is_YCoCg = _t.is_YCoCg;
 
     if (_t.format == eTextureFormat::RGBA8888) {
         if (!_t.is_normalmap) {
