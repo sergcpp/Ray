@@ -80,18 +80,18 @@ struct principled_mat_desc_t {
     float anisotropic_rotation = 0;                         ///< Anisotropy rotation [-PI; +PI]
     float sheen = 0;                                        ///< Sheen
     float sheen_tint = 0.5f;                                ///< Sheen tint
-    float clearcoat = 0.0f;                                 ///< Weight of clearcoat layer
-    float clearcoat_roughness = 0.0f;                       ///< Clearcoat layer roughness
+    float clearcoat = 0;                                    ///< Weight of clearcoat layer
+    float clearcoat_roughness = 0;                          ///< Clearcoat layer roughness
     float ior = 1.45f;                                      ///< IOR
-    float transmission = 0.0f;                              ///< Transmission amount
-    float transmission_roughness = 0.0f;                    ///< Transmission roughness
+    float transmission = 0;                                 ///< Transmission amount
+    float transmission_roughness = 0;                       ///< Transmission roughness
     float emission_color[3] = {0, 0, 0};                    ///< Emissive color
     TextureHandle emission_texture = InvalidTextureHandle;  ///< Emissive texture
-    float emission_strength = 1.0f;                         ///< Emission strength
-    float alpha = 1.0f;                                     ///< Material transparency (alpha blending)
+    float emission_strength = 1;                            ///< Emission strength
+    float alpha = 1;                                        ///< Material transparency (alpha blending)
     TextureHandle alpha_texture = InvalidTextureHandle;     ///< Transparency texture
     TextureHandle normal_map = InvalidTextureHandle;        ///< Material normalmap
-    float normal_map_intensity = 1.0f;                      ///< Normalmap intensity
+    float normal_map_intensity = 1;                         ///< Normalmap intensity
     bool multiple_importance = false;                       ///< Enable explicit emissive geometry sampling
 };
 
@@ -188,9 +188,6 @@ struct tex_desc_t {
     bool force_no_compression = false; ///< Disable compression (guarantee the best quality)
     bool generate_mipmaps = false;     ///< Generate mipmaps for this texture
 };
-
-/// Lightsource type
-enum eLightType { SphereLight, SpotLight, DirectionalLight, LineLight, RectLight };
 
 /// Directional lightsource description
 struct directional_light_desc_t {
