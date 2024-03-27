@@ -458,6 +458,16 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         glassball_mat1 = scene.AddMaterial(glassball_mat1_desc);
     }
 
+    Ray::MaterialHandle two_sided_back;
+    {
+        Ray::principled_mat_desc_t back_mat_desc;
+        back_mat_desc.base_color[0] = 0.0f;
+        back_mat_desc.base_color[1] = 0.0f;
+        back_mat_desc.base_color[2] = 0.5f;
+        back_mat_desc.roughness = 0.0f;
+        two_sided_back = scene.AddMaterial(back_mat_desc);
+    }
+
     std::vector<Ray::MeshHandle> meshes_to_delete;
 
     Ray::MeshHandle base_mesh;
@@ -473,7 +483,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         base_mesh_desc.vtx_uvs = {base_attrs, 6, 8};
         base_mesh_desc.vtx_indices = base_indices;
 
-        const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, base_groups[0], base_groups[1]}};
+        const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, base_groups[0], base_groups[1]}};
         base_mesh_desc.groups = groups;
 
         base_mesh = scene.AddMesh(base_mesh_desc);
@@ -496,7 +506,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         model_mesh_desc.vtx_uvs = {model_attrs, 6, 8};
         model_mesh_desc.vtx_indices = model_indices;
 
-        const Ray::mat_group_desc_t groups[] = {{main_mat, main_mat, model_groups[0], model_groups[1]}};
+        const Ray::mat_group_desc_t groups[] = {{main_mat, model_groups[0], model_groups[1]}};
         model_mesh_desc.groups = groups;
 
         model_mesh = scene.AddMesh(model_mesh_desc);
@@ -515,7 +525,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         core_mesh_desc.vtx_uvs = {core_attrs, 6, 8};
         core_mesh_desc.vtx_indices = core_indices;
 
-        const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, core_groups[0], core_groups[1]}};
+        const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, core_groups[0], core_groups[1]}};
         core_mesh_desc.groups = groups;
 
         core_mesh = scene.AddMesh(core_mesh_desc);
@@ -535,9 +545,8 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         subsurf_bar_mesh_desc.vtx_uvs = {subsurf_bar_attrs, 6, 8};
         subsurf_bar_mesh_desc.vtx_indices = subsurf_bar_indices;
 
-        const Ray::mat_group_desc_t groups[] = {
-            {white_mat, white_mat, subsurf_bar_groups[0], subsurf_bar_groups[1]},
-            {dark_grey_mat, dark_grey_mat, subsurf_bar_groups[2], subsurf_bar_groups[3]}};
+        const Ray::mat_group_desc_t groups[] = {{white_mat, subsurf_bar_groups[0], subsurf_bar_groups[1]},
+                                                {dark_grey_mat, subsurf_bar_groups[2], subsurf_bar_groups[3]}};
         subsurf_bar_mesh_desc.groups = groups;
 
         subsurf_bar_mesh = scene.AddMesh(subsurf_bar_mesh_desc);
@@ -556,7 +565,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         text_mesh_desc.vtx_uvs = {text_attrs, 6, 8};
         text_mesh_desc.vtx_indices = text_indices;
 
-        const Ray::mat_group_desc_t groups[] = {{white_mat, white_mat, text_groups[0], text_groups[1]}};
+        const Ray::mat_group_desc_t groups[] = {{white_mat, text_groups[0], text_groups[1]}};
         text_mesh_desc.groups = groups;
 
         text_mesh = scene.AddMesh(text_mesh_desc);
@@ -564,6 +573,25 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         // Add mesh one more time to test compaction later
         meshes_to_delete.push_back(text_mesh);
         text_mesh = scene.AddMesh(text_mesh_desc);
+    }
+
+    Ray::MeshHandle two_sided_mesh;
+    {
+        std::vector<float> text_attrs;
+        std::vector<uint32_t> text_indices, text_groups;
+        std::tie(text_attrs, text_indices, text_groups) = LoadBIN("test_data/meshes/mat_test/two_sided.bin");
+
+        Ray::mesh_desc_t mesh_desc;
+        mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        mesh_desc.vtx_positions = {text_attrs, 0, 8};
+        mesh_desc.vtx_normals = {text_attrs, 3, 8};
+        mesh_desc.vtx_uvs = {text_attrs, 6, 8};
+        mesh_desc.vtx_indices = text_indices;
+
+        const Ray::mat_group_desc_t groups[] = {{main_mat, two_sided_back, text_groups[0], text_groups[1]}};
+        mesh_desc.groups = groups;
+
+        two_sided_mesh = scene.AddMesh(mesh_desc);
     }
 
     Ray::MeshHandle env_mesh;
@@ -620,9 +648,8 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         square_light_mesh_desc.vtx_uvs = {square_light_attrs, 6, 8};
         square_light_mesh_desc.vtx_indices = square_light_indices;
 
-        const Ray::mat_group_desc_t groups[] = {
-            {square_light_mat, square_light_mat, square_light_groups[0], square_light_groups[1]},
-            {dark_grey_mat, dark_grey_mat, square_light_groups[2], square_light_groups[3]}};
+        const Ray::mat_group_desc_t groups[] = {{square_light_mat, square_light_groups[0], square_light_groups[1]},
+                                                {dark_grey_mat, square_light_groups[2], square_light_groups[3]}};
         square_light_mesh_desc.groups = groups;
 
         square_light_mesh = scene.AddMesh(square_light_mesh_desc);
@@ -646,9 +673,8 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         disc_light_mesh_desc.vtx_uvs = {disc_light_attrs, 6, 8};
         disc_light_mesh_desc.vtx_indices = disc_light_indices;
 
-        const Ray::mat_group_desc_t groups[] = {
-            {disc_light_mat, disc_light_mat, disc_light_groups[0], disc_light_groups[1]},
-            {dark_grey_mat, dark_grey_mat, disc_light_groups[2], disc_light_groups[3]}};
+        const Ray::mat_group_desc_t groups[] = {{disc_light_mat, disc_light_groups[0], disc_light_groups[1]},
+                                                {dark_grey_mat, disc_light_groups[2], disc_light_groups[3]}};
         disc_light_mesh_desc.groups = groups;
 
         disc_light_mesh = scene.AddMesh(disc_light_mesh_desc);
@@ -668,9 +694,8 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         glassball_mesh_desc.vtx_uvs = {glassball_attrs, 6, 8};
         glassball_mesh_desc.vtx_indices = glassball_indices;
 
-        const Ray::mat_group_desc_t groups[] = {
-            {glassball_mat0, glassball_mat0, glassball_groups[0], glassball_groups[1]},
-            {glassball_mat1, glassball_mat1, glassball_groups[2], glassball_groups[3]}};
+        const Ray::mat_group_desc_t groups[] = {{glassball_mat0, glassball_groups[0], glassball_groups[1]},
+                                                {glassball_mat1, glassball_groups[2], glassball_groups[3]}};
         glassball_mesh_desc.groups = groups;
 
         glassball_mesh = scene.AddMesh(glassball_mesh_desc);
@@ -689,15 +714,15 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         box_mesh_desc.vtx_uvs = {box_attrs, 6, 8};
         box_mesh_desc.vtx_indices = box_indices;
 
-        const Ray::mat_group_desc_t groups[] = {{glossy_red, glossy_red, box_groups[0], box_groups[1]}};
+        const Ray::mat_group_desc_t groups[] = {{glossy_red, box_groups[0], box_groups[1]}};
         box_mesh_desc.groups = groups;
         box_mesh = scene.AddMesh(box_mesh_desc);
 
-        const Ray::mat_group_desc_t groups2[] = {{refr_mat_flags, refr_mat_flags, box_groups[0], box_groups[1]}};
+        const Ray::mat_group_desc_t groups2[] = {{refr_mat_flags, box_groups[0], box_groups[1]}};
         box_mesh_desc.groups = groups2;
         box2_mesh = scene.AddMesh(box_mesh_desc);
 
-        const Ray::mat_group_desc_t groups3[] = {{glossy_green, glossy_green, box_groups[0], box_groups[1]}};
+        const Ray::mat_group_desc_t groups3[] = {{glossy_green, box_groups[0], box_groups[1]}};
         box_mesh_desc.groups = groups3;
         box3_mesh = scene.AddMesh(box_mesh_desc);
     }
@@ -768,6 +793,15 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
         box_xform[12] = 0.05f;
         scene.AddMeshInstance(mi);
+    } else if (test_scene == eTestScene::Two_Sided) {
+        const float two_sided_xform[16] = {1.0f, 0.0f,  0.0f, 0.0f, // NOLINT
+                                           0.0f, 1.0f,  0.0f, 0.0f, // NOLINT
+                                           0.0f, 0.0f,  1.0f, 0.0f, // NOLINT
+                                           0.0f, 0.04f, 0.0f, 1.0f};
+
+        scene.AddMeshInstance(two_sided_mesh, two_sided_xform);
+        scene.AddMeshInstance(base_mesh, identity);
+        scene.AddMeshInstance(text_mesh, identity);
     } else {
         scene.AddMeshInstance(model_mesh, model_xform);
         scene.AddMeshInstance(base_mesh, identity);
@@ -787,13 +821,15 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
     } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_SphereLight ||
                test_scene == eTestScene::Standard_SpotLight || test_scene == eTestScene::Standard_DOF0 ||
                test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
+               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
+               test_scene == eTestScene::Two_Sided) {
         //
         // Use explicit lights sources
         //
         if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_DOF0 ||
             test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-            test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
+            test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
+            test_scene == eTestScene::Two_Sided) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,

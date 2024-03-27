@@ -1252,6 +1252,24 @@ void test_alpha_mat4(const char *arch_list[], const char *preferred_device) {
 // Complex material tests
 //
 
+void test_two_sided_mat(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 12;
+    const int PixThres = 788;
+
+    Ray::principled_mat_desc_t front_mat_desc;
+    front_mat_desc.base_color[0] = 0.5f;
+    front_mat_desc.base_color[1] = 0.0f;
+    front_mat_desc.base_color[2] = 0.0f;
+    front_mat_desc.metallic = 1.0f;
+    front_mat_desc.roughness = 0.0f;
+    front_mat_desc.alpha_texture = Ray::TextureHandle{0};
+
+    const char *textures[] = {"test_data/textures/Fence007A_2K_Opacity.dds"};
+
+    run_material_test(arch_list, preferred_device, "two_sided_mat", front_mat_desc, SampleCount, FastMinPSNR, PixThres,
+                      eDenoiseMethod::None, false, textures, eTestScene::Two_Sided);
+}
+
 void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 11;
     const int PixThres = 759;
@@ -1299,7 +1317,6 @@ void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1320,7 +1337,6 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1342,7 +1358,6 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1365,7 +1380,6 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1386,7 +1400,6 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1409,7 +1422,6 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1430,7 +1442,6 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1451,7 +1462,6 @@ void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1472,7 +1482,6 @@ void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferre
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1494,7 +1503,6 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1515,7 +1523,6 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1538,7 +1545,6 @@ void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferr
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1559,7 +1565,6 @@ void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1581,7 +1586,6 @@ void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1603,7 +1607,6 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1625,7 +1628,6 @@ void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;
@@ -1647,7 +1649,6 @@ void test_complex_mat5_hdri_light(const char *arch_list[], const char *preferred
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
-    metal_mat_desc.metallic = 1.0f;
     metal_mat_desc.roughness = 1.0f;
     metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
     metal_mat_desc.metallic = 1.0f;

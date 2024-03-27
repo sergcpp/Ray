@@ -439,7 +439,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         material_stack[0] = grp.front_mat._index;
         uint32_t material_count = 1;
 
-        while (material_count) {
+        while (material_count && is_front_solid) {
             const material_t &mat = materials_[material_stack[--material_count]];
 
             if (mat.type == eShadingNode::Mix) {
@@ -447,16 +447,19 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
                 material_stack[material_count++] = mat.textures[MIX_MAT2];
             } else if (mat.type == eShadingNode::Transparent) {
                 is_front_solid = false;
-                break;
             }
         }
 
         if (grp.back_mat != InvalidMaterialHandle) {
-            material_stack[0] = grp.back_mat._index;
-            material_count = 1;
+            if (grp.back_mat != grp.front_mat) {
+                material_stack[0] = grp.back_mat._index;
+                material_count = 1;
+            } else {
+                is_back_solid = is_front_solid;
+            }
         }
 
-        while (material_count) {
+        while (material_count && is_back_solid) {
             const material_t &mat = materials_[material_stack[--material_count]];
 
             if (mat.type == eShadingNode::Mix) {
@@ -464,7 +467,6 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
                 material_stack[material_count++] = mat.textures[MIX_MAT2];
             } else if (mat.type == eShadingNode::Transparent) {
                 is_back_solid = false;
-                break;
             }
         }
 

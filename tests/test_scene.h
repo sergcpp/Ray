@@ -24,7 +24,8 @@ enum class eTestScene {
     Standard_GlassBall1,
     Standard_Clipped,
     Refraction_Plane,
-    Ray_Flags
+    Ray_Flags,
+    Two_Sided
 };
 
 enum class eDenoiseMethod { None, NLM, UNet };
