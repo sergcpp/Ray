@@ -23,6 +23,7 @@ void test_tex_storage();
 
 void test_aux_channels(const char *arch_list[], const char *preferred_device);
 void test_ray_flags(const char *arch_list[], const char *preferred_device);
+void test_two_sided_mat(const char *arch_list[], const char *preferred_device);
 void test_oren_mat0(const char *arch_list[], const char *preferred_device);
 void test_oren_mat1(const char *arch_list[], const char *preferred_device);
 void test_oren_mat2(const char *arch_list[], const char *preferred_device);
@@ -248,6 +249,7 @@ int main(int argc, char *argv[]) {
 
         futures.push_back(mt_run_pool.Enqueue(test_aux_channels, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_ray_flags, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_two_sided_mat, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat0, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat1, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat2, arch_list, device_name));

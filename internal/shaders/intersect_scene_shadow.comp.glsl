@@ -308,8 +308,10 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             const uint back_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
 
             const bool is_backfacing = !rayQueryGetIntersectionFrontFaceEXT(rq, true);
-            const bool solid_hit = (!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0) ||
-                                   (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0);
+            bool solid_hit = !is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0;
+            if (is_backfacing) {
+                solid_hit = solid_hit || (back_mi & MATERIAL_SOLID_BIT) != 0;
+            }
             if (solid_hit || depth > g_params.max_transp_depth) {
                 return vec3(0.0);
             }
