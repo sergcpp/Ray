@@ -28,6 +28,9 @@ Features:
 
   <div>
     <div float="left" >
+      <img src="images/scene18.jpg" width="89.8%" />
+    </div>
+    <div float="left" >
       <img src="images/scene11.jpg" width="44.7%" />
       <img src="images/scene12.jpg" width="44.7%" />
     </div>
