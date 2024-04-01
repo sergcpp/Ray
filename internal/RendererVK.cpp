@@ -56,57 +56,57 @@ namespace Ray {
 extern const int LUT_DIMS;
 extern const uint32_t *transform_luts[];
 namespace Vk {
+#include "shaders/output/convolution_112_112_coop.comp.spv.inl"
 #include "shaders/output/convolution_112_112_fp16.comp.spv.inl"
 #include "shaders/output/convolution_112_112_fp32.comp.spv.inl"
-#include "shaders/output/convolution_112_112_coop.comp.spv.inl"
+#include "shaders/output/convolution_32_32_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_32_32_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_32_32_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_32_32_Downsample_coop.comp.spv.inl"
+#include "shaders/output/convolution_32_3_img_coop.comp.spv.inl"
 #include "shaders/output/convolution_32_3_img_fp16.comp.spv.inl"
 #include "shaders/output/convolution_32_3_img_fp32.comp.spv.inl"
-#include "shaders/output/convolution_32_3_img_coop.comp.spv.inl"
+#include "shaders/output/convolution_32_48_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_32_48_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_32_48_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_32_48_Downsample_coop.comp.spv.inl"
+#include "shaders/output/convolution_48_64_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_48_64_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_48_64_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_48_64_Downsample_coop.comp.spv.inl"
+#include "shaders/output/convolution_64_32_coop.comp.spv.inl"
 #include "shaders/output/convolution_64_32_fp16.comp.spv.inl"
 #include "shaders/output/convolution_64_32_fp32.comp.spv.inl"
-#include "shaders/output/convolution_64_32_coop.comp.spv.inl"
+#include "shaders/output/convolution_64_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_64_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_64_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_64_64_coop.comp.spv.inl"
+#include "shaders/output/convolution_64_80_Downsample_coop.comp.spv.inl"
 #include "shaders/output/convolution_64_80_Downsample_fp16.comp.spv.inl"
 #include "shaders/output/convolution_64_80_Downsample_fp32.comp.spv.inl"
-#include "shaders/output/convolution_64_80_Downsample_coop.comp.spv.inl"
+#include "shaders/output/convolution_80_96_coop.comp.spv.inl"
 #include "shaders/output/convolution_80_96_fp16.comp.spv.inl"
 #include "shaders/output/convolution_80_96_fp32.comp.spv.inl"
-#include "shaders/output/convolution_80_96_coop.comp.spv.inl"
+#include "shaders/output/convolution_96_96_coop.comp.spv.inl"
 #include "shaders/output/convolution_96_96_fp16.comp.spv.inl"
 #include "shaders/output/convolution_96_96_fp32.comp.spv.inl"
-#include "shaders/output/convolution_96_96_coop.comp.spv.inl"
+#include "shaders/output/convolution_Img_9_32_coop.comp.spv.inl"
 #include "shaders/output/convolution_Img_9_32_fp16.comp.spv.inl"
 #include "shaders/output/convolution_Img_9_32_fp32.comp.spv.inl"
-#include "shaders/output/convolution_Img_9_32_coop.comp.spv.inl"
+#include "shaders/output/convolution_concat_112_48_96_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_112_48_96_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_112_48_96_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_112_48_96_coop.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_3_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_3_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_3_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_64_3_64_coop.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_6_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_6_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_6_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_64_6_64_coop.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_9_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_9_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_64_9_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_64_9_64_coop.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_32_64_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_32_64_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_32_64_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_96_32_64_coop.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_64_112_coop.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_64_112_fp16.comp.spv.inl"
 #include "shaders/output/convolution_concat_96_64_112_fp32.comp.spv.inl"
-#include "shaders/output/convolution_concat_96_64_112_coop.comp.spv.inl"
 #include "shaders/output/debug_rt.comp.spv.inl"
 #include "shaders/output/filter_variance.comp.spv.inl"
 #include "shaders/output/intersect_area_lights.comp.spv.inl"
@@ -642,9 +642,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     mem_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
     mem_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     ctx_->api().vkCmdPipelineBarrier(
-        cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0, 1, &mem_barrier, 0,
-        nullptr, 0, nullptr);
+        cmd_buf,
+        (VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR) &
+            ctx_->supported_stages_mask(),
+        (VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR) &
+            ctx_->supported_stages_mask(),
+        0, 1, &mem_barrier, 0, nullptr, 0, nullptr);
 
     const rect_t rect = region.rect();
     const uint32_t rand_seed = Ref::hash((region.iteration - 1) / RAND_SAMPLES_COUNT);

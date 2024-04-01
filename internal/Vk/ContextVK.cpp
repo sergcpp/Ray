@@ -117,6 +117,11 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
         return false;
     }
 
+    if (!raytracing_supported_) {
+        // mask out unsupported stage
+        supported_stages_mask_ &= ~VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+    }
+
     // Disable as it is not needed for now
     dynamic_rendering_supported_ = false;
 
@@ -382,13 +387,14 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
     return true;
 }
 
-bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device,
+bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &out_physical_device,
                                               VkPhysicalDeviceProperties &out_device_properties,
                                               VkPhysicalDeviceMemoryProperties &out_mem_properties,
-                                              uint32_t &out_graphics_family_index, bool &out_raytracing_supported,
-                                              bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
-                                              bool &out_fp16_supported, bool &out_coop_matrix_supported,
-                                              const char *preferred_device, VkInstance instance, ILog *log) {
+                                              uint32_t &out_graphics_family_index,
+                                              bool &out_raytracing_supported, bool &out_ray_query_supported,
+                                              bool &out_dynamic_rendering_supported, bool &out_fp16_supported,
+                                              bool &out_coop_matrix_supported, const char *preferred_device,
+                                              VkInstance instance, ILog *log) {
     uint32_t physical_device_count = 0;
     api.vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
 
@@ -486,7 +492,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
             if (score > best_score) {
                 best_score = score;
 
-                physical_device = physical_devices[i];
+                out_physical_device = physical_devices[i];
                 out_device_properties = device_properties;
                 out_graphics_family_index = graphics_family_index;
                 out_raytracing_supported = (acc_struct_supported && raytracing_supported);
@@ -498,12 +504,12 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
         }
     }
 
-    if (!physical_device) {
+    if (!out_physical_device) {
         log->Error("No physical device detected that can render and present!");
         return false;
     }
 
-    api.vkGetPhysicalDeviceMemoryProperties(physical_device, &out_mem_properties);
+    api.vkGetPhysicalDeviceMemoryProperties(out_physical_device, &out_mem_properties);
 
     return true;
 }

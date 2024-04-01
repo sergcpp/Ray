@@ -653,7 +653,9 @@ void Ray::Vk::Scene::_insert_mem_barrier(void *cmd_buf) {
     mem_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     ctx_->api().vkCmdPipelineBarrier(
         reinterpret_cast<VkCommandBuffer>(cmd_buf),
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0, 1, &mem_barrier, 0,
-        nullptr, 0, nullptr);
+        (VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR) &
+            ctx_->supported_stages_mask(),
+        (VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR) &
+            ctx_->supported_stages_mask(),
+        0, 1, &mem_barrier, 0, nullptr, 0, nullptr);
 }
