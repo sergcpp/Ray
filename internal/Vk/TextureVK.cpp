@@ -520,6 +520,9 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
                 dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
             }
 
+            src_stages &= ctx_->supported_stages_mask();
+            dst_stages &= ctx_->supported_stages_mask();
+
             if (!barriers.empty()) {
                 ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                                  dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(barriers.size()),
@@ -730,6 +733,9 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
             dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
         }
 
+        src_stages &= ctx_->supported_stages_mask();
+        dst_stages &= ctx_->supported_stages_mask();
+
         if (!buf_barriers.empty() || !img_barriers.empty()) {
             ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                              dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()),
@@ -932,6 +938,9 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
     }
 
+    src_stages &= ctx_->supported_stages_mask();
+    dst_stages &= ctx_->supported_stages_mask();
+
     if (!buf_barriers.empty() || !img_barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                          dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
@@ -1013,6 +1022,9 @@ void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const i
         src_stages |= VKPipelineStagesForState(this->resource_state);
         dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
     }
+
+    src_stages &= ctx_->supported_stages_mask();
+    dst_stages &= ctx_->supported_stages_mask();
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1152,6 +1164,9 @@ void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
         src_stages |= VKPipelineStagesForState(dst_buf.resource_state);
         dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
     }
+
+    src_stages &= src_tex.ctx()->supported_stages_mask();
+    dst_stages &= src_tex.ctx()->supported_stages_mask();
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
         src_tex.ctx()->api().vkCmdPipelineBarrier(
@@ -1488,6 +1503,9 @@ void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
         src_stages |= VKPipelineStagesForState(this->resource_state);
         dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
     }
+
+    src_stages &= ctx_->supported_stages_mask();
+    dst_stages &= ctx_->supported_stages_mask();
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,

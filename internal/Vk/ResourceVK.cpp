@@ -163,11 +163,11 @@ void Ray::Vk::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
     SmallVector<VkBufferMemoryBarrier, 32> buf_barriers;
     SmallVector<VkImageMemoryBarrier, 32> img_barriers;
 
-    const Api *api = nullptr;
+    const Context *ctx = nullptr;
 
     for (const TransitionInfo &transition : transitions) {
         if (transition.p_tex && transition.p_tex->ready()) {
-            api = &transition.p_tex->ctx()->api();
+            ctx = transition.p_tex->ctx();
 
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
@@ -209,7 +209,7 @@ void Ray::Vk::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
                 transition.p_tex->resource_state = transition.new_state;
             }
         } else if (transition.p_3dtex) {
-            api = &transition.p_3dtex->ctx()->api();
+            ctx = transition.p_3dtex->ctx();
 
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
@@ -245,7 +245,7 @@ void Ray::Vk::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
                 transition.p_3dtex->resource_state = transition.new_state;
             }
         } else if (transition.p_buf && *transition.p_buf) {
-            api = &transition.p_buf->ctx()->api();
+            ctx = transition.p_buf->ctx();
 
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
@@ -275,7 +275,7 @@ void Ray::Vk::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
                 transition.p_buf->resource_state = transition.new_state;
             }
         } else if (transition.p_tex_arr && transition.p_tex_arr->page_count()) {
-            api = &transition.p_tex_arr->ctx()->api();
+            ctx = transition.p_tex_arr->ctx();
 
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
@@ -318,8 +318,11 @@ void Ray::Vk::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
     dst_stages &= to_pipeline_stage_flags_vk(dst_stages_mask);
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        api->vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0,
-                                  0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                                  uint32_t(img_barriers.size()), img_barriers.cdata());
+        src_stages &= ctx->supported_stages_mask();
+        dst_stages &= ctx->supported_stages_mask();
+
+        ctx->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                        dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                        uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 }

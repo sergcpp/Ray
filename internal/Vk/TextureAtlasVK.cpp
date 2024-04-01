@@ -381,6 +381,9 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
             dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
         }
 
+        src_stages &= ctx_->supported_stages_mask();
+        dst_stages &= ctx_->supported_stages_mask();
+
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -450,9 +453,10 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
 
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-        ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                         VKPipelineStagesForState(eResState::ShaderResource), 0, 0, nullptr, 0, nullptr,
-                                         uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(
+            cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VKPipelineStagesForState(eResState::ShaderResource) & ctx_->supported_stages_mask(), 0, 0, nullptr, 0,
+            nullptr, uint32_t(img_barriers.size()), img_barriers.cdata());
 
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
@@ -505,6 +509,9 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
             dst_stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
         }
 
+        src_stages &= ctx_->supported_stages_mask();
+        dst_stages &= ctx_->supported_stages_mask();
+
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                          dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(img_barriers.size()),
                                          img_barriers.cdata());
@@ -555,6 +562,9 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
             src_stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
             dst_stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
         }
+
+        src_stages &= ctx_->supported_stages_mask();
+        dst_stages &= ctx_->supported_stages_mask();
 
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                          dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(img_barriers.size()),
@@ -727,6 +737,9 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
             dst_stages |= VKPipelineStagesForState(resource_state);
         }
 
+        src_stages &= ctx_->supported_stages_mask();
+        dst_stages &= ctx_->supported_stages_mask();
+
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                          dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(img_barriers.size()),
                                          img_barriers.cdata());
@@ -813,6 +826,9 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
         dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
     }
 
+    src_stages &= ctx_->supported_stages_mask();
+    dst_stages &= ctx_->supported_stages_mask();
+
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages,
@@ -885,6 +901,9 @@ void Ray::Vk::TextureAtlas::CopyRegionTo(const int page, const int x, const int 
         src_stages |= VKPipelineStagesForState(dst_buf.resource_state);
         dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
     }
+
+    src_stages &= ctx_->supported_stages_mask();
+    dst_stages &= ctx_->supported_stages_mask();
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,

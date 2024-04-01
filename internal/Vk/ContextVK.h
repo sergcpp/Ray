@@ -46,6 +46,8 @@ class Context {
 
     bool coop_matrix_supported_ = false;
 
+    uint32_t supported_stages_mask_ = 0xffffffff;
+
     VkQueue graphics_queue_ = {};
 
     VkCommandPool command_pool_ = {}, temp_command_pool_ = {};
@@ -87,6 +89,7 @@ class Context {
     bool subgroup_supported() const { return subgroup_supported_; }
     bool coop_matrix_supported() const { return coop_matrix_supported_; }
 
+    uint32_t supported_stages_mask() const { return supported_stages_mask_; };
     bool image_blit_supported() const { return true; }
 
     const VkPhysicalDeviceLimits &phys_device_limits() const { return phys_device_limits_; }
