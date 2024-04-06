@@ -225,7 +225,7 @@ void main() {
                               inter.t           // tMax
                              );
         while (rayQueryProceedEXT(rq)) {
-            rayQueryConfirmIntersectionEXT(rq);
+            // NOTE: All instances are opaque, no need to confirm intersection
         }
 
         if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
