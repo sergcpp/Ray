@@ -291,11 +291,8 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
                               rd,                       // direction
                               dist                      // tMax
                               );
-
-        while(rayQueryProceedEXT(rq)) {
-            if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionTriangleEXT) {
-                rayQueryConfirmIntersectionEXT(rq);
-            }
+        while (rayQueryProceedEXT(rq)) {
+            // NOTE: All instances are opaque, no need to confirm intersection
         }
 
         if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {

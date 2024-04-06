@@ -505,12 +505,9 @@ void Ray::Vk::Scene::Rebuild_HWRT_TLAS_nolock() {
         auto &new_instance = tlas_instances.back();
         to_khr_xform(instance.xform, new_instance.transform.matrix);
         new_instance.instanceCustomIndex = m.vert_index / 3;
-        // blas.geo_index;
         new_instance.mask = (instance.ray_visibility & 0xff);
         new_instance.instanceShaderBindingTableRecordOffset = 0;
-        new_instance.flags = 0;
-        // VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR; //
-        // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+        new_instance.flags = VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
         new_instance.accelerationStructureReference = static_cast<uint64_t>(vk_blas.vk_device_address());
 
         // const mesh_t &mesh = meshes_[instance.mesh_index];
