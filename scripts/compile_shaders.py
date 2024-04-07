@@ -128,12 +128,16 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
         print(compile_result.stdout)
         if rewrite_result is not None:
             print(rewrite_result.stdout)
-        if spirv_opt_result is not None:
-            print(spirv_opt_result.stdout)
+            print(rewrite_result.stderr)
+        #if spirv_opt_result is not None:
+        #    print(spirv_opt_result.stdout)
+        #    print(spirv_opt_result.stderr)
         if hlsl_cross_result is not None:
             print(hlsl_cross_result.stdout)
+            print(hlsl_cross_result.stderr)
         if dxc_result is not None:
             print(dxc_result.stdout)
+            print(dxc_result.stderr)
     finally:
         mutex.release()
 
@@ -185,10 +189,26 @@ def main():
     # Shading
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas.comp.spv",
                          defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_cache_update.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_UPDATE=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_cache_query.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless.comp.spv",
                          defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_cache_update.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_UPDATE=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_cache_query.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas.comp.spv", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas_cache_update.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_UPDATE=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas_cache_query.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless.comp.spv", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless_cache_update.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_UPDATE=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless_cache_query.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1")
 
     # Scene intersection (shadow)
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_atlas.comp.spv",
@@ -199,6 +219,13 @@ def main():
                          glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=0", hlsl_profile="cs_6_5")
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_bindless.comp.spv",
                          glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=1", hlsl_profile="cs_6_5")
+
+    # Spatial radiance caching
+    compile_shader_async(src_name="spatial_cache_update.comp.glsl", spv_name="spatial_cache_update.comp.spv",
+                         defines="-DNO_64BIT_ATOMICS=0", hlsl_profile="cs_6_6")
+    compile_shader_async(src_name="spatial_cache_update.comp.glsl", spv_name="spatial_cache_update_compat.comp.spv",
+                         defines="-DNO_64BIT_ATOMICS=1")
+    compile_shader_async(src_name="spatial_cache_resolve.comp.glsl", spv_name="spatial_cache_resolve.comp.spv")
 
     # Postprocess
     compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental.comp.spv")

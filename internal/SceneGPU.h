@@ -76,7 +76,11 @@ class Scene : public SceneCommon {
         Texture2D tex;
     } env_map_qtree_;
 
-    uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_block_ = 0xffffffff;
+    mutable Vector<uint64_t> spatial_cache_entries_;
+    mutable Vector<packed_cache_voxel_t> spatial_cache_voxels_curr_, spatial_cache_voxels_prev_;
+    mutable float spatial_cache_cam_pos_prev_[3] = {};
+
+    uint32_t tlas_root_ = 0xffffffff, tlas_block_ = 0xffffffff;
 
     bvh_node_t tlas_root_node_ = {};
 
@@ -120,7 +124,7 @@ class Scene : public SceneCommon {
                                  uint8_t out_data[], uint32_t out_size[16]);
 
   public:
-    Scene(Context *ctx, bool use_hwrt, bool use_bindless, bool use_tex_compression);
+    Scene(Context *ctx, bool use_hwrt, bool use_bindless, bool use_tex_compression, bool use_spatial_cache);
     ~Scene() override;
 
     TextureHandle AddTexture(const tex_desc_t &t) override {
@@ -195,7 +199,8 @@ namespace Ray {
 int round_up(int v, int align);
 }
 
-inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless, const bool use_tex_compression)
+inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless, const bool use_tex_compression,
+                             const bool use_spatial_cache)
     : ctx_(ctx), use_hwrt_(use_hwrt), use_bindless_(use_bindless), use_tex_compression_(use_tex_compression),
       nodes_(ctx, "Nodes"), tris_(ctx, "Tris"), tri_indices_(ctx, "Tri Indices"), tri_materials_(ctx, "Tri Materials"),
       meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx, "MI Indices"),
@@ -210,9 +215,20 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
           {ctx, "Atlas BC3", eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_wnodes_(ctx, "Light WNodes") {
+      lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_wnodes_(ctx, "Light WNodes"),
+      spatial_cache_entries_(ctx, "Spatial Cache Entries"),
+      spatial_cache_voxels_curr_(ctx, "Spatial Cache Voxels (1/2)"),
+      spatial_cache_voxels_prev_(ctx, "Spatial Cache Voxels (2/2)") {
     SceneBase::log_ = ctx->log();
     SetEnvironment({});
+    if (use_spatial_cache) {
+        spatial_cache_entries_.Resize(1 << 22);
+        spatial_cache_entries_.Fill(0, 0, 1 << 22);
+        spatial_cache_voxels_curr_.Resize(1 << 22);
+        spatial_cache_voxels_curr_.Fill({}, 0, 1 << 22);
+        spatial_cache_voxels_prev_.Resize(1 << 22);
+        spatial_cache_voxels_prev_.Fill({}, 0, 1 << 22);
+    }
 }
 
 inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) {
@@ -1486,9 +1502,9 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
 }
 
 inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
-    if (macro_nodes_root_ != 0xffffffff) {
-        nodes_.Erase(macro_nodes_block_);
-        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+    if (tlas_root_ != 0xffffffff) {
+        nodes_.Erase(tlas_block_);
+        tlas_root_ = tlas_block_ = 0xffffffff;
     }
     mi_indices_.Clear();
 
@@ -1522,8 +1538,8 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
 
     mi_indices_.Append(&mi_indices[0], mi_indices.size());
 
-    macro_nodes_root_ = nodes_index.first;
-    macro_nodes_block_ = nodes_index.second;
+    tlas_root_ = nodes_index.first;
+    tlas_block_ = nodes_index.second;
 
     // store root node
     tlas_root_node_ = bvh_nodes[0];

@@ -8,6 +8,9 @@
 #include "texture.glsl"
 #include "light_bvh.glsl"
 #include "traverse_bvh.glsl"
+#if CACHE_UPDATE || CACHE_QUERY
+    #include "spatial_radiance_cache.glsl"
+#endif
 
 layout(push_constant) uniform UniformParams {
     Params g_params;
@@ -63,6 +66,40 @@ layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer WNodes {
 
 layout(binding = ENV_QTREE_TEX_SLOT) uniform texture2D g_env_qtree;
 
+#if CACHE_QUERY
+layout(std430, binding = CACHE_ENTRIES_BUF_SLOT) readonly buffer CacheEntries {
+    uvec2 g_cache_entries[];
+};
+
+layout(std430, binding = CACHE_VOXELS_BUF_SLOT) readonly buffer CacheVoxels {
+    uvec4 g_cache_voxels[];
+};
+
+bool hash_map_find(const uint64_t hash_key, inout uint cache_entry) {
+    const uint hash = hash64(hash_key);
+    const uint slot = hash % g_params.cache_entries_count;
+    const uint base_slot = hash_map_base_slot(slot);
+    for (uint bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
+        const uint64_t stored_hash_key = (uint64_t(g_cache_entries[base_slot + bucket_offset].y) << 32u) | g_cache_entries[base_slot + bucket_offset].x;
+        if (stored_hash_key == hash_key) {
+            cache_entry = base_slot + bucket_offset;
+            return true;
+        } else if (HASH_GRID_ALLOW_COMPACTION && stored_hash_key == HASH_GRID_INVALID_HASH_KEY) {
+            return false;
+        }
+    }
+    return false;
+}
+
+uint find_entry(const vec3 p, const vec3 n, const cache_grid_params_t params) {
+    const uint64_t hash_key = compute_hash(p, n, params);
+    uint cache_entry = HASH_GRID_INVALID_CACHE_ENTRY;
+    hash_map_find(hash_key, cache_entry);
+    return cache_entry;
+}
+
+#endif
+
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
 
 layout(std430, binding = OUT_RAYS_BUF_SLOT) writeonly buffer OutRays {
@@ -80,7 +117,7 @@ layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
 #if OUTPUT_BASE_COLOR
     layout(binding = OUT_BASE_COLOR_IMG_SLOT, rgba32f) uniform image2D g_out_base_color_img;
 #endif
-#if OUTPUT_DEPTH_NORMALS
+#if OUTPUT_DEPTH_NORMALS || CACHE_UPDATE
     layout(binding = OUT_DEPTH_NORMALS_IMG_SLOT, rgba32f) uniform image2D g_out_depth_normals_img;
 #endif
 
@@ -1293,7 +1330,7 @@ float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
     return 1.0;
 }
 
-vec3 Evaluate_EnvColor(ray_data_t ray, const float pdf_factor, const vec2 tex_rand) {
+vec3 Evaluate_EnvColor(const ray_data_t ray, const float pdf_factor, const vec2 tex_rand) {
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 #if PRIMARY
     vec3 env_col = g_params.back_col.xyz;
@@ -1335,7 +1372,7 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const float pdf_factor, const vec2 tex_ra
     return env_col;
 }
 
-vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) {
+vec3 Evaluate_LightColor(const ray_data_t ray, const hit_data_t inter, const vec2 tex_rand) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
@@ -1470,9 +1507,7 @@ vec3 Evaluate_DiffuseNode(const light_sample_t ls, const ray_data_t ray, const s
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.c[0] = ray.c[0] * lcol[0];
-    sh_r.c[1] = ray.c[1] * lcol[1];
-    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.c[0] = lcol[0]; sh_r.c[1] = lcol[1]; sh_r.c[2] = lcol[2];
     sh_r.xy = ray.xy;
     sh_r.depth = ray.depth;
 
@@ -1493,9 +1528,9 @@ void Sample_DiffuseNode(const ray_data_t ray, const surface_t surf, const vec3 b
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
     new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
 
-    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+    new_ray.c[0] = F[0] * mix_weight / F[3];
+    new_ray.c[1] = F[1] * mix_weight / F[3];
+    new_ray.c[2] = F[2] * mix_weight / F[3];
     new_ray.pdf = F[3];
 }
 
@@ -1533,9 +1568,9 @@ vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray, const su
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.c[0] = ray.c[0] * lcol[0];
-    sh_r.c[1] = ray.c[1] * lcol[1];
-    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.c[0] = lcol[0];
+    sh_r.c[1] = lcol[1];
+    sh_r.c[2] = lcol[2];
     sh_r.xy = ray.xy;
     sh_r.depth = ray.depth;
 
@@ -1559,9 +1594,9 @@ void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 ba
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
     new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
 
-    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+    new_ray.c[0] = F[0] * mix_weight / F[3];
+    new_ray.c[1] = F[1] * mix_weight / F[3];
+    new_ray.c[2] = F[2] * mix_weight / F[3];
     new_ray.pdf = F[3];
 }
 
@@ -1593,9 +1628,7 @@ vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray, cons
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, -surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.c[0] = ray.c[0] * lcol[0];
-    sh_r.c[1] = ray.c[1] * lcol[1];
-    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.c[0] = lcol[0]; sh_r.c[1] = lcol[1]; sh_r.c[2] = lcol[2];
     sh_r.xy = ray.xy;
     sh_r.depth = ray.depth;
 
@@ -1618,9 +1651,9 @@ void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec
     new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
     new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
 
-    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+    new_ray.c[0] = F[0] * mix_weight / F[3];
+    new_ray.c[1] = F[1] * mix_weight / F[3];
+    new_ray.c[2] = F[2] * mix_weight / F[3];
     new_ray.pdf = F[3];
 
     if (!is_backfacing) {
@@ -1745,9 +1778,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, N_dot_L < 0.0 ? -surf.plane_N : surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.c[0] = ray.c[0] * lcol[0];
-    sh_r.c[1] = ray.c[1] * lcol[1];
-    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.c[0] = lcol[0]; sh_r.c[1] = lcol[1]; sh_r.c[2] = lcol[2];
     sh_r.xy = ray.xy;
     sh_r.depth = ray.depth;
 
@@ -1785,9 +1816,9 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
             new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
 
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / lobe_weights.diffuse;
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / lobe_weights.diffuse;
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / lobe_weights.diffuse;
+            new_ray.c[0] = F[0] * mix_weight / lobe_weights.diffuse;
+            new_ray.c[1] = F[1] * mix_weight / lobe_weights.diffuse;
+            new_ray.c[2] = F[2] * mix_weight / lobe_weights.diffuse;
             new_ray.pdf = F[3];
         }
     } else [[dont_flatten]] if (mix_rand < lobe_weights.diffuse + lobe_weights.specular) {
@@ -1804,9 +1835,9 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
             new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.c[0] = F[0] * mix_weight / F[3];
+            new_ray.c[1] = F[1] * mix_weight / F[3];
+            new_ray.c[2] = F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
 
             const vec3 new_o = offset_ray(surf.P, surf.plane_N);
@@ -1827,9 +1858,9 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
             new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
-            new_ray.c[0] = 0.25 * ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = 0.25 * ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = 0.25 * ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.c[0] = 0.25 * F[0] * mix_weight / F[3];
+            new_ray.c[1] = 0.25 * F[1] * mix_weight / F[3];
+            new_ray.c[2] = 0.25 * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
 
             const vec3 new_o = offset_ray(surf.P, surf.plane_N);
@@ -1879,9 +1910,9 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
 
             F[3] *= lobe_weights.refraction;
 
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.c[0] = F[0] * mix_weight / F[3];
+            new_ray.c[1] = F[1] * mix_weight / F[3];
+            new_ray.c[2] = F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
 
             new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
@@ -1889,7 +1920,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
     }
 }
 
-vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, inout vec3 out_normals) {
+vec3 ShadeSurface(const hit_data_t inter, const ray_data_t ray, inout vec3 out_base_color, inout vec3 out_normals) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
@@ -1912,7 +1943,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         const float pdf_factor = (total_depth < g_params.max_total_depth) ? float(g_params.li_count) : -1.0;
 #endif
 
-        vec3 env_col = Evaluate_EnvColor(ray, pdf_factor, tex_rand) * vec3(ray.c[0], ray.c[1], ray.c[2]);
+        vec3 env_col = Evaluate_EnvColor(ray, pdf_factor, tex_rand);
+#if !CACHE_UPDATE
+        env_col *= vec3(ray.c[0], ray.c[1], ray.c[2]);
+#endif
 
         const float sum = env_col.r + env_col.g + env_col.b;
         if (sum > g_params.limit_direct) {
@@ -1928,7 +1962,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     surf.P = ro + inter.t * rd;
 
     [[dont_flatten]] if (inter.obj_index < 0) { // Area light intersection
-        vec3 lcol = Evaluate_LightColor(ray, inter, tex_rand) * vec3(ray.c[0], ray.c[1], ray.c[2]);
+        vec3 lcol = Evaluate_LightColor(ray, inter, tex_rand);
+#if !CACHE_UPDATE
+        lcol *= vec3(ray.c[0], ray.c[1], ray.c[2]);
+#endif
 
         const float sum = lcol.r + lcol.g + lcol.b;
         if (sum > g_params.limit_direct) {
@@ -2077,6 +2114,38 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     surf.T = cross(surf.N, surf.B);
 #endif
 
+#if CACHE_QUERY
+    cache_grid_params_t params;
+    params.cam_pos_curr = g_params.cam_pos_and_exposure.xyz;
+    params.log_base = RAD_CACHE_GRID_LOGARITHM_BASE;
+    params.scale = RAD_CACHE_GRID_SCALE;
+    params.exposure = g_params.cam_pos_and_exposure.w;
+
+    const vec2 cache_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_CACHE, rand_hash, g_params.iteration - 1);
+
+    const uint grid_level = calc_grid_level(surf.P, params);
+    const float voxel_size = calc_voxel_size(grid_level, params);
+
+    bool use_cache = get_diff_depth(ray.depth) > 0;
+    use_cache = use_cache || (cone_width > mix(1.0, 1.5, cache_rand.x) * voxel_size);
+    use_cache = use_cache && (inter.t > mix(1.0, 2.0, cache_rand.y) * voxel_size);
+    if (use_cache) {
+        const uint cache_entry = find_entry(surf.P, surf.plane_N, params);
+        if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
+            const uvec4 voxel = g_cache_voxels[cache_entry];
+            cache_voxel_t unpacked = unpack_voxel_data(voxel);
+
+            vec3 color = unpacked.radiance;
+            if (unpacked.sample_count > 0) {
+                color /= float(unpacked.sample_count);
+            }
+            color /= params.exposure;
+            color *= vec3(ray.c[0], ray.c[1], ray.c[2]);
+            return color;
+        }
+    }
+#endif
+
 #if USE_NEE
     light_sample_t ls;
     ls.col = ls.L = vec3(0.0);
@@ -2098,7 +2167,11 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     }
 
     out_base_color = base_color;
+#if !CACHE_UPDATE
     out_normals = surf.N;
+#else
+    out_normals = surf.plane_N;
+#endif
 
     vec3 tint_color = vec3(0.0);
 
@@ -2112,6 +2185,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         const float roughness_lod = get_texture_lod(texSize(mat.textures[ROUGH_TEXTURE]), lambda);
         roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], surf.uvs, int(roughness_lod), tex_rand, false /* YCoCg */, true /* SRGB */).r;
     }
+#if CACHE_UPDATE
+    roughness = max(roughness, RAD_CACHE_MIN_ROUGHNESS);
+#endif
 
     const vec2 rand_bsdf_uv = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF, rand_hash, g_params.iteration - 1);
 
@@ -2281,6 +2357,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     const bool can_terminate_path = false;
 #endif
 
+#if !CACHE_UPDATE
+    new_ray.c[0] *= ray.c[0]; new_ray.c[1] *= ray.c[1]; new_ray.c[2] *= ray.c[2];
+#endif
     const float lum = max(new_ray.c[0], max(new_ray.c[1], new_ray.c[2]));
     const float p = mix_term_rand.y;
     const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
@@ -2294,6 +2373,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     }
 
 #if USE_NEE
+    #if !CACHE_UPDATE
+        sh_r.c[0] *= ray.c[0]; sh_r.c[1] *= ray.c[1]; sh_r.c[2] *= ray.c[2];
+    #endif
     const float sh_lum = max(sh_r.c[0], max(sh_r.c[1], sh_r.c[2]));
     [[dont_flatten]] if (sh_lum > 0.0) {
         // actual ray direction accouning for bias from both ends
@@ -2311,7 +2393,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     }
 #endif
 
+#if !CACHE_UPDATE
     col *= vec3(ray.c[0], ray.c[1], ray.c[2]);
+#endif
 
     const float sum = col.r + col.g + col.b;
     if (sum > g_params.limit_indirect) {
@@ -2343,20 +2427,20 @@ void main() {
     const int y = int(g_rays[index].xy & 0xffff);
 #endif
 
-    hit_data_t inter = g_hits[index];
-    ray_data_t ray = g_rays[index];
+    const hit_data_t inter = g_hits[index];
+    const ray_data_t ray = g_rays[index];
 
     vec3 base_color = vec3(0.0), normals = vec3(0.0);
     vec3 col = ShadeSurface(inter, ray, base_color, normals);
 
-#if !PRIMARY
+#if !PRIMARY && !CACHE_UPDATE
     col += imageLoad(g_out_img, ivec2(x, y)).rgb;
 #endif
     imageStore(g_out_img, ivec2(x, y), vec4(col, 1.0));
-#if OUTPUT_BASE_COLOR
+#if OUTPUT_BASE_COLOR && !CACHE_UPDATE
     imageStore(g_out_base_color_img, ivec2(x, y), vec4(base_color, 0.0));
 #endif
-#if OUTPUT_DEPTH_NORMALS
+#if OUTPUT_DEPTH_NORMALS || CACHE_UPDATE
     imageStore(g_out_depth_normals_img, ivec2(x, y), vec4(normals, inter.t));
 #endif
 }

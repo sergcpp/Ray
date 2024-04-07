@@ -314,6 +314,19 @@ void Ray::Dx::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
 
     ID3D12Device *device = ctx_->device();
 
+    SmallVector<D3D12_RESOURCE_BARRIER, 1> barriers;
+    if (resource_state != eResState::UnorderedAccess) {
+        auto &new_barrier = barriers.emplace_back();
+        new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        new_barrier.Transition.pResource = handle_.buf;
+        new_barrier.Transition.StateBefore = DXResourceState(resource_state);
+        new_barrier.Transition.StateAfter = DXResourceState(eResState::UnorderedAccess);
+        new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+    if (!barriers.empty()) {
+        cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
+    }
+
     D3D12_DESCRIPTOR_HEAP_DESC temp_cpu_descriptor_heap_desc = {};
     temp_cpu_descriptor_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     temp_cpu_descriptor_heap_desc.NumDescriptors = 1;
@@ -365,6 +378,8 @@ void Ray::Dx::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
 
     ctx_->descriptor_heaps_to_release[ctx_->backend_frame].push_back(temp_cpu_descriptor_heap);
     ctx_->descriptor_heaps_to_release[ctx_->backend_frame].push_back(temp_gpu_descriptor_heap);
+
+    resource_state = eResState::UnorderedAccess;
 }
 
 void Ray::Dx::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, void *_cmd_buf) {

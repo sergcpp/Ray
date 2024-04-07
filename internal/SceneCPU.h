@@ -76,7 +76,7 @@ class Scene : public SceneCommon {
                                         &tex_storage_bc1_,  &tex_storage_bc3_, &tex_storage_bc4_, &tex_storage_bc5_};
 
     SparseStorage<light_t> lights_;
-    std::vector<uint32_t> li_indices_;     // compacted list of all lights
+    std::vector<uint32_t> li_indices_; // compacted list of all lights
     uint32_t visible_lights_count_ = 0, blocker_lights_count_ = 0;
 
     std::vector<light_bvh_node_t> light_nodes_;
@@ -90,7 +90,11 @@ class Scene : public SceneCommon {
         SmallVector<aligned_vector<float, 16>, 16> mips;
     } env_map_qtree_;
 
-    uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_block_ = 0xffffffff;
+    mutable std::vector<uint64_t> spatial_cache_entries_;
+    mutable aligned_vector<packed_cache_voxel_t, 16> spatial_cache_voxels_curr_, spatial_cache_voxels_prev_;
+    mutable float spatial_cache_cam_pos_prev_[3] = {};
+
+    uint32_t tlas_root_ = 0xffffffff, tlas_block_ = 0xffffffff;
 
     void RemoveMesh_nolock(MeshHandle m);
     void RemoveMeshInstance_nolock(MeshInstanceHandle i);
@@ -104,7 +108,7 @@ class Scene : public SceneCommon {
     void SetMeshInstanceTransform_nolock(MeshInstanceHandle mi, const float *xform);
 
   public:
-    Scene(ILog *log, bool use_wide_bvh, bool use_tex_compression);
+    Scene(ILog *log, bool use_wide_bvh, bool use_tex_compression, bool use_spatial_cache);
     ~Scene() override;
 
     TextureHandle AddTexture(const tex_desc_t &t) override;
@@ -151,6 +155,8 @@ class Scene : public SceneCommon {
     }
 
     void Finalize(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
+
+    void GetBounds(float bbox_min[3], float bbox_max[3]) const;
 
     uint32_t triangle_count() const override {
         std::shared_lock<std::shared_timed_mutex> lock(mtx_);

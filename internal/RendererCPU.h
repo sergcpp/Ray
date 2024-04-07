@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <mutex>
@@ -9,7 +10,11 @@
 #include "../RendererBase.h"
 #include "CDFUtils.h"
 #include "CoreRef.h"
+#include "DenoiseRef.h"
+#include "RadCacheRef.h"
 #include "SceneCPU.h"
+#include "ShadeRef.h"
+#include "TonemapRef.h"
 #include "UNetFilter.h"
 
 #define DEBUG_ADAPTIVE_SAMPLING 0
@@ -80,15 +85,13 @@ class SIMDPolicy {
         return Ref::SortRays_CPU(rays, root_min, cell_size, hash_values, scan_values, chunks, chunks_temp);
     }
 
-    static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters,
-                                          Span<const ray_data_t> rays, const uint32_t rand_seq[],
-                                          const uint32_t rand_seed, const int iteration, const scene_data_t &sc,
-                                          uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                                          ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
-                                          shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                                          float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                                          color_rgba_t *out_depth_normal) {
-        Ref::ShadePrimary(ps, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
+    static force_inline void ShadePrimary(
+        const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
+        const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration, const eSpatialCacheMode cache_mode,
+        const scene_data_t &sc, const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+        int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+        float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
+        Ref::ShadePrimary(ps, inters, rays, rand_seq, rand_seed, iteration, cache_mode, sc, textures,
                           out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
                           mix_factor, out_color, out_base_color, out_depth_normal);
     }
@@ -96,13 +99,22 @@ class SIMDPolicy {
     static force_inline void ShadeSecondary(const pass_settings_t &ps, const float clamp_direct,
                                             Span<const hit_data_t> inters, Span<const ray_data_t> rays,
                                             const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
-                                            const scene_data_t &sc, uint32_t node_index,
+                                            const eSpatialCacheMode cache_mode, const scene_data_t &sc,
                                             const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                             int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                            int *out_shadow_rays_count, int img_w, color_rgba_t *out_color) {
-        Ref::ShadeSecondary(ps, clamp_direct, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
+                                            int *out_shadow_rays_count, int img_w, color_rgba_t *out_color,
+                                            color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
+        Ref::ShadeSecondary(ps, clamp_direct, inters, rays, rand_seq, rand_seed, iteration, cache_mode, sc, textures,
                             out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
-                            out_color);
+                            out_color, out_base_color, out_depth_normal);
+    }
+
+    static force_inline void SpatialCacheUpdate(const cache_grid_params_t &params, Span<const hit_data_t> inters,
+                                                Span<const ray_data_t> rays, Span<cache_data_t> cache_data,
+                                                const color_rgba_t radiance[], const color_rgba_t depth_normals[],
+                                                int img_w, Span<uint64_t> entries,
+                                                Span<packed_cache_voxel_t> voxels_curr) {
+        Ref::SpatialCacheUpdate(params, inters, rays, cache_data, radiance, depth_normals, img_w, entries, voxels_curr);
     }
 
     template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels,
@@ -158,7 +170,7 @@ namespace Cpu {
 template <typename SIMDPolicy> class Renderer : public RendererBase, private SIMDPolicy {
     ILog *log_;
 
-    bool use_tex_compression_;
+    bool use_tex_compression_, use_spatial_cache_;
     aligned_vector<color_rgba_t, 16> full_buf_, half_buf_, base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
         raw_filtered_buf_;
     std::vector<uint16_t> required_samples_;
@@ -175,6 +187,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     Ref::tonemap_params_t tonemap_params_;
     float variance_threshold_ = 0.0f;
+
+    std::vector<cache_data_t> temp_cache_data_;
 
     aligned_vector<float, 64> unet_weights_;
     unet_weight_offsets_t unet_offsets_;
@@ -243,6 +257,11 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
             raw_filtered_buf_.assign(w * h, {});
             raw_filtered_buf_.shrink_to_fit();
 
+            if (use_spatial_cache_) {
+                temp_cache_data_.assign((w / RAD_CACHE_DOWNSAMPLING_FACTOR) * (h / RAD_CACHE_DOWNSAMPLING_FACTOR), {});
+                temp_cache_data_.shrink_to_fit();
+            }
+
             w_ = w;
             h_ = h;
 
@@ -260,6 +279,10 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     void RenderScene(const SceneBase &scene, RegionContext &region) override;
     void DenoiseImage(const RegionContext &region) override;
     void DenoiseImage(int pass, const RegionContext &region) override;
+
+    void UpdateSpatialCache(const SceneBase &scene, RegionContext &region) override;
+    void ResolveSpatialCache(const SceneBase &scene,
+                             const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
@@ -302,25 +325,34 @@ template <typename SIMDPolicy> PassData<SIMDPolicy> &get_per_thread_pass_data() 
 
 template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
-    : log_(log), use_tex_compression_(s.use_tex_compression) {
+    : log_(log), use_tex_compression_(s.use_tex_compression), use_spatial_cache_(s.use_spatial_cache) {
     log->Info("===========================================");
-    log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
+    log->Info("Compression  is %s", use_tex_compression_ ? "enabled" : "disabled");
+    log->Info("SpatialCache is %s", use_spatial_cache_ ? "enabled" : "disabled");
     log->Info("===========================================");
 
     Resize(s.w, s.h);
 }
 
 template <typename SIMDPolicy> Ray::SceneBase *Ray::Cpu::Renderer<SIMDPolicy>::CreateScene() {
-    return new Cpu::Scene(log_, true /* use_wide_bvh */, use_tex_compression_);
+    return new Cpu::Scene(log_, true /* use_wide_bvh */, use_tex_compression_, use_spatial_cache_);
 }
 
 template <typename SIMDPolicy>
 void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionContext &region) {
+    using namespace std::chrono;
+
     const auto &s = dynamic_cast<const Cpu::Scene &>(scene);
 
     std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
 
     const camera_t &cam = s.cams_[s.current_cam()._index];
+
+    ++region.iteration;
+
+    cache_grid_params_t cache_grid_params;
+    memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
+    cache_grid_params.exposure = std::pow(2.0f, cam.exposure);
 
     const scene_data_t sc_data = {s.env_,
                                   s.mesh_instances_.empty() ? nullptr : &s.mesh_instances_[0],
@@ -340,52 +372,18 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   {s.light_nodes_},
-                                  {s.light_wnodes_}};
+                                  {s.light_wnodes_},
+                                  cache_grid_params,
+                                  {s.spatial_cache_entries_},
+                                  {s.spatial_cache_voxels_prev_}};
 
-    const uint32_t macro_tree_root = s.macro_nodes_root_;
+    const uint32_t tlas_root = s.tlas_root_;
 
-    float root_min[3], cell_size[3];
-    if (macro_tree_root != 0xffffffff) {
-        float root_max[3];
-
-        if (sc_data.wnodes) {
-            const wbvh_node_t &root_node = sc_data.wnodes[macro_tree_root];
-
-            root_min[0] = root_min[1] = root_min[2] = MAX_DIST;
-            root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;
-
-            if (root_node.child[0] & LEAF_NODE_BIT) {
-                UNROLLED_FOR(i, 3, {
-                    root_min[i] = root_node.bbox_min[i][0];
-                    root_max[i] = root_node.bbox_max[i][0];
-                })
-            } else {
-                for (int j = 0; j < 8; j++) {
-                    if (root_node.child[j] == 0x7fffffff) {
-                        continue;
-                    }
-
-                    UNROLLED_FOR(i, 3, {
-                        root_min[i] = root_node.bbox_min[i][j];
-                        root_max[i] = root_node.bbox_max[i][j];
-                    })
-                }
-            }
-        } else {
-            const bvh_node_t &root_node = sc_data.nodes[macro_tree_root];
-
-            UNROLLED_FOR(i, 3, {
-                root_min[i] = root_node.bbox_min[i];
-                root_max[i] = root_node.bbox_max[i];
-            })
-        }
-
-        UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
-    }
+    float root_min[3], root_max[3], cell_size[3];
+    s.GetBounds(root_min, root_max);
+    UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
 
     const rect_t &rect = region.rect();
-
-    ++region.iteration;
 
     { // Check filter table
         // TODO: Skip locking here
@@ -404,8 +402,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
     get_per_thread_BCCache<2>().Invalidate();
     get_per_thread_BCCache<4>().Invalidate();
 
-    using namespace std::chrono;
-
     const auto time_start = high_resolution_clock::now();
     time_point<high_resolution_clock> time_after_ray_gen;
 
@@ -418,9 +414,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
         time_after_ray_gen = high_resolution_clock::now();
 
-        if (macro_tree_root != 0xffffffff) {
+        if (tlas_root != 0xffffffff) {
             SIMDPolicy::TraceRays(p.primary_rays, cam.pass_settings.min_transp_depth,
-                                  cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, false, s.tex_storages_,
+                                  cam.pass_settings.max_transp_depth, sc_data, tlas_root, false, s.tex_storages_,
                                   rand_seq, rand_seed, region.iteration, p.intersections);
         }
     } else {
@@ -442,17 +438,17 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
+    const eSpatialCacheMode cache_mode = use_spatial_cache_ ? eSpatialCacheMode::Query : eSpatialCacheMode::None;
     SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays, rand_seq, rand_seed, region.iteration,
-                             sc_data, macro_tree_root, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+                             cache_mode, sc_data, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
                              &p.shadow_rays[0], &shadow_rays_count, w_, mix_factor, temp_buf_.data(),
                              base_color_buf_.data(), depth_normals_buf_.data());
 
     const auto time_after_prim_shade = high_resolution_clock::now();
 
     SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
-                                cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data,
-                                macro_tree_root, rand_seq, rand_seed, region.iteration, s.tex_storages_, w_,
-                                temp_buf_.data());
+                                cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data, tlas_root,
+                                rand_seq, rand_seed, region.iteration, s.tex_storages_, w_, temp_buf_.data());
 
     const auto time_after_prim_shadow = high_resolution_clock::now();
     duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{},
@@ -499,8 +495,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
         SIMDPolicy::TraceRays(Span<typename SIMDPolicy::RayDataType>{p.secondary_rays.data(), secondary_rays_count},
                               cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth, sc_data,
-                              macro_tree_root, true, s.tex_storages_, rand_seq, rand_seed, region.iteration,
-                              p.intersections);
+                              tlas_root, true, s.tex_storages_, rand_seq, rand_seed, region.iteration, p.intersections);
 
         const auto time_secondary_shade_start = high_resolution_clock::now();
 
@@ -514,14 +509,14 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
         SIMDPolicy::ShadeSecondary(
             cam.pass_settings, clamp_direct, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
             Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq, rand_seed,
-            region.iteration, sc_data, macro_tree_root, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
-            &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data());
+            region.iteration, cache_mode, sc_data, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+            &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data(), nullptr, nullptr);
 
         const auto time_secondary_shadow_start = high_resolution_clock::now();
 
         SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                     cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_indirect, sc_data,
-                                    macro_tree_root, rand_seq, rand_seed, region.iteration, s.tex_storages_, w_,
+                                    tlas_root, rand_seq, rand_seed, region.iteration, s.tex_storages_, w_,
                                     temp_buf_.data());
 
         const auto time_secondary_shadow_end = high_resolution_clock::now();
@@ -963,6 +958,206 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
     {
         std::lock_guard<std::mutex> _(mtx_);
         stats_.time_denoise_us += (unsigned long long)duration<double, std::micro>{denoise_end - denoise_start}.count();
+    }
+}
+
+template <typename SIMDPolicy>
+void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, RegionContext &region) {
+    using namespace std::chrono;
+
+    if (!use_spatial_cache_) {
+        return;
+    }
+
+    const auto &s = dynamic_cast<const Cpu::Scene &>(scene);
+
+    std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
+
+    camera_t cam = s.cams_[s.current_cam()._index];
+    cam.fstop = 0.0f;
+    cam.filter = ePixelFilter::Box;
+
+    cache_grid_params_t cache_grid_params;
+    memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
+    cache_grid_params.exposure = std::pow(2.0f, cam.exposure);
+
+    const scene_data_t sc_data = {s.env_,
+                                  s.mesh_instances_.empty() ? nullptr : &s.mesh_instances_[0],
+                                  s.mi_indices_.empty() ? nullptr : &s.mi_indices_[0],
+                                  s.meshes_.empty() ? nullptr : &s.meshes_[0],
+                                  s.vtx_indices_.empty() ? nullptr : &s.vtx_indices_[0],
+                                  s.vertices_.empty() ? nullptr : &s.vertices_[0],
+                                  s.nodes_.empty() ? nullptr : &s.nodes_[0],
+                                  s.wnodes_.empty() ? nullptr : &s.wnodes_[0],
+                                  s.tris_.empty() ? nullptr : &s.tris_[0],
+                                  s.tri_indices_.empty() ? nullptr : &s.tri_indices_[0],
+                                  s.mtris_.data(),
+                                  s.tri_materials_.empty() ? nullptr : &s.tri_materials_[0],
+                                  s.materials_.empty() ? nullptr : &s.materials_[0],
+                                  {s.lights_.data(), s.lights_.capacity()},
+                                  {s.li_indices_},
+                                  s.visible_lights_count_,
+                                  s.blocker_lights_count_,
+                                  {s.light_nodes_},
+                                  {s.light_wnodes_},
+                                  cache_grid_params,
+                                  {},
+                                  {}};
+
+    const uint32_t tlas_root = s.tlas_root_;
+
+    float root_min[3], root_max[3], cell_size[3];
+    s.GetBounds(root_min, root_max);
+    UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+
+    rect_t rect = region.rect();
+    rect.x /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+    rect.y /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+    rect.w /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+    rect.h /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+
+    PassData<SIMDPolicy> &p = get_per_thread_pass_data<SIMDPolicy>();
+
+    // make sure we will not use stale values
+    get_per_thread_BCCache<1>().Invalidate();
+    get_per_thread_BCCache<2>().Invalidate();
+    get_per_thread_BCCache<4>().Invalidate();
+
+    const auto time_start = high_resolution_clock::now();
+
+    const uint32_t *rand_seq = __pmj02_samples;
+    const uint32_t rand_seed = Ref::hash(Ref::hash(region.iteration / RAND_SAMPLES_COUNT));
+
+    if (cam.type != eCamType::Geo) {
+        SIMDPolicy::GeneratePrimaryRays(cam, rect, (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR),
+                                        (h_ / RAD_CACHE_DOWNSAMPLING_FACTOR), rand_seq, rand_seed, nullptr,
+                                        region.iteration + 1, nullptr, p.primary_rays, p.intersections);
+        if (tlas_root != 0xffffffff) {
+            SIMDPolicy::TraceRays(p.primary_rays, cam.pass_settings.min_transp_depth,
+                                  cam.pass_settings.max_transp_depth, sc_data, tlas_root, false, s.tex_storages_,
+                                  rand_seq, rand_seed, region.iteration + 1, p.intersections);
+        }
+    } else {
+        assert(false && "Unsupported camera type!");
+    }
+
+    p.secondary_rays.resize(p.primary_rays.size());
+    p.shadow_rays.resize(p.primary_rays.size());
+
+    int secondary_rays_count = 0, shadow_rays_count = 0;
+
+    SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays, rand_seq, rand_seed,
+                             region.iteration + 1, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
+                             &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count, w_,
+                             1.0f, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
+
+    SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
+                                cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data, tlas_root,
+                                rand_seq, rand_seed, region.iteration + 1, s.tex_storages_, w_, temp_buf_.data());
+
+    rect_fill<cache_data_t>(temp_cache_data_, (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR), rect, cache_data_t{});
+    SIMDPolicy::SpatialCacheUpdate(cache_grid_params, p.intersections, p.primary_rays, temp_cache_data_,
+                                   temp_buf_.data(), raw_filtered_buf_.data(), w_, s.spatial_cache_entries_,
+                                   s.spatial_cache_voxels_curr_);
+
+    p.hash_values.resize(p.primary_rays.size());
+    p.scan_values.resize(round_up(rect.w, 4) * round_up(rect.h, 4));
+    p.chunks.resize(round_up(rect.w, 4) * round_up(rect.h, 4));
+    p.chunks_temp.resize(round_up(rect.w, 4) * round_up(rect.h, 4));
+
+    for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; ++bounce) {
+        secondary_rays_count = SIMDPolicy::SortRays_CPU(
+            Span<typename SIMDPolicy::RayDataType>{&p.secondary_rays[0], secondary_rays_count}, root_min, cell_size,
+            &p.hash_values[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
+
+        for (int i = 0; i < secondary_rays_count; i++) {
+            p.intersections[i] = {};
+        }
+
+        auto rays = Span<typename SIMDPolicy::RayDataType>{p.secondary_rays.data(), secondary_rays_count};
+        auto intersections = Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), secondary_rays_count};
+
+        SIMDPolicy::TraceRays(rays, cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth, sc_data,
+                              tlas_root, true, s.tex_storages_, rand_seq, rand_seed, region.iteration + 1,
+                              p.intersections);
+
+        secondary_rays_count = 0;
+        shadow_rays_count = 0;
+        std::swap(p.primary_rays, p.secondary_rays);
+
+        // Use direct clamping value only for the first intersection with lightsource
+        const float clamp_direct = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
+        SIMDPolicy::ShadeSecondary(cam.pass_settings, clamp_direct, intersections, rays, rand_seq, rand_seed,
+                                   region.iteration + 1, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
+                                   &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count,
+                                   w_, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
+
+        SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
+                                    cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_indirect, sc_data,
+                                    tlas_root, rand_seq, rand_seed, region.iteration + 1, s.tex_storages_, w_,
+                                    temp_buf_.data());
+
+        SIMDPolicy::SpatialCacheUpdate(cache_grid_params, intersections, rays, temp_cache_data_, temp_buf_.data(),
+                                       raw_filtered_buf_.data(), w_, s.spatial_cache_entries_,
+                                       s.spatial_cache_voxels_curr_);
+    }
+
+    scene_lock.unlock();
+
+    const auto time_end = high_resolution_clock::now();
+
+    {
+        std::lock_guard<std::mutex> _(mtx_);
+        stats_.time_cache_update_us += (unsigned long long)duration<double, std::micro>{time_end - time_start}.count();
+    }
+}
+
+template <typename SIMDPolicy>
+void Ray::Cpu::Renderer<SIMDPolicy>::ResolveSpatialCache(
+    const SceneBase &scene, const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    using namespace std::chrono;
+
+    if (!use_spatial_cache_) {
+        return;
+    }
+
+    const auto &s = dynamic_cast<const Cpu::Scene &>(scene);
+
+    const auto time_start = high_resolution_clock::now();
+
+    std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
+
+    const camera_t &cam = s.cams_[s.current_cam()._index];
+
+    cache_grid_params_t params;
+    memcpy(params.cam_pos_curr, cam.origin, 3 * sizeof(float));
+    memcpy(params.cam_pos_prev, s.spatial_cache_cam_pos_prev_, 3 * sizeof(float));
+
+    static const int ResolvePortion = 32768;
+    assert((s.spatial_cache_entries_.size() % ResolvePortion) == 0);
+    const int JobsCount = (s.spatial_cache_entries_.size() / ResolvePortion);
+
+    parallel_for(0, JobsCount, [&](const int i) {
+        Ref::SpatialCacheResolve(params, s.spatial_cache_entries_, s.spatial_cache_voxels_curr_,
+                                 s.spatial_cache_voxels_prev_, i * ResolvePortion, ResolvePortion);
+    });
+
+    std::swap(s.spatial_cache_voxels_prev_, s.spatial_cache_voxels_curr_);
+    parallel_for(0, JobsCount, [&](const int i) {
+        auto it = begin(s.spatial_cache_voxels_curr_) + i * ResolvePortion;
+        std::fill(it, it + ResolvePortion, packed_cache_voxel_t{});
+    });
+
+    // Store previous camera position
+    memcpy(s.spatial_cache_cam_pos_prev_, cam.origin, 3 * sizeof(float));
+
+    scene_lock.unlock();
+
+    const auto time_end = high_resolution_clock::now();
+
+    {
+        std::lock_guard<std::mutex> _(mtx_);
+        stats_.time_cache_resolve_us += (unsigned long long)duration<double, std::micro>{time_end - time_start}.count();
     }
 }
 

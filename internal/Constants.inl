@@ -35,7 +35,9 @@ const int RAND_DIM_BSDF = 1;
 const int RAND_DIM_LIGHT_PICK = 2;
 const int RAND_DIM_LIGHT = 3;
 const int RAND_DIM_TEX = 4;
-const int RAND_DIM_BOUNCE_COUNT = 5; // separate for each bounce
+const int RAND_DIM_CACHE = 5;
+// 6 and 7 reserved for the future use
+const int RAND_DIM_BOUNCE_COUNT = 8; // separate for each bounce
 
 //
 // Light constants
@@ -90,3 +92,38 @@ const int ATLAS_TEX_WIDTH_BITS = 16383;        // 0b0011111111111111
 const int ATLAS_TEX_MIPS_BIT = 32768;          // 0b1000000000000000
 const int ATLAS_TEX_YCOCG_BIT = 16384;         // 0b0100000000000000
 const int ATLAS_TEX_HEIGHT_BITS = 16383;       // 0b0011111111111111
+
+//
+// Spatial hashing
+//
+const uint HASH_GRID_POSITION_BIT_NUM = 17u;
+const uint HASH_GRID_POSITION_BIT_MASK = (1u << HASH_GRID_POSITION_BIT_NUM) - 1;
+const uint HASH_GRID_LEVEL_BIT_NUM = 10u;
+const uint HASH_GRID_LEVEL_BIT_MASK = (1u << HASH_GRID_LEVEL_BIT_NUM) - 1;
+const uint HASH_GRID_NORMAL_BIT_NUM = 3u;
+const uint HASH_GRID_NORMAL_BIT_MASK = (1u << HASH_GRID_NORMAL_BIT_NUM) - 1;
+const uint HASH_GRID_HASH_MAP_BUCKET_SIZE = 32u;
+const uint HASH_GRID_INVALID_CACHE_ENTRY = 0xFFFFFFFFu;
+const uint HASH_GRID_LEVEL_BIAS = 2u; // positive bias adds extra levels with content magnification
+const uint HASH_GRID_INVALID_HASH_KEY = 0u;
+const bool HASH_GRID_USE_NORMALS = true;
+const bool HASH_GRID_ALLOW_COMPACTION = (HASH_GRID_HASH_MAP_BUCKET_SIZE == 32u);
+
+//
+// Radiance caching
+//
+const int RAD_CACHE_SAMPLE_COUNT_MAX = 128;
+const int RAD_CACHE_SAMPLE_COUNT_MIN = 8;
+const float RAD_CACHE_RADIANCE_SCALE = 1e4f;
+const int RAD_CACHE_SAMPLE_COUNTER_BIT_NUM = 20;
+const uint RAD_CACHE_SAMPLE_COUNTER_BIT_MASK = ((1u << RAD_CACHE_SAMPLE_COUNTER_BIT_NUM) - 1);
+const uint RAD_CACHE_FRAME_COUNTER_BIT_NUM = (32 - RAD_CACHE_SAMPLE_COUNTER_BIT_NUM);
+const uint RAD_CACHE_FRAME_COUNTER_BIT_MASK = ((1u << RAD_CACHE_FRAME_COUNTER_BIT_NUM) - 1);
+const float RAD_CACHE_GRID_LOGARITHM_BASE = 2.0f;
+const int RAD_CACHE_STALE_FRAME_NUM_MAX = 128;
+const int RAD_CACHE_DOWNSAMPLING_FACTOR = 4;
+const bool RAD_CACHE_ENABLE_COMPACTION = true;
+const bool RAD_CACHE_FILTER_ADJACENT_LEVELS = true;
+const int RAD_CACHE_PROPAGATION_DEPTH = 4;
+const float RAD_CACHE_GRID_SCALE = 50.0f;
+const float RAD_CACHE_MIN_ROUGHNESS = 0.4f;

@@ -250,12 +250,23 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
     }
     max_combined_image_samplers_ = std::min(max_sampled_images_, max_samplers_);
 
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device1_));
+    if (SUCCEEDED(hr)) {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1 = {};
+        hr = device1_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &options1, sizeof(options1));
+        if (SUCCEEDED(hr)) {
+            if (options1.Int64ShaderOps == TRUE) {
+                int64_supported_ = true;
+            }
+        }
+    }
+
     hr = device_->QueryInterface(IID_PPV_ARGS(&device4_));
     if (SUCCEEDED(hr)) {
-        D3D12_FEATURE_DATA_D3D12_OPTIONS4 feature_support = {};
-        hr = device4_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &feature_support, sizeof(feature_support));
+        D3D12_FEATURE_DATA_D3D12_OPTIONS4 options4 = {};
+        hr = device4_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &options4, sizeof(options4));
         if (SUCCEEDED(hr)) {
-            if (feature_support.Native16BitShaderOpsSupported == TRUE) {
+            if (options4.Native16BitShaderOpsSupported == TRUE) {
                 fp16_supported_ = true;
             }
         }
@@ -263,11 +274,22 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
 
     hr = device_->QueryInterface(IID_PPV_ARGS(&device5_));
     if (SUCCEEDED(hr)) {
-        D3D12_FEATURE_DATA_D3D12_OPTIONS5 feature_support = {};
-        hr = device5_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &feature_support, sizeof(feature_support));
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
+        hr = device5_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5));
         if (SUCCEEDED(hr)) {
-            if (feature_support.RaytracingTier > D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
+            if (options5.RaytracingTier > D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
                 raytracing_supported_ = ray_query_supported_ = true;
+            }
+        }
+    }
+
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device9_));
+    if (SUCCEEDED(hr)) {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS9 feature_support = {};
+        hr = device9_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS9, &feature_support, sizeof(feature_support));
+        if (SUCCEEDED(hr)) {
+            if (feature_support.AtomicInt64OnTypedResourceSupported == TRUE) {
+                int64_atomics_supported_ = true;
             }
         }
     }
@@ -280,29 +302,36 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
         supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_0;
         hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
                                           sizeof(supported_shader_models));
-        if (FAILED(hr)) {
+        if (FAILED(hr) || supported_shader_models.HighestShaderModel < D3D_SHADER_MODEL_6_0) {
             subgroup_supported_ = false;
+            int64_supported_ = false;
             return false;
         }
 
         supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_2;
         hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
                                           sizeof(supported_shader_models));
-        if (FAILED(hr)) {
+        if (FAILED(hr) || supported_shader_models.HighestShaderModel < D3D_SHADER_MODEL_6_2) {
             fp16_supported_ = false;
         }
 
         supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_5;
         hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
                                           sizeof(supported_shader_models));
-        if (FAILED(hr)) {
+        if (FAILED(hr) || supported_shader_models.HighestShaderModel < D3D_SHADER_MODEL_6_5) {
             raytracing_supported_ = ray_query_supported_ = false;
+        }
+
+        supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_6;
+        hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
+                                          sizeof(supported_shader_models));
+        if (FAILED(hr) || supported_shader_models.HighestShaderModel < D3D_SHADER_MODEL_6_6) {
+            int64_atomics_supported_ = false;
         }
     }
 
     { // check wave ops support
-        D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1;
-
+        D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1 = {};
         hr = device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &options1,
                                           sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS1));
         if (FAILED(hr)) {

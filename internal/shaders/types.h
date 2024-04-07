@@ -30,10 +30,10 @@ const uint TEX_SRGB_BIT = (1u << 24);               // 0b00000001
 const uint TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
 const uint TEX_YCOCG_BIT = (4u << 24);              // 0b00000100
 
-const uint TEXTURES_SAMPLER_SLOT = 20;
-const uint TEXTURES_SIZE_SLOT = 21;
-const uint TEXTURES_BUF_SLOT = 22;
-const uint TEXTURE_ATLASES_SLOT = 23;
+const uint TEXTURES_SAMPLER_SLOT = 21;
+const uint TEXTURES_SIZE_SLOT = 22;
+const uint TEXTURES_BUF_SLOT = 23;
+const uint TEXTURE_ATLASES_SLOT = 24;
 
 const int FILTER_BOX = 0;
 const int FILTER_GAUSSIAN = 1;
@@ -187,6 +187,25 @@ struct ray_chunk_t {
 
 struct ray_hash_t {
     uint hash, index;
+};
+
+struct cache_voxel_t {
+    vec3 radiance;
+    uint sample_count;
+    uint frame_count;
+};
+
+struct cache_grid_params_t {
+    vec3 cam_pos_curr, cam_pos_prev;
+    float log_base;
+    float scale;
+    float exposure;
+};
+
+struct cache_data_t {
+    uint cache_entries[RAD_CACHE_PROPAGATION_DEPTH];
+    float sample_weight[RAD_CACHE_PROPAGATION_DEPTH][3];
+    int path_len;
 };
 
 INTERFACE_END

@@ -42,7 +42,7 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, int lod, const vec2 rand, 
         res.a = 1.0;
     }
     if (maybe_SRGB && (index & TEX_SRGB_BIT) != 0) {
-        res.rgb = srgb_to_rgb(res.rgb);
+        res.rgb = srgb_to_linear(res.rgb);
     }
     return res;
 }
@@ -138,7 +138,7 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 
         res.a = 1.0;
     }
     if (maybe_SRGB && (t.size & ATLAS_TEX_SRGB_BIT) != 0) {
-        res.rgb = srgb_to_rgb(res.rgb);
+        res.rgb = srgb_to_linear(res.rgb);
     }
     return res;
 }

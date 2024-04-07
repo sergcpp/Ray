@@ -24,6 +24,13 @@
 #pragma intrinsic(_BitScanForward)
 #pragma intrinsic(_BitScanReverse)
 #pragma intrinsic(_bittestandcomplement)
+#pragma intrinsic(_InterlockedExchangeAdd)
+#pragma intrinsic(_InterlockedCompareExchange)
+#pragma intrinsic(_InterlockedCompareExchange64)
+
+#define InterlockedExchangeAdd _InterlockedExchangeAdd
+#define InterlockedCompareExchange _InterlockedCompareExchange
+#define InterlockedCompareExchange64 _InterlockedCompareExchange64
 
 #ifdef _M_IX86
 // Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls
@@ -40,6 +47,11 @@ force_inline unsigned char _BitScanForward64(unsigned long *Index, unsigned __in
     return 0;
 }
 #endif
+#else
+
+#define InterlockedExchangeAdd __sync_fetch_and_add
+#define InterlockedCompareExchange(dst, exch, comp) __sync_val_compare_and_swap(dst, comp, exch)
+#define InterlockedCompareExchange64(dst, exch, comp) __sync_val_compare_and_swap(dst, comp, exch)
 
 #endif
 
@@ -430,6 +442,45 @@ enum class ePreOp { None, Upscale, HDRTransfer, PositiveNormalize };
 };
 static_assert(sizeof(pass_info_t) == 20, "!");*/
 
+struct cache_voxel_t {
+    float radiance[3] = {};
+    uint32_t sample_count = 0;
+    uint32_t frame_count = 0;
+};
+
+struct packed_cache_voxel_t {
+    uint32_t v[4] = {};
+};
+
+inline cache_voxel_t unpack_voxel_data(const packed_cache_voxel_t &v) {
+    cache_voxel_t ret;
+    ret.radiance[0] = float(v.v[0]) / RAD_CACHE_RADIANCE_SCALE;
+    ret.radiance[1] = float(v.v[1]) / RAD_CACHE_RADIANCE_SCALE;
+    ret.radiance[2] = float(v.v[2]) / RAD_CACHE_RADIANCE_SCALE;
+    ret.sample_count = (v.v[3] >> 0) & RAD_CACHE_SAMPLE_COUNTER_BIT_MASK;
+    ret.frame_count = (v.v[3] >> RAD_CACHE_SAMPLE_COUNTER_BIT_NUM) & RAD_CACHE_FRAME_COUNTER_BIT_MASK;
+    return ret;
+}
+
+struct cache_grid_params_t {
+    float cam_pos_curr[3] = {0.0f, 0.0f, 0.0f}, cam_pos_prev[3] = {0.0f, 0.0f, 0.0f};
+    float log_base = RAD_CACHE_GRID_LOGARITHM_BASE;
+    float scale = RAD_CACHE_GRID_SCALE;
+    float exposure = 1.0f;
+};
+
+struct cache_data_t {
+    uint32_t cache_entries[RAD_CACHE_PROPAGATION_DEPTH];
+    float sample_weight[RAD_CACHE_PROPAGATION_DEPTH][3];
+    int path_len;
+};
+
+enum eSpatialCacheMode {
+    None,
+    Update,
+    Query
+};
+
 struct scene_data_t {
     const environment_t &env;
     const mesh_instance_t *mesh_instances;
@@ -450,14 +501,34 @@ struct scene_data_t {
     uint32_t blocker_lights_count;
     Span<const light_bvh_node_t> light_nodes;
     Span<const light_wbvh_node_t> light_wnodes;
+    const cache_grid_params_t &spatial_cache_grid;
+    Span<const uint64_t> spatial_cache_entries;
+    Span<const packed_cache_voxel_t> spatial_cache_voxels;
 };
 
 force_inline float clamp(const float val, const float min, const float max) {
     return val < min ? min : (val > max ? max : val);
 }
-
 force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
 
+force_inline float sqr(const float x) { return x * x; }
+
 force_inline float mix(float x, float y, float a) { return x * (1.0f - a) + y * a; }
+
+force_inline float log_base(const float x, const float base) { return logf(x) / logf(base); }
+
+force_inline float calc_voxel_size(const uint32_t grid_level, const cache_grid_params_t &params) {
+    return powf(params.log_base, grid_level) / (params.scale * powf(params.log_base, HASH_GRID_LEVEL_BIAS));
+}
+
+template <typename T> void rect_fill(Span<T> data, const int stride, const rect_t &rect, T &&val) {
+    for (int y = 0; y < rect.h; ++y) {
+        const int yy = rect.y + y;
+        for (int x = 0; x < rect.w; ++x) {
+            const int xx = rect.x + x;
+            data[yy * stride + xx] = val;
+        }
+    }
+}
 
 } // namespace Ray
