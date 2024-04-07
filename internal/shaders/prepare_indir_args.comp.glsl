@@ -20,6 +20,8 @@ layout(std430, binding = OUT_INDIR_ARGS_SLOT) writeonly buffer IndirArgs {
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 void main() {
+    // store previous value
+    g_counters[6] = g_counters[1];
     { // secondary rays
         uint ray_count = g_counters[0];
 

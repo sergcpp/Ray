@@ -86,7 +86,7 @@ vec3 safe_invert(vec3 v) {
     return ret;
 }
 
-vec3 srgb_to_rgb(vec3 col) {
+vec3 srgb_to_linear(vec3 col) {
     vec3 ret;
     [[unroll]] for (int i = 0; i < 3; ++i) {
         [[flatten]] if (col[i] > 0.04045) {

@@ -16,7 +16,7 @@ struct Params {
     float regularize_alpha;
     //
     float limit_direct;
-    int _unused2;
+    uint cache_entries_count;
     int max_total_depth;
     int min_total_depth;
     //
@@ -29,6 +29,8 @@ struct Params {
     float limit_indirect;
     uint env_map_res;
     uint back_map_res;
+    //
+    vec4 cam_pos_and_exposure;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
@@ -47,6 +49,8 @@ const int VTX_INDICES_BUF_SLOT = 15;
 const int RANDOM_SEQ_BUF_SLOT = 16;
 const int LIGHT_WNODES_BUF_SLOT = 17;
 const int ENV_QTREE_TEX_SLOT = 18;
+const int CACHE_ENTRIES_BUF_SLOT = 19;
+const int CACHE_VOXELS_BUF_SLOT = 20;
 
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAYS_BUF_SLOT = 1;

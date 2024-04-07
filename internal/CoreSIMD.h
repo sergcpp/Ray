@@ -471,24 +471,33 @@ void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<S> &ray, 
 
 // Shade
 template <int S>
-void ShadeSurface(const pass_settings_t &ps, const float limits[2], const uint32_t rand_seq[], uint32_t rand_seed,
-                  int iteration, const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
-                  uint32_t node_index, const Cpu::TexStorageBase *const tex_atlases[], fvec<S> out_rgba[4],
-                  ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count, shadow_ray_t<S> out_shadow_rays[],
-                  int *out_shadow_rays_count, fvec<S> out_base_color[4], fvec<S> out_depth_normals[4]);
+void ShadeSurface(const pass_settings_t &ps, const float limits[2], eSpatialCacheMode cache_mode,
+                  const uint32_t rand_seq[], uint32_t rand_seed, int iteration, const hit_data_t<S> &inter,
+                  const ray_data_t<S> &ray, const scene_data_t &sc, const Cpu::TexStorageBase *const tex_atlases[],
+                  fvec<S> out_rgba[4], ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
+                  shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count, fvec<S> out_base_color[4],
+                  fvec<S> out_depth_normals[4]);
 template <int S>
 void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters, Span<const ray_data_t<S>> rays,
-                  const uint32_t rand_seq[], uint32_t rans_seed, int iteration, const scene_data_t &sc,
-                  uint32_t node_index, const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
-                  int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
-                  int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                  color_rgba_t *out_depth_normals);
+                  const uint32_t rand_seq[], uint32_t rans_seed, int iteration, eSpatialCacheMode cache_mode,
+                  const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
+                  ray_data_t<S> *out_secondary_rays, int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays,
+                  int *out_shadow_rays_count, int img_w, float mix_factor, color_rgba_t *out_color,
+                  color_rgba_t *out_base_color, color_rgba_t *out_depth_normals);
 template <int S>
 void ShadeSecondary(const pass_settings_t &ps, float clamp_direct, Span<const hit_data_t<S>> inters,
                     Span<const ray_data_t<S>> rays, const uint32_t rand_seq[], uint32_t rand_seed, int iteration,
-                    const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                    eSpatialCacheMode cache_mode, const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
                     ray_data_t<S> *out_secondary_rays, int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays,
-                    int *out_shadow_rays_count, int img_w, color_rgba_t *out_color);
+                    int *out_shadow_rays_count, int img_w, color_rgba_t *out_color, color_rgba_t *out_base_color,
+                    color_rgba_t *out_depth_normal);
+
+// Radiance caching
+template <int S>
+void SpatialCacheUpdate(const cache_grid_params_t &params, Span<const hit_data_t<S>> inters,
+                        Span<const ray_data_t<S>> rays, Span<cache_data_t> cache_data, const color_rgba_t radiance[],
+                        const color_rgba_t depth_normals[], int img_w, Span<uint64_t> entries,
+                        Span<packed_cache_voxel_t> voxels_curr);
 
 template <int S, int InChannels, int OutChannels, int OutPxPitch = OutChannels, ePostOp PostOp = ePostOp::None,
           eActivation Activation = eActivation::ReLU>
@@ -558,30 +567,36 @@ class SIMDPolicyBase {
         return NS::SortRays_CPU<RPSize>(rays, root_min, cell_size, hash_values, scan_values, chunks, chunks_temp);
     }
 
-    static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const HitDataType> inters,
-                                          Span<const RayDataType> rays, const uint32_t rand_seq[],
-                                          const uint32_t rand_seed, const int iteration, const scene_data_t &sc,
-                                          uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                                          RayDataType *out_secondary_rays, int *out_secondary_rays_count,
-                                          ShadowRayType *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                                          float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                                          color_rgba_t *out_depth_normal) {
-        NS::ShadePrimary<RPSize>(ps, inters, rays, rand_seq, rand_seed, iteration, sc, node_index, textures,
+    static force_inline void ShadePrimary(
+        const pass_settings_t &ps, Span<const HitDataType> inters, Span<const RayDataType> rays,
+        const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration, const eSpatialCacheMode cache_mode,
+        const scene_data_t &sc, const Cpu::TexStorageBase *const textures[], RayDataType *out_secondary_rays,
+        int *out_secondary_rays_count, ShadowRayType *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+        float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
+        NS::ShadePrimary<RPSize>(ps, inters, rays, rand_seq, rand_seed, iteration, cache_mode, sc, textures,
                                  out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
                                  img_w, mix_factor, out_color, out_base_color, out_depth_normal);
     }
 
-    static force_inline void ShadeSecondary(const pass_settings_t &ps, const float clamp_direct,
-                                            Span<const HitDataType> inters, Span<const RayDataType> rays,
-                                            const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
-                                            const scene_data_t &sc, uint32_t node_index,
-                                            const Cpu::TexStorageBase *const textures[],
-                                            RayDataType *out_secondary_rays, int *out_secondary_rays_count,
-                                            ShadowRayType *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                                            color_rgba_t *out_color) {
-        NS::ShadeSecondary<RPSize>(ps, clamp_direct, inters, rays, rand_seq, rand_seed, iteration, sc, node_index,
+    static force_inline void
+    ShadeSecondary(const pass_settings_t &ps, const float clamp_direct, Span<const HitDataType> inters,
+                   Span<const RayDataType> rays, const uint32_t rand_seq[], const uint32_t rand_seed,
+                   const int iteration, const eSpatialCacheMode cache_mode, const scene_data_t &sc,
+                   const Cpu::TexStorageBase *const textures[], RayDataType *out_secondary_rays,
+                   int *out_secondary_rays_count, ShadowRayType *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                   color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
+        NS::ShadeSecondary<RPSize>(ps, clamp_direct, inters, rays, rand_seq, rand_seed, iteration, cache_mode, sc,
                                    textures, out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
-                                   out_shadow_rays_count, img_w, out_color);
+                                   out_shadow_rays_count, img_w, out_color, out_base_color, out_depth_normal);
+    }
+
+    static force_inline void SpatialCacheUpdate(const cache_grid_params_t &params, Span<const HitDataType> inters,
+                                                Span<const RayDataType> rays, Span<cache_data_t> cache_data,
+                                                const color_rgba_t radiance[], const color_rgba_t depth_normals[],
+                                                int img_w, Span<uint64_t> entries,
+                                                Span<packed_cache_voxel_t> voxels_curr) {
+        NS::SpatialCacheUpdate<RPSize>(params, inters, rays, cache_data, radiance, depth_normals, img_w, entries,
+                                       voxels_curr);
     }
 
     template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels,
@@ -1520,6 +1535,25 @@ template <int S> force_inline fvec<S> distance(const fvec<S> p1[3], const fvec<S
     return length(temp);
 }
 
+template <int S> force_inline fvec<S> distance(const fvec<S> p1[3], const float p2[3]) {
+    const fvec<S> temp[3] = {p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]};
+    return length(temp);
+}
+
+template <int S> force_inline fvec<S> pow(const float base, const fvec<S> exponent) {
+    fvec<S> ret;
+    UNROLLED_FOR_S(i, S, { ret.template set<i>(powf(base, exponent[i])); })
+    return ret;
+}
+
+template <int S> force_inline fvec<S> log_base(const fvec<S> &x, const float base) { return log(x) / logf(base); }
+
+template <int S> force_inline fvec<S> calc_voxel_size(const uvec<S> &grid_level, const cache_grid_params_t &params) {
+    return pow(params.log_base, fvec<S>(grid_level)) / (params.scale * powf(params.log_base, HASH_GRID_LEVEL_BIAS));
+}
+
+uint32_t find_entry(Span<const uint64_t> entries, const fvec4 &p, const fvec4 &n, const cache_grid_params_t &params);
+
 template <int S> force_inline uvec<S> hash(uvec<S> x) {
     // finalizer from murmurhash3
     x ^= x >> 16;
@@ -1968,7 +2002,7 @@ template <int S> force_inline fvec<S> lum(const fvec<S> color[3]) {
     return 0.212671f * color[0] + 0.715160f * color[1] + 0.072169f * color[2];
 }
 
-template <int S> force_inline void srgb_to_rgb(const fvec<S> in_col[4], fvec<S> out_col[4]) {
+template <int S> force_inline void srgb_to_linear(const fvec<S> in_col[4], fvec<S> out_col[4]) {
     UNROLLED_FOR(i, 3, {
         out_col[i] = select(in_col[i] > 0.04045f, pow((in_col[i] + 0.055f) / 1.055f, 2.4f), in_col[i] / 12.92f);
     })
@@ -2736,6 +2770,13 @@ template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const fv
     }
 }
 
+template <int S> uvec<S> calc_grid_level(const fvec<S> p[3], const cache_grid_params_t &params) {
+    const fvec<S> dist = distance(p, params.cam_pos_curr);
+    const fvec<S> ret =
+        clamp(floor(log_base(dist, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0f, HASH_GRID_LEVEL_BIT_MASK);
+    return uvec<S>(ret);
+}
+
 } // namespace NS
 } // namespace Ray
 
@@ -2768,11 +2809,13 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
             const ivec<S> ixx = x + off_x, iyy = y + off_y;
             const ivec<S> ixx_clamped = min(ixx, w - 1), iyy_clamped = min(iyy, h - 1);
 
-            ivec<S> req_samples;
-            UNROLLED_FOR_S(i, S, {
-                req_samples.template set<i>(
-                    required_samples[iyy_clamped.template get<i>() * w + ixx_clamped.template get<i>()]);
-            })
+            ivec<S> req_samples = INT_MAX;
+            if (required_samples) {
+                UNROLLED_FOR_S(i, S, {
+                    req_samples.template set<i>(
+                        required_samples[iyy_clamped.template get<i>() * w + ixx_clamped.template get<i>()]);
+                })
+            }
 
             out_r.mask = (ixx < w) & (iyy < h) & (req_samples >= iteration);
 
@@ -5041,7 +5084,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                                 YCoCg_to_RGB(mix, mix);
                             }
                             if (first_t & TEX_SRGB_BIT) {
-                                srgb_to_rgb(mix, mix);
+                                srgb_to_linear(mix, mix);
                             }
                             _mix_val *= mix[0];
                         }
@@ -5293,7 +5336,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
                                     YCoCg_to_RGB(mix, mix);
                                 }
                                 if (first_t & TEX_SRGB_BIT) {
-                                    srgb_to_rgb(mix, mix);
+                                    srgb_to_linear(mix, mix);
                                 }
                                 mix_val *= mix[0];
                             }
@@ -5752,7 +5795,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                         YCoCg_to_RGB(tex_col, tex_col);
                     }
                     if (l.tri.tex_index & TEX_SRGB_BIT) {
-                        srgb_to_rgb(tex_col, tex_col);
+                        srgb_to_linear(tex_col, tex_col);
                     }
                     UNROLLED_FOR(i, 3, { where(accept, ls.col[i]) *= tex_col[i]; })
                 }
@@ -6509,7 +6552,7 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_DiffuseNode(const light_sample_t<S> &ls, cons
     UNROLLED_FOR(i, 3, { where(mask, sh_r.o[i]) = P_biased[i]; })
     UNROLLED_FOR(i, 3, {
         const fvec<S> temp = ls.col[i] * diff_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
-        where(mask, sh_r.c[i]) = ray.c[i] * temp;
+        where(mask, sh_r.c[i]) = temp;
         where(mask & ~ls.cast_shadow, out_col[i]) += temp;
     })
 
@@ -6533,7 +6576,7 @@ void Ray::NS::Sample_DiffuseNode(const ray_data_t<S> &ray, const ivec<S> &mask, 
     UNROLLED_FOR(i, 3, {
         where(mask, new_ray.o[i]) = P_biased[i];
         where(mask, new_ray.d[i]) = V[i];
-        where(mask, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3];
+        where(mask, new_ray.c[i]) = F[i] * mix_weight / F[3];
     })
     where(mask, new_ray.pdf) = F[3];
 }
@@ -6571,7 +6614,7 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_GlossyNode(const light_sample_t<S> &ls, const
     UNROLLED_FOR(i, 3, { where(mask, sh_r.o[i]) = P_biased[i]; })
     UNROLLED_FOR(i, 3, {
         const fvec<S> temp = ls.col[i] * spec_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
-        where(mask, sh_r.c[i]) = ray.c[i] * temp;
+        where(mask, sh_r.c[i]) = temp;
         where(mask & ~ls.cast_shadow, out_col[i]) += temp;
     })
 
@@ -6600,7 +6643,7 @@ void Ray::NS::Sample_GlossyNode(const ray_data_t<S> &ray, const ivec<S> &mask, c
     UNROLLED_FOR(i, 3, {
         where(mask, new_ray.o[i]) = P_biased[i];
         where(mask, new_ray.d[i]) = V[i];
-        where(mask, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
+        where(mask, new_ray.c[i]) = F[i] * safe_div_pos(mix_weight, F[3]);
     })
     where(mask, new_ray.pdf) = F[3];
 }
@@ -6636,7 +6679,7 @@ Ray::NS::Evaluate_RefractiveNode(const light_sample_t<S> &ls, const ray_data_t<S
     UNROLLED_FOR(i, 3, { where(mask, sh_r.o[i]) = P_biased[i]; })
     UNROLLED_FOR(i, 3, {
         const fvec<S> temp = ls.col[i] * refr_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
-        where(mask, sh_r.c[i]) = ray.c[i] * temp;
+        where(mask, sh_r.c[i]) = temp;
         where(mask & ~ls.cast_shadow, out_col[i]) += temp;
     })
 
@@ -6666,7 +6709,7 @@ void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const ivec<S> &mas
     UNROLLED_FOR(i, 3, {
         where(mask, new_ray.o[i]) = P_biased[i];
         where(mask, new_ray.d[i]) = V[i];
-        where(mask, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
+        where(mask, new_ray.c[i]) = F[i] * safe_div_pos(mix_weight, F[3]);
     })
 
     pop_ior_stack(is_backfacing & mask, new_ray.ior);
@@ -6794,7 +6837,7 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
         where(mask, sh_r.o[i]) = P_biased[i];
     })
     UNROLLED_FOR(i, 3, {
-        where(mask, sh_r.c[i]) = ray.c[i] * lcol[i];
+        where(mask, sh_r.c[i]) = lcol[i];
         where(mask & ~ls.cast_shadow, out_col[i]) += lcol[i];
     })
 
@@ -6834,7 +6877,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         UNROLLED_FOR(i, 3, {
             where(sample_diff_lobe, new_ray.o[i]) = new_p[i];
             where(sample_diff_lobe, new_ray.d[i]) = V[i];
-            where(sample_diff_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, lobe_weights.diffuse);
+            where(sample_diff_lobe, new_ray.c[i]) = safe_div_pos(F[i] * mix_weight, lobe_weights.diffuse);
         })
         where(sample_diff_lobe, new_ray.pdf) = F[3];
 
@@ -6864,7 +6907,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         UNROLLED_FOR(i, 3, {
             where(sample_spec_lobe, new_ray.o[i]) = new_p[i];
             where(sample_spec_lobe, new_ray.d[i]) = V[i];
-            where(sample_spec_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]);
+            where(sample_spec_lobe, new_ray.c[i]) = safe_div_pos(F[i] * mix_weight, F[3]);
         })
         where(sample_spec_lobe, new_ray.pdf) = F[3];
 
@@ -6893,7 +6936,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         UNROLLED_FOR(i, 3, {
             where(sample_coat_lobe, new_ray.o[i]) = new_p[i];
             where(sample_coat_lobe, new_ray.d[i]) = V[i];
-            where(sample_coat_lobe, new_ray.c[i]) = 0.25f * ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
+            where(sample_coat_lobe, new_ray.c[i]) = 0.25f * F[i] * safe_div_pos(mix_weight, F[3]);
         })
         where(sample_coat_lobe, new_ray.pdf) = F[3];
 
@@ -6959,7 +7002,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
 
         UNROLLED_FOR(i, 3, {
             where(sample_trans_lobe, new_ray.d[i]) = V[i];
-            where(sample_trans_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]);
+            where(sample_trans_lobe, new_ray.c[i]) = safe_div_pos(F[i] * mix_weight, F[3]);
         })
         where(sample_trans_lobe, new_ray.pdf) = F[3];
 
@@ -6970,9 +7013,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
 }
 
 template <int S>
-void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], const uint32_t rand_seq[],
-                           const uint32_t rand_seed, const int iteration, const hit_data_t<S> &inter,
-                           const ray_data_t<S> &ray, const scene_data_t &sc, const uint32_t node_index,
+void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], const eSpatialCacheMode cache_mode,
+                           const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
+                           const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
                            const Cpu::TexStorageBase *const textures[], fvec<S> out_rgba[4],
                            ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
                            shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count, fvec<S> out_base_color[4],
@@ -7007,7 +7050,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                                           fvec<S>{-1.0f});
         Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), pdf_factor,
                           tex_rand, env_col);
-        UNROLLED_FOR(i, 3, { env_col[i] = ray.c[i] * env_col[i]; })
+        if (cache_mode != eSpatialCacheMode::Update) {
+            UNROLLED_FOR(i, 3, { env_col[i] = ray.c[i] * env_col[i]; })
+        }
 
         const fvec<S> sum = env_col[0] + env_col[1] + env_col[2];
         UNROLLED_FOR(i, 3, {
@@ -7032,7 +7077,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
         fvec<S> light_col[3] = {};
         Evaluate_LightColor(surf.P, ray, is_light_hit, inter, sc.env, sc.lights, uint32_t(sc.li_indices.size()),
                             *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), tex_rand, light_col);
-        UNROLLED_FOR(i, 3, { light_col[i] = ray.c[i] * light_col[i]; })
+        if (cache_mode != eSpatialCacheMode::Update) {
+            UNROLLED_FOR(i, 3, { light_col[i] = ray.c[i] * light_col[i]; })
+        }
 
         const fvec<S> sum = light_col[0] + light_col[1] + light_col[2];
         UNROLLED_FOR(i, 3, {
@@ -7202,7 +7249,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                     YCoCg_to_RGB(tex_color, tex_color);
                 }
                 if (first_t & TEX_SRGB_BIT) {
-                    srgb_to_rgb(tex_color, tex_color);
+                    srgb_to_linear(tex_color, tex_color);
                 }
 
                 where(ray_queue[index], mix_val) *= tex_color[0];
@@ -7323,6 +7370,52 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
     cross(surf.N, surf.B, surf.T);
 #endif
 
+    if (cache_mode == eSpatialCacheMode::Query) {
+        fvec<S> cache_rand[2];
+        get_scrambled_2d_rand(rand_dim + unsigned(RAND_DIM_CACHE), rand_hash, iteration - 1, rand_seq, cache_rand);
+
+        const uvec<S> grid_level = calc_grid_level(surf.P, sc.spatial_cache_grid);
+        const fvec<S> voxel_size = calc_voxel_size(grid_level, sc.spatial_cache_grid);
+
+        ivec<S> use_cache = get_diff_depth(ray.depth) > 0;
+        use_cache |= simd_cast(cone_width > mix(fvec<S>{1.0f}, fvec<S>{1.5f}, cache_rand[0]) * voxel_size);
+        use_cache &= simd_cast(inter.t > mix(fvec<S>{1.0f}, fvec<S>{2.0f}, cache_rand[1]) * voxel_size);
+        use_cache &= is_active_lane;
+        if (use_cache.not_all_zeros()) {
+            for (int i = 0; i < S; ++i) {
+                if (use_cache[i] == 0) {
+                    continue;
+                }
+
+                const fvec4 P = {surf.P[0][i], surf.P[1][i], surf.P[2][i], 0.0f};
+                const fvec4 plane_N = {surf.plane_N[0][i], surf.plane_N[1][i], surf.plane_N[2][i], 0.0f};
+
+                const uint32_t cache_entry = find_entry(sc.spatial_cache_entries, P, plane_N, sc.spatial_cache_grid);
+                if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
+                    const packed_cache_voxel_t &voxel = sc.spatial_cache_voxels[cache_entry];
+                    cache_voxel_t unpacked = unpack_voxel_data(voxel);
+
+                    fvec4 color = fvec4{unpacked.radiance[0], unpacked.radiance[1], unpacked.radiance[2], 0.0f};
+                    if (unpacked.sample_count) {
+                        color /= float(unpacked.sample_count);
+                    }
+                    color /= sc.spatial_cache_grid.exposure;
+                    color *= fvec4{ray.c[0][i], ray.c[1][i], ray.c[2][i], 0.0f};
+
+                    out_rgba[0].set(i, color[0]);
+                    out_rgba[1].set(i, color[1]);
+                    out_rgba[2].set(i, color[2]);
+                    out_rgba[3].set(i, 1.0f);
+                }
+            }
+        }
+
+        is_active_lane &= ~use_cache;
+        if (is_active_lane.all_zeros()) {
+            return;
+        }
+    }
+
 #if USE_NEE
     light_sample_t<S> ls;
     if (!sc.light_wnodes.empty()) {
@@ -7372,7 +7465,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                     YCoCg_to_RGB(tex_color, tex_color);
                 }
                 if (first_t & TEX_SRGB_BIT) {
-                    srgb_to_rgb(tex_color, tex_color);
+                    srgb_to_linear(tex_color, tex_color);
                 }
 
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], base_color[i]) *= tex_color[i]; })
@@ -7386,7 +7479,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
         UNROLLED_FOR(i, 3, { where(is_active_lane, out_base_color[i]) = base_color[i]; })
     }
     if (out_depth_normals) {
-        UNROLLED_FOR(i, 3, { where(is_active_lane, out_depth_normals[i]) = surf.N[i]; })
+        if (cache_mode != eSpatialCacheMode::Update) {
+            UNROLLED_FOR(i, 3, { where(is_active_lane, out_depth_normals[i]) = surf.N[i]; })
+        } else {
+            UNROLLED_FOR(i, 3, { where(is_active_lane, out_depth_normals[i]) = surf.plane_N[i]; })
+        }
         where(is_active_lane, out_depth_normals[3]) = inter.t;
     }
 
@@ -7427,13 +7524,16 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                 SampleBilinear(textures, first_t, surf.uvs, ivec<S>(roughness_lod), tex_rand, ray_queue[index],
                                roughness_color);
                 if (first_t & TEX_SRGB_BIT) {
-                    srgb_to_rgb(roughness_color, roughness_color);
+                    srgb_to_linear(roughness_color, roughness_color);
                 }
                 where(ray_queue[index], roughness) *= roughness_color[0];
 
                 ++index;
             }
         }
+    }
+    if (cache_mode == eSpatialCacheMode::Update) {
+        roughness = max(roughness, RAD_CACHE_MIN_ROUGHNESS);
     }
 
     fvec<S> col[3] = {0.0f, 0.0f, 0.0f};
@@ -7604,7 +7704,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                     SampleBilinear(textures, specular_tex, surf.uvs, ivec<S>(specular_lod), tex_rand, ray_queue[index],
                                    specular_color);
                     if (specular_tex & TEX_SRGB_BIT) {
-                        srgb_to_rgb(specular_color, specular_color);
+                        srgb_to_linear(specular_color, specular_color);
                     }
                     specular *= specular_color[0];
                 }
@@ -7681,6 +7781,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
     const ivec<S> can_terminate_path = 0;
 #endif
 
+    if (cache_mode != eSpatialCacheMode::Update) {
+        UNROLLED_FOR(i, 3, { new_ray.c[i] *= ray.c[i]; })
+    }
     const fvec<S> lum = max(new_ray.c[0], max(new_ray.c[1], new_ray.c[2]));
     const fvec<S> &p = mix_term_rand[1];
     const fvec<S> q = select(can_terminate_path, max(0.05f, 1.0f - lum), fvec<S>{0.0f});
@@ -7701,6 +7804,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
 
 #if USE_NEE
     if (shadow_mask.not_all_zeros()) {
+        if (cache_mode != eSpatialCacheMode::Update) {
+            UNROLLED_FOR(i, 3, { sh_r.c[i] *= ray.c[i]; })
+        }
         // actual ray direction accouning for bias from both ends
         fvec<S> to_light[3];
         UNROLLED_FOR(i, 3, { to_light[i] = ls.lp[i] - sh_r.o[i]; })
@@ -7715,7 +7821,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
     }
 #endif
 
-    UNROLLED_FOR(i, 3, { where(is_active_lane, col[i]) = ray.c[i] * col[i]; })
+    if (cache_mode != eSpatialCacheMode::Update) {
+        UNROLLED_FOR(i, 3, { where(is_active_lane, col[i]) *= ray.c[i]; })
+    }
 
     const fvec<S> sum = col[0] + col[1] + col[2];
     UNROLLED_FOR(i, 3, {
@@ -7728,7 +7836,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
 template <int S>
 void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters, Span<const ray_data_t<S>> rays,
                            const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
-                           const scene_data_t &sc, const uint32_t node_index,
+                           const eSpatialCacheMode cache_mode, const scene_data_t &sc,
                            const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
                            int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
                            int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
@@ -7740,52 +7848,55 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
         const hit_data_t<S> &inter = inters[i];
 
         fvec<S> col[4] = {}, base_color[3] = {}, depth_normal[4] = {};
-        ShadeSurface(ps, limits, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col,
+        ShadeSurface(ps, limits, cache_mode, rand_seq, rand_seed, iteration, inter, r, sc, textures, col,
                      out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, base_color,
                      depth_normal);
 
         const uvec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
         // TODO: match layouts!
-        UNROLLED_FOR_S(j, S, {
-            if (r.mask.template get<j>()) {
+        for (int j = 0; j < S; ++j) {
+            if (r.mask[j]) {
                 // clang-format off
                 UNROLLED_FOR(k, 4, {
-                    out_color[y.template get<j>() * img_w + x.template get<j>()].v[k] = col[k].template get<j>();
+                    out_color[y[j] * img_w + x[j]].v[k] = col[k][j];
                 })
                 // clang-format on
-                { // base color
-                    auto old_val =
-                        fvec4(out_base_color[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
-                    old_val += (fvec4{base_color[0].template get<j>(), base_color[1].template get<j>(),
-                                      base_color[2].template get<j>(), 0.0f} -
-                                old_val) *
-                               mix_factor;
-                    old_val.store_to(out_base_color[y.template get<j>() * img_w + x.template get<j>()].v,
-                                     vector_aligned);
+                if (out_base_color) {
+                    if (cache_mode != eSpatialCacheMode::Update) {
+                        auto old_val = fvec4(out_base_color[y[j] * img_w + x[j]].v, vector_aligned);
+                        old_val +=
+                            (fvec4{base_color[0][j], base_color[1][j], base_color[2][j], 0.0f} - old_val) * mix_factor;
+                        old_val.store_to(out_base_color[y[j] * img_w + x[j]].v, vector_aligned);
+                    } else {
+                        UNROLLED_FOR(k, 3, { out_base_color[y[j] * img_w + x[j]].v[k] = base_color[k][j]; })
+                    }
                 }
-                { // depth-normals
-                    auto old_val =
-                        fvec4(out_depth_normals[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
-                    old_val += (fvec4{depth_normal[0].template get<j>(), depth_normal[1].template get<j>(),
-                                      depth_normal[2].template get<j>(), depth_normal[3].template get<j>()} -
-                                old_val) *
-                               mix_factor;
-                    old_val.store_to(out_depth_normals[y.template get<j>() * img_w + x.template get<j>()].v,
-                                     vector_aligned);
+                if (out_depth_normals) {
+                    if (cache_mode != eSpatialCacheMode::Update) {
+                        auto old_val = fvec4(out_depth_normals[y[j] * img_w + x[j]].v, vector_aligned);
+                        old_val +=
+                            (fvec4{depth_normal[0][j], depth_normal[1][j], depth_normal[2][j], depth_normal[3][j]} -
+                             old_val) *
+                            mix_factor;
+                        old_val.store_to(out_depth_normals[y[j] * img_w + x[j]].v, vector_aligned);
+                    } else {
+                        UNROLLED_FOR(k, 4, { out_depth_normals[y[j] * img_w + x[j]].v[k] = depth_normal[k][j]; })
+                    }
                 }
             }
-        })
+        }
     }
 }
 
 template <int S>
 void Ray::NS::ShadeSecondary(const pass_settings_t &ps, const float clamp_direct, Span<const hit_data_t<S>> inters,
                              Span<const ray_data_t<S>> rays, const uint32_t rand_seq[], const uint32_t rand_seed,
-                             const int iteration, const scene_data_t &sc, uint32_t node_index,
+                             const int iteration, const eSpatialCacheMode cache_mode, const scene_data_t &sc,
                              const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
                              int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays,
-                             int *out_shadow_rays_count, int img_w, color_rgba_t *out_color) {
+                             int *out_shadow_rays_count, int img_w, color_rgba_t *out_color,
+                             color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
     const float limits[2] = {(clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX,
                              (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX};
     for (int i = 0; i < inters.size(); ++i) {
@@ -7793,7 +7904,7 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, const float clamp_direct
         const hit_data_t<S> &inter = inters[i];
 
         fvec<S> col[4] = {0.0f};
-        Ray::NS::ShadeSurface(ps, limits, rand_seq, rand_seed, iteration, inter, r, sc, node_index, textures, col,
+        Ray::NS::ShadeSurface(ps, limits, cache_mode, rand_seq, rand_seed, iteration, inter, r, sc, textures, col,
                               out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
                               (fvec<S> *)nullptr, (fvec<S> *)nullptr);
 
@@ -7802,11 +7913,202 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, const float clamp_direct
         // TODO: match layouts!
         UNROLLED_FOR_S(j, S, {
             if (r.mask.template get<j>()) {
-                auto old_val = fvec4(out_color[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
-                old_val += fvec4(col[0].template get<j>(), col[1].template get<j>(), col[2].template get<j>(), 0.0f);
-                old_val.store_to(out_color[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
+                if (cache_mode != eSpatialCacheMode::Update) {
+                    auto old_val =
+                        fvec4(out_color[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
+                    old_val +=
+                        fvec4(col[0].template get<j>(), col[1].template get<j>(), col[2].template get<j>(), 0.0f);
+                    old_val.store_to(out_color[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
+                } else {
+                    UNROLLED_FOR(k, 4, { out_color[y[j] * img_w + x[j]].v[k] = col[k][j]; })
+                }
             }
         })
+    }
+}
+
+namespace Ray {
+namespace NS {
+force_inline fvec4 make_fvec3(const float *f) { return fvec4{f[0], f[1], f[2], 0.0f}; }
+
+// TODO: Avoid duplication!
+force_inline constexpr uint32_t hash_jenkins32(uint32_t a) {
+    a = (a + 0x7ed55d16) + (a << 12);
+    a = (a ^ 0xc761c23c) ^ (a >> 19);
+    a = (a + 0x165667b1) + (a << 5);
+    a = (a + 0xd3a2646c) ^ (a << 9);
+    a = (a + 0xfd7046c5) + (a << 3);
+    a = (a ^ 0xb55a4f09) ^ (a >> 16);
+    return a;
+}
+
+force_inline uint32_t hash64(const uint64_t hash_key) {
+    return hash_jenkins32(uint32_t((hash_key >> 0) & 0xffffffff)) ^
+           hash_jenkins32(uint32_t((hash_key >> 32) & 0xffffffff));
+}
+
+void accumulate_cache_voxel(packed_cache_voxel_t &voxel, const fvec4 &r, const uint32_t sample_data) {
+    const uvec4 data = uvec4(r * RAD_CACHE_RADIANCE_SCALE);
+
+    InterlockedExchangeAdd((long *)&voxel.v[0], data.get<0>());
+    InterlockedExchangeAdd((long *)&voxel.v[1], data.get<1>());
+    InterlockedExchangeAdd((long *)&voxel.v[2], data.get<2>());
+    InterlockedExchangeAdd((long *)&voxel.v[3], sample_data);
+}
+
+uint32_t calc_grid_level(const fvec4 &p, const cache_grid_params_t &params) {
+    const float distance = length(make_fvec3(params.cam_pos_curr) - p);
+    const float ret = Ray::clamp(floorf(Ray::log_base(distance, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0f,
+                                 HASH_GRID_LEVEL_BIT_MASK);
+    return uint32_t(ret);
+}
+
+ivec4 calc_grid_position_log(const fvec4 &p, const cache_grid_params_t &params) {
+    const uint32_t grid_level = calc_grid_level(p, params);
+    const float voxel_size = calc_voxel_size(grid_level, params);
+    ivec4 grid_position = ivec4(floor(p / voxel_size));
+    grid_position.set<3>(grid_level);
+    return grid_position;
+}
+
+uint64_t compute_hash(const fvec4 &p, const fvec4 &n, const cache_grid_params_t &params) {
+    const uvec4 grid_pos = uvec4(calc_grid_position_log(p, params));
+
+    uint64_t hash_key =
+        ((uint64_t(grid_pos.get<0>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 0)) |
+        ((uint64_t(grid_pos.get<1>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 1)) |
+        ((uint64_t(grid_pos.get<2>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 2)) |
+        ((uint64_t(grid_pos.get<3>()) & HASH_GRID_LEVEL_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 3));
+
+    if (HASH_GRID_USE_NORMALS) {
+        const uint32_t normal_bits = (n.get<0>() >= 0 ? 1 : 0) + (n.get<1>() >= 0 ? 2 : 0) + (n.get<2>() >= 0 ? 4 : 0);
+        hash_key |= (uint64_t(normal_bits) << (HASH_GRID_POSITION_BIT_NUM * 3 + HASH_GRID_LEVEL_BIT_NUM));
+    }
+
+    return hash_key;
+}
+
+force_inline uint32_t hash_map_base_slot(const uint32_t slot) {
+    if (HASH_GRID_ALLOW_COMPACTION) {
+        return (slot / HASH_GRID_HASH_MAP_BUCKET_SIZE) * HASH_GRID_HASH_MAP_BUCKET_SIZE;
+    } else {
+        return slot;
+    }
+}
+
+bool hash_map_insert(Span<uint64_t> entries, const uint64_t hash_key, uint32_t &cache_entry) {
+    const uint32_t hash = hash64(hash_key);
+    const uint32_t slot = hash % entries.size();
+    const uint32_t base_slot = hash_map_base_slot(slot);
+    for (uint32_t bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE && base_slot < entries.size();
+         ++bucket_offset) {
+        const uint64_t prev_hash_key = InterlockedCompareExchange64((long long *)&entries[base_slot + bucket_offset],
+                                                                    hash_key, HASH_GRID_INVALID_HASH_KEY);
+        if (prev_hash_key == HASH_GRID_INVALID_HASH_KEY || prev_hash_key == hash_key) {
+            cache_entry = base_slot + bucket_offset;
+            return true;
+        }
+    }
+    cache_entry = 0;
+    return false;
+}
+
+bool hash_map_find(Span<const uint64_t> entries, const uint64_t hash_key, uint32_t &cache_entry) {
+    const uint32_t hash = hash64(hash_key);
+    const uint32_t slot = hash % entries.size();
+    const uint32_t base_slot = hash_map_base_slot(slot);
+    for (uint32_t bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
+        const uint64_t stored_hash_key = entries[base_slot + bucket_offset];
+        if (stored_hash_key == hash_key) {
+            cache_entry = base_slot + bucket_offset;
+            return true;
+        } else if (HASH_GRID_ALLOW_COMPACTION && stored_hash_key == HASH_GRID_INVALID_HASH_KEY) {
+            return false;
+        }
+    }
+    return false;
+}
+
+uint32_t insert_entry(Span<uint64_t> entries, const fvec4 &p, const fvec4 &n, const cache_grid_params_t &params) {
+    const uint64_t hash_key = compute_hash(p, n, params);
+    uint32_t cache_entry = HASH_GRID_INVALID_CACHE_ENTRY;
+    hash_map_insert(entries, hash_key, cache_entry);
+    return cache_entry;
+}
+
+uint32_t find_entry(Span<const uint64_t> entries, const fvec4 &p, const fvec4 &n, const cache_grid_params_t &params) {
+    const uint64_t hash_key = compute_hash(p, n, params);
+    uint32_t cache_entry = HASH_GRID_INVALID_CACHE_ENTRY;
+    hash_map_find(entries, hash_key, cache_entry);
+    return cache_entry;
+}
+
+} // namespace NS
+} // namespace Ray
+
+template <int S>
+void Ray::NS::SpatialCacheUpdate(const cache_grid_params_t &params, Span<const hit_data_t<S>> inters,
+                                 Span<const ray_data_t<S>> rays, Span<cache_data_t> cache_data,
+                                 const color_rgba_t radiance[], const color_rgba_t depth_normals[], int img_w,
+                                 Span<uint64_t> entries, Span<packed_cache_voxel_t> voxels_curr) {
+    for (int i = 0; i < int(inters.size()); ++i) {
+        const ray_data_t<S> &r = rays[i];
+        const hit_data_t<S> &inter = inters[i];
+
+        const uvec<S> _x = (r.xy >> 16) & 0x0000ffff;
+        const uvec<S> _y = r.xy & 0x0000ffff;
+
+        const fvec<S> *I = r.d;
+        const fvec<S> *ro = r.o;
+
+        fvec<S> _P[3];
+        UNROLLED_FOR(j, 3, { _P[j] = ro[j] + inter.t * I[j]; })
+
+        // TODO: Optimize this!
+        for (int j = 0; j < S; ++j) {
+            if (r.mask[j] == 0) {
+                continue;
+            }
+
+            const uint32_t x = _x[j];
+            const uint32_t y = _y[j];
+
+            const fvec4 P = {_P[0][j], _P[1][j], _P[2][j], 0.0f};
+            const fvec4 N = fvec4{depth_normals[y * img_w + x].v};
+            fvec4 rad = fvec4{radiance[y * img_w + x].v} * params.exposure;
+
+            cache_data_t &cache = cache_data[y * (img_w / RAD_CACHE_DOWNSAMPLING_FACTOR) + x];
+            cache.sample_weight[0][0] = r.c[0][j];
+            cache.sample_weight[0][1] = r.c[1][j];
+            cache.sample_weight[0][2] = r.c[2][j];
+            if (inter.v[j] < 0.0f || inter.obj_index[j] < 0) {
+                for (int k = 0; k < cache.path_len; ++k) {
+                    rad *= make_fvec3(cache.sample_weight[k]);
+                    if (cache.cache_entries[k] != HASH_GRID_INVALID_CACHE_ENTRY) {
+                        accumulate_cache_voxel(voxels_curr[cache.cache_entries[k]], rad, 0);
+                    }
+                }
+            } else {
+                for (int k = cache.path_len; k > 0; --k) {
+                    cache.cache_entries[k] = cache.cache_entries[k - 1];
+                    memcpy(cache.sample_weight[k], cache.sample_weight[k - 1], 3 * sizeof(float));
+                }
+
+                cache.cache_entries[0] = insert_entry(entries, P, N, params);
+                if (cache.cache_entries[0] != HASH_GRID_INVALID_CACHE_ENTRY) {
+                    accumulate_cache_voxel(voxels_curr[cache.cache_entries[0]], rad, 1);
+                }
+
+                cache.path_len = std::min(cache.path_len + 1, RAD_CACHE_PROPAGATION_DEPTH - 1);
+
+                for (int k = 1; k < cache.path_len; ++k) {
+                    rad *= make_fvec3(cache.sample_weight[k]);
+                    if (cache.cache_entries[k] != HASH_GRID_INVALID_CACHE_ENTRY) {
+                        accumulate_cache_voxel(voxels_curr[cache.cache_entries[k]], rad, 0);
+                    }
+                }
+            }
+        }
     }
 }
 

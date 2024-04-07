@@ -17,10 +17,13 @@
 #include "shaders/sort_reorder_rays_interface.h"
 #include "shaders/sort_scan_interface.h"
 #include "shaders/sort_scatter_interface.h"
+#include "shaders/spatial_cache_resolve_interface.h"
+#include "shaders/spatial_cache_update_interface.h"
 
 void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, const uint32_t rand_seed,
-                                                   const rect_t &rect, const Buffer &rand_seq,
-                                                   const Buffer &filter_table, const int iteration,
+                                                   const rect_t &rect, const int img_w, const int img_h,
+                                                   const Buffer &rand_seq, const Buffer &filter_table,
+                                                   const int iteration, const bool _adaptive,
                                                    const Texture2D &req_samples_img, const Buffer &inout_counters,
                                                    const Buffer &out_rays) {
     const TransitionInfo res_transitions[] = {{&rand_seq, eResState::ShaderResource},
@@ -44,8 +47,8 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
     uniform_params.rect[1] = rect.y;
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
-    uniform_params.img_size[0] = w_;
-    uniform_params.img_size[1] = h_;
+    uniform_params.img_size[0] = img_w;
+    uniform_params.img_size[1] = img_h;
     uniform_params.rand_seed = rand_seed;
 
     const float temp = std::tan(0.5f * cam.fov * float(PI) / 180.0f);
@@ -68,7 +71,8 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
     uniform_params.shift_y = cam.shift[1];
     uniform_params.iteration = iteration;
 
-    const bool adaptive = (iteration > cam.pass_settings.min_samples) && cam.pass_settings.min_samples != -1;
+    const bool adaptive =
+        _adaptive && (iteration > cam.pass_settings.min_samples) && cam.pass_settings.min_samples != -1;
     DispatchCompute(cmd_buf, adaptive ? pi_prim_rays_gen_adaptive_ : pi_prim_rays_gen_simple_, grp_count, bindings,
                     &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
@@ -712,8 +716,8 @@ void Ray::NS::Renderer::kernel_SortScanAdd(CommandBuffer cmd_buf, const Buffer &
 }
 
 void Ray::NS::Renderer::kernel_SortScatter(CommandBuffer cmd_buf, int shift, const Buffer &indir_args,
-                                           int indir_args_index, const Buffer &hashes, const Buffer &sum_table,
-                                           const Buffer &counters, int counter_index, const Buffer &out_chunks) {
+                                           const int indir_args_index, const Buffer &hashes, const Buffer &sum_table,
+                                           const Buffer &counters, const int counter_index, const Buffer &out_chunks) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hashes, eResState::ShaderResource},
                                               {&sum_table, eResState::ShaderResource},
@@ -733,4 +737,77 @@ void Ray::NS::Renderer::kernel_SortScatter(CommandBuffer cmd_buf, int shift, con
     DispatchComputeIndirect(cmd_buf, pi_sort_scatter_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
                             bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                             ctx_->log());
+}
+
+void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const cache_grid_params_t &params,
+                                                  const Buffer &indir_args, const int indir_args_index,
+                                                  const Buffer &counters, const int counter_index, const Buffer &inters,
+                                                  const Buffer &rays, const Buffer &cache_data,
+                                                  const Texture2D &radiance_img, const Texture2D &depth_normals_img,
+                                                  const Buffer &inout_entries, const Buffer &inout_voxels_curr,
+                                                  const Buffer &inout_lock_buf) {
+    SmallVector<TransitionInfo, 16> res_transitions = {{&indir_args, eResState::IndirectArgument},
+                                                       {&counters, eResState::ShaderResource},
+                                                       {&inters, eResState::ShaderResource},
+                                                       {&cache_data, eResState::ShaderResource},
+                                                       {&rays, eResState::ShaderResource},
+                                                       {&radiance_img, eResState::ShaderResource},
+                                                       {&depth_normals_img, eResState::ShaderResource},
+                                                       {&inout_entries, eResState::UnorderedAccess},
+                                                       {&inout_voxels_curr, eResState::UnorderedAccess}};
+    if (!ctx_->int64_atomics_supported()) {
+        res_transitions.emplace_back(&inout_lock_buf, eResState::UnorderedAccess);
+    }
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 16> bindings = {
+        {eBindTarget::SBufRO, CacheUpdate::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::SBufRO, CacheUpdate::HITS_BUF_SLOT, inters},
+        {eBindTarget::SBufRO, CacheUpdate::RAYS_BUF_SLOT, rays},
+        {eBindTarget::Tex2D, CacheUpdate::RADIANCE_TEX_SLOT, radiance_img},
+        {eBindTarget::Tex2D, CacheUpdate::DEPTH_NORMAL_TEX_SLOT, depth_normals_img},
+        {eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_DATA_BUF_SLOT, cache_data},
+        {eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries},
+        {eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_VOXELS_BUF_SLOT, inout_voxels_curr}};
+    if (!ctx_->int64_atomics_supported()) {
+        bindings.emplace_back(eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_LOCK_BUF_SLOT, inout_lock_buf);
+    }
+
+    CacheUpdate::Params uniform_params = {};
+    memcpy(&uniform_params.cam_pos_curr[0], params.cam_pos_curr, 3 * sizeof(float));
+    uniform_params.cache_w = (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR);
+    uniform_params.entries_count = inout_entries.size() / sizeof(uint64_t);
+    uniform_params.exposure = params.exposure;
+
+    DispatchComputeIndirect(cmd_buf, pi_spatial_cache_update_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const cache_grid_params_t &params,
+                                                   const Buffer &inout_entries, const Buffer &inout_voxels_curr,
+                                                   const Buffer &voxels_prev) {
+    SmallVector<TransitionInfo, 16> res_transitions = {{&voxels_prev, eResState::ShaderResource},
+                                                       {&inout_entries, eResState::UnorderedAccess},
+                                                       {&inout_voxels_curr, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 16> bindings = {
+        {eBindTarget::SBufRO, CacheResolve::CACHE_VOXELS_PREV_BUF_SLOT, voxels_prev},
+        {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries},
+        {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_VOXELS_CURR_BUF_SLOT, inout_voxels_curr}};
+
+    CacheResolve::Params uniform_params = {};
+    memcpy(&uniform_params.cam_pos_curr[0], params.cam_pos_curr, 3 * sizeof(float));
+    memcpy(&uniform_params.cam_pos_prev[0], params.cam_pos_prev, 3 * sizeof(float));
+    uniform_params.cache_w = (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR);
+    uniform_params.entries_count = inout_entries.size() / sizeof(uint64_t);
+    const bool cam_moved = length2(Ref::make_fvec3(params.cam_pos_curr) - Ref::make_fvec3(params.cam_pos_prev)) > FLT_EPS;
+    uniform_params.cam_moved = cam_moved ? 1.0f : 0.0f;
+
+    assert((uniform_params.entries_count % 64) == 0);
+
+    const uint32_t grp_count[3] = {uniform_params.entries_count / 64, 1, 1};
+    DispatchCompute(cmd_buf, pi_spatial_cache_resolve_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
 }

@@ -16,6 +16,7 @@ template <typename T> class Vector {
     }
 
     const Buffer &buf() const { return buf_; }
+    Buffer &buf() { return buf_; }
 
     size_t size() const { return size_; }
 
@@ -162,6 +163,27 @@ template <typename T> class Vector {
 
         uint8_t *ptr = temp_stage_buf.Map();
         memcpy(ptr, p, sizeof(T) * count);
+        temp_stage_buf.Unmap();
+
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        CopyBufferToBuffer(temp_stage_buf, 0, buf_, uint32_t(sizeof(T) * offset), uint32_t(sizeof(T) * count), cmd_buf);
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    }
+
+    void Fill(const T &p, const size_t offset, const size_t count) {
+#ifndef NDEBUG
+        if (offset + count > size_) {
+            throw std::out_of_range("Vector::Set");
+        }
+#endif
+
+        // TODO: This can be done more efficiently
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T) * count)};
+
+        T *ptr = (T *)temp_stage_buf.Map();
+        for (size_t i = 0; i < count; ++i) {
+            ptr[i] = p;
+        }
         temp_stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());

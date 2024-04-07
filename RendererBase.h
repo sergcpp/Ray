@@ -49,6 +49,7 @@ struct settings_t {
     bool use_tex_compression = true;
     bool use_hwrt = true;
     bool use_bindless = true;
+    bool use_spatial_cache = false;
     int validation_level = 0;
 };
 
@@ -60,16 +61,14 @@ class RegionContext {
     rect_t rect_;
 
   public:
-    int iteration = 0;                   ///< Number of rendered samples per pixel
+    int iteration = 0; ///< Number of rendered samples per pixel
 
     explicit RegionContext(const rect_t &rect) : rect_(rect) {}
 
     const rect_t &rect() const { return rect_; }
 
     /// Clear region context (used to start again)
-    void Clear() {
-        iteration = 0;
-    }
+    void Clear() { iteration = 0; }
 };
 
 class ILog;
@@ -140,6 +139,19 @@ class RendererBase {
     */
     virtual void DenoiseImage(int pass, const RegionContext &region) = 0;
 
+    /** @brief Update spatial radiance cache
+        @param scene reference to a scene
+        @param region image region to render
+    */
+    virtual void UpdateSpatialCache(const SceneBase &scene, RegionContext &region) = 0;
+
+    /** @brief Resolve spatial radiance cache
+        @param scene reference to a scene
+    */
+    virtual void ResolveSpatialCache(
+        const SceneBase &scene,
+        const std::function<void(int, int, ParallelForFunction &&)> &parallel_for = parallel_for_serial) = 0;
+
     /// Structure that holds render timings (in microseconds)
     struct stats_t {
         unsigned long long time_primary_ray_gen_us;
@@ -151,6 +163,8 @@ class RendererBase {
         unsigned long long time_secondary_shade_us;
         unsigned long long time_secondary_shadow_us;
         unsigned long long time_denoise_us;
+        unsigned long long time_cache_update_us;
+        unsigned long long time_cache_resolve_us;
     };
     virtual void GetStats(stats_t &st) = 0;
     virtual void ResetStats() = 0;

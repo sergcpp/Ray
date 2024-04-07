@@ -2,25 +2,17 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cfloat>
 #include <tuple>
 #include <utility>
 
+#include "RadCacheRef.h"
 #include "TextureStorageCPU.h"
 
 namespace Ray {
-//
-// Useful macros for debugging
-//
-#define USE_NEE 1
-#define USE_PATH_TERMINATION 1
-#define USE_HIERARCHICAL_NEE 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
 // #define FORCE_TEXTURE_LOD 0
 #define USE_STOCH_TEXTURE_FILTERING 1
-#define USE_SPHERICAL_AREA_LIGHT_SAMPLING 1
-#define USE_SAFE_MATH 1
 
 namespace Ref {
 #define sign_of(f) (((f) >= 0) ? 1 : -1)
@@ -460,27 +452,9 @@ template <int StackSize, typename T = stack_entry_t> struct TraversalStack {
     }
 };
 
-force_inline float clamp(const float val, const float min, const float max) {
-    return val < min ? min : (val > max ? max : val);
-}
-
-force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
-
 force_inline int clamp(const int val, const int min, const int max) {
     return val < min ? min : (val > max ? max : val);
 }
-
-force_inline fvec4 cross(const fvec4 &v1, const fvec4 &v2) {
-    return fvec4{v1.get<1>() * v2.get<2>() - v1.get<2>() * v2.get<1>(),
-                 v1.get<2>() * v2.get<0>() - v1.get<0>() * v2.get<2>(),
-                 v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
-}
-
-force_inline fvec4 reflect(const fvec4 &I, const fvec4 &N, const float dot_N_I) { return I - 2 * dot_N_I * N; }
-
-force_inline float pow5(const float v) { return (v * v) * (v * v) * v; }
-
-force_inline float mix(const float v1, const float v2, const float k) { return (1.0f - k) * v1 + k * v2; }
 
 force_inline uint32_t get_ray_hash(const ray_data_t &r, const float root_min[3], const float cell_size[3]) {
     int x = clamp(int((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
@@ -524,381 +498,6 @@ force_inline void _radix_sort_lsb(ray_chunk_t *begin, ray_chunk_t *end, ray_chun
 
 force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1) {
     _radix_sort_lsb(begin, end, begin1, 24);
-}
-
-force_inline fvec4 YCoCg_to_RGB(const fvec4 &col) {
-    const float scale = (col.get<2>() * (255.0f / 8.0f)) + 1.0f;
-    const float Y = col.get<3>();
-    const float Co = (col.get<0>() - (0.5f * 256.0f / 255.0f)) / scale;
-    const float Cg = (col.get<1>() - (0.5f * 256.0f / 255.0f)) / scale;
-
-    fvec4 col_rgb = 1.0f;
-    col_rgb.set<0>(Y + Co - Cg);
-    col_rgb.set<1>(Y + Cg);
-    col_rgb.set<2>(Y - Co - Cg);
-
-    return saturate(col_rgb);
-}
-
-force_inline float fast_log2(float val) {
-    // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
-    union {
-        float val;
-        int32_t x;
-    } u = {val};
-    auto log_2 = float(((u.x >> 23) & 255) - 128);
-    u.x &= ~(255 << 23);
-    u.x += 127 << 23;
-    log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
-    return (log_2);
-}
-
-force_inline float safe_sqrt(float val) {
-#if USE_SAFE_MATH
-    return sqrtf(fmaxf(val, 0.0f));
-#else
-    return sqrtf(val);
-#endif
-}
-
-force_inline float safe_div(const float a, const float b) {
-#if USE_SAFE_MATH
-    return b != 0.0f ? (a / b) : FLT_MAX;
-#else
-    return (a / b)
-#endif
-}
-
-force_inline float safe_div_pos(const float a, const float b) {
-#if USE_SAFE_MATH
-    return a / fmaxf(b, FLT_EPS);
-#else
-    return (a / b)
-#endif
-}
-
-force_inline float safe_div_neg(const float a, const float b) {
-#if USE_SAFE_MATH
-    return a / fminf(b, -FLT_EPS);
-#else
-    return (a / b)
-#endif
-}
-
-void safe_invert(const float v[3], float out_v[3]) {
-    for (int i = 0; i < 3; ++i) {
-        if (fabsf(v[i]) > FLT_EPS) {
-            out_v[i] = 1.0f / v[i];
-        } else {
-            out_v[i] = (v[i] >= 0.0f) ? FLT_MAX : -FLT_MAX;
-        }
-    }
-}
-
-force_inline fvec4 safe_normalize(const fvec4 &a) {
-#if USE_SAFE_MATH
-    const float l = length(a);
-    return l > 0.0f ? (a / l) : a;
-#else
-    return normalize(a);
-#endif
-}
-
-#define sqr(x) ((x) * (x))
-
-force_inline float lum(const fvec3 &color) {
-    return 0.212671f * color.get<0>() + 0.715160f * color.get<1>() + 0.072169f * color.get<2>();
-}
-
-force_inline float lum(const fvec4 &color) {
-    return 0.212671f * color.get<0>() + 0.715160f * color.get<1>() + 0.072169f * color.get<2>();
-}
-
-float get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const fvec2 &duv_dx,
-                      const fvec2 &duv_dy) {
-#ifdef FORCE_TEXTURE_LOD
-    const float lod = float(FORCE_TEXTURE_LOD);
-#else
-    fvec2 sz;
-    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, value_ptr(sz));
-    const fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
-    const fvec2 _diagonal = _duv_dx + _duv_dy;
-
-    // Find minimal dimention of parallelogram
-    const float min_length2 = fminf(fminf(_duv_dx.length2(), _duv_dy.length2()), _diagonal.length2());
-    // Find lod
-    float lod = fast_log2(min_length2);
-    // Substruct 1 from lod to always have 4 texels for interpolation
-    lod = clamp(0.5f * lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
-#endif
-    return lod;
-}
-
-float get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const float lambda) {
-#ifdef FORCE_TEXTURE_LOD
-    const float lod = float(FORCE_TEXTURE_LOD);
-#else
-    fvec2 res;
-    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, value_ptr(res));
-    // Find lod
-    float lod = lambda + 0.5f * fast_log2(res.get<0>() * res.get<1>());
-    // Substruct 1 from lod to always have 4 texels for interpolation
-    lod = clamp(lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
-#endif
-    return lod;
-}
-
-lobe_weights_t get_lobe_weights(const float base_color_lum, const float spec_color_lum, const float specular,
-                                const float metallic, const float transmission, const float clearcoat) {
-    lobe_weights_t weights;
-
-    // taken from Cycles
-    weights.diffuse = base_color_lum * (1.0f - metallic) * (1.0f - transmission);
-    const float final_transmission = transmission * (1.0f - metallic);
-    weights.specular = (specular != 0.0f || metallic != 0.0f) ? spec_color_lum * (1.0f - final_transmission) : 0.0f;
-    weights.clearcoat = 0.25f * clearcoat * (1.0f - metallic);
-    weights.refraction = final_transmission * base_color_lum;
-
-    const float total_weight = weights.diffuse + weights.specular + weights.clearcoat + weights.refraction;
-    if (total_weight != 0.0f) {
-        weights.diffuse /= total_weight;
-        weights.specular /= total_weight;
-        weights.clearcoat /= total_weight;
-        weights.refraction /= total_weight;
-    }
-
-    return weights;
-}
-
-force_inline float power_heuristic(const float a, const float b) {
-    const float t = a * a;
-    return t / (b * b + t);
-}
-
-force_inline float schlick_weight(const float u) {
-    const float m = saturate(1.0f - u);
-    return pow5(m);
-}
-
-float fresnel_dielectric_cos(float cosi, float eta) {
-    // compute fresnel reflectance without explicitly computing the refracted direction
-    float c = fabsf(cosi);
-    float g = eta * eta - 1 + c * c;
-    float result;
-
-    if (g > 0) {
-        g = sqrtf(g);
-        float A = (g - c) / (g + c);
-        float B = (c * (g + c) - 1) / (c * (g - c) + 1);
-        result = 0.5f * A * A * (1 + B * B);
-    } else {
-        result = 1.0f; // TIR (no refracted component)
-    }
-
-    return result;
-}
-
-force_inline fvec2 calc_alpha(const float roughness, const float anisotropy, const float regularize_alpha) {
-    const float roughness2 = sqr(roughness);
-    const float aspect = sqrtf(1.0f - 0.9f * anisotropy);
-
-    fvec2 alpha = {roughness2 / aspect, roughness2 * aspect};
-    where(alpha < regularize_alpha, alpha) = clamp(2 * alpha, 0.25f * regularize_alpha, regularize_alpha);
-    return alpha;
-}
-
-//
-// From "A Fast and Robust Method for Avoiding Self-Intersection"
-//
-
-force_inline int32_t float_as_int(const float v) {
-    union {
-        float f;
-        int32_t i;
-    } ret = {v};
-    return ret.i;
-}
-force_inline float int_as_float(const int32_t v) {
-    union {
-        int32_t i;
-        float f;
-    } ret = {v};
-    return ret.f;
-}
-
-fvec4 offset_ray(const fvec4 &p, const fvec4 &n) {
-    const float Origin = 1.0f / 32.0f;
-    const float FloatScale = 1.0f / 65536.0f;
-    const float IntScale = 128.0f; // 256.0f;
-
-    const ivec4 of_i(IntScale * n);
-
-    const fvec4 p_i(int_as_float(float_as_int(p.get<0>()) + ((p.get<0>() < 0.0f) ? -of_i.get<0>() : of_i.get<0>())),
-                    int_as_float(float_as_int(p.get<1>()) + ((p.get<1>() < 0.0f) ? -of_i.get<1>() : of_i.get<1>())),
-                    int_as_float(float_as_int(p.get<2>()) + ((p.get<2>() < 0.0f) ? -of_i.get<2>() : of_i.get<2>())),
-                    0.0f);
-
-    return fvec4{fabsf(p.get<0>()) < Origin ? (p.get<0>() + FloatScale * n.get<0>()) : p_i.get<0>(),
-                 fabsf(p.get<1>()) < Origin ? (p.get<1>() + FloatScale * n.get<1>()) : p_i.get<1>(),
-                 fabsf(p.get<2>()) < Origin ? (p.get<2>() + FloatScale * n.get<2>()) : p_i.get<2>(), 0.0f};
-}
-
-fvec3 sample_GTR1(const float rgh, const float r1, const float r2) {
-    const float a = fmaxf(0.001f, rgh);
-    const float a2 = sqr(a);
-
-    const float phi = r1 * (2.0f * PI);
-
-    const float cosTheta = sqrtf(fmaxf(0.0f, 1.0f - powf(a2, 1.0f - r2)) / (1.0f - a2));
-    const float sinTheta = sqrtf(fmaxf(0.0f, 1.0f - (cosTheta * cosTheta)));
-    const float sinPhi = sinf(phi), cosPhi = cosf(phi);
-
-    return fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
-}
-
-fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
-    const float a = fmaxf(0.001f, rgh);
-
-    const float phi = r1 * (2.0f * PI);
-
-    const float cosTheta = sqrtf((1.0f - r2) / (1.0f + (a * a - 1.0f) * r2));
-    const float sinTheta = saturate(sqrtf(1.0f - (cosTheta * cosTheta)));
-    const float sinPhi = sinf(phi), cosPhi = cosf(phi);
-
-    return fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
-}
-
-// http://jcgt.org/published/0007/04/01/paper.pdf
-fvec4 SampleVNDF_Hemisphere_CrossSect(const fvec4 &Vh, float U1, float U2) {
-    // orthonormal basis (with special case if cross product is zero)
-    const float lensq = sqr(Vh.get<0>()) + sqr(Vh.get<1>());
-    const fvec4 T1 =
-        lensq > 0.0f ? fvec4(-Vh.get<1>(), Vh.get<0>(), 0.0f, 0.0f) / sqrtf(lensq) : fvec4(1.0f, 0.0f, 0.0f, 0.0f);
-    const fvec4 T2 = cross(Vh, T1);
-    // parameterization of the projected area
-    const float r = sqrtf(U1);
-    const float phi = 2.0f * PI * U2;
-    const float t1 = r * cosf(phi);
-    float t2 = r * sinf(phi);
-    const float s = 0.5f * (1.0f + Vh.get<2>());
-    t2 = (1.0f - s) * sqrtf(1.0f - t1 * t1) + s * t2;
-    // reprojection onto hemisphere
-    const fvec4 Nh = t1 * T1 + t2 * T2 + sqrtf(fmaxf(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
-    // normalization will be done later
-    return Nh;
-}
-
-// https://arxiv.org/pdf/2306.05044.pdf
-fvec4 SampleVNDF_Hemisphere_SphCap(const fvec4 &Vh, const fvec2 alpha, const fvec2 rand) {
-    // sample a spherical cap in (-Vh.z, 1]
-    const float phi = 2.0f * PI * rand.get<0>();
-    const float z = fma(1.0f - rand.get<1>(), 1.0f + Vh.get<2>(), -Vh.get<2>());
-    const float sin_theta = sqrtf(saturate(1.0f - z * z));
-    const float x = sin_theta * cosf(phi);
-    const float y = sin_theta * sinf(phi);
-    const fvec4 c = fvec4{x, y, z, 0.0f};
-    // normalization will be done later
-    return c + Vh;
-}
-
-// https://gpuopen.com/download/publications/Bounded_VNDF_Sampling_for_Smith-GGX_Reflections.pdf
-fvec4 SampleVNDF_Hemisphere_SphCap_Bounded(const fvec4 &Ve, const fvec4 &Vh, const fvec2 alpha, const fvec2 rand) {
-    // sample a spherical cap in (-Vh.z, 1]
-    const float phi = 2.0f * PI * rand.get<0>();
-    const float a = saturate(fminf(alpha.get<0>(), alpha.get<1>()));
-    const float s = 1.0f + length(fvec2{Ve.get<0>(), Ve.get<1>()});
-    const float a2 = a * a, s2 = s * s;
-    const float k = (1.0f - a2) * s2 / (s2 + a2 * Ve.get<2>() * Ve.get<2>());
-    const float b = (Ve.get<2>() > 0.0f) ? k * Vh.get<2>() : Vh.get<2>();
-    const float z = fma(1.0f - rand.get<1>(), 1.0f + b, -b);
-    const float sin_theta = sqrtf(saturate(1.0f - z * z));
-    const float x = sin_theta * cosf(phi);
-    const float y = sin_theta * sinf(phi);
-    const fvec4 c = fvec4{x, y, z, 0.0f};
-    // normalization will be done later
-    return c + Vh;
-}
-
-// Input Ve: view direction
-// Input alpha_x, alpha_y: roughness parameters
-// Input U1, U2: uniform random numbers
-// Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
-fvec4 SampleGGX_VNDF(const fvec4 &Ve, fvec2 alpha, fvec2 rand) {
-    // transforming the view direction to the hemisphere configuration
-    const fvec4 Vh = normalize(fvec4(alpha.get<0>() * Ve.get<0>(), alpha.get<1>() * Ve.get<1>(), Ve.get<2>(), 0.0f));
-    // sample the hemisphere
-    const fvec4 Nh = SampleVNDF_Hemisphere_SphCap(Vh, alpha, rand);
-    // transforming the normal back to the ellipsoid configuration
-    const fvec4 Ne =
-        normalize(fvec4(alpha.get<0>() * Nh.get<0>(), alpha.get<1>() * Nh.get<1>(), fmaxf(0.0f, Nh.get<2>()), 0.0f));
-    return Ne;
-}
-
-fvec4 SampleGGX_VNDF_Bounded(const fvec4 &Ve, fvec2 alpha, fvec2 rand) {
-    // transforming the view direction to the hemisphere configuration
-    const fvec4 Vh = normalize(fvec4(alpha.get<0>() * Ve.get<0>(), alpha.get<1>() * Ve.get<1>(), Ve.get<2>(), 0.0f));
-    // sample the hemisphere
-    const fvec4 Nh = SampleVNDF_Hemisphere_SphCap_Bounded(Ve, Vh, alpha, rand);
-    // transforming the normal back to the ellipsoid configuration
-    const fvec4 Ne =
-        normalize(fvec4(alpha.get<0>() * Nh.get<0>(), alpha.get<1>() * Nh.get<1>(), fmaxf(0.0f, Nh.get<2>()), 0.0f));
-    return Ne;
-}
-
-float GGX_VNDF_Reflection_Bounded_PDF(const float D, const fvec4 &view_dir_ts, const fvec2 alpha) {
-    const fvec2 ai = alpha * fvec2{view_dir_ts.get<0>(), view_dir_ts.get<1>()};
-    const float len2 = dot(ai, ai);
-    const float t = sqrtf(len2 + view_dir_ts.get<2>() * view_dir_ts.get<2>());
-    if (view_dir_ts.get<2>() >= 0.0f) {
-        const float a = saturate(fminf(alpha.get<0>(), alpha.get<1>()));
-        const float s = 1.0f + length(fvec2{view_dir_ts.get<0>(), view_dir_ts.get<1>()});
-        const float a2 = a * a, s2 = s * s;
-        const float k = (1.0f - a2) * s2 / (s2 + a2 * view_dir_ts.get<2>() * view_dir_ts.get<2>());
-        return D / (2.0f * (k * view_dir_ts.get<2>() + t));
-    }
-    return D * (t - view_dir_ts.get<2>()) / (2.0f * len2);
-}
-
-// Smith shadowing function
-force_inline float G1(const fvec4 &Ve, fvec2 alpha) {
-    alpha *= alpha;
-    const float delta =
-        (-1.0f + sqrtf(1.0f + safe_div_pos(alpha.get<0>() * sqr(Ve.get<0>()) + alpha.get<1>() * sqr(Ve.get<1>()),
-                                           sqr(Ve.get<2>())))) /
-        2.0f;
-    return 1.0f / (1.0f + delta);
-}
-
-float SmithG_GGX(const float N_dot_V, const float alpha_g) {
-    const float a = alpha_g * alpha_g;
-    const float b = N_dot_V * N_dot_V;
-    return 1.0f / (N_dot_V + sqrtf(a + b - a * b));
-}
-
-float D_GTR1(float NDotH, float a) {
-    if (a >= 1.0f) {
-        return 1.0f / PI;
-    }
-    const float a2 = sqr(a);
-    const float t = 1.0f + (a2 - 1.0f) * NDotH * NDotH;
-    return (a2 - 1.0f) / (PI * logf(a2) * t);
-}
-
-float D_GTR2(const float N_dot_H, const float a) {
-    const float a2 = sqr(a);
-    const float t = 1.0f + (a2 - 1.0f) * N_dot_H * N_dot_H;
-    return a2 / (PI * t * t);
-}
-
-float D_GGX(const fvec4 &H, const fvec2 alpha) {
-    if (H.get<2>() == 0.0f) {
-        return 0.0f;
-    }
-    const float sx = -H.get<0>() / (H.get<2>() * alpha.get<0>());
-    const float sy = -H.get<1>() / (H.get<2>() * alpha.get<1>());
-    const float s1 = 1.0f + sx * sx + sy * sy;
-    const float cos_theta_h4 = sqr(sqr(H.get<2>()));
-    return 1.0f / (sqr(s1) * PI * alpha.get<0>() * alpha.get<1>() * cos_theta_h4);
 }
 
 void create_tbn_matrix(const fvec4 &N, fvec4 out_TBN[3]) {
@@ -987,25 +586,6 @@ force_inline float sphere_intersection(const fvec4 &center, const float radius, 
     return (-b - sqrtf(fmaxf(discriminant, 0.0f))) / (2 * a);
 }
 
-fvec4 rotate_around_axis(const fvec4 &p, const fvec4 &axis, const float angle) {
-    const float costheta = cosf(angle);
-    const float sintheta = sinf(angle);
-    fvec4 r;
-
-    r.set<0>(((costheta + (1.0f - costheta) * axis.get<0>() * axis.get<0>()) * p.get<0>()) +
-             (((1.0f - costheta) * axis.get<0>() * axis.get<1>() - axis.get<2>() * sintheta) * p.get<1>()) +
-             (((1.0f - costheta) * axis.get<0>() * axis.get<2>() + axis.get<1>() * sintheta) * p.get<2>()));
-    r.set<1>((((1.0f - costheta) * axis.get<0>() * axis.get<1>() + axis.get<2>() * sintheta) * p.get<0>()) +
-             ((costheta + (1.0f - costheta) * axis.get<1>() * axis.get<1>()) * p.get<1>()) +
-             (((1.0f - costheta) * axis.get<1>() * axis.get<2>() - axis.get<0>() * sintheta) * p.get<2>()));
-    r.set<2>((((1.0f - costheta) * axis.get<0>() * axis.get<2>() - axis.get<1>() * sintheta) * p.get<0>()) +
-             (((1.0f - costheta) * axis.get<1>() * axis.get<2>() + axis.get<0>() * sintheta) * p.get<1>()) +
-             ((costheta + (1.0f - costheta) * axis.get<2>() * axis.get<2>()) * p.get<2>()));
-    r.set<3>(0.0f);
-
-    return r;
-}
-
 void transpose(const fvec3 in_3x3[3], fvec3 out_3x3[3]) {
     out_3x3[0].set<0>(in_3x3[0].get<0>());
     out_3x3[0].set<1>(in_3x3[1].get<0>());
@@ -1031,114 +611,6 @@ fvec3 mul(const fvec3 in_mat[3], const fvec3 &in_vec) {
     return out_vec;
 }
 
-force_inline float safe_sqrtf(float f) { return sqrtf(fmaxf(f, 0.0f)); }
-
-// Taken from Cycles
-fvec4 ensure_valid_reflection(const fvec4 &Ng, const fvec4 &I, const fvec4 &N) {
-    const fvec4 R = 2 * dot(N, I) * N - I;
-
-    // Reflection rays may always be at least as shallow as the incoming ray.
-    const float threshold = fminf(0.9f * dot(Ng, I), 0.01f);
-    if (dot(Ng, R) >= threshold) {
-        return N;
-    }
-
-    // Form coordinate system with Ng as the Z axis and N inside the X-Z-plane.
-    // The X axis is found by normalizing the component of N that's orthogonal to Ng.
-    // The Y axis isn't actually needed.
-    const float NdotNg = dot(N, Ng);
-    const fvec4 X = normalize(N - NdotNg * Ng);
-
-    // Calculate N.z and N.x in the local coordinate system.
-    //
-    // The goal of this computation is to find a N' that is rotated towards Ng just enough
-    // to lift R' above the threshold (here called t), therefore dot(R', Ng) = t.
-    //
-    // According to the standard reflection equation,
-    // this means that we want dot(2*dot(N', I)*N' - I, Ng) = t.
-    //
-    // Since the Z axis of our local coordinate system is Ng, dot(x, Ng) is just x.z, so we get
-    // 2*dot(N', I)*N'.z - I.z = t.
-    //
-    // The rotation is simple to express in the coordinate system we formed -
-    // since N lies in the X-Z-plane, we know that N' will also lie in the X-Z-plane,
-    // so N'.y = 0 and therefore dot(N', I) = N'.x*I.x + N'.z*I.z .
-    //
-    // Furthermore, we want N' to be normalized, so N'.x = sqrt(1 - N'.z^2).
-    //
-    // With these simplifications,
-    // we get the final equation 2*(sqrt(1 - N'.z^2)*I.x + N'.z*I.z)*N'.z - I.z = t.
-    //
-    // The only unknown here is N'.z, so we can solve for that.
-    //
-    // The equation has four solutions in general:
-    //
-    // N'.z = +-sqrt(0.5*(+-sqrt(I.x^2*(I.x^2 + I.z^2 - t^2)) + t*I.z + I.x^2 + I.z^2)/(I.x^2 + I.z^2))
-    // We can simplify this expression a bit by grouping terms:
-    //
-    // a = I.x^2 + I.z^2
-    // b = sqrt(I.x^2 * (a - t^2))
-    // c = I.z*t + a
-    // N'.z = +-sqrt(0.5*(+-b + c)/a)
-    //
-    // Two solutions can immediately be discarded because they're negative so N' would lie in the
-    // lower hemisphere.
-
-    const float Ix = dot(I, X), Iz = dot(I, Ng);
-    const float Ix2 = (Ix * Ix), Iz2 = (Iz * Iz);
-    const float a = Ix2 + Iz2;
-
-    const float b = safe_sqrtf(Ix2 * (a - (threshold * threshold)));
-    const float c = Iz * threshold + a;
-
-    // Evaluate both solutions.
-    // In many cases one can be immediately discarded (if N'.z would be imaginary or larger than
-    // one), so check for that first. If no option is viable (might happen in extreme cases like N
-    // being in the wrong hemisphere), give up and return Ng.
-    const float fac = 0.5f / a;
-    const float N1_z2 = fac * (b + c), N2_z2 = fac * (-b + c);
-    bool valid1 = (N1_z2 > 1e-5f) && (N1_z2 <= (1.0f + 1e-5f));
-    bool valid2 = (N2_z2 > 1e-5f) && (N2_z2 <= (1.0f + 1e-5f));
-
-    fvec2 N_new;
-    if (valid1 && valid2) {
-        // If both are possible, do the expensive reflection-based check.
-        const fvec2 N1 = fvec2(safe_sqrtf(1.0f - N1_z2), safe_sqrtf(N1_z2));
-        const fvec2 N2 = fvec2(safe_sqrtf(1.0f - N2_z2), safe_sqrtf(N2_z2));
-
-        const float R1 = 2 * (N1.get<0>() * Ix + N1.get<1>() * Iz) * N1.get<1>() - Iz;
-        const float R2 = 2 * (N2.get<0>() * Ix + N2.get<1>() * Iz) * N2.get<1>() - Iz;
-
-        valid1 = (R1 >= 1e-5f);
-        valid2 = (R2 >= 1e-5f);
-        if (valid1 && valid2) {
-            // If both solutions are valid, return the one with the shallower reflection since it will be
-            // closer to the input (if the original reflection wasn't shallow, we would not be in this
-            // part of the function).
-            N_new = (R1 < R2) ? N1 : N2;
-        } else {
-            // If only one reflection is valid (= positive), pick that one.
-            N_new = (R1 > R2) ? N1 : N2;
-        }
-    } else if (valid1 || valid2) {
-        // Only one solution passes the N'.z criterium, so pick that one.
-        const float Nz2 = valid1 ? N1_z2 : N2_z2;
-        N_new = fvec2(safe_sqrtf(1.0f - Nz2), safe_sqrtf(Nz2));
-    } else {
-        return Ng;
-    }
-
-    return N_new.get<0>() * X + N_new.get<1>() * Ng;
-}
-
-force_inline fvec4 world_from_tangent(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &V) {
-    return V.get<0>() * T + V.get<1>() * B + V.get<2>() * N;
-}
-
-force_inline fvec4 tangent_from_world(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &V) {
-    return fvec4{dot(V, T), dot(V, B), dot(V, N), 0.0f};
-}
-
 force_inline bool quadratic(float a, float b, float c, float &t0, float &t1) {
     const float d = b * b - 4.0f * a * c;
     if (d < 0.0f) {
@@ -1158,37 +630,6 @@ force_inline bool quadratic(float a, float b, float c, float &t0, float &t1) {
 
 force_inline float ngon_rad(const float theta, const float n) {
     return cosf(PI / n) / cosf(theta - (2.0f * PI / n) * floorf((n * theta + PI) / (2.0f * PI)));
-}
-
-force_inline fvec4 make_fvec3(const float *f) { return fvec4{f[0], f[1], f[2], 0.0f}; }
-
-void push_ior_stack(float stack[4], const float val) {
-    UNROLLED_FOR(i, 3, {
-        if (stack[i] < 0.0f) {
-            stack[i] = val;
-            return;
-        }
-    })
-    // replace the last value regardless of sign
-    stack[3] = val;
-}
-
-float pop_ior_stack(float stack[4], const float default_value = 1.0f) {
-    UNROLLED_FOR_R(i, 4, {
-        if (stack[i] > 0.0f) {
-            return std::exchange(stack[i], -1.0f);
-        }
-    })
-    return default_value;
-}
-
-float peek_ior_stack(const float stack[4], bool skip_first, const float default_value = 1.0f) {
-    UNROLLED_FOR_R(i, 4, {
-        if (stack[i] > 0.0f && !std::exchange(skip_first, false)) {
-            return stack[i];
-        }
-    })
-    return default_value;
 }
 
 float approx_atan2(const float y, const float x) { // max error is 0.000004f
@@ -1356,8 +797,6 @@ void calc_lnode_importance(const light_wbvh_node_t &n, const fvec4 &P, float imp
     }
 }
 
-force_inline uint32_t hash_combine(uint32_t seed, uint32_t v) { return seed ^ (v + (seed << 6) + (seed >> 2)); }
-
 force_inline uint32_t reverse_bits(uint32_t x) {
     x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
     x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2));
@@ -1391,16 +830,6 @@ force_inline float scramble_flt(const uint32_t seed, const float val) {
 force_inline float scramble_unorm(const uint32_t seed, uint32_t val) {
     val = nested_uniform_scramble_base2(val, seed);
     return float(val >> 8) / 16777216.0f;
-}
-
-fvec2 get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const int sample, const uint32_t rand_seq[]) {
-    const uint32_t shuffled_dim = nested_uniform_scramble_base2(dim, seed) & (RAND_DIMS_COUNT - 1);
-    const uint32_t shuffled_i =
-        nested_uniform_scramble_base2(sample, hash_combine(seed, dim)) & (RAND_SAMPLES_COUNT - 1);
-    return fvec2{scramble_unorm(hash_combine(seed, 2 * dim + 0),
-                                rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
-                 scramble_unorm(hash_combine(seed, 2 * dim + 1),
-                                rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1])};
 }
 
 // Gram-Schmidt method
@@ -1541,11 +970,14 @@ float SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, 
     return (1.0f / area);
 }
 
+} // namespace Ref
+} // namespace Ray
+
 // "An Area-Preserving Parametrization for Spherical Rectangles"
 // https://www.arnoldrenderer.com/research/egsr2013_spherical_rectangle.pdf
 // NOTE: no precomputation is done, everything is calculated in-place
-float SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fvec4 &axis_u, const fvec4 &axis_v,
-                               const fvec2 Xi, fvec4 *out_p) {
+float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fvec4 &axis_u,
+                                         const fvec4 &axis_v, const fvec2 Xi, fvec4 *out_p) {
     const fvec4 corner = light_pos - 0.5f * axis_u - 0.5f * axis_v;
 
     float axisu_len, axisv_len;
@@ -1609,8 +1041,16 @@ float SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fve
     return (1.0f / area);
 }
 
-} // namespace Ref
-} // namespace Ray
+Ray::Ref::fvec2 Ray::Ref::get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const int sample,
+                                                const uint32_t rand_seq[]) {
+    const uint32_t shuffled_dim = nested_uniform_scramble_base2(dim, seed) & (RAND_DIMS_COUNT - 1);
+    const uint32_t shuffled_i =
+        nested_uniform_scramble_base2(sample, hash_combine(seed, dim)) & (RAND_SAMPLES_COUNT - 1);
+    return fvec2{scramble_unorm(hash_combine(seed, 2 * dim + 0),
+                                rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
+                 scramble_unorm(hash_combine(seed, 2 * dim + 1),
+                                rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1])};
+}
 
 void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
                                    const uint32_t rand_seq[], const uint32_t rand_seed, const float filter_table[],
@@ -1654,7 +1094,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
 
     for (int y = r.y; y < r.y + r.h; ++y) {
         for (int x = r.x; x < r.x + r.w; ++x) {
-            if (required_samples[y * w + x] < iteration) {
+            if (required_samples && required_samples[y * w + x] < iteration) {
                 continue;
             }
 
@@ -2675,368 +2115,6 @@ bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[
     return false;
 }
 
-float Ray::Ref::BRDF_PrincipledDiffuse(const fvec4 &V, const fvec4 &N, const fvec4 &L, const fvec4 &H,
-                                       const float roughness) {
-    const float N_dot_L = dot(N, L);
-    const float N_dot_V = dot(N, V);
-    if (N_dot_L <= 0.0f /*|| N_dot_V <= 0.0f*/) {
-        return 0.0f;
-    }
-
-    const float FL = schlick_weight(N_dot_L);
-    const float FV = schlick_weight(N_dot_V);
-
-    const float L_dot_H = dot(L, H);
-    const float Fd90 = 0.5f + 2.0f * L_dot_H * L_dot_H * roughness;
-    const float Fd = mix(1.0f, Fd90, FL) * mix(1.0f, Fd90, FV);
-
-    return Fd;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_OrenDiffuse_BSDF(const fvec4 &V, const fvec4 &N, const fvec4 &L,
-                                                    const float roughness, const fvec4 &base_color) {
-    const float sigma = roughness;
-    const float div = 1.0f / (PI + ((3.0f * PI - 4.0f) / 6.0f) * sigma);
-
-    const float a = 1.0f * div;
-    const float b = sigma * div;
-
-    ////
-
-    const float nl = fmaxf(dot(N, L), 0.0f);
-    const float nv = fmaxf(dot(N, V), 0.0f);
-    float t = dot(L, V) - nl * nv;
-
-    if (t > 0.0f) {
-        t /= fmaxf(nl, nv) + FLT_MIN;
-    }
-    const float is = nl * (a + b * t);
-
-    fvec4 diff_col = is * base_color;
-    diff_col.set<3>(0.5f / PI);
-
-    return diff_col;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I,
-                                                  const float roughness, const fvec4 &base_color, const fvec2 rand,
-                                                  fvec4 &out_V) {
-
-    const float phi = 2 * PI * rand.get<1>();
-    const float cos_phi = cosf(phi), sin_phi = sinf(phi);
-
-    const float dir = sqrtf(1.0f - rand.get<0>() * rand.get<1>());
-    auto V = fvec4{dir * cos_phi, dir * sin_phi, rand.get<0>(), 0.0f}; // in tangent-space
-
-    out_V = world_from_tangent(T, B, N, V);
-    return Evaluate_OrenDiffuse_BSDF(-I, N, out_V, roughness, base_color);
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledDiffuse_BSDF(const fvec4 &V, const fvec4 &N, const fvec4 &L,
-                                                          const float roughness, const fvec4 &base_color,
-                                                          const fvec4 &sheen_color, const bool uniform_sampling) {
-    float weight, pdf;
-    if (uniform_sampling) {
-        weight = 2 * dot(N, L);
-        pdf = 0.5f / PI;
-    } else {
-        weight = 1.0f;
-        pdf = dot(N, L) / PI;
-    }
-
-    fvec4 H = normalize(L + V);
-    if (dot(V, H) < 0.0f) {
-        H = -H;
-    }
-
-    fvec4 diff_col = base_color * (weight * BRDF_PrincipledDiffuse(V, N, L, H, roughness));
-
-    const float FH = PI * schlick_weight(dot(L, H));
-    diff_col += FH * sheen_color;
-    diff_col.set<3>(pdf);
-
-    return diff_col;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I,
-                                                        const float roughness, const fvec4 &base_color,
-                                                        const fvec4 &sheen_color, const bool uniform_sampling,
-                                                        const fvec2 rand, fvec4 &out_V) {
-    const float phi = 2 * PI * rand.get<1>();
-    const float cos_phi = cosf(phi), sin_phi = sinf(phi);
-
-    fvec4 V;
-    if (uniform_sampling) {
-        const float dir = sqrtf(1.0f - rand.get<0>() * rand.get<0>());
-        V = fvec4{dir * cos_phi, dir * sin_phi, rand.get<0>(), 0.0f}; // in tangent-space
-    } else {
-        const float dir = sqrtf(rand.get<0>());
-        const float k = sqrtf(1.0f - rand.get<0>());
-        V = fvec4{dir * cos_phi, dir * sin_phi, k, 0.0f}; // in tangent-space
-    }
-
-    out_V = world_from_tangent(T, B, N, V);
-    return Evaluate_PrincipledDiffuse_BSDF(-I, N, out_V, roughness, base_color, sheen_color, uniform_sampling);
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const fvec4 &view_dir_ts, const fvec4 &sampled_normal_ts,
-                                                    const fvec4 &reflected_dir_ts, const fvec2 alpha,
-                                                    const float spec_ior, const float spec_F0, const fvec4 &spec_col,
-                                                    const fvec4 &spec_col_90) {
-    const float D = D_GGX(sampled_normal_ts, alpha);
-    const float G = G1(view_dir_ts, alpha) * G1(reflected_dir_ts, alpha);
-
-    const float FH =
-        (fresnel_dielectric_cos(dot(view_dir_ts, sampled_normal_ts), spec_ior) - spec_F0) / (1.0f - spec_F0);
-    fvec4 F = mix(spec_col, spec_col_90, FH);
-
-    const float denom = 4.0f * fabsf(view_dir_ts.get<2>() * reflected_dir_ts.get<2>());
-    F *= (denom != 0.0f) ? (D * G / denom) : 0.0f;
-    F *= fmaxf(reflected_dir_ts.get<2>(), 0.0f);
-
-    const float pdf = GGX_VNDF_Reflection_Bounded_PDF(D, view_dir_ts, alpha);
-    F.set<3>(pdf);
-
-    return F;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I,
-                                                  const fvec2 alpha, const float spec_ior, const float spec_F0,
-                                                  const fvec4 &spec_col, const fvec4 &spec_col_90, const fvec2 rand,
-                                                  fvec4 &out_V) {
-    if (alpha.get<0>() * alpha.get<1>() < 1e-7f) {
-        const fvec4 V = reflect(I, N, dot(N, I));
-        const float FH = (fresnel_dielectric_cos(dot(V, N), spec_ior) - spec_F0) / (1.0f - spec_F0);
-        fvec4 F = mix(spec_col, spec_col_90, FH);
-        out_V = V;
-        return fvec4{F.get<0>() * 1e6f, F.get<1>() * 1e6f, F.get<2>() * 1e6f, 1e6f};
-    }
-
-    const fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
-    const fvec4 sampled_normal_ts = SampleGGX_VNDF_Bounded(view_dir_ts, alpha, rand);
-
-    const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
-    const fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts, dot_N_V));
-
-    out_V = world_from_tangent(T, B, N, reflected_dir_ts);
-    return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha, spec_ior, spec_F0,
-                                     spec_col, spec_col_90);
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const fvec4 &view_dir_ts, const fvec4 &sampled_normal_ts,
-                                                      const fvec4 &refr_dir_ts, const fvec2 alpha, float eta,
-                                                      const fvec4 &refr_col) {
-    if (refr_dir_ts.get<2>() >= 0.0f || view_dir_ts.get<2>() <= 0.0f || alpha.get<0>() * alpha.get<1>() < 1e-7f) {
-        return fvec4{0.0f};
-    }
-
-    const float D = D_GGX(sampled_normal_ts, alpha);
-
-    const float G1o = G1(refr_dir_ts, alpha), G1i = G1(view_dir_ts, alpha);
-
-    const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
-    const float jacobian = denom != 0.0f ? fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
-
-    float F = D * G1i * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
-              (/*-refr_dir_ts.get<2>() */ view_dir_ts.get<2>());
-
-    float pdf = D * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian / view_dir_ts.get<2>();
-
-    // const float pdf = D * fmaxf(sampled_normal_ts.get<2>(), 0.0f) * jacobian;
-    // const float pdf = D * sampled_normal_ts.get<2>() * fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / denom;
-
-    fvec4 ret = F * refr_col;
-    // ret *= (-refr_dir_ts.get<2>());
-    ret.set<3>(pdf);
-
-    return ret;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I,
-                                                    const fvec2 alpha, const float eta, const fvec4 &refr_col,
-                                                    const fvec2 rand, fvec4 &out_V) {
-    if (alpha.get<0>() * alpha.get<1>() < 1e-7f) {
-        const float cosi = -dot(I, N);
-        const float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-        if (cost2 < 0) {
-            return fvec4{0.0f};
-        }
-        const float m = eta * cosi - sqrtf(cost2);
-        const fvec4 V = normalize(eta * I + m * N);
-
-        out_V = fvec4{V.get<0>(), V.get<1>(), V.get<2>(), m};
-        return fvec4{refr_col.get<0>() * 1e6f, refr_col.get<1>() * 1e6f, refr_col.get<2>() * 1e6f, 1e6f};
-    }
-
-    const fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
-    const fvec4 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, alpha, rand);
-
-    const float cosi = dot(view_dir_ts, sampled_normal_ts);
-    const float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-    if (cost2 < 0) {
-        return fvec4{0.0f};
-    }
-    const float m = eta * cosi - sqrtf(cost2);
-    const fvec4 refr_dir_ts = normalize(-eta * view_dir_ts + m * sampled_normal_ts);
-
-    const fvec4 F = Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, refr_dir_ts, alpha, eta, refr_col);
-
-    const fvec4 V = world_from_tangent(T, B, N, refr_dir_ts);
-    out_V = fvec4{V.get<0>(), V.get<1>(), V.get<2>(), m};
-    return F;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledClearcoat_BSDF(const fvec4 &view_dir_ts, const fvec4 &sampled_normal_ts,
-                                                            const fvec4 &reflected_dir_ts,
-                                                            const float clearcoat_roughness2, const float clearcoat_ior,
-                                                            const float clearcoat_F0) {
-    const float D = D_GTR1(sampled_normal_ts.get<2>(), clearcoat_roughness2);
-    // Always assume roughness of 0.25 for clearcoat
-    const fvec2 clearcoat_alpha = {0.25f * 0.25f};
-    const float G = G1(view_dir_ts, clearcoat_alpha) * G1(reflected_dir_ts, clearcoat_alpha);
-
-    const float FH = (fresnel_dielectric_cos(dot(reflected_dir_ts, sampled_normal_ts), clearcoat_ior) - clearcoat_F0) /
-                     (1.0f - clearcoat_F0);
-    float F = mix(0.04f, 1.0f, FH);
-
-    const float denom = 4.0f * fabsf(view_dir_ts.get<2>()) * fabsf(reflected_dir_ts.get<2>());
-    F *= (denom != 0.0f) ? D * G / denom : 0.0f;
-    F *= fmaxf(reflected_dir_ts.get<2>(), 0.0f);
-
-    const float pdf = GGX_VNDF_Reflection_Bounded_PDF(D, view_dir_ts, clearcoat_alpha);
-    return fvec4{F, F, F, pdf};
-}
-
-Ray::Ref::fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N,
-                                                          const fvec4 &I, const float clearcoat_roughness2,
-                                                          const float clearcoat_ior, const float clearcoat_F0,
-                                                          const fvec2 rand, fvec4 &out_V) {
-    if (sqr(clearcoat_roughness2) < 1e-7f) {
-        const fvec4 V = reflect(I, N, dot(N, I));
-
-        const float FH = (fresnel_dielectric_cos(dot(V, N), clearcoat_ior) - clearcoat_F0) / (1.0f - clearcoat_F0);
-        const float F = mix(0.04f, 1.0f, FH);
-
-        out_V = V;
-        return fvec4{F * 1e6f, F * 1e6f, F * 1e6f, 1e6f};
-    }
-
-    const fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
-    // NOTE: GTR1 distribution is not used for sampling because Cycles does it this way (???!)
-    const fvec4 sampled_normal_ts = SampleGGX_VNDF_Bounded(view_dir_ts, clearcoat_roughness2, rand);
-
-    const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
-    const fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts, dot_N_V));
-
-    out_V = world_from_tangent(T, B, N, reflected_dir_ts);
-
-    return Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, clearcoat_roughness2,
-                                             clearcoat_ior, clearcoat_F0);
-}
-
-float Ray::Ref::Evaluate_EnvQTree(const float y_rotation, const fvec4 *const *qtree_mips, const int qtree_levels,
-                                  const fvec4 &L) {
-    int res = 2;
-    int lod = qtree_levels - 1;
-
-    fvec2 p;
-    DirToCanonical(value_ptr(L), -y_rotation, value_ptr(p));
-    float factor = 1.0f;
-
-    while (lod >= 0) {
-        const int x = clamp(int(p.get<0>() * float(res)), 0, res - 1);
-        const int y = clamp(int(p.get<1>() * float(res)), 0, res - 1);
-
-        int index = 0;
-        index |= (x & 1) << 0;
-        index |= (y & 1) << 1;
-
-        const int qx = x / 2;
-        const int qy = y / 2;
-
-        const fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
-        const float total = quad.get<0>() + quad.get<1>() + quad.get<2>() + quad.get<3>();
-        if (total <= 0.0f) {
-            break;
-        }
-
-        factor *= 4.0f * quad[index] / total;
-
-        --lod;
-        res *= 2;
-    }
-
-    return factor / (4.0f * PI);
-}
-
-Ray::Ref::fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const fvec4 *const *qtree_mips,
-                                          const int qtree_levels, const float rand, const float rx, const float ry) {
-    int res = 2;
-    float step = 1.0f / float(res);
-
-    float sample = rand;
-    int lod = qtree_levels - 1;
-
-    fvec2 origin = {0.0f, 0.0f};
-    float factor = 1.0f;
-
-    while (lod >= 0) {
-        const int qx = int(origin.get<0>() * float(res)) / 2;
-        const int qy = int(origin.get<1>() * float(res)) / 2;
-
-        const fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
-
-        const float top_left = quad.get<0>();
-        const float top_right = quad.get<1>();
-        float partial = top_left + quad.get<2>();
-        const float total = partial + top_right + quad.get<3>();
-        if (total <= 0.0f) {
-            break;
-        }
-
-        float boundary = partial / total;
-
-        int index = 0;
-        if (sample < boundary) {
-            assert(partial > 0.0f);
-            sample /= boundary;
-            boundary = top_left / partial;
-        } else {
-            partial = total - partial;
-            assert(partial > 0.0f);
-            origin.set<0>(origin.get<0>() + step);
-            sample = (sample - boundary) / (1.0f - boundary);
-            boundary = top_right / partial;
-            index |= (1 << 0);
-        }
-
-        if (sample < boundary) {
-            sample /= boundary;
-        } else {
-            origin.set<1>(origin.get<1>() + step);
-            sample = (sample - boundary) / (1.0f - boundary);
-            index |= (1 << 1);
-        }
-
-        factor *= 4.0f * quad[index] / total;
-
-        --lod;
-        res *= 2;
-        step *= 0.5f;
-    }
-
-    origin += 2 * step * fvec2{rx, ry};
-
-    // origin = fvec2{rx, ry};
-    // factor = 1.0f;
-
-    fvec4 dir_and_pdf;
-    CanonicalToDir(value_ptr(origin), y_rotation, value_ptr(dir_and_pdf));
-    dir_and_pdf.set<3>(factor / (4.0f * PI));
-
-    return dir_and_pdf;
-}
-
 void Ray::Ref::TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3],
                             float out_rd[3]) {
     out_ro[0] = xform[0] * ro[0] + xform[4] * ro[1] + xform[8] * ro[2] + xform[12];
@@ -3064,6 +2142,40 @@ Ray::Ref::fvec4 Ray::Ref::TransformNormal(const fvec4 &n, const float *inv_xform
     return fvec4{inv_xform[0] * n.get<0>() + inv_xform[1] * n.get<1>() + inv_xform[2] * n.get<2>(),
                  inv_xform[4] * n.get<0>() + inv_xform[5] * n.get<1>() + inv_xform[6] * n.get<2>(),
                  inv_xform[8] * n.get<0>() + inv_xform[9] * n.get<1>() + inv_xform[10] * n.get<2>(), 0.0f};
+}
+
+float Ray::Ref::get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const fvec2 &duv_dx,
+                                const fvec2 &duv_dy) {
+#ifdef FORCE_TEXTURE_LOD
+    const float lod = float(FORCE_TEXTURE_LOD);
+#else
+    fvec2 sz;
+    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, value_ptr(sz));
+    const fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
+    const fvec2 _diagonal = _duv_dx + _duv_dy;
+
+    // Find minimal dimention of parallelogram
+    const float min_length2 = fminf(fminf(_duv_dx.length2(), _duv_dy.length2()), _diagonal.length2());
+    // Find lod
+    float lod = fast_log2(min_length2);
+    // Substruct 1 from lod to always have 4 texels for interpolation
+    lod = clamp(0.5f * lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
+#endif
+    return lod;
+}
+
+float Ray::Ref::get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const float lambda) {
+#ifdef FORCE_TEXTURE_LOD
+    const float lod = float(FORCE_TEXTURE_LOD);
+#else
+    fvec2 res;
+    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, value_ptr(res));
+    // Find lod
+    float lod = lambda + 0.5f * fast_log2(res.get<0>() * res.get<1>());
+    // Substruct 1 from lod to always have 4 texels for interpolation
+    lod = clamp(lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
+#endif
+    return lod;
 }
 
 Ray::Ref::fvec4 Ray::Ref::SampleNearest(const Cpu::TexStorageBase *const textures[], const uint32_t index,
@@ -3326,7 +2438,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
                         tex_color = YCoCg_to_RGB(tex_color);
                     }
                     if (base_texture & TEX_SRGB_BIT) {
-                        tex_color = srgb_to_rgb(tex_color);
+                        tex_color = srgb_to_linear(tex_color);
                     }
                     mix_val *= tex_color.get<0>();
                 }
@@ -3344,11 +2456,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
                 break;
             }
 
-#if USE_PATH_TERMINATION
-            const bool can_terminate_path = get_transp_depth(r.depth) > min_transp_depth;
-#else
-            const bool can_terminate_path = false;
-#endif
+            const bool can_terminate_path = USE_PATH_TERMINATION && get_transp_depth(r.depth) > min_transp_depth;
 
             const float lum = fmaxf(r.c[0], fmaxf(r.c[1], r.c[2]));
             const float p = mix_term_rand.get<1>();
@@ -3454,7 +2562,7 @@ Ray::Ref::fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int max_tr
                         tex_color = YCoCg_to_RGB(tex_color);
                     }
                     if (base_texture & TEX_SRGB_BIT) {
-                        tex_color = srgb_to_rgb(tex_color);
+                        tex_color = srgb_to_linear(tex_color);
                     }
                     mix_val *= tex_color.get<0>();
                 }
@@ -3487,52 +2595,53 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
                                  const fvec2 rand_light_uv, const fvec2 rand_tex_uv, light_sample_t &ls) {
     float u1 = rand_pick_light;
 
-#if USE_HIERARCHICAL_NEE
-    float factor = 1.0f;
+    uint32_t light_index;
+    float factor;
+    if (USE_HIERARCHICAL_NEE) {
+        factor = 1.0f;
+        uint32_t i = 0; // start from root
+        while (!is_leaf_node(sc.light_wnodes[i])) {
+            alignas(16) float importance[8];
+            calc_lnode_importance(sc.light_wnodes[i], P, importance);
 
-    uint32_t i = 0; // start from root
-    while (!is_leaf_node(sc.light_wnodes[i])) {
-        alignas(16) float importance[8];
-        calc_lnode_importance(sc.light_wnodes[i], P, importance);
-
-        const float total_importance =
-            hsum(fvec4{&importance[0], vector_aligned} + fvec4{&importance[4], vector_aligned});
-        if (total_importance == 0.0f) {
-            // failed to find lightsource for sampling
-            return;
-        }
-
-        alignas(16) float factors[8];
-        UNROLLED_FOR(j, 8, { factors[j] = importance[j] / total_importance; })
-
-        float factors_cdf[9] = {};
-        UNROLLED_FOR(j, 8, { factors_cdf[j + 1] = factors_cdf[j] + factors[j]; })
-        // make sure cdf ends with 1.0
-        UNROLLED_FOR(j, 8, {
-            if (factors_cdf[j + 1] == factors_cdf[8]) {
-                factors_cdf[j + 1] = 1.01f;
+            const float total_importance =
+                hsum(fvec4{&importance[0], vector_aligned} + fvec4{&importance[4], vector_aligned});
+            if (total_importance == 0.0f) {
+                // failed to find lightsource for sampling
+                return;
             }
-        })
 
-        ivec4 less_eq[2] = {};
-        where(fvec4{&factors_cdf[1]} <= u1, less_eq[0]) = 1;
-        where(fvec4{&factors_cdf[5]} <= u1, less_eq[1]) = 1;
+            alignas(16) float factors[8];
+            UNROLLED_FOR(j, 8, { factors[j] = importance[j] / total_importance; })
 
-        const int next = hsum(less_eq[0] + less_eq[1]);
-        assert(next < 8);
+            float factors_cdf[9] = {};
+            UNROLLED_FOR(j, 8, { factors_cdf[j + 1] = factors_cdf[j] + factors[j]; })
+            // make sure cdf ends with 1.0
+            UNROLLED_FOR(j, 8, {
+                if (factors_cdf[j + 1] == factors_cdf[8]) {
+                    factors_cdf[j + 1] = 1.01f;
+                }
+            })
 
-        u1 = fract((u1 - factors_cdf[next]) / factors[next]);
-        i = sc.light_wnodes[i].child[next];
-        factor *= factors[next];
+            ivec4 less_eq[2] = {};
+            where(fvec4{&factors_cdf[1]} <= u1, less_eq[0]) = 1;
+            where(fvec4{&factors_cdf[5]} <= u1, less_eq[1]) = 1;
+
+            const int next = hsum(less_eq[0] + less_eq[1]);
+            assert(next < 8);
+
+            u1 = fract((u1 - factors_cdf[next]) / factors[next]);
+            i = sc.light_wnodes[i].child[next];
+            factor *= factors[next];
+        }
+        light_index = (sc.light_wnodes[i].child[0] & PRIM_INDEX_BITS);
+        factor = 1.0f / factor;
+    } else {
+        light_index = std::min(uint32_t(u1 * float(sc.li_indices.size())), uint32_t(sc.li_indices.size() - 1));
+        u1 = u1 * float(sc.li_indices.size()) - float(light_index);
+        light_index = sc.li_indices[light_index];
+        factor = float(sc.li_indices.size());
     }
-    const uint32_t light_index = (sc.light_wnodes[i].child[0] & PRIM_INDEX_BITS);
-    factor = 1.0f / factor;
-#else
-    uint32_t light_index = std::min(uint32_t(u1 * float(sc.li_indices.size())), uint32_t(sc.li_indices.size() - 1));
-    u1 = u1 * float(sc.li_indices.size()) - float(light_index);
-    light_index = sc.li_indices[light_index];
-    const float factor = float(sc.li_indices.size());
-#endif
     const light_t &l = sc.lights[light_index];
 
     ls.col = make_fvec3(l.col);
@@ -3601,13 +2710,12 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         const fvec4 light_forward = normalize(cross(light_u, light_v));
 
         fvec4 lp;
-        float pdf;
+        float pdf = 0.0f;
 
-#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-        pdf = SampleSphericalRectangle(P, light_pos, light_u, light_v, rand_light_uv, &lp);
-        if (pdf <= 0.0f)
-#endif
-        {
+        if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
+            pdf = SampleSphericalRectangle(P, light_pos, light_u, light_v, rand_light_uv, &lp);
+        }
+        if (pdf <= 0.0f) {
             const float r1 = rand_light_uv.get<0>() - 0.5f, r2 = rand_light_uv.get<1>() - 0.5f;
             lp = light_pos + light_u * r1 + light_v * r2;
         }
@@ -3726,11 +2834,12 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
 
         fvec4 lp;
         fvec2 luvs;
-        float pdf;
+        float pdf = 0.0f;
 
-#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-        // Spherical triangle sampling
-        pdf = SampleSphericalTriangle(P, p1, p2, p3, rand_light_uv, &ls.L);
+        if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
+            // Spherical triangle sampling
+            pdf = SampleSphericalTriangle(P, p1, p2, p3, rand_light_uv, &ls.L);
+        }
         if (pdf > 0.0f) {
             // find u, v of intersection point
             const fvec4 pvec = cross(ls.L, e2);
@@ -3741,9 +2850,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
 
             lp = (1.0f - tri_u - tri_v) * p1 + tri_u * p2 + tri_v * p3;
             luvs = (1.0f - tri_u - tri_v) * uv1 + tri_u * uv2 + tri_v * uv3;
-        } else
-#endif
-        {
+        } else {
             // Simple area sampling
             const float r1 = sqrtf(rand_light_uv.get<0>()), r2 = rand_light_uv.get<1>();
             luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
@@ -3770,7 +2877,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
                     tex_color = YCoCg_to_RGB(tex_color);
                 }
                 if (l.tri.tex_index & TEX_SRGB_BIT) {
-                    tex_color = srgb_to_rgb(tex_color);
+                    tex_color = srgb_to_linear(tex_color);
                 }
                 ls.col *= tex_color;
             }
@@ -4495,6 +3602,109 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri
     return 1.0f;
 }
 
+float Ray::Ref::Evaluate_EnvQTree(const float y_rotation, const fvec4 *const *qtree_mips, const int qtree_levels,
+                                  const fvec4 &L) {
+    int res = 2;
+    int lod = qtree_levels - 1;
+
+    fvec2 p;
+    DirToCanonical(value_ptr(L), -y_rotation, value_ptr(p));
+    float factor = 1.0f;
+
+    while (lod >= 0) {
+        const int x = clamp(int(p.get<0>() * float(res)), 0, res - 1);
+        const int y = clamp(int(p.get<1>() * float(res)), 0, res - 1);
+
+        int index = 0;
+        index |= (x & 1) << 0;
+        index |= (y & 1) << 1;
+
+        const int qx = x / 2;
+        const int qy = y / 2;
+
+        const fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
+        const float total = quad.get<0>() + quad.get<1>() + quad.get<2>() + quad.get<3>();
+        if (total <= 0.0f) {
+            break;
+        }
+
+        factor *= 4.0f * quad[index] / total;
+
+        --lod;
+        res *= 2;
+    }
+
+    return factor / (4.0f * PI);
+}
+
+Ray::Ref::fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const fvec4 *const *qtree_mips,
+                                          const int qtree_levels, const float rand, const float rx, const float ry) {
+    int res = 2;
+    float step = 1.0f / float(res);
+
+    float sample = rand;
+    int lod = qtree_levels - 1;
+
+    fvec2 origin = {0.0f, 0.0f};
+    float factor = 1.0f;
+
+    while (lod >= 0) {
+        const int qx = int(origin.get<0>() * float(res)) / 2;
+        const int qy = int(origin.get<1>() * float(res)) / 2;
+
+        const fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
+
+        const float top_left = quad.get<0>();
+        const float top_right = quad.get<1>();
+        float partial = top_left + quad.get<2>();
+        const float total = partial + top_right + quad.get<3>();
+        if (total <= 0.0f) {
+            break;
+        }
+
+        float boundary = partial / total;
+
+        int index = 0;
+        if (sample < boundary) {
+            assert(partial > 0.0f);
+            sample /= boundary;
+            boundary = top_left / partial;
+        } else {
+            partial = total - partial;
+            assert(partial > 0.0f);
+            origin.set<0>(origin.get<0>() + step);
+            sample = (sample - boundary) / (1.0f - boundary);
+            boundary = top_right / partial;
+            index |= (1 << 0);
+        }
+
+        if (sample < boundary) {
+            sample /= boundary;
+        } else {
+            origin.set<1>(origin.get<1>() + step);
+            sample = (sample - boundary) / (1.0f - boundary);
+            index |= (1 << 1);
+        }
+
+        factor *= 4.0f * quad[index] / total;
+
+        --lod;
+        res *= 2;
+        step *= 0.5f;
+    }
+
+    origin += 2 * step * fvec2{rx, ry};
+
+    // origin = fvec2{rx, ry};
+    // factor = 1.0f;
+
+    fvec4 dir_and_pdf;
+    CanonicalToDir(value_ptr(origin), y_rotation, value_ptr(dir_and_pdf));
+    dir_and_pdf.set<3>(factor / (4.0f * PI));
+
+    return dir_and_pdf;
+}
+
 void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
                          uint32_t node_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
                          const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
@@ -4513,7 +3723,7 @@ void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_tr
 void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val,
                                const scene_data_t &sc, uint32_t node_index, const uint32_t rand_seq[],
                                const uint32_t rand_seed, const int iteration,
-                               const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
+                               const Cpu::TexStorageBase *const textures[], const int img_w, color_rgba_t *out_color) {
     const float limit = (_clamp_val != 0.0f) ? 3.0f * _clamp_val : FLT_MAX;
     for (int i = 0; i < int(rays.size()); ++i) {
         const shadow_ray_t &sh_r = rays[i];
@@ -4538,1440 +3748,6 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
     }
 }
 
-Ray::Ref::fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env,
-                                            const Cpu::TexStorageRGBA &tex_storage, const float pdf_factor,
-                                            const fvec2 &rand) {
-    const fvec4 I = make_fvec3(ray.d);
-    fvec4 env_col = 1.0f;
-
-    const uint32_t env_map = is_indirect(ray.depth) ? env.env_map : env.back_map;
-    const float env_map_rotation = is_indirect(ray.depth) ? env.env_map_rotation : env.back_map_rotation;
-    if (env_map != 0xffffffff) {
-        env_col = SampleLatlong_RGBE(tex_storage, env_map, I, env_map_rotation, rand);
-    }
-
-#if USE_NEE
-    if (env.light_index != 0xffffffff && pdf_factor >= 0.0f && is_indirect(ray.depth)) {
-        if (env.qtree_levels) {
-            const auto *qtree_mips = reinterpret_cast<const fvec4 *const *>(env.qtree_mips);
-
-            const float light_pdf =
-                safe_div_pos(Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, I), pdf_factor);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            env_col *= mis_weight;
-        } else {
-            const float light_pdf = safe_div_pos(0.5f, PI * pdf_factor);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            env_col *= mis_weight;
-        }
-    }
-#endif
-
-    env_col *= is_indirect(ray.depth) ? fvec4{env.env_col[0], env.env_col[1], env.env_col[2], 1.0f}
-                                      : fvec4{env.back_col[0], env.back_col[1], env.back_col[2], 1.0f};
-    env_col.set<3>(1.0f);
-
-    return env_col;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
-                                              const Cpu::TexStorageRGBA &tex_storage, Span<const light_t> lights,
-                                              const uint32_t lights_count, const fvec2 &rand) {
-    const fvec4 ro = make_fvec3(ray.o), I = make_fvec3(ray.d);
-
-    const light_t &l = lights[-inter.obj_index - 1];
-#if USE_HIERARCHICAL_NEE
-    const float pdf_factor = 1.0f / inter.u;
-#else
-    const float pdf_factor = float(lights_count);
-#endif
-
-    fvec4 lcol = make_fvec3(l.col);
-    if (l.sky_portal != 0) {
-        fvec4 env_col = make_fvec3(env.env_col);
-        if (env.env_map != 0xffffffff) {
-            env_col *= SampleLatlong_RGBE(tex_storage, env.env_map, I, env.env_map_rotation, rand);
-        }
-        lcol *= env_col;
-    }
-#if USE_NEE
-    if (l.type == LIGHT_TYPE_SPHERE) {
-        const fvec4 light_pos = make_fvec3(l.sph.pos);
-
-        const fvec4 disk_normal = normalize(ro - light_pos);
-        const float disk_dist = dot(ro, disk_normal) - dot(light_pos, disk_normal);
-
-        const float light_pdf = (disk_dist * disk_dist) / (PI * l.sph.radius * l.sph.radius * pdf_factor);
-        const float bsdf_pdf = ray.pdf;
-
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        lcol *= mis_weight;
-
-        if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
-            const float _dot = -dot(I, fvec4{l.sph.dir});
-            assert(_dot > 0.0f);
-            const float _angle = acosf(saturate(_dot));
-            assert(_angle <= l.sph.spot);
-            if (l.sph.blend > 0.0f) {
-                lcol *= saturate((l.sph.spot - _angle) / l.sph.blend);
-            }
-        }
-    } else if (l.type == LIGHT_TYPE_DIR) {
-        const float radius = tanf(l.dir.angle);
-        const float light_area = PI * radius * radius;
-
-        const float cos_theta = dot(I, make_fvec3(l.dir.dir));
-
-        const float light_pdf = 1.0f / (light_area * cos_theta * pdf_factor);
-        const float bsdf_pdf = ray.pdf;
-
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        lcol *= mis_weight;
-    } else if (l.type == LIGHT_TYPE_RECT) {
-        const fvec4 light_pos = make_fvec3(l.rect.pos);
-        const fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
-
-        float light_pdf;
-#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-        light_pdf = SampleSphericalRectangle(ro, light_pos, light_u, light_v, {}, nullptr) / pdf_factor;
-        if (light_pdf == 0.0f)
-#endif
-        {
-            const fvec4 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.rect.area;
-            const float cos_theta = dot(I, light_forward);
-            light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
-        }
-
-        const float bsdf_pdf = ray.pdf;
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        lcol *= mis_weight;
-    } else if (l.type == LIGHT_TYPE_DISK) {
-        fvec4 light_u = make_fvec3(l.disk.u), light_v = make_fvec3(l.disk.v);
-
-        const fvec4 light_forward = normalize(cross(light_u, light_v));
-        const float light_area = l.disk.area;
-
-        const float cos_theta = dot(I, light_forward);
-
-        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
-        const float bsdf_pdf = ray.pdf;
-
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        lcol *= mis_weight;
-    } else if (l.type == LIGHT_TYPE_LINE) {
-        const fvec4 light_dir = make_fvec3(l.line.v);
-        const float light_area = l.line.area;
-
-        const float cos_theta = 1.0f - fabsf(dot(I, light_dir));
-
-        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
-        const float bsdf_pdf = ray.pdf;
-
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        lcol *= mis_weight;
-    }
-#endif // USE_NEE
-    return lcol;
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                               const fvec4 &base_color, const float roughness, const float mix_weight,
-                                               const bool use_mis, shadow_ray_t &sh_r) {
-    const fvec4 I = make_fvec3(ray.d);
-
-    const fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, surf.N, ls.L, roughness, base_color);
-    const float bsdf_pdf = diff_col[3];
-
-    float mis_weight = 1.0f;
-    if (use_mis && ls.area > 0.0f) {
-        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-    }
-
-    const fvec4 lcol = ls.col * diff_col * (mix_weight * mis_weight / ls.pdf);
-
-    if (!ls.cast_shadow) {
-        // apply light immediately
-        return lcol;
-    }
-
-    // schedule shadow ray
-    memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-    UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol[i]; })
-    return fvec4{0.0f};
-}
-
-void Ray::Ref::Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color,
-                                  const float roughness, const fvec2 rand, const float mix_weight,
-                                  ray_data_t &new_ray) {
-    const fvec4 I = make_fvec3(ray.d);
-
-    fvec4 V;
-    const fvec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand, V);
-
-    new_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
-    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(1, 0, 0, 0);
-
-    memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-    memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-    UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F[i] * mix_weight / F[3]; })
-    new_ray.pdf = F[3];
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                              const fvec4 &base_color, const float roughness,
-                                              const float regularize_alpha, const float spec_ior, const float spec_F0,
-                                              const float mix_weight, const bool use_mis, shadow_ray_t &sh_r) {
-    const fvec4 I = make_fvec3(ray.d);
-    const fvec4 H = normalize(ls.L - I);
-
-    const fvec4 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
-    const fvec4 light_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, ls.L);
-    const fvec4 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
-
-    const fvec2 alpha = calc_alpha(roughness, 0.0f, regularize_alpha);
-    if (alpha.get<0>() * alpha.get<1>() < 1e-7f) {
-        return fvec4{0.0f};
-    }
-
-    const fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha, spec_ior,
-                                                     spec_F0, base_color, base_color);
-    const float bsdf_pdf = spec_col[3];
-
-    float mis_weight = 1.0f;
-    if (use_mis && ls.area > 0.0f) {
-        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-    }
-    const fvec4 lcol = ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
-
-    if (!ls.cast_shadow) {
-        // apply light immediately
-        return lcol;
-    }
-
-    // schedule shadow ray
-    memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-    sh_r.c[0] = ray.c[0] * lcol.get<0>();
-    sh_r.c[1] = ray.c[1] * lcol.get<1>();
-    sh_r.c[2] = ray.c[2] * lcol.get<2>();
-    return fvec4{0.0f};
-}
-
-void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color,
-                                 const float roughness, const float regularize_alpha, const float spec_ior,
-                                 const float spec_F0, const fvec2 rand, const float mix_weight, ray_data_t &new_ray) {
-    const fvec4 I = make_fvec3(ray.d);
-
-    fvec4 V;
-    const fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, calc_alpha(roughness, 0.0f, regularize_alpha),
-                                            spec_ior, spec_F0, base_color, base_color, rand, V);
-
-    new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
-    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
-
-    memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-    memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-
-    UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
-    new_ray.pdf = F[3];
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray,
-                                                  const surface_t &surf, const fvec4 &base_color, const float roughness,
-                                                  const float regularize_alpha, const float eta, const float mix_weight,
-                                                  const bool use_mis, shadow_ray_t &sh_r) {
-    const fvec4 I = make_fvec3(ray.d);
-
-    const fvec4 H = normalize(ls.L - I * eta);
-    const fvec4 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
-    const fvec4 light_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, ls.L);
-    const fvec4 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
-
-    const fvec4 refr_col = Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
-                                                       calc_alpha(roughness, 0.0f, regularize_alpha), eta, base_color);
-    const float bsdf_pdf = refr_col[3];
-
-    float mis_weight = 1.0f;
-    if (use_mis && ls.area > 0.0f) {
-        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-    }
-    const fvec4 lcol = ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
-
-    if (!ls.cast_shadow) {
-        // apply light immediately
-        return lcol;
-    }
-
-    // schedule shadow ray
-    memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
-    UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol.get<i>(); })
-    return fvec4{0.0f};
-}
-
-void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color,
-                                     const float roughness, const float regularize_alpha, const bool is_backfacing,
-                                     const float int_ior, const float ext_ior, const fvec2 rand, const float mix_weight,
-                                     ray_data_t &new_ray) {
-    const fvec4 I = make_fvec3(ray.d);
-    const float eta = is_backfacing ? (int_ior / ext_ior) : (ext_ior / int_ior);
-
-    fvec4 V;
-    const fvec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, calc_alpha(roughness, 0.0f, regularize_alpha),
-                                              eta, base_color, rand, V);
-
-    new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
-    new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
-
-    UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
-    new_ray.pdf = F.get<3>();
-
-    if (!is_backfacing) {
-        // Entering the surface, push new value
-        push_ior_stack(new_ray.ior, int_ior);
-    } else {
-        // Exiting the surface, pop the last ior value
-        pop_ior_stack(new_ray.ior);
-    }
-
-    memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
-    memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-}
-
-Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &ray,
-                                                  const surface_t &surf, const lobe_weights_t &lobe_weights,
-                                                  const diff_params_t &diff, const spec_params_t &spec,
-                                                  const clearcoat_params_t &coat, const transmission_params_t &trans,
-                                                  const float metallic, const float transmission, const float N_dot_L,
-                                                  const float mix_weight, const bool use_mis,
-                                                  const float regularize_alpha, shadow_ray_t &sh_r) {
-    const fvec4 I = make_fvec3(ray.d);
-
-    fvec4 lcol = 0.0f;
-    float bsdf_pdf = 0.0f;
-
-    if (lobe_weights.diffuse > 0.0f && N_dot_L > 0.0f) {
-        fvec4 diff_col =
-            Evaluate_PrincipledDiffuse_BSDF(-I, surf.N, ls.L, diff.roughness, diff.base_color, diff.sheen_color, false);
-        bsdf_pdf += lobe_weights.diffuse * diff_col.get<3>();
-        diff_col *= (1.0f - metallic) * (1.0f - transmission);
-
-        lcol += ls.col * N_dot_L * diff_col / (PI * ls.pdf);
-    }
-
-    fvec4 H;
-    if (N_dot_L > 0.0f) {
-        H = normalize(ls.L - I);
-    } else {
-        H = normalize(ls.L - I * trans.eta);
-    }
-
-    const fvec4 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
-    const fvec4 light_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, ls.L);
-    const fvec4 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
-
-    const fvec2 spec_alpha = calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha);
-    if (lobe_weights.specular > 0.0f && spec_alpha.get<0>() * spec_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
-        const fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, spec_alpha,
-                                                         spec.ior, spec.F0, spec.tmp_col, fvec4{1.0f});
-        bsdf_pdf += lobe_weights.specular * spec_col.get<3>();
-
-        lcol += ls.col * spec_col / ls.pdf;
-    }
-
-    const fvec2 coat_alpha = calc_alpha(coat.roughness, 0.0f, regularize_alpha);
-    if (lobe_weights.clearcoat > 0.0f && coat_alpha.get<0>() * coat_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
-        const fvec4 clearcoat_col = Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
-                                                                      coat_alpha.get<0>(), coat.ior, coat.F0);
-        bsdf_pdf += lobe_weights.clearcoat * clearcoat_col.get<3>();
-
-        lcol += 0.25f * ls.col * clearcoat_col / ls.pdf;
-    }
-
-    if (lobe_weights.refraction > 0.0f) {
-        const fvec2 refr_spec_alpha = calc_alpha(spec.roughness, 0.0f, regularize_alpha);
-        if (trans.fresnel != 0.0f && refr_spec_alpha.get<0>() * refr_spec_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
-            const fvec4 spec_col =
-                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, refr_spec_alpha, 1.0f /* ior */,
-                                          0.0f /* F0 */, fvec4{1.0f}, fvec4{1.0f});
-            bsdf_pdf += lobe_weights.refraction * trans.fresnel * spec_col.get<3>();
-
-            lcol += ls.col * spec_col * (trans.fresnel / ls.pdf);
-        }
-
-        const fvec2 refr_trans_alpha = calc_alpha(trans.roughness, 0.0f, regularize_alpha);
-        if (trans.fresnel != 1.0f && refr_trans_alpha.get<0>() * refr_trans_alpha.get<1>() >= 1e-7f && N_dot_L < 0.0f) {
-            const fvec4 refr_col = Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
-                                                               refr_trans_alpha, trans.eta, diff.base_color);
-            bsdf_pdf += lobe_weights.refraction * (1.0f - trans.fresnel) * refr_col.get<3>();
-
-            lcol += ls.col * refr_col * ((1.0f - trans.fresnel) / ls.pdf);
-        }
-    }
-
-    float mis_weight = 1.0f;
-    if (use_mis && ls.area > 0.0f) {
-        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-    }
-    lcol *= mix_weight * mis_weight;
-
-    if (!ls.cast_shadow) {
-        // apply light immediately
-        return lcol;
-    }
-
-    // schedule shadow ray
-    memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, N_dot_L < 0.0f ? -surf.plane_N : surf.plane_N)), 3 * sizeof(float));
-    UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol.get<i>(); })
-    return fvec4{0.0f};
-}
-
-void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
-                                     const lobe_weights_t &lobe_weights, const diff_params_t &diff,
-                                     const spec_params_t &spec, const clearcoat_params_t &coat,
-                                     const transmission_params_t &trans, const float metallic, const float transmission,
-                                     const fvec2 rand, float mix_rand, const float mix_weight,
-                                     const float regularize_alpha, ray_data_t &new_ray) {
-    const fvec4 I = make_fvec3(ray.d);
-
-    const int diff_depth = get_diff_depth(ray.depth), spec_depth = get_spec_depth(ray.depth),
-              refr_depth = get_refr_depth(ray.depth);
-    // NOTE: transparency depth is not accounted here
-    const int total_depth = diff_depth + spec_depth + refr_depth;
-
-    if (mix_rand < lobe_weights.diffuse) {
-        //
-        // Diffuse lobe
-        //
-        if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
-            fvec4 V;
-            fvec4 F = Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, I, diff.roughness, diff.base_color,
-                                                    diff.sheen_color, false, rand, V);
-            const float pdf = F.get<3>(); // * lobe_weights.diffuse;
-
-            F *= (1.0f - metallic) * (1.0f - transmission);
-
-            new_ray.depth = pack_ray_type(RAY_TYPE_DIFFUSE);
-            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(1, 0, 0, 0);
-
-            memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-
-            UNROLLED_FOR(i, 3,
-                         { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, lobe_weights.diffuse); })
-            new_ray.pdf = pdf;
-        }
-    } else if (mix_rand < lobe_weights.diffuse + lobe_weights.specular) {
-        //
-        // Main specular lobe
-        //
-        if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
-            fvec4 V;
-            fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I,
-                                              calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha), spec.ior,
-                                              spec.F0, spec.tmp_col, fvec4{1.0f}, rand, V);
-            const float pdf = F.get<3>() * lobe_weights.specular;
-
-            new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
-            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
-
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
-            new_ray.pdf = pdf;
-
-            memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-        }
-    } else if (mix_rand < lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat) {
-        //
-        // Clearcoat lobe (secondary specular)
-        //
-        if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
-            fvec4 V;
-            fvec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I,
-                                                      calc_alpha(coat.roughness, 0.0f, regularize_alpha).get<0>(),
-                                                      coat.ior, coat.F0, rand, V);
-            const float pdf = F.get<3>() * lobe_weights.clearcoat;
-
-            new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
-            new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
-
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = 0.25f * ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
-            new_ray.pdf = pdf;
-
-            memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-        }
-    } else /*if (mix_rand < lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat +
-              lobe_weights.refraction)*/
-    {
-        //
-        // Refraction/reflection lobes
-        //
-        mix_rand -= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat;
-        mix_rand = safe_div_pos(mix_rand, lobe_weights.refraction);
-        if (((mix_rand >= trans.fresnel && refr_depth < ps.max_refr_depth) ||
-             (mix_rand < trans.fresnel && spec_depth < ps.max_spec_depth)) &&
-            total_depth < ps.max_total_depth) {
-
-            fvec4 F, V;
-            if (mix_rand < trans.fresnel) {
-                F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I,
-                                            calc_alpha(spec.roughness, 0.0f, regularize_alpha), 1.0f /* ior */,
-                                            0.0f /* F0 */, fvec4{1.0f}, fvec4{1.0f}, rand, V);
-
-                new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
-                new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
-                memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-            } else {
-                F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I,
-                                              calc_alpha(trans.roughness, 0.0f, regularize_alpha), trans.eta,
-                                              diff.base_color, rand, V);
-
-                new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
-                new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
-                memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
-
-                if (!trans.backfacing) {
-                    // Entering the surface, push new value
-                    push_ior_stack(new_ray.ior, trans.int_ior);
-                } else {
-                    // Exiting the surface, pop the last ior value
-                    pop_ior_stack(new_ray.ior);
-                }
-            }
-
-            const float pdf = F.get<3>() * lobe_weights.refraction;
-
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
-            new_ray.pdf = pdf;
-
-            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-        }
-    }
-}
-
-Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float limits[2], const hit_data_t &inter,
-                                         const ray_data_t &ray, const uint32_t rand_seq[], const uint32_t rand_seed,
-                                         const int iteration, const scene_data_t &sc, const uint32_t node_index,
-                                         const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                                         int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                         int *out_shadow_rays_count, color_rgba_t *out_base_color,
-                                         color_rgba_t *out_depth_normal) {
-    const fvec4 I = make_fvec3(ray.d);
-    const fvec4 ro = make_fvec3(ray.o);
-
-    // used to randomize random sequence among pixels
-    const uint32_t px_hash = hash(ray.xy);
-    const uint32_t rand_hash = hash_combine(px_hash, rand_seed);
-    const uint32_t rand_dim = RAND_DIM_BASE_COUNT + get_total_depth(ray.depth) * RAND_DIM_BOUNCE_COUNT;
-
-    const fvec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
-
-    if (inter.v < 0.0f) {
-#if USE_HIERARCHICAL_NEE
-        const float pdf_factor =
-            (get_total_depth(ray.depth) < ps.max_total_depth) ? safe_div_pos(1.0f, inter.u) : -1.0f;
-#else
-        const float pdf_factor =
-            (get_total_depth(ray.depth) < ps.max_total_depth) ? float(sc.li_indices.size()) : -1.0f;
-#endif
-
-        fvec4 env_col = Evaluate_EnvColor(ray, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
-                                          pdf_factor, tex_rand);
-        env_col *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
-
-        const float sum = hsum(env_col);
-        if (sum > limits[0]) {
-            env_col *= (limits[0] / sum);
-        }
-
-        return color_rgba_t{env_col.get<0>(), env_col.get<1>(), env_col.get<2>(), env_col.get<3>()};
-    }
-
-    surface_t surf = {};
-    surf.P = ro + inter.t * I;
-
-    if (inter.obj_index < 0) { // Area light intersection
-        fvec4 lcol = Evaluate_LightColor(ray, inter, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
-                                         sc.lights, uint32_t(sc.li_indices.size()), tex_rand);
-        lcol *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
-
-        const float sum = hsum(lcol);
-        if (sum > limits[0]) {
-            lcol *= (limits[0] / sum);
-        }
-
-        return color_rgba_t{lcol.get<0>(), lcol.get<1>(), lcol.get<2>(), 1.0f};
-    }
-
-    const bool is_backfacing = (inter.prim_index < 0);
-    const uint32_t tri_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
-
-    const material_t *mat = &sc.materials[sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS];
-    const mesh_instance_t *mi = &sc.mesh_instances[inter.obj_index];
-
-    const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
-    const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
-    const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
-
-    const float w = 1.0f - inter.u - inter.v;
-    surf.N = normalize(make_fvec3(v1.n) * w + make_fvec3(v2.n) * inter.u + make_fvec3(v3.n) * inter.v);
-    surf.uvs = fvec2(v1.t) * w + fvec2(v2.t) * inter.u + fvec2(v3.t) * inter.v;
-
-    float pa;
-    surf.plane_N = normalize_len(cross(fvec4{v2.p} - fvec4{v1.p}, fvec4{v3.p} - fvec4{v1.p}), pa);
-
-    surf.B = make_fvec3(v1.b) * w + make_fvec3(v2.b) * inter.u + make_fvec3(v3.b) * inter.v;
-    surf.T = cross(surf.B, surf.N);
-
-    if (is_backfacing) {
-        if (sc.tri_materials[tri_index].back_mi == 0xffff) {
-            return color_rgba_t{0.0f, 0.0f, 0.0f, 0.0f};
-        } else {
-            mat = &sc.materials[sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS];
-            surf.plane_N = -surf.plane_N;
-            surf.N = -surf.N;
-            surf.B = -surf.B;
-            surf.T = -surf.T;
-        }
-    }
-
-    surf.plane_N = TransformNormal(surf.plane_N, mi->inv_xform);
-    surf.N = TransformNormal(surf.N, mi->inv_xform);
-    surf.B = TransformNormal(surf.B, mi->inv_xform);
-    surf.T = TransformNormal(surf.T, mi->inv_xform);
-
-    // normalize vectors (scaling might have been applied)
-    surf.plane_N = safe_normalize(surf.plane_N);
-    surf.N = safe_normalize(surf.N);
-    surf.B = safe_normalize(surf.B);
-    surf.T = safe_normalize(surf.T);
-
-    const float ta = fabsf((v2.t[0] - v1.t[0]) * (v3.t[1] - v1.t[1]) - (v3.t[0] - v1.t[0]) * (v2.t[1] - v1.t[1]));
-
-    const float cone_width = ray.cone_width + ray.cone_spread * inter.t;
-
-    float lambda = 0.5f * fast_log2(ta / pa);
-    lambda += fast_log2(cone_width);
-    // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
-    // lambda -= fast_log2(fabsf(dot(I, plane_N)));
-
-    const float ext_ior = peek_ior_stack(ray.ior, is_backfacing);
-
-    fvec4 col = {0.0f};
-
-    const int diff_depth = get_diff_depth(ray.depth), spec_depth = get_spec_depth(ray.depth),
-              refr_depth = get_refr_depth(ray.depth);
-    // NOTE: transparency depth is not accounted here
-    const int total_depth = diff_depth + spec_depth + refr_depth;
-
-    const fvec2 mix_term_rand =
-        get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, iteration - 1, rand_seq);
-
-    float mix_rand = mix_term_rand.get<0>();
-    float mix_weight = 1.0f;
-
-    // resolve mix material
-    while (mat->type == eShadingNode::Mix) {
-        float mix_val = mat->strength;
-        const uint32_t base_texture = mat->textures[BASE_TEXTURE];
-        if (base_texture != 0xffffffff) {
-            fvec4 tex_color = SampleBilinear(textures, base_texture, surf.uvs, 0, tex_rand);
-            if (base_texture & TEX_YCOCG_BIT) {
-                tex_color = YCoCg_to_RGB(tex_color);
-            }
-            if (base_texture & TEX_SRGB_BIT) {
-                tex_color = srgb_to_rgb(tex_color);
-            }
-            mix_val *= tex_color.get<0>();
-        }
-
-        const float eta = is_backfacing ? safe_div_pos(ext_ior, mat->ior) : safe_div_pos(mat->ior, ext_ior);
-        const float RR = mat->ior != 0.0f ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0f;
-
-        mix_val *= saturate(RR);
-
-        if (mix_rand > mix_val) {
-            mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / (1.0f - mix_val) : 1.0f;
-
-            mat = &sc.materials[mat->textures[MIX_MAT1]];
-            mix_rand = safe_div_pos(mix_rand - mix_val, 1.0f - mix_val);
-        } else {
-            mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / mix_val : 1.0f;
-
-            mat = &sc.materials[mat->textures[MIX_MAT2]];
-            mix_rand = safe_div_pos(mix_rand, mix_val);
-        }
-    }
-
-    // apply normal map
-    if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
-        fvec4 normals = SampleBilinear(textures, mat->textures[NORMALS_TEXTURE], surf.uvs, 0, tex_rand);
-        normals = normals * 2.0f - 1.0f;
-        normals.set<2>(1.0f);
-        if (mat->textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) {
-            normals.set<2>(safe_sqrt(1.0f - normals.get<0>() * normals.get<0>() - normals.get<1>() * normals.get<1>()));
-        }
-        fvec4 in_normal = surf.N;
-        surf.N = normalize(normals.get<0>() * surf.T + normals.get<2>() * surf.N + normals.get<1>() * surf.B);
-        if (mat->normal_map_strength_unorm != 0xffff) {
-            surf.N = normalize(in_normal + (surf.N - in_normal) * unpack_unorm_16(mat->normal_map_strength_unorm));
-        }
-        surf.N = ensure_valid_reflection(surf.plane_N, -I, surf.N);
-    }
-
-#if 0
-    create_tbn_matrix(N, _tangent_from_world);
-#else
-    // Find radial tangent in local space
-    const fvec4 P_ls = make_fvec3(v1.p) * w + make_fvec3(v2.p) * inter.u + make_fvec3(v3.p) * inter.v;
-    // rotate around Y axis by 90 degrees in 2d
-    fvec4 tangent = {-P_ls.get<2>(), 0.0f, P_ls.get<0>(), 0.0f};
-    tangent = TransformNormal(tangent, mi->inv_xform);
-    if (length2(cross(tangent, surf.N)) == 0.0f) {
-        tangent = TransformNormal(P_ls, mi->inv_xform);
-    }
-    if (mat->tangent_rotation != 0.0f) {
-        tangent = rotate_around_axis(tangent, surf.N, mat->tangent_rotation);
-    }
-
-    surf.B = normalize(cross(tangent, surf.N));
-    surf.T = cross(surf.N, surf.B);
-#endif
-
-#if USE_NEE
-    light_sample_t ls;
-    if ((!sc.light_wnodes.empty() || !sc.light_nodes.empty()) && mat->type != eShadingNode::Emissive) {
-        const float rand_pick_light =
-            get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT_PICK, rand_hash, iteration - 1, rand_seq).get<0>();
-        const fvec2 rand_light_uv =
-            get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT, rand_hash, iteration - 1, rand_seq);
-
-        SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, rand_pick_light, rand_light_uv, tex_rand, ls);
-    }
-    const float N_dot_L = dot(surf.N, ls.L);
-#endif
-
-    // sample base texture
-    fvec4 base_color = fvec4{mat->base_color[0], mat->base_color[1], mat->base_color[2], 1.0f};
-    if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-        const uint32_t base_texture = mat->textures[BASE_TEXTURE];
-        const float base_lod = get_texture_lod(textures, base_texture, lambda);
-        fvec4 tex_color = SampleBilinear(textures, base_texture, surf.uvs, int(base_lod), tex_rand);
-        if (base_texture & TEX_YCOCG_BIT) {
-            tex_color = YCoCg_to_RGB(tex_color);
-        }
-        if (base_texture & TEX_SRGB_BIT) {
-            tex_color = srgb_to_rgb(tex_color);
-        }
-        base_color *= tex_color;
-    }
-
-    if (out_base_color) {
-        memcpy(out_base_color->v, value_ptr(base_color), 3 * sizeof(float));
-    }
-    if (out_depth_normal) {
-        memcpy(out_depth_normal->v, value_ptr(surf.N), 3 * sizeof(float));
-        out_depth_normal->v[3] = inter.t;
-    }
-
-    fvec4 tint_color = {0.0f};
-
-    const float base_color_lum = lum(base_color);
-    if (base_color_lum > 0.0f) {
-        tint_color = base_color / base_color_lum;
-    }
-
-    float roughness = unpack_unorm_16(mat->roughness_unorm);
-    if (mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
-        const uint32_t roughness_tex = mat->textures[ROUGH_TEXTURE];
-        const float roughness_lod = get_texture_lod(textures, roughness_tex, lambda);
-        fvec4 roughness_color =
-            SampleBilinear(textures, roughness_tex, surf.uvs, int(roughness_lod), tex_rand).get<0>();
-        if (roughness_tex & TEX_SRGB_BIT) {
-            roughness_color = srgb_to_rgb(roughness_color);
-        }
-        roughness *= roughness_color.get<0>();
-    }
-
-    const fvec2 rand_bsdf = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF, rand_hash, iteration - 1, rand_seq);
-
-    ray_data_t &new_ray = out_secondary_rays[*out_secondary_rays_count];
-    memcpy(new_ray.ior, ray.ior, 4 * sizeof(float));
-    new_ray.cone_width = cone_width;
-    new_ray.cone_spread = ray.cone_spread;
-    new_ray.xy = ray.xy;
-    new_ray.pdf = 0.0f;
-
-    shadow_ray_t &sh_r = out_shadow_rays[*out_shadow_rays_count];
-    sh_r.c[0] = sh_r.c[1] = sh_r.c[2] = 0.0f;
-    sh_r.depth = ray.depth;
-    sh_r.xy = ray.xy;
-
-    const float regularize_alpha = (get_diff_depth(ray.depth) > 0) ? ps.regularize_alpha : 0.0f;
-
-    // Sample materials
-    if (mat->type == eShadingNode::Diffuse) {
-#if USE_NEE
-        if (ls.pdf > 0.0f && N_dot_L > 0.0f) {
-            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight,
-                                        (total_depth < ps.max_total_depth), sh_r);
-        }
-#endif
-        if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
-            Sample_DiffuseNode(ray, surf, base_color, roughness, rand_bsdf, mix_weight, new_ray);
-        }
-    } else if (mat->type == eShadingNode::Glossy) {
-        const float specular = 0.5f;
-        const float spec_ior = (2.0f / (1.0f - sqrtf(0.08f * specular))) - 1.0f;
-        const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
-#if USE_NEE
-        if (ls.pdf > 0.0f && N_dot_L > 0.0f) {
-            col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, regularize_alpha, spec_ior, spec_F0,
-                                       mix_weight, (total_depth < ps.max_total_depth), sh_r);
-        }
-#endif
-        if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
-            Sample_GlossyNode(ray, surf, base_color, roughness, regularize_alpha, spec_ior, spec_F0, rand_bsdf,
-                              mix_weight, new_ray);
-        }
-    } else if (mat->type == eShadingNode::Refractive) {
-#if USE_NEE
-        if (ls.pdf > 0.0f && N_dot_L < 0.0f) {
-            const float eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
-            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness, regularize_alpha, eta, mix_weight,
-                                           (total_depth < ps.max_total_depth), sh_r);
-        }
-#endif
-        if (refr_depth < ps.max_refr_depth && total_depth < ps.max_total_depth) {
-            Sample_RefractiveNode(ray, surf, base_color, roughness, regularize_alpha, is_backfacing, mat->ior, ext_ior,
-                                  rand_bsdf, mix_weight, new_ray);
-        }
-    } else if (mat->type == eShadingNode::Emissive) {
-        float mis_weight = 1.0f;
-#if USE_NEE
-        if ((ray.depth & 0x00ffffff) != 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
-#if USE_HIERARCHICAL_NEE
-            // TODO: maybe this can be done more efficiently
-            float pdf_factor;
-            if (!sc.light_wnodes.empty()) {
-                pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_wnodes);
-            } else {
-                pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_nodes);
-            }
-#else
-            const float pdf_factor = float(sc.li_indices.size());
-#endif
-
-            const auto p1 = make_fvec3(v1.p), p2 = make_fvec3(v2.p), p3 = make_fvec3(v3.p);
-
-            float light_forward_len;
-            fvec4 light_forward =
-                normalize_len(TransformDirection(cross(p2 - p1, p3 - p1), mi->xform), light_forward_len);
-            const float tri_area = 0.5f * light_forward_len;
-
-            const float cos_theta = fabsf(dot(I, light_forward)); // abs for doublesided light
-            if (cos_theta > 0.0f) {
-                float light_pdf;
-#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-                const fvec4 P = TransformPoint(ro, mi->inv_xform);
-                light_pdf = SampleSphericalTriangle(P, p1, p2, p3, {}, nullptr) / pdf_factor;
-                if (light_pdf == 0.0f)
-#endif
-                {
-                    light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
-                }
-
-                const float bsdf_pdf = ray.pdf;
-                mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            }
-        }
-#endif
-        col += mix_weight * mis_weight * mat->strength * base_color;
-    } else if (mat->type == eShadingNode::Principled) {
-        float metallic = unpack_unorm_16(mat->metallic_unorm);
-        if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
-            const uint32_t metallic_tex = mat->textures[METALLIC_TEXTURE];
-            const float metallic_lod = get_texture_lod(textures, metallic_tex, lambda);
-            metallic *= SampleBilinear(textures, metallic_tex, surf.uvs, int(metallic_lod), tex_rand).get<0>();
-        }
-
-        float specular = unpack_unorm_16(mat->specular_unorm);
-        if (mat->textures[SPECULAR_TEXTURE] != 0xffffffff) {
-            const uint32_t specular_tex = mat->textures[SPECULAR_TEXTURE];
-            const float specular_lod = get_texture_lod(textures, specular_tex, lambda);
-            fvec4 specular_color = SampleBilinear(textures, specular_tex, surf.uvs, int(specular_lod), tex_rand);
-            if (specular_tex & TEX_SRGB_BIT) {
-                specular_color = srgb_to_rgb(specular_color);
-            }
-            specular *= specular_color.get<0>();
-        }
-
-        const float specular_tint = unpack_unorm_16(mat->specular_tint_unorm);
-        const float transmission = unpack_unorm_16(mat->transmission_unorm);
-        const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
-        const float clearcoat_roughness = unpack_unorm_16(mat->clearcoat_roughness_unorm);
-        const float sheen = 2.0f * unpack_unorm_16(mat->sheen_unorm);
-        const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
-
-        diff_params_t diff = {};
-        diff.base_color = base_color;
-        diff.sheen_color = sheen * mix(fvec4{1.0f}, tint_color, sheen_tint);
-        diff.roughness = roughness;
-
-        spec_params_t spec = {};
-        spec.tmp_col = mix(fvec4{1.0f}, tint_color, specular_tint);
-        spec.tmp_col = mix(specular * 0.08f * spec.tmp_col, base_color, metallic);
-        spec.roughness = roughness;
-        spec.ior = (2.0f / (1.0f - sqrtf(0.08f * specular))) - 1.0f;
-        spec.F0 = fresnel_dielectric_cos(1.0f, spec.ior);
-        spec.anisotropy = unpack_unorm_16(mat->anisotropic_unorm);
-
-        clearcoat_params_t coat = {};
-        coat.roughness = clearcoat_roughness;
-        coat.ior = (2.0f / (1.0f - sqrtf(0.08f * clearcoat))) - 1.0f;
-        coat.F0 = fresnel_dielectric_cos(1.0f, coat.ior);
-
-        transmission_params_t trans = {};
-        trans.roughness = 1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
-        trans.int_ior = mat->ior;
-        trans.eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
-        trans.fresnel = fresnel_dielectric_cos(dot(I, surf.N), 1.0f / trans.eta);
-        trans.backfacing = is_backfacing;
-
-        // Approximation of FH (using shading normal)
-        const float FN = (fresnel_dielectric_cos(dot(I, surf.N), spec.ior) - spec.F0) / (1.0f - spec.F0);
-
-        const fvec4 approx_spec_col = mix(spec.tmp_col, fvec4(1.0f), FN);
-        const float spec_color_lum = lum(approx_spec_col);
-
-        const auto lobe_weights = get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic,
-                                                   transmission, clearcoat);
-
-#if USE_NEE
-        if (ls.pdf > 0.0f) {
-            col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission,
-                                           N_dot_L, mix_weight, (total_depth < ps.max_total_depth), regularize_alpha,
-                                           sh_r);
-        }
-#endif
-        Sample_PrincipledNode(ps, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_bsdf,
-                              mix_rand, mix_weight, regularize_alpha, new_ray);
-    } /*else if (mat->type == TransparentNode) {
-        assert(false);
-    }*/
-
-#if USE_PATH_TERMINATION
-    const bool can_terminate_path = total_depth > ps.min_total_depth;
-#else
-    const bool can_terminate_path = false;
-#endif
-
-    const float lum = fmaxf(new_ray.c[0], fmaxf(new_ray.c[1], new_ray.c[2]));
-    const float p = mix_term_rand.get<1>();
-    const float q = can_terminate_path ? fmaxf(0.05f, 1.0f - lum) : 0.0f;
-    if (p >= q && lum > 0.0f && new_ray.pdf > 0.0f) {
-        new_ray.pdf = fminf(new_ray.pdf, 1e6f);
-        new_ray.c[0] /= (1.0f - q);
-        new_ray.c[1] /= (1.0f - q);
-        new_ray.c[2] /= (1.0f - q);
-        ++(*out_secondary_rays_count);
-    }
-
-#if USE_NEE
-    const float sh_lum = fmaxf(sh_r.c[0], fmaxf(sh_r.c[1], sh_r.c[2]));
-    if (sh_lum > 0.0f) {
-        // actual ray direction accouning for bias from both ends
-        const fvec4 to_light = normalize_len(ls.lp - fvec4{sh_r.o[0], sh_r.o[1], sh_r.o[2], 0.0f}, sh_r.dist);
-        memcpy(&sh_r.d[0], value_ptr(to_light), 3 * sizeof(float));
-        sh_r.dist *= ls.dist_mul;
-        if (ls.from_env) {
-            // NOTE: hacky way to identify env ray
-            sh_r.dist = -sh_r.dist;
-        }
-        ++(*out_shadow_rays_count);
-    }
-#endif
-
-    col *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
-
-    const float sum = hsum(col);
-    if (sum > limits[1]) {
-        col *= (limits[1] / sum);
-    }
-
-    return color_rgba_t{col.get<0>(), col.get<1>(), col.get<2>(), 1.0f};
-}
-
-void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
-                            const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration,
-                            const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                            ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
-                            shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w, float mix_factor,
-                            color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
-    const float limits[2] = {(ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX,
-                             (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX};
-    for (int i = 0; i < int(inters.size()); ++i) {
-        const ray_data_t &r = rays[i];
-        const hit_data_t &inter = inters[i];
-
-        const int x = (r.xy >> 16) & 0x0000ffff;
-        const int y = r.xy & 0x0000ffff;
-
-        color_rgba_t base_color = {}, depth_normal = {};
-        const color_rgba_t col = ShadeSurface(ps, limits, inter, r, rand_seq, rand_seed, iteration, sc, node_index,
-                                              textures, out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
-                                              out_shadow_rays_count, &base_color, &depth_normal);
-        out_color[y * img_w + x] = col;
-
-        { // base color
-            auto old_val = Ref::fvec4{out_base_color[y * img_w + x].v, Ref::vector_aligned};
-            old_val += (Ref::fvec4{base_color.v, Ref::vector_aligned} - old_val) * mix_factor;
-            old_val.store_to(out_base_color[y * img_w + x].v, Ref::vector_aligned);
-        }
-        { // depth-normals
-            auto old_val = Ref::fvec4{out_depth_normal[y * img_w + x].v, Ref::vector_aligned};
-            old_val += (Ref::fvec4{depth_normal.v, Ref::vector_aligned} - old_val) * mix_factor;
-            old_val.store_to(out_depth_normal[y * img_w + x].v, Ref::vector_aligned);
-        }
-    }
-}
-
-void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, const float clamp_direct, Span<const hit_data_t> inters,
-                              Span<const ray_data_t> rays, const uint32_t rand_seq[], uint32_t rand_seed, int iteration,
-                              const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                              ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
-                              shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                              color_rgba_t *out_color) {
-    const float limits[2] = {(clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX,
-                             (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX};
-    for (int i = 0; i < int(inters.size()); ++i) {
-        const ray_data_t &r = rays[i];
-        const hit_data_t &inter = inters[i];
-
-        const int x = (r.xy >> 16) & 0x0000ffff;
-        const int y = r.xy & 0x0000ffff;
-
-        color_rgba_t col = ShadeSurface(ps, limits, inter, r, rand_seq, rand_seed, iteration, sc, node_index, textures,
-                                        out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
-                                        out_shadow_rays_count, nullptr, nullptr);
-        col.v[3] = 0.0f;
-
-        auto vcol = Ref::fvec4{col.v};
-
-        auto old_val = Ref::fvec4{out_color[y * img_w + x].v, Ref::vector_aligned};
-        old_val += vcol;
-        old_val.store_to(out_color[y * img_w + x].v, Ref::vector_aligned);
-    }
-}
-
-namespace Ray {
-namespace Ref {
-template <int WINDOW_SIZE, int NEIGHBORHOOD_SIZE, bool FEATURE0, bool FEATURE1>
-void JointNLMFilter(const color_rgba_t *restrict input, const rect_t &rect, const int input_stride, const float alpha,
-                    const float damping, const color_rgba_t variance[], const color_rgba_t *restrict feature0,
-                    const float feature0_weight, const color_rgba_t *restrict feature1, const float feature1_weight,
-                    const rect_t &output_rect, const int output_stride, color_rgba_t *restrict output) {
-    const int WindowRadius = (WINDOW_SIZE - 1) / 2;
-    const float PatchDistanceNormFactor = NEIGHBORHOOD_SIZE * NEIGHBORHOOD_SIZE;
-    const int NeighborRadius = (NEIGHBORHOOD_SIZE - 1) / 2;
-
-    assert(rect.w == output_rect.w);
-    assert(rect.h == output_rect.h);
-
-    for (int iy = rect.y; iy < rect.y + rect.h; ++iy) {
-        for (int ix = rect.x; ix < rect.x + rect.w; ++ix) {
-            fvec4 sum_output = {};
-            float sum_weight = 0.0f;
-
-            for (int k = -WindowRadius; k <= WindowRadius; ++k) {
-                const int jy = iy + k;
-
-                for (int l = -WindowRadius; l <= WindowRadius; ++l) {
-                    const int jx = ix + l;
-
-                    fvec4 color_distance = {};
-
-                    for (int q = -NeighborRadius; q <= NeighborRadius; ++q) {
-                        for (int p = -NeighborRadius; p <= NeighborRadius; ++p) {
-                            const fvec4 ipx = {input[(iy + q) * input_stride + (ix + p)].v, vector_aligned};
-                            const fvec4 jpx = {input[(jy + q) * input_stride + (jx + p)].v, vector_aligned};
-
-                            const fvec4 ivar = {variance[(iy + q) * input_stride + (ix + p)].v, vector_aligned};
-                            const fvec4 jvar = {variance[(jy + q) * input_stride + (jx + p)].v, vector_aligned};
-                            const fvec4 min_var = min(ivar, jvar);
-
-                            color_distance += ((ipx - jpx) * (ipx - jpx) - alpha * (ivar + min_var)) /
-                                              (0.0001f + damping * damping * (ivar + jvar));
-                        }
-                    }
-
-                    const float patch_distance = 0.25f * PatchDistanceNormFactor *
-                                                 (color_distance.get<0>() + color_distance.get<1>() +
-                                                  color_distance.get<2>() + color_distance.get<3>());
-                    float weight = expf(-fmaxf(0.0f, patch_distance));
-
-                    if (FEATURE0 || FEATURE1) {
-                        fvec4 feature_distance = {};
-                        if (FEATURE0) {
-                            const fvec4 ipx = {feature0[iy * input_stride + ix].v, vector_aligned};
-                            const fvec4 jpx = {feature0[jy * input_stride + jx].v, vector_aligned};
-
-                            feature_distance = feature0_weight * (ipx - jpx) * (ipx - jpx);
-                        }
-                        if (FEATURE1) {
-                            const fvec4 ipx = {feature1[iy * input_stride + ix].v, vector_aligned};
-                            const fvec4 jpx = {feature1[jy * input_stride + jx].v, vector_aligned};
-
-                            feature_distance = max(feature_distance, feature1_weight * (ipx - jpx) * (ipx - jpx));
-                        }
-
-                        const float feature_patch_distance =
-                            0.25f * (feature_distance.get<0>() + feature_distance.get<1>() + feature_distance.get<2>() +
-                                     feature_distance.get<3>());
-                        const float feature_weight = expf(-fmaxf(0.0f, fminf(10000.0f, feature_patch_distance)));
-
-                        weight = fminf(weight, feature_weight);
-                    }
-
-                    sum_output += fvec4{input[jy * input_stride + jx].v, vector_aligned} * weight;
-                    sum_weight += weight;
-                }
-            }
-
-            if (sum_weight != 0.0f) {
-                sum_output /= sum_weight;
-            }
-
-            sum_output.store_to(output[(output_rect.y + iy - rect.y) * output_stride + (output_rect.x + ix - rect.x)].v,
-                                vector_aligned);
-        }
-    }
-}
-} // namespace Ref
-} // namespace Ray
-
-template <int WINDOW_SIZE, int NEIGHBORHOOD_SIZE>
-void Ray::Ref::JointNLMFilter(const color_rgba_t input[], const rect_t &rect, const int input_stride, const float alpha,
-                              const float damping, const color_rgba_t variance[], const color_rgba_t feature1[],
-                              const float feature1_weight, const color_rgba_t feature2[], const float feature2_weight,
-                              const rect_t &output_rect, const int output_stride, color_rgba_t output[]) {
-    if (feature1 && feature2) {
-        JointNLMFilter<WINDOW_SIZE, NEIGHBORHOOD_SIZE, true, true>(input, rect, input_stride, alpha, damping, variance,
-                                                                   feature1, feature1_weight, feature2, feature2_weight,
-                                                                   output_rect, output_stride, output);
-    } else if (feature1) {
-        JointNLMFilter<WINDOW_SIZE, NEIGHBORHOOD_SIZE, true, false>(input, rect, input_stride, alpha, damping, variance,
-                                                                    feature1, feature1_weight, nullptr, 0.0f,
-                                                                    output_rect, output_stride, output);
-    } else if (feature2) {
-        JointNLMFilter<WINDOW_SIZE, NEIGHBORHOOD_SIZE, true, false>(input, rect, input_stride, alpha, damping, variance,
-                                                                    feature2, feature2_weight, nullptr, 0.0f,
-                                                                    output_rect, output_stride, output);
-    } else {
-        JointNLMFilter<WINDOW_SIZE, NEIGHBORHOOD_SIZE, false, false>(input, rect, input_stride, alpha, damping,
-                                                                     variance, nullptr, 0.0f, nullptr, 0.0f,
-                                                                     output_rect, output_stride, output);
-    }
-}
-
-template void Ray::Ref::JointNLMFilter<21 /* WINDOW_SIZE */, 5 /* NEIGHBORHOOD_SIZE */>(
-    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
-    const color_rgba_t variance[], const color_rgba_t feature0[], float feature0_weight, const color_rgba_t feature1[],
-    float feature1_weight, const rect_t &output_rect, int output_stride, color_rgba_t output[]);
-template void Ray::Ref::JointNLMFilter<21 /* WINDOW_SIZE */, 3 /* NEIGHBORHOOD_SIZE */>(
-    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
-    const color_rgba_t variance[], const color_rgba_t feature0[], float feature0_weight, const color_rgba_t feature1[],
-    float feature1_weight, const rect_t &output_rect, int output_stride, color_rgba_t output[]);
-template void Ray::Ref::JointNLMFilter<7 /* WINDOW_SIZE */, 3 /* NEIGHBORHOOD_SIZE */>(
-    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
-    const color_rgba_t variance[], const color_rgba_t feature0[], float feature0_weight, const color_rgba_t feature1[],
-    float feature1_weight, const rect_t &output_rect, int output_stride, color_rgba_t output[]);
-template void Ray::Ref::JointNLMFilter<3 /* WINDOW_SIZE */, 1 /* NEIGHBORHOOD_SIZE */>(
-    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
-    const color_rgba_t variance[], const color_rgba_t feature0[], float feature0_weight, const color_rgba_t feature1[],
-    float feature1_weight, const rect_t &output_rect, int output_stride, color_rgba_t output[]);
-
-#define NS Ref
-#include "Convolution.h"
-#undef NS
-
-template <int InChannels, int OutChannels, int OutPxPitch, Ray::ePostOp PostOp, Ray::eActivation Activation>
-void Ray::Ref::Convolution3x3_Direct(const float data[], const rect_t &rect, int w, int h, int stride,
-                                     const float weights[], const float biases[], float output[], int output_stride) {
-    static_assert((InChannels % 4) == 0, "!");
-
-    if (!output_stride) {
-        if (PostOp == ePostOp::Downscale) {
-            output_stride = (w + 1) / 2;
-        } else {
-            output_stride = w;
-        }
-    }
-
-    if (PostOp == ePostOp::Downscale) {
-        if (OutChannels == OutPxPitch) {
-            for (int y = (rect.y / 2); y < (rect.y + rect.h + 1) / 2; ++y) {
-                float *ptr = &output[OutChannels * (y * output_stride + (rect.x / 2))];
-                std::fill(ptr, ptr + ((rect.w + 1) / 2) * OutChannels, 0.0f);
-            }
-        } else {
-            for (int y = (rect.y / 2); y < (rect.y + rect.h + 1) / 2; ++y) {
-                for (int x = (rect.x / 2); x < (rect.x + rect.w + 1) / 2; ++x) {
-                    for (int c = 0; c < OutChannels; ++c) {
-                        output[OutPxPitch * (y * output_stride + (rect.x / 2)) + c] = 0.0f;
-                    }
-                }
-            }
-        }
-    }
-
-    int y = rect.y;
-    for (; y < rect.y + rect.h - 7; y += 8) {
-        Convolution3x3_Direct_ProcessRows<8, 4, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            y, data, rect, w, h, stride, weights, biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h - 3; y += 4) {
-        Convolution3x3_Direct_ProcessRows<4, 4, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            y, data, rect, w, h, stride, weights, biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h; ++y) {
-        Convolution3x3_Direct_ProcessRows<1, 4, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            y, data, rect, w, h, stride, weights, biases, output, output_stride);
-    }
-}
-
-template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, Ray::ePreOp PreOp1,
-          Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePostOp PostOp, Ray::eActivation Activation>
-void Ray::Ref::Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[], const rect_t &rect,
-                                   int in_w, int in_h, int w, int h, int stride, const float weights[],
-                                   const float biases[], float output[], int output_stride) {
-    Convolution3x3_GEMM<4, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3, PostOp,
-                        Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights, biases, output,
-                                    output_stride);
-}
-
-template void Ray::Ref::Convolution3x3_Direct<32, 3, 4, Ray::ePostOp::HDRTransfer, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<32, 32, 32, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<32, 48, 48, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<48, 64, 64, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<64, 32, 32, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<64, 64, 64, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<64, 80, 80, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<80, 96, 96, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<96, 96, 96, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<112, 112, 112, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
-    float output[], int output_stride);
-
-template void Ray::Ref::Convolution3x3_GEMM<3, 0, 0, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                            Ray::ePreOp::None, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
-    int stride, const float weights[], const float biases[], float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_GEMM<3, 3, 0, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                            Ray::ePreOp::None, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
-    int stride, const float weights[], const float biases[], float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_GEMM<3, 3, 3, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                            Ray::ePreOp::PositiveNormalize, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
-    int stride, const float weights[], const float biases[], float output[], int output_stride);
-
-template <int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1, Ray::ePostOp PostOp,
-          Ray::eActivation Activation>
-void Ray::Ref::ConvolutionConcat3x3_Direct(const float data1[], const float data2[], const rect_t &rect, int w, int h,
-                                           int stride1, int stride2, const float weights[], const float biases[],
-                                           float output[], int output_stride) {
-    static_assert((InChannels1 % 4) == 0 && (InChannels2 % 4) == 0, "!");
-
-    int y = rect.y;
-    for (; y < rect.y + rect.h - 7; y += 8) {
-        ConvolutionConcat3x3_Direct_ProcessRows<8, 4, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
-                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
-                                                            biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h - 3; y += 4) {
-        ConvolutionConcat3x3_Direct_ProcessRows<4, 4, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
-                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
-                                                            biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h; ++y) {
-        ConvolutionConcat3x3_Direct_ProcessRows<1, 4, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
-                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
-                                                            biases, output, output_stride);
-    }
-}
-
-template <int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1, Ray::eActivation Activation>
-void Ray::Ref::ConvolutionConcat3x3_GEMM(const float data1[], const float data2[], const rect_t &rect, int w, int h,
-                                         const float weights[], const float biases[], float output[]) {
-    ConvolutionConcat3x3_GEMM<4, InChannels1, InChannels2, OutChannels, PreOp1, Activation>(data1, data2, rect, w, h,
-                                                                                            weights, biases, output);
-}
-
-template <int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
-          Ray::ePreOp PreOp1, Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePreOp PreOp4, Ray::ePostOp PostOp,
-          Ray::eActivation Activation>
-void Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM(const float data1[], const float data2[], const float data3[],
-                                                  const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
-                                                  int stride1, int stride2, const float weights[], const float biases[],
-                                                  float output[], int output_stride) {
-    static_assert((InChannels1 % 4) == 0, "!");
-
-    int y = rect.y;
-    for (; y < rect.y + rect.h - 7; y += 8) {
-        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<8, 4, InChannels1, InChannels2, InChannels3, InChannels4,
-                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
-                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
-                                                                   stride1, stride2, weights, biases, output,
-                                                                   output_stride);
-    }
-
-    for (; y < rect.y + rect.h - 3; y += 4) {
-        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<4, 4, InChannels1, InChannels2, InChannels3, InChannels4,
-                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
-                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
-                                                                   stride1, stride2, weights, biases, output,
-                                                                   output_stride);
-    }
-
-    for (; y < rect.y + rect.h; ++y) {
-        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<1, 4, InChannels1, InChannels2, InChannels3, InChannels4,
-                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
-                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
-                                                                   stride1, stride2, weights, biases, output,
-                                                                   output_stride);
-    }
-}
-
-template void
-Ray::Ref::ConvolutionConcat3x3_Direct<96, 64, 112, Ray::ePreOp::Upscale, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data1[], const float data2[], const rect_t &rect, int w, int h, int stride1, int stride2,
-    const float weights[], const float biases[], float output[], int output_stride);
-template void
-Ray::Ref::ConvolutionConcat3x3_Direct<112, 48, 96, Ray::ePreOp::Upscale, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data1[], const float data2[], const rect_t &rect, int w, int h, int stride1, int stride2,
-    const float weights[], const float biases[], float output[], int output_stride);
-template void
-Ray::Ref::ConvolutionConcat3x3_Direct<96, 32, 64, Ray::ePreOp::Upscale, Ray::ePostOp::None, Ray::eActivation::ReLU>(
-    const float data1[], const float data2[], const rect_t &rect, int w, int h, int stride1, int stride2,
-    const float weights[], const float biases[], float output[], int output_stride);
-
-template void Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM<
-    64, 3, 0, 0, 4, 64, Ray::ePreOp::Upscale, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None, Ray::ePreOp::None,
-    Ray::ePostOp::None, Ray::eActivation::ReLU>(const float data1[], const float data2[], const float data3[],
-                                                const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
-                                                int stride1, int stride2, const float weights[], const float biases[],
-                                                float output[], int output_stride);
-template void Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM<
-    64, 3, 3, 0, 4, 64, Ray::ePreOp::Upscale, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None, Ray::ePreOp::None,
-    Ray::ePostOp::None, Ray::eActivation::ReLU>(const float data1[], const float data2[], const float data3[],
-                                                const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
-                                                int stride1, int stride2, const float weights[], const float biases[],
-                                                float output[], int output_stride);
-template void
-Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upscale, Ray::ePreOp::HDRTransfer,
-                                             Ray::ePreOp::None, Ray::ePreOp::PositiveNormalize, Ray::ePostOp::None,
-                                             Ray::eActivation::ReLU>(const float data1[], const float data2[],
-                                                                     const float data3[], const float data4[],
-                                                                     const rect_t &rect, int w, int h, int w2, int h2,
-                                                                     int stride1, int stride2, const float weights[],
-                                                                     const float biases[], float output[],
-                                                                     int output_stride);
-
-namespace Ray {
-extern const int LUT_DIMS = 48;
-#include "precomputed/__agx.inl"
-#include "precomputed/__agx_punchy.inl"
-#include "precomputed/__filmic_high_contrast.inl"
-#include "precomputed/__filmic_low_contrast.inl"
-#include "precomputed/__filmic_med_contrast.inl"
-#include "precomputed/__filmic_med_high_contrast.inl"
-#include "precomputed/__filmic_med_low_contrast.inl"
-#include "precomputed/__filmic_very_high_contrast.inl"
-#include "precomputed/__filmic_very_low_contrast.inl"
-
-const uint32_t *transform_luts[] = {
-    nullptr,                    // Standard
-    __agx,                      // AgX
-    __agx_punchy,               // AgX_Punchy
-    __filmic_very_low_contrast, // Filmic_VeryLowContrast
-    __filmic_low_contrast,      // Filmic_LowContrast
-    __filmic_med_low_contrast,  // Filmic_MediumLowContrast
-    __filmic_med_contrast,      // Filmic_MediumContrast
-    __filmic_med_high_contrast, // Filmic_MediumHighContrast
-    __filmic_high_contrast,     // Filmic_HighContrast
-    __filmic_very_high_contrast // Filmic_VeryHighContrast
-};
-static_assert(sizeof(transform_luts) / sizeof(transform_luts[0]) == int(eViewTransform::_Count), "!");
-
-namespace Ref {
-force_inline fvec4 FetchLUT(const eViewTransform view_transform, const int ix, const int iy, const int iz) {
-    const uint32_t packed_val = transform_luts[int(view_transform)][iz * LUT_DIMS * LUT_DIMS + iy * LUT_DIMS + ix];
-    const ivec4 ret = ivec4{int((packed_val >> 0) & 0x3ff), int((packed_val >> 10) & 0x3ff),
-                            int((packed_val >> 20) & 0x3ff), int((packed_val >> 30) & 0x3)};
-    return fvec4(ret) * fvec4{1.0f / 1023.0f, 1.0f / 1023.0f, 1.0f / 1023.0f, 1.0f / 3.0f};
-}
-} // namespace Ref
-} // namespace Ray
-
-Ray::Ref::fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform view_transform, fvec4 color) {
-    const fvec4 encoded = color / (color + 1.0f);
-    const fvec4 uv = encoded * float(LUT_DIMS - 1);
-    const ivec4 xyz = ivec4(uv);
-    const fvec4 f = fract(uv);
-    const ivec4 xyz_next = min(xyz + 1, ivec4{LUT_DIMS - 1});
-
-    const int ix = xyz.get<0>(), iy = xyz.get<1>(), iz = xyz.get<2>();
-    const int jx = xyz_next.get<0>(), jy = xyz_next.get<1>(), jz = xyz_next.get<2>();
-    const float fx = f.get<0>(), fy = f.get<1>(), fz = f.get<2>();
-
-    const fvec4 c000 = FetchLUT(view_transform, ix, iy, iz), c001 = FetchLUT(view_transform, jx, iy, iz),
-                c010 = FetchLUT(view_transform, ix, jy, iz), c011 = FetchLUT(view_transform, jx, jy, iz),
-                c100 = FetchLUT(view_transform, ix, iy, jz), c101 = FetchLUT(view_transform, jx, iy, jz),
-                c110 = FetchLUT(view_transform, ix, jy, jz), c111 = FetchLUT(view_transform, jx, jy, jz);
-
-    const fvec4 c00x = (1.0f - fx) * c000 + fx * c001, c01x = (1.0f - fx) * c010 + fx * c011,
-                c10x = (1.0f - fx) * c100 + fx * c101, c11x = (1.0f - fx) * c110 + fx * c111;
-
-    const fvec4 c0xx = (1.0f - fy) * c00x + fy * c01x, c1xx = (1.0f - fy) * c10x + fy * c11x;
-
-    fvec4 cxxx = (1.0f - fz) * c0xx + fz * c1xx;
-    cxxx.set<3>(color.get<3>());
-
-    return cxxx;
-}
-
-#undef sqr
-
-#undef USE_NEE
-#undef USE_PATH_TERMINATION
 #undef VECTORIZE_BBOX_INTERSECTION
 #undef FORCE_TEXTURE_LOD
 #undef USE_STOCH_TEXTURE_FILTERING
-#undef USE_SAFE_MATH

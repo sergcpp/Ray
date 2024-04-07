@@ -32,8 +32,8 @@ force_inline float smoothstep(float edge0, float edge1, float x) {
 }
 
 // Math
-Ref::fvec2 SphereIntersection(Ref::fvec4 ray_start, const Ref::fvec4 &ray_dir,
-                                   const Ref::fvec4 &sphere_center, const float sphere_radius) {
+Ref::fvec2 SphereIntersection(Ref::fvec4 ray_start, const Ref::fvec4 &ray_dir, const Ref::fvec4 &sphere_center,
+                              const float sphere_radius) {
     ray_start -= sphere_center;
     const float a = dot(ray_dir, ray_dir);
     const float b = 2.0f * dot(ray_start, ray_dir);
@@ -48,19 +48,19 @@ Ref::fvec2 SphereIntersection(Ref::fvec4 ray_start, const Ref::fvec4 &ray_dir,
 }
 
 Ref::fvec2 PlanetIntersection(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
-                                   const Ref::fvec4 &ray_dir) {
+                              const Ref::fvec4 &ray_dir) {
     const Ref::fvec4 planet_center = Ref::fvec4(0, -params.planet_radius, 0, 0);
     return SphereIntersection(ray_start, ray_dir, planet_center, params.planet_radius);
 }
 
 Ref::fvec2 AtmosphereIntersection(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
-                                       const Ref::fvec4 &ray_dir) {
+                                  const Ref::fvec4 &ray_dir) {
     const Ref::fvec4 planet_center = Ref::fvec4(0, -params.planet_radius, 0, 0);
     return SphereIntersection(ray_start, ray_dir, planet_center, params.planet_radius + params.atmosphere_height);
 }
 
 Ref::fvec4 CloudsIntersection(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
-                                   const Ref::fvec4 &ray_dir) {
+                              const Ref::fvec4 &ray_dir) {
     const Ref::fvec4 planet_center = Ref::fvec4(0, -params.planet_radius, 0, 0);
     const Ref::fvec2 beg =
         SphereIntersection(ray_start, ray_dir, planet_center, params.planet_radius + params.clouds_height_beg);
@@ -69,10 +69,8 @@ Ref::fvec4 CloudsIntersection(const atmosphere_params_t &params, const Ref::fvec
     return {beg.get<0>(), beg.get<1>(), end.get<0>(), end.get<1>()};
 }
 
-Ref::fvec2 MoonIntersection(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
-                                 const Ref::fvec4 &ray_dir) {
-    const Ref::fvec4 planet_center =
-        Ref::fvec4{params.moon_dir, Ref::vector_aligned} * params.moon_distance;
+Ref::fvec2 MoonIntersection(const atmosphere_params_t &params, const Ref::fvec4 &ray_start, const Ref::fvec4 &ray_dir) {
+    const Ref::fvec4 planet_center = Ref::fvec4{params.moon_dir, Ref::vector_aligned} * params.moon_distance;
     return SphereIntersection(ray_start, ray_dir, planet_center, params.moon_radius);
 }
 
@@ -117,8 +115,7 @@ float GetLightEnergy(const float dl, const float dC, const Ref::fvec4 &phase_pro
 }
 
 // Atmosphere
-float AtmosphereHeight(const atmosphere_params_t &params, const Ref::fvec4 &position_ws,
-                       Ref::fvec4 &up_vector) {
+float AtmosphereHeight(const atmosphere_params_t &params, const Ref::fvec4 &position_ws, Ref::fvec4 &up_vector) {
     const Ref::fvec4 planet_center = Ref::fvec4(0, -params.planet_radius, 0, 0);
     up_vector = (position_ws - planet_center);
     const float height = length(up_vector);
@@ -136,8 +133,7 @@ force_inline Ref::fvec4 AtmosphereDensity(const atmosphere_params_t &params, con
 #endif
     const float density_ozone = fmaxf(0.0f, 1.0f - fabsf(h - params.ozone_height_center) / params.ozone_half_width);
 
-    return params.atmosphere_density *
-           Ref::fvec4{density_rayleigh.get<0>(), density_mie.get<0>(), density_ozone, 0.0f};
+    return params.atmosphere_density * Ref::fvec4{density_rayleigh.get<0>(), density_mie.get<0>(), density_ozone, 0.0f};
 }
 
 struct atmosphere_medium_t {
@@ -189,19 +185,15 @@ Ref::fvec4 SampleTransmittanceLUT(Span<const float> lut, Ref::fvec2 uv) {
     iuv0 = clamp(iuv0, Ref::ivec2{0, 0}, Ref::ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
     const Ref::ivec2 iuv1 = min(iuv0 + 1, Ref::ivec2{TRANSMITTANCE_LUT_W - 1, TRANSMITTANCE_LUT_H - 1});
 
-    const auto tr00 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
-                                      Ref::vector_aligned),
-               tr01 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
-                                      Ref::vector_aligned),
-               tr10 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())],
-                                      Ref::vector_aligned),
-               tr11 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())],
-                                      Ref::vector_aligned);
+    const auto tr00 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())], Ref::vector_aligned),
+               tr01 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())], Ref::vector_aligned),
+               tr10 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv0.get<0>())], Ref::vector_aligned),
+               tr11 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * TRANSMITTANCE_LUT_W + iuv1.get<0>())], Ref::vector_aligned);
 
     const Ref::fvec2 k = fract(uv);
 
     const Ref::fvec4 tr0 = tr01 * k.get<0>() + tr00 * (1.0f - k.get<0>()),
-                          tr1 = tr11 * k.get<0>() + tr10 * (1.0f - k.get<0>());
+                     tr1 = tr11 * k.get<0>() + tr10 * (1.0f - k.get<0>());
 
     return (tr1 * k.get<1>() + tr0 * (1.0f - k.get<1>()));
 }
@@ -212,27 +204,23 @@ Ref::fvec4 SampleMultiscatterLUT(Span<const float> lut, Ref::fvec2 uv) {
     iuv0 = clamp(iuv0, Ref::ivec2{0, 0}, Ref::ivec2{MULTISCATTER_LUT_RES - 1});
     const Ref::ivec2 iuv1 = min(iuv0 + 1, Ref::ivec2{MULTISCATTER_LUT_RES - 1});
 
-    const auto ms00 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * MULTISCATTER_LUT_RES + iuv0.get<0>())],
-                                      Ref::vector_aligned),
-               ms01 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * MULTISCATTER_LUT_RES + iuv1.get<0>())],
-                                      Ref::vector_aligned),
-               ms10 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * MULTISCATTER_LUT_RES + iuv0.get<0>())],
-                                      Ref::vector_aligned),
-               ms11 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * MULTISCATTER_LUT_RES + iuv1.get<0>())],
-                                      Ref::vector_aligned);
+    const auto ms00 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * MULTISCATTER_LUT_RES + iuv0.get<0>())], Ref::vector_aligned),
+               ms01 = Ref::fvec4(&lut[4 * (iuv0.get<1>() * MULTISCATTER_LUT_RES + iuv1.get<0>())], Ref::vector_aligned),
+               ms10 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * MULTISCATTER_LUT_RES + iuv0.get<0>())], Ref::vector_aligned),
+               ms11 = Ref::fvec4(&lut[4 * (iuv1.get<1>() * MULTISCATTER_LUT_RES + iuv1.get<0>())], Ref::vector_aligned);
 
     const Ref::fvec2 k = fract(uv);
 
     const Ref::fvec4 ms0 = ms01 * k.get<0>() + ms00 * (1.0f - k.get<0>()),
-                          ms1 = ms11 * k.get<0>() + ms10 * (1.0f - k.get<0>());
+                     ms1 = ms11 * k.get<0>() + ms10 * (1.0f - k.get<0>());
 
     return (ms1 * k.get<1>() + ms0 * (1.0f - k.get<1>()));
 }
 
 force_inline Ref::fvec4 FetchWeatherTex(const int x, const int y) {
     return Ref::fvec4{float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 0]),
-                           float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 1]),
-                           float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 2]), 0.0f};
+                      float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 1]),
+                      float(__weather_tex[3 * (y * WEATHER_TEX_RES + x) + 2]), 0.0f};
 }
 
 Ref::fvec4 SampleWeatherTex(Ref::fvec2 uv) {
@@ -242,14 +230,14 @@ Ref::fvec4 SampleWeatherTex(Ref::fvec2 uv) {
     const Ref::ivec2 iuv1 = (iuv0 + 1) & Ref::ivec2{WEATHER_TEX_RES - 1};
 
     const Ref::fvec4 w00 = FetchWeatherTex(iuv0.get<0>(), iuv0.get<1>()),
-                          w01 = FetchWeatherTex(iuv1.get<0>(), iuv0.get<1>()),
-                          w10 = FetchWeatherTex(iuv0.get<0>(), iuv1.get<1>()),
-                          w11 = FetchWeatherTex(iuv1.get<0>(), iuv1.get<1>());
+                     w01 = FetchWeatherTex(iuv1.get<0>(), iuv0.get<1>()),
+                     w10 = FetchWeatherTex(iuv0.get<0>(), iuv1.get<1>()),
+                     w11 = FetchWeatherTex(iuv1.get<0>(), iuv1.get<1>());
 
     const Ref::fvec2 k = fract(uv);
 
     const Ref::fvec4 w0 = w01 * k.get<0>() + w00 * (1.0f - k.get<0>()),
-                          w1 = w11 * k.get<0>() + w10 * (1.0f - k.get<0>());
+                     w1 = w11 * k.get<0>() + w10 * (1.0f - k.get<0>());
 
     return (w1 * k.get<1>() + w0 * (1.0f - k.get<1>())) * (1.0f / 255.0f);
 }
@@ -306,7 +294,7 @@ float GetCloudsDensity(const atmosphere_params_t &params, Ref::fvec4 local_posit
         (out_local_height - params.clouds_height_beg) / (params.clouds_height_end - params.clouds_height_beg);
 
     Ref::fvec2 weather_uv = {local_position.get<0>() + params.clouds_offset_x,
-                                  local_position.get<2>() + params.clouds_offset_z};
+                             local_position.get<2>() + params.clouds_offset_z};
     weather_uv = fract(weather_uv * 0.00007f);
 
     const Ref::fvec4 weather_sample = SampleWeatherTex(weather_uv);
@@ -354,9 +342,8 @@ float TraceCloudShadow(const atmosphere_params_t &params, const uint32_t rand_ha
 
 // https://www.shadertoy.com/view/NtsBzB
 Ref::fvec4 stars_hash(Ref::fvec4 p) {
-    p = Ref::fvec4{dot(p, Ref::fvec4{127.1f, 311.7f, 74.7f, 0.0f}),
-                        dot(p, Ref::fvec4{269.5f, 183.3f, 246.1f, 0.0f}),
-                        dot(p, Ref::fvec4{113.5f, 271.9f, 124.6f, 0.0f}), 0.0f};
+    p = Ref::fvec4{dot(p, Ref::fvec4{127.1f, 311.7f, 74.7f, 0.0f}), dot(p, Ref::fvec4{269.5f, 183.3f, 246.1f, 0.0f}),
+                   dot(p, Ref::fvec4{113.5f, 271.9f, 124.6f, 0.0f}), 0.0f};
 
     p.set<0>(sinf(p.get<0>()));
     p.set<1>(sinf(p.get<1>()));
@@ -371,35 +358,26 @@ float stars_noise(const Ref::fvec4 &p) {
 
     Ref::fvec4 u = f * f * (3.0f - 2.0f * f);
 
-    return mix(mix(mix(dot(stars_hash(i + Ref::fvec4(0.0f, 0.0f, 0.0f, 0.0f)),
-                           f - Ref::fvec4(0.0f, 0.0f, 0.0f, 0.0f)),
-                       dot(stars_hash(i + Ref::fvec4(1.0f, 0.0f, 0.0f, 0.0f)),
-                           f - Ref::fvec4(1.0f, 0.0f, 0.0f, 0.0f)),
+    return mix(mix(mix(dot(stars_hash(i + Ref::fvec4(0.0f, 0.0f, 0.0f, 0.0f)), f - Ref::fvec4(0.0f, 0.0f, 0.0f, 0.0f)),
+                       dot(stars_hash(i + Ref::fvec4(1.0f, 0.0f, 0.0f, 0.0f)), f - Ref::fvec4(1.0f, 0.0f, 0.0f, 0.0f)),
                        u.get<0>()),
-                   mix(dot(stars_hash(i + Ref::fvec4(0.0f, 1.0f, 0.0f, 0.0f)),
-                           f - Ref::fvec4(0.0f, 1.0f, 0.0f, 0.0f)),
-                       dot(stars_hash(i + Ref::fvec4(1.0f, 1.0f, 0.0f, 0.0f)),
-                           f - Ref::fvec4(1.0f, 1.0f, 0.0f, 0.0f)),
+                   mix(dot(stars_hash(i + Ref::fvec4(0.0f, 1.0f, 0.0f, 0.0f)), f - Ref::fvec4(0.0f, 1.0f, 0.0f, 0.0f)),
+                       dot(stars_hash(i + Ref::fvec4(1.0f, 1.0f, 0.0f, 0.0f)), f - Ref::fvec4(1.0f, 1.0f, 0.0f, 0.0f)),
                        u.get<0>()),
                    u.get<1>()),
-               mix(mix(dot(stars_hash(i + Ref::fvec4(0.0f, 0.0f, 1.0f, 0.0f)),
-                           f - Ref::fvec4(0.0f, 0.0f, 1.0f, 0.0f)),
-                       dot(stars_hash(i + Ref::fvec4(1.0f, 0.0f, 1.0f, 0.0f)),
-                           f - Ref::fvec4(1.0f, 0.0f, 1.0f, 0.0f)),
+               mix(mix(dot(stars_hash(i + Ref::fvec4(0.0f, 0.0f, 1.0f, 0.0f)), f - Ref::fvec4(0.0f, 0.0f, 1.0f, 0.0f)),
+                       dot(stars_hash(i + Ref::fvec4(1.0f, 0.0f, 1.0f, 0.0f)), f - Ref::fvec4(1.0f, 0.0f, 1.0f, 0.0f)),
                        u.get<0>()),
-                   mix(dot(stars_hash(i + Ref::fvec4(0.0f, 1.0f, 1.0f, 0.0f)),
-                           f - Ref::fvec4(0.0f, 1.0f, 1.0f, 0.0f)),
-                       dot(stars_hash(i + Ref::fvec4(1.0f, 1.0f, 1.0f, 0.0f)),
-                           f - Ref::fvec4(1.0f, 1.0f, 1.0f, 0.0f)),
+                   mix(dot(stars_hash(i + Ref::fvec4(0.0f, 1.0f, 1.0f, 0.0f)), f - Ref::fvec4(0.0f, 1.0f, 1.0f, 0.0f)),
+                       dot(stars_hash(i + Ref::fvec4(1.0f, 1.0f, 1.0f, 0.0f)), f - Ref::fvec4(1.0f, 1.0f, 1.0f, 0.0f)),
                        u.get<0>()),
                    u.get<1>()),
                u.get<2>());
 }
 
 force_inline Ref::fvec4 FetchMoonTex(const int x, const int y) {
-    return Ref::fvec4{float(__moon_tex[3 * (y * MOON_TEX_W + x) + 0]),
-                           float(__moon_tex[3 * (y * MOON_TEX_W + x) + 1]),
-                           float(__moon_tex[3 * (y * MOON_TEX_W + x) + 2]), 0.0f};
+    return Ref::fvec4{float(__moon_tex[3 * (y * MOON_TEX_W + x) + 0]), float(__moon_tex[3 * (y * MOON_TEX_W + x) + 1]),
+                      float(__moon_tex[3 * (y * MOON_TEX_W + x) + 2]), 0.0f};
 }
 
 Ref::fvec4 SampleMoonTex(Ref::fvec2 uv) {
@@ -408,22 +386,20 @@ Ref::fvec4 SampleMoonTex(Ref::fvec2 uv) {
     iuv0 = clamp(iuv0, Ref::ivec2{0, 0}, Ref::ivec2{MOON_TEX_W - 1, MOON_TEX_H - 1});
     const Ref::ivec2 iuv1 = (iuv0 + 1) & Ref::ivec2{MOON_TEX_W - 1, MOON_TEX_H - 1};
 
-    const Ref::fvec4 m00 = FetchMoonTex(iuv0.get<0>(), iuv0.get<1>()),
-                          m01 = FetchMoonTex(iuv1.get<0>(), iuv0.get<1>()),
-                          m10 = FetchMoonTex(iuv0.get<0>(), iuv1.get<1>()),
-                          m11 = FetchMoonTex(iuv1.get<0>(), iuv1.get<1>());
+    const Ref::fvec4 m00 = FetchMoonTex(iuv0.get<0>(), iuv0.get<1>()), m01 = FetchMoonTex(iuv1.get<0>(), iuv0.get<1>()),
+                     m10 = FetchMoonTex(iuv0.get<0>(), iuv1.get<1>()), m11 = FetchMoonTex(iuv1.get<0>(), iuv1.get<1>());
 
     const Ref::fvec2 k = fract(uv);
 
     const Ref::fvec4 m0 = m01 * k.get<0>() + m00 * (1.0f - k.get<0>()),
-                          m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
+                     m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
 
-    return srgb_to_rgb((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
+    return srgb_to_linear((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
 }
 
 force_inline Ref::fvec2 FetchCirrusTex(const int x, const int y) {
     return Ref::fvec2{float(__cirrus_tex[2 * (y * CIRRUS_TEX_W + x) + 0]),
-                           float(__cirrus_tex[2 * (y * CIRRUS_TEX_W + x) + 1])};
+                      float(__cirrus_tex[2 * (y * CIRRUS_TEX_W + x) + 1])};
 }
 
 Ref::fvec2 SampleCirrusTex(Ref::fvec2 uv) {
@@ -433,22 +409,22 @@ Ref::fvec2 SampleCirrusTex(Ref::fvec2 uv) {
     const Ref::ivec2 iuv1 = (iuv0 + 1) & Ref::ivec2{CIRRUS_TEX_W - 1, CIRRUS_TEX_H - 1};
 
     const Ref::fvec2 m00 = FetchCirrusTex(iuv0.get<0>(), iuv0.get<1>()),
-                          m01 = FetchCirrusTex(iuv1.get<0>(), iuv0.get<1>()),
-                          m10 = FetchCirrusTex(iuv0.get<0>(), iuv1.get<1>()),
-                          m11 = FetchCirrusTex(iuv1.get<0>(), iuv1.get<1>());
+                     m01 = FetchCirrusTex(iuv1.get<0>(), iuv0.get<1>()),
+                     m10 = FetchCirrusTex(iuv0.get<0>(), iuv1.get<1>()),
+                     m11 = FetchCirrusTex(iuv1.get<0>(), iuv1.get<1>());
 
     const Ref::fvec2 k = fract(uv);
 
     const Ref::fvec2 m0 = m01 * k.get<0>() + m00 * (1.0f - k.get<0>()),
-                          m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
+                     m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
 
-    return srgb_to_rgb((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
+    return srgb_to_linear((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
 }
 
 } // namespace Ray
 
 Ray::Ref::fvec4 Ray::IntegrateOpticalDepth(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
-                                                const Ref::fvec4 &ray_dir) {
+                                           const Ref::fvec4 &ray_dir) {
     Ref::fvec2 intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     float ray_length = intersection[1];
 
@@ -469,11 +445,11 @@ Ray::Ref::fvec4 Ray::IntegrateOpticalDepth(const atmosphere_params_t &params, co
 
 template <bool ExpSampleDistribution, bool UniformPhase>
 std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4>
-Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
-                             const Ref::fvec4 &ray_dir, float ray_length, const Ref::fvec4 &light_dir,
-                             const Ref::fvec4 &moon_dir, const Ref::fvec4 &light_color,
-                             Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
-                             const float rand_offset, const int sample_count, Ref::fvec4 &inout_transmittance) {
+Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::fvec4 &ray_start, const Ref::fvec4 &ray_dir,
+                             float ray_length, const Ref::fvec4 &light_dir, const Ref::fvec4 &moon_dir,
+                             const Ref::fvec4 &light_color, Span<const float> transmittance_lut,
+                             Span<const float> multiscatter_lut, const float rand_offset, const int sample_count,
+                             Ref::fvec4 &inout_transmittance) {
     const Ref::fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     const Ref::fvec2 planet_intersection = PlanetIntersection(params, ray_start, ray_dir);
@@ -529,10 +505,10 @@ Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::fvec4
 
             Ref::fvec4 multiscattered_lum = 0.0f;
             if (!multiscatter_lut.empty()) {
-                Ref::fvec2 uv = saturate(
-                    Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
+                Ref::fvec2 uv =
+                    saturate(Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
                 uv = Ref::fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
-                                     from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+                                from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
 
                 multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
             }
@@ -552,10 +528,10 @@ Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::fvec4
 
             Ref::fvec4 multiscattered_lum = 0.0f;
             if (!multiscatter_lut.empty()) {
-                Ref::fvec2 uv = saturate(
-                    Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
+                Ref::fvec2 uv =
+                    saturate(Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
                 uv = Ref::fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
-                                     from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+                                from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
 
                 multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
             }
@@ -602,32 +578,36 @@ Ray::IntegrateScatteringMain(const atmosphere_params_t &params, const Ref::fvec4
     return std::make_pair(radiance, multiscat_as_1);
 }
 
-template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::IntegrateScatteringMain<false, false>(
-    const atmosphere_params_t &params, const Ref::fvec4 &ray_start, const Ref::fvec4 &ray_dir,
-    float ray_length, const Ref::fvec4 &light_dir, const Ref::fvec4 &moon_dir,
-    const Ref::fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
-    float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
-template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::IntegrateScatteringMain<false, true>(
-    const atmosphere_params_t &params, const Ref::fvec4 &ray_start, const Ref::fvec4 &ray_dir,
-    float ray_length, const Ref::fvec4 &light_dir, const Ref::fvec4 &moon_dir,
-    const Ref::fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
-    float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
-template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::IntegrateScatteringMain<true, false>(
-    const atmosphere_params_t &params, const Ref::fvec4 &ray_start, const Ref::fvec4 &ray_dir,
-    float ray_length, const Ref::fvec4 &light_dir, const Ref::fvec4 &moon_dir,
-    const Ref::fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
-    float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
-template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::IntegrateScatteringMain<true, true>(
-    const atmosphere_params_t &params, const Ref::fvec4 &ray_start, const Ref::fvec4 &ray_dir,
-    float ray_length, const Ref::fvec4 &light_dir, const Ref::fvec4 &moon_dir,
-    const Ref::fvec4 &light_color, Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
-    float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4>
+Ray::IntegrateScatteringMain<false, false>(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
+                                           const Ref::fvec4 &ray_dir, float ray_length, const Ref::fvec4 &light_dir,
+                                           const Ref::fvec4 &moon_dir, const Ref::fvec4 &light_color,
+                                           Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+                                           float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4>
+Ray::IntegrateScatteringMain<false, true>(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
+                                          const Ref::fvec4 &ray_dir, float ray_length, const Ref::fvec4 &light_dir,
+                                          const Ref::fvec4 &moon_dir, const Ref::fvec4 &light_color,
+                                          Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+                                          float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4>
+Ray::IntegrateScatteringMain<true, false>(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
+                                          const Ref::fvec4 &ray_dir, float ray_length, const Ref::fvec4 &light_dir,
+                                          const Ref::fvec4 &moon_dir, const Ref::fvec4 &light_color,
+                                          Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+                                          float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
+template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4>
+Ray::IntegrateScatteringMain<true, true>(const atmosphere_params_t &params, const Ref::fvec4 &ray_start,
+                                         const Ref::fvec4 &ray_dir, float ray_length, const Ref::fvec4 &light_dir,
+                                         const Ref::fvec4 &moon_dir, const Ref::fvec4 &light_color,
+                                         Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+                                         float rand_offset, int sample_count, Ref::fvec4 &inout_transmittance);
 
 Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref::fvec4 ray_start,
-                                              const Ref::fvec4 &ray_dir, float ray_length,
-                                              const Ref::fvec4 &light_dir, const float light_angle,
-                                              const Ref::fvec4 &light_color, Span<const float> transmittance_lut,
-                                              Span<const float> multiscatter_lut, uint32_t rand_hash) {
+                                         const Ref::fvec4 &ray_dir, float ray_length, const Ref::fvec4 &light_dir,
+                                         const float light_angle, const Ref::fvec4 &light_color,
+                                         Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+                                         uint32_t rand_hash) {
     const Ref::fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     if (atm_intersection.get<0>() > 0) {
@@ -701,7 +681,7 @@ Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref:
 
             // NOTE: We assume transmittance is constant along the clouds range (~500m)
             Ref::fvec4 light_transmittance, moon_transmittance, multiscattered_lum = 0.0f,
-                                                                     moon_multiscattered_lum = 0.0f;
+                                                                moon_multiscattered_lum = 0.0f;
             {
                 Ref::fvec4 up_vector;
                 const float local_height = AtmosphereHeight(params, local_position, up_vector);
@@ -712,10 +692,10 @@ Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref:
                     light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
                     if (!multiscatter_lut.empty()) {
-                        Ref::fvec2 uv = saturate(Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f,
-                                                                      local_height / params.atmosphere_height));
+                        Ref::fvec2 uv = saturate(
+                            Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
                         uv = Ref::fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
-                                             from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+                                        from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
 
                         multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
                     }
@@ -727,10 +707,10 @@ Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref:
                     moon_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
                     if (!multiscatter_lut.empty()) {
-                        Ref::fvec2 uv = saturate(Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f,
-                                                                      local_height / params.atmosphere_height));
+                        Ref::fvec2 uv = saturate(
+                            Ref::fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
                         uv = Ref::fvec2(from_unit_to_sub_uvs(uv.get<0>(), MULTISCATTER_LUT_RES),
-                                             from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
+                                        from_unit_to_sub_uvs(uv.get<1>(), MULTISCATTER_LUT_RES));
 
                         moon_multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
                     }
@@ -750,8 +730,7 @@ Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref:
 
                     if (light_dir.get<1>() > -0.025f) {
                         // main light contribution
-                        const Ref::fvec2 planet_intersection =
-                            PlanetIntersection(params, local_position, light_dir);
+                        const Ref::fvec2 planet_intersection = PlanetIntersection(params, local_position, light_dir);
                         const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
                         const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, light_dir);
 
@@ -794,7 +773,7 @@ Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref:
         cirrus_coords.set<1>(cirrus_coords.get<1>() + 1.75f);
 
         float noise_read = 1.0f - Sample3dNoiseTex(fract(Ref::fvec4{0.0f, cirrus_coords.get<0>() * 0.03f,
-                                                                         cirrus_coords.get<1>() * 0.03f, 0.0f}));
+                                                                    cirrus_coords.get<1>() * 0.03f, 0.0f}));
         noise_read =
             saturate(noise_read - 1.0f + params.cirrus_clouds_amount * 0.6f) / (params.cirrus_clouds_amount + 1e-9f);
 
@@ -803,7 +782,7 @@ Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref:
         //
         cirrus_coords.set<0>(cirrus_coords.get<0>() + 0.25f);
         noise_read = 1.0f - Sample3dNoiseTex(fract(Ref::fvec4{0.7f, cirrus_coords.get<0>() * 0.02f,
-                                                                   cirrus_coords.get<1>() * 0.02f, 0.0f}));
+                                                              cirrus_coords.get<1>() * 0.02f, 0.0f}));
         noise_read =
             saturate(noise_read - 1.0f + params.cirrus_clouds_amount * 0.7f) / (params.cirrus_clouds_amount + 1e-9f);
 
@@ -885,8 +864,7 @@ Ray::Ref::fvec4 Ray::IntegrateScattering(const atmosphere_params_t &params, Ref:
     //
     if (planet_intersection.get<0>() < 0 && moon_intersection.get<0>() > 0 && params.moon_radius > 0.0f &&
         light_brightness > 0.0f) {
-        const Ref::fvec4 moon_center =
-            Ref::fvec4{params.moon_dir, Ref::vector_aligned} * params.moon_distance;
+        const Ref::fvec4 moon_center = Ref::fvec4{params.moon_dir, Ref::vector_aligned} * params.moon_distance;
         const Ref::fvec4 moon_normal = normalize(ray_start + moon_intersection.get<0>() * ray_dir - moon_center);
 
         const float theta = acosf(clamp(moon_normal.get<1>(), -1.0f, 1.0f)) / PI;
@@ -928,7 +906,7 @@ void Ray::UvToLutTransmittanceParams(const atmosphere_params_t &params, Ref::fve
 }
 
 Ray::Ref::fvec2 Ray::LutTransmittanceParamsToUv(const atmosphere_params_t &params, const float view_height,
-                                                     const float view_zenith_cos_angle) {
+                                                const float view_zenith_cos_angle) {
     const float top_radius = params.planet_radius + params.atmosphere_height;
 
     const float H = sqrtf(fmaxf(0.0f, top_radius * top_radius - params.planet_radius * params.planet_radius));

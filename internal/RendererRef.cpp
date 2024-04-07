@@ -1,3 +1,4 @@
+#define THIS_IS_REF
 #include "RendererCPU.h"
 
 namespace Ray {

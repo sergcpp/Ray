@@ -18,6 +18,7 @@ struct scene_data_t {
     const Buffer &tri_indices;
     const Buffer &tri_materials;
     const Buffer &materials;
+    Span<const TextureAtlas> tex_atlases;
     const Buffer &atlas_textures;
     const Buffer &lights;
     const Buffer &li_indices;
@@ -28,6 +29,9 @@ struct scene_data_t {
     const AccStructure &rt_tlas;
     const Texture2D &env_qtree;
     int env_qtree_levels;
+    const cache_grid_params_t &spatial_cache_grid;
+    const Buffer &spatial_cache_entries;
+    const Buffer &spatial_cache_voxels;
 };
 
 class Renderer : public RendererBase {
@@ -35,8 +39,10 @@ class Renderer : public RendererBase {
     std::unique_ptr<Context> ctx_;
 
     Shader sh_prim_rays_gen_simple_, sh_prim_rays_gen_adaptive_, sh_intersect_scene_, sh_intersect_scene_indirect_,
-        sh_intersect_area_lights_, sh_shade_primary_, sh_shade_secondary_, sh_intersect_scene_shadow_,
-        sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_filter_variance_, sh_nlm_filter_, sh_debug_rt_;
+        sh_intersect_area_lights_, sh_shade_primary_, sh_shade_primary_cache_update_, sh_shade_primary_cache_query_,
+        sh_shade_secondary_, sh_shade_secondary_cache_update_, sh_shade_secondary_cache_query_,
+        sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_filter_variance_,
+        sh_nlm_filter_, sh_debug_rt_;
     Shader sh_sort_hash_rays_, sh_sort_init_count_table_, sh_sort_reduce_, sh_sort_scan_, sh_sort_scan_add_,
         sh_sort_scatter_, sh_sort_reorder_rays_;
     Shader sh_intersect_scene_rgen_, sh_intersect_scene_rchit_, sh_intersect_scene_rmiss_,
@@ -47,11 +53,14 @@ class Renderer : public RendererBase {
         sh_convolution_concat_96_64_112_, sh_convolution_concat_112_48_96_, sh_convolution_concat_96_32_64_,
         sh_convolution_concat_64_3_64_, sh_convolution_concat_64_6_64_, sh_convolution_concat_64_9_64_,
         sh_convolution_32_3_img_;
+    Shader sh_spatial_cache_update_, sh_spatial_cache_resolve_;
 
     Program prog_prim_rays_gen_simple_, prog_prim_rays_gen_adaptive_, prog_intersect_scene_,
-        prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_, prog_shade_secondary_,
-        prog_intersect_scene_shadow_, prog_prepare_indir_args_, prog_mix_incremental_, prog_postprocess_,
-        prog_filter_variance_, prog_nlm_filter_, prog_debug_rt_;
+        prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_,
+        prog_shade_primary_cache_update_, prog_shade_primary_cache_query_, prog_shade_secondary_,
+        prog_shade_secondary_cache_update_, prog_shade_secondary_cache_query_, prog_intersect_scene_shadow_,
+        prog_prepare_indir_args_, prog_mix_incremental_, prog_postprocess_, prog_filter_variance_, prog_nlm_filter_,
+        prog_debug_rt_;
     Program prog_sort_hash_rays_, prog_sort_init_count_table_, prog_sort_reduce_, prog_sort_scan_, prog_sort_scan_add_,
         prog_sort_scatter_, prog_sort_reorder_rays_;
     Program prog_intersect_scene_rtpipe_, prog_intersect_scene_indirect_rtpipe_;
@@ -61,10 +70,13 @@ class Renderer : public RendererBase {
         prog_convolution_concat_96_64_112_, prog_convolution_concat_112_48_96_, prog_convolution_concat_96_32_64_,
         prog_convolution_concat_64_3_64_, prog_convolution_concat_64_6_64_, prog_convolution_concat_64_9_64_,
         prog_convolution_32_3_img_;
+    Program prog_spatial_cache_update_, prog_spatial_cache_resolve_;
 
     Pipeline pi_prim_rays_gen_simple_, pi_prim_rays_gen_adaptive_, pi_intersect_scene_, pi_intersect_scene_indirect_,
-        pi_intersect_area_lights_, pi_shade_primary_, pi_shade_secondary_, pi_intersect_scene_shadow_,
-        pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_filter_variance_, pi_nlm_filter_, pi_debug_rt_;
+        pi_intersect_area_lights_, pi_shade_primary_, pi_shade_primary_cache_update_, pi_shade_primary_cache_query_,
+        pi_shade_secondary_, pi_shade_secondary_cache_update_, pi_shade_secondary_cache_query_,
+        pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_filter_variance_,
+        pi_nlm_filter_, pi_debug_rt_;
     Pipeline pi_sort_hash_rays_, pi_sort_init_count_table_, pi_sort_reduce_, pi_sort_scan_, pi_sort_scan_add_,
         pi_sort_scatter_, pi_sort_reorder_rays_, pi_intersect_scene_rtpipe_, pi_intersect_scene_indirect_rtpipe_;
     Pipeline pi_convolution_Img_9_32_, pi_convolution_32_32_Downsample_, pi_convolution_32_48_Downsample_,
@@ -73,10 +85,11 @@ class Renderer : public RendererBase {
         pi_convolution_concat_96_64_112_, pi_convolution_concat_112_48_96_, pi_convolution_concat_96_32_64_,
         pi_convolution_concat_64_3_64_, pi_convolution_concat_64_6_64_, pi_convolution_concat_64_9_64_,
         pi_convolution_32_3_img_;
+    Pipeline pi_spatial_cache_update_, pi_spatial_cache_resolve_;
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
-         use_coop_matrix_ = false, use_subgroup_ = false;
+         use_coop_matrix_ = false, use_subgroup_ = false, use_spatial_cache_ = false;
 
     ePixelFilter filter_table_filter_ = ePixelFilter(-1);
     float filter_table_width_ = 0.0f;
@@ -96,7 +109,9 @@ class Renderer : public RendererBase {
 
     Buffer random_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2],
         count_table_buf_, reduce_table_buf_;
-    Buffer counters_buf_, indir_args_buf_;
+    Buffer counters_buf_, indir_args_buf_[2];
+
+    Buffer temp_cache_data_buf_, temp_lock_buf_;
 
     Buffer pixel_readback_buf_, base_color_readback_buf_, depth_normals_readback_buf_;
     mutable bool pixel_readback_is_tonemapped_ = false;
@@ -121,6 +136,8 @@ class Renderer : public RendererBase {
     float variance_threshold_ = 0.0f;
 
     struct {
+        int cache_update[2];
+        int cache_resolve[2];
         int primary_ray_gen[2];
         int primary_trace[2];
         int primary_shade[2];
@@ -135,9 +152,9 @@ class Renderer : public RendererBase {
     stats_t stats_ = {0};
 
     void kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, uint32_t rand_seed, const rect_t &rect,
-                                    const Buffer &rand_seq, const Buffer &filter_table, int iteration,
-                                    const Texture2D &req_samples_img, const Buffer &inout_counters,
-                                    const Buffer &out_rays);
+                                    int img_w, int img_h, const Buffer &rand_seq, const Buffer &filter_table,
+                                    int iteration, bool adaptive, const Texture2D &req_samples_img,
+                                    const Buffer &inout_counters, const Buffer &out_rays);
     void kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
                                const Buffer &rand_seq, uint32_t rand_seed, int iteration, const rect_t &rect,
                                uint32_t node_index, const float cam_fwd[3], float clip_dist,
@@ -166,20 +183,22 @@ class Renderer : public RendererBase {
                                      const Texture2D &out_img);
     void kernel_IntersectAreaLights(CommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
-    void kernel_ShadePrimaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
-                                 const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays,
-                                 const scene_data_t &sc_data, const Buffer &rand_seq, uint32_t rand_seed, int iteration,
-                                 const rect_t &rect, Span<const TextureAtlas> tex_atlases,
-                                 const BindlessTexData &bindless_tex, const Texture2D &out_img, const Buffer &out_rays,
-                                 const Buffer &out_sh_rays, const Buffer &inout_counters,
-                                 const Texture2D &out_base_color, const Texture2D &out_depth_normals);
-    void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_direct,
-                                   const environment_t &env, const Buffer &indir_args, int indir_args_index,
-                                   const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                   const Buffer &rand_seq, uint32_t rand_seed, int iteration,
-                                   Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                   const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
-                                   const Buffer &inout_counters);
+    void kernel_ShadePrimaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, eSpatialCacheMode cache,
+                                 const environment_t &env, const Buffer &indir_args, int indir_args_index,
+                                 const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
+                                 const Buffer &rand_seq, uint32_t rand_seed, int iteration, const rect_t &rect,
+                                 Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                 const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+                                 const Buffer &inout_counters, const Texture2D &out_base_color,
+                                 const Texture2D &out_depth_normals);
+    void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings,
+                                   eSpatialCacheMode cache_usage, float clamp_direct, const environment_t &env,
+                                   const Buffer &indir_args, int indir_args_index, const Buffer &hits,
+                                   const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq,
+                                   uint32_t rand_seed, int iteration, Span<const TextureAtlas> tex_atlases,
+                                   const BindlessTexData &bindless_tex, const Texture2D &out_img,
+                                   const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters,
+                                   const Texture2D &out_depth_normals);
     void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(CommandBuffer cmd_buf, float mix_factor, float half_mix_factor, const rect_t &rect,
                                int iteration, float exposure, const Texture2D &temp_img,
@@ -245,7 +264,17 @@ class Renderer : public RendererBase {
                                 const Buffer &out_rays);
     void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
+    void kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const cache_grid_params_t &params, const Buffer &indir_args,
+                                   const int indir_args_index, const Buffer &counters, const int counter_index,
+                                   const Buffer &inters, const Buffer &rays, const Buffer &cache_data,
+                                   const Texture2D &radiance_img, const Texture2D &depth_normals_img,
+                                   const Buffer &inout_entries, const Buffer &inout_voxels_curr,
+                                   const Buffer &inout_lock_buf);
+    void kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const cache_grid_params_t &params,
+                                    const Buffer &inout_entries, const Buffer &inout_voxels_curr,
+                                    const Buffer &voxels_prev);
 
+    void TransitionSceneResources(CommandBuffer cmd_buf, const scene_data_t &sc_data) const;
     void RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
                    const Buffer &counters, const Buffer &reduce_table);
 
@@ -279,6 +308,10 @@ class Renderer : public RendererBase {
     void DenoiseImage(const RegionContext &region) override;
     void DenoiseImage(int pass, const RegionContext &region) override;
 
+    void UpdateSpatialCache(const SceneBase &scene, RegionContext &region) override;
+    void ResolveSpatialCache(const SceneBase &scene,
+                             const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
+
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
 
@@ -298,7 +331,7 @@ inline Ray::NS::Renderer::~Renderer() {
 }
 
 inline Ray::SceneBase *Ray::NS::Renderer::CreateScene() {
-    return new NS::Scene(ctx_.get(), use_hwrt_, use_bindless_, use_tex_compression_);
+    return new NS::Scene(ctx_.get(), use_hwrt_, use_bindless_, use_tex_compression_, use_spatial_cache_);
 }
 
 inline void Ray::NS::Renderer::Resize(const int w, const int h) {
@@ -386,6 +419,16 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     const int reduce_blocks_count = (blocks_count + BlockSize - 1) / BlockSize;
     reduce_table_buf_ = Buffer{"Reduce Table", ctx_.get(), eBufType::Storage,
                                uint32_t(sizeof(uint32_t) * SORT_BINS_COUNT * reduce_blocks_count)};
+
+    if (use_spatial_cache_) {
+        const int cache_w = w / RAD_CACHE_DOWNSAMPLING_FACTOR, cache_h = h / RAD_CACHE_DOWNSAMPLING_FACTOR;
+        temp_cache_data_buf_ = Buffer{"Temp Cache Data", ctx_.get(), eBufType::Storage,
+                                      uint32_t(sizeof(cache_data_t) * cache_w * cache_h)};
+        if (!ctx_->int64_atomics_supported()) {
+            temp_lock_buf_ =
+                Buffer{"Temp Lock Buffer", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * (1 << 22))};
+        }
+    }
 
     w_ = w;
     h_ = h;
@@ -610,6 +653,58 @@ inline void Ray::NS::Renderer::UpdateUNetFilterMemory(CommandBuffer cmd_buf) {
     unet_tensors_.dec_conv1a_size *= el_sz;
     unet_tensors_.dec_conv1b_offset *= el_sz;
     unet_tensors_.dec_conv1b_size *= el_sz;
+}
+
+inline void Ray::NS::Renderer::TransitionSceneResources(CommandBuffer cmd_buf, const scene_data_t &sc_data) const {
+    SmallVector<TransitionInfo, 16> res_transitions;
+
+    for (const auto &tex_atlas : sc_data.tex_atlases) {
+        if (tex_atlas.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&tex_atlas, eResState::ShaderResource);
+        }
+    }
+
+    if (sc_data.mi_indices && sc_data.mi_indices.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.mi_indices, eResState::ShaderResource);
+    }
+    if (sc_data.meshes && sc_data.meshes.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.meshes, eResState::ShaderResource);
+    }
+    if (sc_data.vtx_indices && sc_data.vtx_indices.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.vtx_indices, eResState::ShaderResource);
+    }
+    if (sc_data.vertices && sc_data.vertices.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.vertices, eResState::ShaderResource);
+    }
+    if (sc_data.nodes && sc_data.nodes.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.nodes, eResState::ShaderResource);
+    }
+    if (sc_data.tris && sc_data.tris.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.tris, eResState::ShaderResource);
+    }
+    if (sc_data.tri_indices && sc_data.tri_indices.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.tri_indices, eResState::ShaderResource);
+    }
+    if (sc_data.tri_materials && sc_data.tri_materials.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.tri_materials, eResState::ShaderResource);
+    }
+    if (sc_data.materials && sc_data.materials.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.materials, eResState::ShaderResource);
+    }
+    if (sc_data.atlas_textures && sc_data.atlas_textures.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.atlas_textures, eResState::ShaderResource);
+    }
+    if (sc_data.lights && sc_data.lights.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.lights, eResState::ShaderResource);
+    }
+    if (sc_data.li_indices && sc_data.li_indices.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.li_indices, eResState::ShaderResource);
+    }
+    if (sc_data.env_qtree.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.env_qtree, eResState::ShaderResource);
+    }
+
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 }
 
 inline void Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],

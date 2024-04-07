@@ -23,10 +23,15 @@ Ref::fvec4 cross(const Ref::fvec4 &v1, const Ref::fvec4 &v2) {
 } // namespace Cpu
 } // namespace Ray
 
-Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_compression)
+Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_compression, const bool use_spatial_cache)
     : use_wide_bvh_(use_wide_bvh), use_tex_compression_(use_tex_compression) {
     SceneBase::log_ = log;
     SetEnvironment({});
+    if (use_spatial_cache) {
+        spatial_cache_entries_.resize(1 << 22, 0);
+        spatial_cache_voxels_curr_.resize(1 << 22, {});
+        spatial_cache_voxels_prev_.resize(1 << 22, {});
+    }
 }
 
 Ray::Cpu::Scene::~Scene() {
@@ -43,13 +48,13 @@ Ray::Cpu::Scene::~Scene() {
         Scene::RemoveMesh_nolock(to_delete);
     }
 
-    if (macro_nodes_root_ != 0xffffffff) {
+    if (tlas_root_ != 0xffffffff) {
         if (use_wide_bvh_) {
-            wnodes_.Erase(macro_nodes_block_);
+            wnodes_.Erase(tlas_block_);
         } else {
-            nodes_.Erase(macro_nodes_block_);
+            nodes_.Erase(tlas_block_);
         }
-        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+        tlas_root_ = tlas_block_ = 0xffffffff;
     }
 }
 
@@ -893,13 +898,13 @@ void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, ParallelForFun
 }
 
 void Ray::Cpu::Scene::RebuildTLAS_nolock() {
-    if (macro_nodes_root_ != 0xffffffff) {
+    if (tlas_root_ != 0xffffffff) {
         if (use_wide_bvh_) {
-            wnodes_.Erase(macro_nodes_block_);
+            wnodes_.Erase(tlas_block_);
         } else {
-            nodes_.Erase(macro_nodes_block_);
+            nodes_.Erase(tlas_block_);
         }
-        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+        tlas_root_ = tlas_block_ = 0xffffffff;
     }
     mi_indices_.clear();
 
@@ -939,8 +944,8 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
             }
         }
 
-        macro_nodes_root_ = wnodes_index.first;
-        macro_nodes_block_ = wnodes_index.second;
+        tlas_root_ = wnodes_index.first;
+        tlas_block_ = wnodes_index.second;
     } else {
         const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_nodes.size()));
 
@@ -955,8 +960,8 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
             }
         }
 
-        macro_nodes_root_ = nodes_index.first;
-        macro_nodes_block_ = nodes_index.second;
+        tlas_root_ = nodes_index.first;
+        tlas_block_ = nodes_index.second;
     }
 }
 
@@ -1399,5 +1404,64 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
         assert(root_node == 0);
         (void)root_node;
         light_nodes_.clear();
+    }
+}
+
+void Ray::Cpu::Scene::GetBounds(float bbox_min[3], float bbox_max[3]) const {
+    bbox_min[0] = bbox_min[1] = bbox_min[2] = MAX_DIST;
+    bbox_max[0] = bbox_max[1] = bbox_max[2] = -MAX_DIST;
+    if (tlas_root_ != 0xffffffff) {
+        if (use_wide_bvh_) {
+            const wbvh_node_t &root_node = wnodes_[tlas_root_];
+            if (root_node.child[0] & LEAF_NODE_BIT) {
+                for (int i = 0; i < 3; ++i) {
+                    bbox_min[i] = root_node.bbox_min[i][0];
+                    bbox_max[i] = root_node.bbox_max[i][0];
+                }
+            } else {
+                for (int j = 0; j < 8; j++) {
+                    if (root_node.child[j] == 0x7fffffff) {
+                        continue;
+                    }
+                    for (int i = 0; i < 3; ++i) {
+                        bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i][j]);
+                        bbox_max[i] = fmaxf(bbox_max[i], root_node.bbox_max[i][j]);
+                    }
+                }
+            }
+        } else {
+            const bvh_node_t &root_node = nodes_[tlas_root_];
+            for (int i = 0; i < 3; ++i) {
+                bbox_min[i] = root_node.bbox_min[i];
+                bbox_max[i] = root_node.bbox_max[i];
+            }
+        }
+    }
+    if (!light_wnodes_.empty()) {
+        if (use_wide_bvh_) {
+            const wbvh_node_t &root_node = light_wnodes_[0];
+            if (root_node.child[0] & LEAF_NODE_BIT) {
+                for (int i = 0; i < 3; ++i) {
+                    bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i][0]);
+                    bbox_max[i] = fmaxf(bbox_max[i], root_node.bbox_max[i][0]);
+                }
+            } else {
+                for (int j = 0; j < 8; j++) {
+                    if (root_node.child[j] == 0x7fffffff) {
+                        continue;
+                    }
+                    for (int i = 0; i < 3; ++i) {
+                        bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i][j]);
+                        bbox_max[i] = fmaxf(bbox_max[i], root_node.bbox_max[i][j]);
+                    }
+                }
+            }
+        } else {
+            const bvh_node_t &root_node = light_nodes_[0];
+            for (int i = 0; i < 3; ++i) {
+                bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i]);
+                bbox_max[i] = fmaxf(bbox_max[i], root_node.bbox_max[i]);
+            }
+        }
     }
 }

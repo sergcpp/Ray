@@ -73,10 +73,14 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/CoreRef.h
                           internal/CoreRef.cpp
                           internal/CoreSIMD.h
+                          internal/DenoiseRef.h
+                          internal/DenoiseRef.cpp
                           internal/Fixed.h
                           internal/FreelistAlloc.h
                           internal/FreelistAlloc.cpp
                           internal/HashMap32.h
+                          internal/RadCacheRef.h
+                          internal/RadCacheRef.cpp
                           internal/RastState.h
                           internal/RendererCPU.h
                           internal/RendererGPU.h
@@ -89,6 +93,8 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/SceneCPU.cpp
                           internal/SceneGPU.h
                           internal/ScopeExit.h
+                          internal/ShadeRef.h
+                          internal/ShadeRef.cpp
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h
                           internal/SparseStorageGPU.h
@@ -100,13 +106,15 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/TextureStorageCPU.cpp
                           internal/TextureUtils.h
                           internal/TextureUtils.cpp
+                          internal/TextureUtilsNEON.cpp
+                          internal/TextureUtilsSSE2.cpp
                           internal/Time_.h
                           internal/Time.cpp
-                          internal/VectorGPU.h
+                          internal/TonemapRef.h
+                          internal/TonemapRef.cpp
                           internal/UNetFilter.h
                           internal/UNetFilter.cpp
-                          internal/TextureUtilsNEON.cpp
-                          internal/TextureUtilsSSE2.cpp)
+                          internal/VectorGPU.h)
 
 if (ENABLE_REF_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}

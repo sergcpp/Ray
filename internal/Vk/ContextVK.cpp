@@ -113,7 +113,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
 
     if (!ChooseVkPhysicalDevice(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
                                 raytracing_supported_, ray_query_supported_, dynamic_rendering_supported_,
-                                fp16_supported_, coop_matrix_supported_, preferred_device, instance_, log)) {
+                                fp16_supported_, int64_supported_, int64_atomics_supported_, coop_matrix_supported_,
+                                preferred_device, instance_, log)) {
         return false;
     }
 
@@ -168,8 +169,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
     }
 
     if (!InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
-                      ray_query_supported_, dynamic_rendering_supported_, fp16_supported_, coop_matrix_supported_,
-                      g_enabled_layers, g_enabled_layers_count, log)) {
+                      ray_query_supported_, dynamic_rendering_supported_, fp16_supported_, int64_supported_,
+                      int64_atomics_supported_, coop_matrix_supported_, g_enabled_layers, g_enabled_layers_count,
+                      log)) {
         return false;
     }
 
@@ -390,11 +392,11 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
 bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &out_physical_device,
                                               VkPhysicalDeviceProperties &out_device_properties,
                                               VkPhysicalDeviceMemoryProperties &out_mem_properties,
-                                              uint32_t &out_graphics_family_index,
-                                              bool &out_raytracing_supported, bool &out_ray_query_supported,
-                                              bool &out_dynamic_rendering_supported, bool &out_fp16_supported,
-                                              bool &out_coop_matrix_supported, const char *preferred_device,
-                                              VkInstance instance, ILog *log) {
+                                              uint32_t &out_graphics_family_index, bool &out_raytracing_supported,
+                                              bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
+                                              bool &out_fp16_supported, bool &out_int64_supported,
+                                              bool &out_int64_atomics_supported, bool &out_coop_matrix_supported,
+                                              const char *preferred_device, VkInstance instance, ILog *log) {
     uint32_t physical_device_count = 0;
     api.vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
 
@@ -412,8 +414,8 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
         }
 
         bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
-             dynamic_rendering_supported = false, shader_fp16_supported = false, storage_fp16_supported = false,
-             coop_matrix_supported = false;
+             dynamic_rendering_supported = false, shader_fp16_supported = false, shader_int64_supported = false,
+             storage_fp16_supported = false, coop_matrix_supported = false, shader_buf_int64_atomics_supported = false;
 
         { // check for features support
             uint32_t extension_count;
@@ -440,7 +442,22 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                     storage_fp16_supported = true;
                 } else if (strcmp(ext.extensionName, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME) == 0) {
                     coop_matrix_supported = true;
+                } else if (strcmp(ext.extensionName, VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME) == 0) {
+                    shader_buf_int64_atomics_supported = true;
                 }
+            }
+
+            if (shader_buf_int64_atomics_supported) {
+                VkPhysicalDeviceFeatures2KHR device_features2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR};
+
+                VkPhysicalDeviceShaderAtomicInt64Features atomic_int64_features = {
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR};
+                device_features2.pNext = &atomic_int64_features;
+
+                api.vkGetPhysicalDeviceFeatures2KHR(physical_devices[i], &device_features2);
+
+                shader_int64_supported = (device_features2.features.shaderInt64 == VK_TRUE);
+                shader_buf_int64_atomics_supported = (atomic_int64_features.shaderBufferInt64Atomics == VK_TRUE);
             }
         }
 
@@ -499,6 +516,8 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                 out_ray_query_supported = ray_query_supported;
                 out_dynamic_rendering_supported = dynamic_rendering_supported;
                 out_fp16_supported = (shader_fp16_supported && storage_fp16_supported);
+                out_int64_supported = shader_int64_supported;
+                out_int64_atomics_supported = shader_buf_int64_atomics_supported;
                 out_coop_matrix_supported = coop_matrix_supported;
             }
         }
@@ -516,8 +535,9 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
 
 bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                                     uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
-                                    bool enable_dynamic_rendering, bool enable_fp16, bool enable_coop_matrix,
-                                    const char *enabled_layers[], int enabled_layers_count, ILog *log) {
+                                    bool enable_dynamic_rendering, bool enable_fp16, bool enable_int64,
+                                    bool enable_int64_atomics, bool enable_coop_matrix, const char *enabled_layers[],
+                                    int enabled_layers_count, ILog *log) {
     VkDeviceQueueCreateInfo queue_create_infos[2] = {{}, {}};
     const float queue_priorities[] = {1.0f};
 
@@ -574,6 +594,10 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
         device_extensions.push_back(VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
     }
 
+    if (enable_int64_atomics) {
+        device_extensions.push_back(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
+    }
+
     device_info.enabledExtensionCount = uint32_t(device_extensions.size());
     device_info.ppEnabledExtensionNames = device_extensions.cdata();
 
@@ -582,6 +606,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
     features.samplerAnisotropy = VK_TRUE;
     features.imageCubeArray = VK_TRUE;
     features.fillModeNonSolid = VK_TRUE;
+    features.shaderInt64 = enable_int64 ? VK_TRUE : VK_FALSE;
     device_info.pEnabledFeatures = &features;
     void **pp_next = const_cast<void **>(&device_info.pNext);
 
@@ -665,6 +690,15 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
 
         (*pp_next) = &coop_matrix_features;
         pp_next = &coop_matrix_features.pNext;
+    }
+
+    VkPhysicalDeviceShaderAtomicInt64Features atomic_int64_features = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR};
+    atomic_int64_features.shaderBufferInt64Atomics = VK_TRUE;
+
+    if (enable_int64_atomics) {
+        (*pp_next) = &atomic_int64_features;
+        pp_next = &atomic_int64_features.pNext;
     }
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)

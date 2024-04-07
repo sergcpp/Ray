@@ -49,9 +49,9 @@ Ray::Vk::Scene::~Scene() {
         Scene::RemoveMesh_nolock(to_delete);
     }
 
-    if (macro_nodes_root_ != 0xffffffff) {
-        nodes_.Erase(macro_nodes_block_);
-        macro_nodes_root_ = macro_nodes_block_ = 0xffffffff;
+    if (tlas_root_ != 0xffffffff) {
+        nodes_.Erase(tlas_block_);
+        tlas_root_ = tlas_block_ = 0xffffffff;
     }
 
     bindless_textures_.clear();
