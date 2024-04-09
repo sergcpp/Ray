@@ -209,7 +209,7 @@ int main() {
     // Render image
     for (int i = 0; i < SAMPLE_COUNT; i++) {
         // Each call performs one iteration, blocks until finished
-        renderer->RenderScene(scene, region);
+        renderer->RenderScene(*scene, region);
         printf("Renderered %i samples\n", i);
     }
     printf("Done\n");

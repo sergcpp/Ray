@@ -257,7 +257,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     }
 
     SceneBase *CreateScene() override;
-    void RenderScene(const SceneBase *scene, RegionContext &region) override;
+    void RenderScene(const SceneBase &scene, RegionContext &region) override;
     void DenoiseImage(const RegionContext &region) override;
     void DenoiseImage(int pass, const RegionContext &region) override;
 
@@ -315,37 +315,34 @@ template <typename SIMDPolicy> Ray::SceneBase *Ray::Cpu::Renderer<SIMDPolicy>::C
 }
 
 template <typename SIMDPolicy>
-void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionContext &region) {
-    const auto s = dynamic_cast<const Cpu::Scene *>(scene);
-    if (!s) {
-        return;
-    }
+void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionContext &region) {
+    const auto &s = dynamic_cast<const Cpu::Scene &>(scene);
 
-    std::shared_lock<std::shared_timed_mutex> scene_lock(s->mtx_);
+    std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
 
-    const camera_t &cam = s->cams_[s->current_cam()._index];
+    const camera_t &cam = s.cams_[s.current_cam()._index];
 
-    const scene_data_t sc_data = {s->env_,
-                                  s->mesh_instances_.empty() ? nullptr : &s->mesh_instances_[0],
-                                  s->mi_indices_.empty() ? nullptr : &s->mi_indices_[0],
-                                  s->meshes_.empty() ? nullptr : &s->meshes_[0],
-                                  s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0],
-                                  s->vertices_.empty() ? nullptr : &s->vertices_[0],
-                                  s->nodes_.empty() ? nullptr : &s->nodes_[0],
-                                  s->wnodes_.empty() ? nullptr : &s->wnodes_[0],
-                                  s->tris_.empty() ? nullptr : &s->tris_[0],
-                                  s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0],
-                                  s->mtris_.data(),
-                                  s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0],
-                                  s->materials_.empty() ? nullptr : &s->materials_[0],
-                                  {s->lights_.data(), s->lights_.capacity()},
-                                  {s->li_indices_},
-                                  s->visible_lights_count_,
-                                  s->blocker_lights_count_,
-                                  {s->light_nodes_},
-                                  {s->light_wnodes_}};
+    const scene_data_t sc_data = {s.env_,
+                                  s.mesh_instances_.empty() ? nullptr : &s.mesh_instances_[0],
+                                  s.mi_indices_.empty() ? nullptr : &s.mi_indices_[0],
+                                  s.meshes_.empty() ? nullptr : &s.meshes_[0],
+                                  s.vtx_indices_.empty() ? nullptr : &s.vtx_indices_[0],
+                                  s.vertices_.empty() ? nullptr : &s.vertices_[0],
+                                  s.nodes_.empty() ? nullptr : &s.nodes_[0],
+                                  s.wnodes_.empty() ? nullptr : &s.wnodes_[0],
+                                  s.tris_.empty() ? nullptr : &s.tris_[0],
+                                  s.tri_indices_.empty() ? nullptr : &s.tri_indices_[0],
+                                  s.mtris_.data(),
+                                  s.tri_materials_.empty() ? nullptr : &s.tri_materials_[0],
+                                  s.materials_.empty() ? nullptr : &s.materials_[0],
+                                  {s.lights_.data(), s.lights_.capacity()},
+                                  {s.li_indices_},
+                                  s.visible_lights_count_,
+                                  s.blocker_lights_count_,
+                                  {s.light_nodes_},
+                                  {s.light_wnodes_}};
 
-    const uint32_t macro_tree_root = s->macro_nodes_root_;
+    const uint32_t macro_tree_root = s.macro_nodes_root_;
 
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
@@ -423,7 +420,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
         if (macro_tree_root != 0xffffffff) {
             SIMDPolicy::TraceRays(p.primary_rays, cam.pass_settings.min_transp_depth,
-                                  cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, false, s->tex_storages_,
+                                  cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, false, s.tex_storages_,
                                   rand_seq, rand_seed, region.iteration, p.intersections);
         }
     } else {
@@ -446,7 +443,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
     SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays, rand_seq, rand_seed, region.iteration,
-                             sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+                             sc_data, macro_tree_root, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
                              &p.shadow_rays[0], &shadow_rays_count, w_, mix_factor, temp_buf_.data(),
                              base_color_buf_.data(), depth_normals_buf_.data());
 
@@ -454,7 +451,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
     SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                 cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data,
-                                macro_tree_root, rand_seq, rand_seed, region.iteration, s->tex_storages_, w_,
+                                macro_tree_root, rand_seq, rand_seed, region.iteration, s.tex_storages_, w_,
                                 temp_buf_.data());
 
     const auto time_after_prim_shadow = high_resolution_clock::now();
@@ -502,7 +499,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
         SIMDPolicy::TraceRays(Span<typename SIMDPolicy::RayDataType>{p.secondary_rays.data(), secondary_rays_count},
                               cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth, sc_data,
-                              macro_tree_root, true, s->tex_storages_, rand_seq, rand_seed, region.iteration,
+                              macro_tree_root, true, s.tex_storages_, rand_seq, rand_seed, region.iteration,
                               p.intersections);
 
         const auto time_secondary_shade_start = high_resolution_clock::now();
@@ -517,14 +514,14 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         SIMDPolicy::ShadeSecondary(
             cam.pass_settings, clamp_direct, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
             Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq, rand_seed,
-            region.iteration, sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+            region.iteration, sc_data, macro_tree_root, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
             &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data());
 
         const auto time_secondary_shadow_start = high_resolution_clock::now();
 
         SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                     cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_indirect, sc_data,
-                                    macro_tree_root, rand_seq, rand_seed, region.iteration, s->tex_storages_, w_,
+                                    macro_tree_root, rand_seq, rand_seed, region.iteration, s.tex_storages_, w_,
                                     temp_buf_.data());
 
         const auto time_secondary_shadow_end = high_resolution_clock::now();
@@ -641,11 +638,11 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
     p.feature_buf2.resize(rect_ext.w * rect_ext.h);
 
 #define FETCH_FINAL_BUF(_x, _y)                                                                                        \
-    Ref::fvec4(full_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
-                    Ref::vector_aligned)
+    Ref::fvec4(full_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,                \
+               Ref::vector_aligned)
 #define FETCH_VARIANCE(_x, _y)                                                                                         \
-    Ref::fvec4(temp_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
-                    Ref::vector_aligned)
+    Ref::fvec4(temp_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,                \
+               Ref::vector_aligned)
 
     static const float GaussWeights[] = {0.2270270270f, 0.1945945946f, 0.1216216216f, 0.0540540541f, 0.0162162162f};
 
@@ -714,8 +711,8 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
         for (int x = 0; x < rect.w; ++x) {
             const int xx = rect.x + x;
 
-            const Ref::fvec4 variance = {
-                p.filtered_variance_buf[(y + EXT_RADIUS) * rect_ext.w + (x + EXT_RADIUS)].v, Ref::vector_aligned};
+            const Ref::fvec4 variance = {p.filtered_variance_buf[(y + EXT_RADIUS) * rect_ext.w + (x + EXT_RADIUS)].v,
+                                         Ref::vector_aligned};
             if (simd_cast(variance >= variance_threshold).not_all_zeros()) {
                 required_samples_[yy * w_ + xx] = region.iteration + 1;
             }
