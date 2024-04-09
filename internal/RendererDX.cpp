@@ -399,20 +399,17 @@ Ray::eRendererType Ray::Dx::Renderer::type() const { return eRendererType::Direc
 
 const char *Ray::Dx::Renderer::device_name() const { return ctx_->device_name().c_str(); }
 
-void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) {
-    const auto s = dynamic_cast<const Dx::Scene *>(_s);
-    if (!s) {
-        return;
-    }
+void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &region) {
+    const auto &s = dynamic_cast<const Dx::Scene &>(scene);
 
-    const uint32_t macro_tree_root = s->macro_nodes_root_;
+    const uint32_t macro_tree_root = s.macro_nodes_root_;
 
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
         float root_max[3];
 
-        const bvh_node_t &root_node = s->tlas_root_node_;
-        // s->nodes_.Get(macro_tree_root, root_node);
+        const bvh_node_t &root_node = s.tlas_root_node_;
+        // s.nodes_.Get(macro_tree_root, root_node);
 
         UNROLLED_FOR(i, 3, {
             root_min[i] = root_node.bbox_min[i];
@@ -424,7 +421,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     ++region.iteration;
 
-    const Ray::camera_t &cam = s->cams_[s->current_cam()._index];
+    const Ray::camera_t &cam = s.cams_[s.current_cam()._index];
 
     // TODO: Use common command buffer for all uploads
     if (cam.filter != filter_table_filter_ || cam.filter_width != filter_table_width_) {
@@ -472,27 +469,27 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         loaded_view_transform_ = cam.view_transform;
     }
 
-    const scene_data_t sc_data = {&s->env_,
-                                  s->mesh_instances_.gpu_buf(),
-                                  s->mi_indices_.buf(),
-                                  s->meshes_.gpu_buf(),
-                                  s->vtx_indices_.gpu_buf(),
-                                  s->vertices_.gpu_buf(),
-                                  s->nodes_.gpu_buf(),
-                                  s->tris_.gpu_buf(),
-                                  s->tri_indices_.gpu_buf(),
-                                  s->tri_materials_.gpu_buf(),
-                                  s->materials_.gpu_buf(),
-                                  s->atlas_textures_.gpu_buf(),
-                                  s->lights_.gpu_buf(),
-                                  s->li_indices_.buf(),
-                                  int(s->li_indices_.size()),
-                                  s->visible_lights_count_,
-                                  s->blocker_lights_count_,
-                                  s->light_wnodes_.buf(),
-                                  s->rt_tlas_,
-                                  s->env_map_qtree_.tex,
-                                  int(s->env_map_qtree_.mips.size())};
+    const scene_data_t sc_data = {&s.env_,
+                                  s.mesh_instances_.gpu_buf(),
+                                  s.mi_indices_.buf(),
+                                  s.meshes_.gpu_buf(),
+                                  s.vtx_indices_.gpu_buf(),
+                                  s.vertices_.gpu_buf(),
+                                  s.nodes_.gpu_buf(),
+                                  s.tris_.gpu_buf(),
+                                  s.tri_indices_.gpu_buf(),
+                                  s.tri_materials_.gpu_buf(),
+                                  s.materials_.gpu_buf(),
+                                  s.atlas_textures_.gpu_buf(),
+                                  s.lights_.gpu_buf(),
+                                  s.li_indices_.buf(),
+                                  int(s.li_indices_.size()),
+                                  s.visible_lights_count_,
+                                  s.blocker_lights_count_,
+                                  s.light_wnodes_.buf(),
+                                  s.rt_tlas_,
+                                  s.env_map_qtree_.tex,
+                                  int(s.env_map_qtree_.mips.size())};
 
 #if !RUN_IN_LOCKSTEP
     if (ctx_->in_flight_fence(ctx_->backend_frame)->GetCompletedValue() < ctx_->fence_values[ctx_->backend_frame]) {
@@ -573,7 +570,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
 
-        for (const auto &tex_atlas : s->tex_atlases_) {
+        for (const auto &tex_atlas : s.tex_atlases_) {
             if (tex_atlas.resource_state != eResState::ShaderResource) {
                 res_transitions.emplace_back(&tex_atlas, eResState::ShaderResource);
             }
@@ -623,13 +620,13 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
     // Allocate bindless texture descriptors
-    if (s->bindless_tex_data_.srv_descr_table.count) {
+    if (s.bindless_tex_data_.srv_descr_table.count) {
         // TODO: refactor this!
         ID3D12Device *device = ctx_->device();
         const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
         DescrSizes descr_sizes;
-        descr_sizes.cbv_srv_uav_count += s->bindless_tex_data_.srv_descr_table.count;
+        descr_sizes.cbv_srv_uav_count += s.bindless_tex_data_.srv_descr_table.count;
 
         const PoolRefs pool_refs = ctx_->default_descr_alloc()->Alloc(descr_sizes);
 
@@ -639,11 +636,11 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         srv_gpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
 
         device->CopyDescriptorsSimple(descr_sizes.cbv_srv_uav_count, srv_cpu_handle,
-                                      D3D12_CPU_DESCRIPTOR_HANDLE{s->bindless_tex_data_.srv_descr_table.cpu_ptr},
+                                      D3D12_CPU_DESCRIPTOR_HANDLE{s.bindless_tex_data_.srv_descr_table.cpu_ptr},
                                       D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-        s->bindless_tex_data_.srv_descr_table.gpu_heap = pool_refs.cbv_srv_uav.heap;
-        s->bindless_tex_data_.srv_descr_table.gpu_ptr = srv_gpu_handle.ptr;
+        s.bindless_tex_data_.srv_descr_table.gpu_heap = pool_refs.cbv_srv_uav.heap;
+        s.bindless_tex_data_.srv_descr_table.gpu_ptr = srv_gpu_handle.ptr;
     }
 
     const rect_t rect = region.rect();
@@ -673,16 +670,16 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data, random_seq_buf_,
                               rand_seed, region.iteration, macro_tree_root, cam.fwd, cam.clip_end - cam.clip_start,
-                              s->tex_atlases_, s->bindless_tex_data_, prim_rays_buf_, prim_hits_buf_);
+                              s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_, prim_hits_buf_);
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
     { // shade primary hits
         DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_, prim_rays_buf_,
-                                sc_data, random_seq_buf_, rand_seed, region.iteration, rect, s->tex_atlases_,
-                                s->bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_, counters_buf_,
+        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s.env_, indir_args_buf_, 0, prim_hits_buf_, prim_rays_buf_,
+                                sc_data, random_seq_buf_, rand_seed, region.iteration, rect, s.tex_atlases_,
+                                s.bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_, counters_buf_,
                                 temp_buf1_, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
@@ -697,7 +694,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                     random_seq_buf_, rand_seed, region.iteration, macro_tree_root,
-                                    cam.pass_settings.clamp_direct, s->tex_atlases_, s->bindless_tex_data_,
+                                    cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
                                     shadow_rays_buf_, temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
@@ -731,7 +728,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
             kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
                                   random_seq_buf_, rand_seed, region.iteration, macro_tree_root, nullptr, -1.0f,
-                                  s->tex_atlases_, s->bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
+                                  s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
         }
 
         if (sc_data.visible_lights_count) {
@@ -746,10 +743,10 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
-            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, clamp_val, s->env_, indir_args_buf_, 0,
-                                      prim_hits_buf_, secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed,
-                                      region.iteration, s->tex_atlases_, s->bindless_tex_data_, temp_buf0_,
-                                      prim_rays_buf_, shadow_rays_buf_, counters_buf_);
+            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, clamp_val, s.env_, indir_args_buf_, 0, prim_hits_buf_,
+                                      secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed, region.iteration,
+                                      s.tex_atlases_, s.bindless_tex_data_, temp_buf0_, prim_rays_buf_,
+                                      shadow_rays_buf_, counters_buf_);
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
         }
 
@@ -763,7 +760,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                         random_seq_buf_, rand_seed, region.iteration, macro_tree_root,
-                                        cam.pass_settings.clamp_indirect, s->tex_atlases_, s->bindless_tex_data_,
+                                        cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
                                         shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
         }

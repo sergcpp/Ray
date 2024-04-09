@@ -127,7 +127,7 @@ class RendererBase {
         @param scene reference to a scene
         @param region image region to render
     */
-    virtual void RenderScene(const SceneBase *scene, RegionContext &region) = 0;
+    virtual void RenderScene(const SceneBase &scene, RegionContext &region) = 0;
 
     /** @brief Denoise image region using NLM filter
         @param region image region to denoise

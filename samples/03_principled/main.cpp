@@ -214,7 +214,7 @@ int main() {
 #pragma omp parallel for
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < SAMPLE_COUNT; j++) {
-                renderer->RenderScene(scene, regions[i]);
+                renderer->RenderScene(*scene, regions[i]);
             }
         }
     } else {
@@ -222,7 +222,7 @@ int main() {
         auto region = Ray::RegionContext{{0, 0, IMG_W, IMG_H}};
         for (int i = 0; i < SAMPLE_COUNT; i++) {
             // Each call performs one iteration, blocks until finished
-            renderer->RenderScene(scene, region);
+            renderer->RenderScene(*scene, region);
             printf("Renderered %i samples\n", i);
         }
     }

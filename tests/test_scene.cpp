@@ -1064,7 +1064,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
             }
 #endif
             for (int i = 0; i < portion; ++i) {
-                renderer.RenderScene(scene, region_contexts[j]);
+                renderer.RenderScene(*scene, region_contexts[j]);
             }
         };
 
@@ -1156,7 +1156,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
 
         for (int i = 0; i < max_samples; ++i) {
             for (auto &region : region_contexts) {
-                renderer.RenderScene(scene, region);
+                renderer.RenderScene(*scene, region);
             }
 
             if (((i % SamplePortion) == 0 || i == max_samples - 1) && !g_minimal_output) {

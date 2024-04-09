@@ -275,7 +275,7 @@ class Renderer : public RendererBase {
     void Clear(const color_rgba_t &c) override;
 
     SceneBase *CreateScene() override;
-    void RenderScene(const SceneBase *scene, RegionContext &region) override;
+    void RenderScene(const SceneBase &scene, RegionContext &region) override;
     void DenoiseImage(const RegionContext &region) override;
     void DenoiseImage(int pass, const RegionContext &region) override;
 
