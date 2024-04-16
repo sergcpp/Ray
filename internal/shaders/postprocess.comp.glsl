@@ -56,7 +56,7 @@ void main() {
 #endif
     imageStore(g_out_img, gi, tonemapped_res);
 
-    vec4 p1 = reversible_tonemap(2.0 * full_val - half_val);
+    vec4 p1 = reversible_tonemap(max(2.0 * full_val - half_val, 0.0));
     vec4 p2 = reversible_tonemap(half_val);
 
     vec4 variance = 0.5 * (p1 - p2) * (p1 - p2);

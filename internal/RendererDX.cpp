@@ -1281,13 +1281,13 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     cam.fstop = 0.0f;
     cam.filter = ePixelFilter::Box;
 
-    // TODO: Use common command buffer for all uploads
-    if (cam.filter != filter_table_filter_ || cam.filter_width != filter_table_width_) {
+    // TODO: Filter table is unused, this can be removed
+    if (orig_cam.filter != filter_table_filter_ || orig_cam.filter_width != filter_table_width_) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-        UpdateFilterTable(cmd_buf, cam.filter, cam.filter_width);
-        filter_table_filter_ = cam.filter;
-        filter_table_width_ = cam.filter_width;
+        UpdateFilterTable(cmd_buf, orig_cam.filter, orig_cam.filter_width);
+        filter_table_filter_ = orig_cam.filter;
+        filter_table_width_ = orig_cam.filter_width;
 
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }

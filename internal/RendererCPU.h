@@ -593,7 +593,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
             const Ref::fvec4 tonemapped_res = Tonemap(tonemap_params, full_val);
             tonemapped_res.store_to(final_buf_[y * w_ + x].v, Ref::vector_aligned);
 
-            const Ref::fvec4 p1 = reversible_tonemap(2.0f * full_val - half_val);
+            const Ref::fvec4 p1 = reversible_tonemap(max(2.0f * full_val - half_val, 0.0f));
             const Ref::fvec4 p2 = reversible_tonemap(half_val);
 
             const Ref::fvec4 variance = 0.5f * (p1 - p2) * (p1 - p2);
