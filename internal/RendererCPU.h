@@ -1135,7 +1135,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::ResolveSpatialCache(
 
     static const int ResolvePortion = 32768;
     assert((s.spatial_cache_entries_.size() % ResolvePortion) == 0);
-    const int JobsCount = (s.spatial_cache_entries_.size() / ResolvePortion);
+    const int JobsCount = int(s.spatial_cache_entries_.size() / ResolvePortion);
 
     parallel_for(0, JobsCount, [&](const int i) {
         Ref::SpatialCacheResolve(params, s.spatial_cache_entries_, s.spatial_cache_voxels_curr_,
