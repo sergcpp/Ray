@@ -518,7 +518,7 @@ force_inline float mix(float x, float y, float a) { return x * (1.0f - a) + y * 
 force_inline float log_base(const float x, const float base) { return logf(x) / logf(base); }
 
 force_inline float calc_voxel_size(const uint32_t grid_level, const cache_grid_params_t &params) {
-    return powf(params.log_base, grid_level) / (params.scale * powf(params.log_base, HASH_GRID_LEVEL_BIAS));
+    return powf(params.log_base, float(grid_level)) / (params.scale * powf(params.log_base, HASH_GRID_LEVEL_BIAS));
 }
 
 template <typename T> void rect_fill(Span<T> data, const int stride, const rect_t &rect, T &&val) {
