@@ -187,8 +187,10 @@ void Ray::Ref::SpatialCacheUpdate(const cache_grid_params_t &params, Span<const 
         fvec4 rad = fvec4{radiance[y * img_w + x].v} * params.exposure;
 
         cache_data_t &cache = cache_data[y * (img_w / RAD_CACHE_DOWNSAMPLING_FACTOR) + x];
-        memcpy(cache.sample_weight[0], r.c, 3 * sizeof(float));
-        if (inter.v < 0.0f || inter.obj_index < 0) {
+        cache.sample_weight[0][0] *= r.c[0];
+        cache.sample_weight[0][1] *= r.c[1];
+        cache.sample_weight[0][2] *= r.c[2];
+        if (inter.v < 0.0f || inter.obj_index < 0 || cache.path_len == RAD_CACHE_PROPAGATION_DEPTH) {
             for (int j = 0; j < cache.path_len; ++j) {
                 rad *= make_fvec3(cache.sample_weight[j]);
                 if (cache.cache_entries[j] != HASH_GRID_INVALID_CACHE_ENTRY) {
@@ -201,12 +203,12 @@ void Ray::Ref::SpatialCacheUpdate(const cache_grid_params_t &params, Span<const 
                 memcpy(cache.sample_weight[j], cache.sample_weight[j - 1], 3 * sizeof(float));
             }
 
+            cache.sample_weight[0][0] = cache.sample_weight[0][1] = cache.sample_weight[0][2] = 1.0f;
             cache.cache_entries[0] = insert_entry(entries, P, N, params);
             if (cache.cache_entries[0] != HASH_GRID_INVALID_CACHE_ENTRY) {
                 accumulate_cache_voxel(voxels_curr[cache.cache_entries[0]], rad, 1);
             }
-
-            cache.path_len = std::min(cache.path_len + 1, RAD_CACHE_PROPAGATION_DEPTH - 1);
+            ++cache.path_len;
 
             for (int j = 1; j < cache.path_len; ++j) {
                 rad *= make_fvec3(cache.sample_weight[j]);

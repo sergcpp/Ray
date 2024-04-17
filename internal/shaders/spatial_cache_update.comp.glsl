@@ -140,10 +140,10 @@ void main() {
     vec3 rad = texelFetch(g_radiance_tex, ivec2(x, y), 0).rgb * grid_params.exposure;
 
     cache_data_t cache = g_inout_cache_data[y * g_params.cache_w + x];
-    for (int k = 0; k < 3; ++k) {
-        cache.sample_weight[0][k] = ray.c[k];
-    }
-    if (inter.v < 0.0 || inter.obj_index < 0) {
+    cache.sample_weight[0][0] = ray.c[0];
+    cache.sample_weight[0][1] = ray.c[1];
+    cache.sample_weight[0][2] = ray.c[2];
+    if (inter.v < 0.0 || inter.obj_index < 0 || cache.path_len == RAD_CACHE_PROPAGATION_DEPTH) {
         for (int j = 0; j < cache.path_len; ++j) {
             rad *= vec3(cache.sample_weight[j][0], cache.sample_weight[j][1], cache.sample_weight[j][2]);
             if (cache.cache_entries[j] != HASH_GRID_INVALID_CACHE_ENTRY) {
@@ -158,12 +158,12 @@ void main() {
             }
         }
 
+        cache.sample_weight[0][0] = cache.sample_weight[0][1] = cache.sample_weight[0][2] = 1.0;
         cache.cache_entries[0] = insert_entry(P, N, grid_params);
         if (cache.cache_entries[0] != HASH_GRID_INVALID_CACHE_ENTRY) {
             accumulate_cache_voxel(cache.cache_entries[0], rad, 1);
         }
-
-        cache.path_len = min(cache.path_len + 1, RAD_CACHE_PROPAGATION_DEPTH - 1);
+        ++cache.path_len;
 
         for (int j = 1; j < cache.path_len; ++j) {
             rad *= vec3(cache.sample_weight[j][0], cache.sample_weight[j][1], cache.sample_weight[j][2]);
