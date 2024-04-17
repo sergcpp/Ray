@@ -1333,7 +1333,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     surf.T = cross(surf.N, surf.B);
 #endif
 
-    if (cache_mode == eSpatialCacheMode::Query) {
+    if (cache_mode == eSpatialCacheMode::Query && mat->type != eShadingNode::Emissive) {
         const fvec2 cache_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_CACHE, rand_hash, iteration - 1, rand_seq);
 
         const uint32_t grid_level = calc_grid_level(surf.P, sc.spatial_cache_grid);
@@ -1348,14 +1348,12 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
             if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
                 const packed_cache_voxel_t &voxel = sc.spatial_cache_voxels[cache_entry];
                 cache_voxel_t unpacked = unpack_voxel_data(voxel);
-
-                fvec4 color = fvec4{unpacked.radiance[0], unpacked.radiance[1], unpacked.radiance[2], 0.0f};
-                if (unpacked.sample_count) {
-                    color /= float(unpacked.sample_count);
+                if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
+                    fvec4 color = make_fvec3(unpacked.radiance) / float(unpacked.sample_count);
+                    color /= sc.spatial_cache_grid.exposure;
+                    color *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
+                    return color_rgba_t{color.get<0>(), color.get<1>(), color.get<2>(), color.get<3>()};
                 }
-                color /= sc.spatial_cache_grid.exposure;
-                color *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
-                return color_rgba_t{color.get<0>(), color.get<1>(), color.get<2>(), color.get<3>()};
             }
         }
     }

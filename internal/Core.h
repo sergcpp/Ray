@@ -475,11 +475,7 @@ struct cache_data_t {
     int path_len;
 };
 
-enum eSpatialCacheMode {
-    None,
-    Update,
-    Query
-};
+enum eSpatialCacheMode { None, Update, Query };
 
 struct scene_data_t {
     const environment_t &env;
@@ -522,11 +518,9 @@ force_inline float calc_voxel_size(const uint32_t grid_level, const cache_grid_p
 }
 
 template <typename T> void rect_fill(Span<T> data, const int stride, const rect_t &rect, T &&val) {
-    for (int y = 0; y < rect.h; ++y) {
-        const int yy = rect.y + y;
-        for (int x = 0; x < rect.w; ++x) {
-            const int xx = rect.x + x;
-            data[yy * stride + xx] = val;
+    for (int y = rect.y; y < rect.y + rect.h; ++y) {
+        for (int x = rect.x; x < rect.x + rect.w; ++x) {
+            data[y * stride + x] = val;
         }
     }
 }

@@ -2115,33 +2115,33 @@ vec3 ShadeSurface(const hit_data_t inter, const ray_data_t ray, inout vec3 out_b
 #endif
 
 #if CACHE_QUERY
-    cache_grid_params_t params;
-    params.cam_pos_curr = g_params.cam_pos_and_exposure.xyz;
-    params.log_base = RAD_CACHE_GRID_LOGARITHM_BASE;
-    params.scale = RAD_CACHE_GRID_SCALE;
-    params.exposure = g_params.cam_pos_and_exposure.w;
+    if (mat.type != EmissiveNode) {
+        cache_grid_params_t params;
+        params.cam_pos_curr = g_params.cam_pos_and_exposure.xyz;
+        params.log_base = RAD_CACHE_GRID_LOGARITHM_BASE;
+        params.scale = RAD_CACHE_GRID_SCALE;
+        params.exposure = g_params.cam_pos_and_exposure.w;
 
-    const vec2 cache_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_CACHE, rand_hash, g_params.iteration - 1);
+        const vec2 cache_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_CACHE, rand_hash, g_params.iteration - 1);
 
-    const uint grid_level = calc_grid_level(surf.P, params);
-    const float voxel_size = calc_voxel_size(grid_level, params);
+        const uint grid_level = calc_grid_level(surf.P, params);
+        const float voxel_size = calc_voxel_size(grid_level, params);
 
-    bool use_cache = get_diff_depth(ray.depth) > 0;
-    use_cache = use_cache || (cone_width > mix(1.0, 1.5, cache_rand.x) * voxel_size);
-    use_cache = use_cache && (inter.t > mix(1.0, 2.0, cache_rand.y) * voxel_size);
-    if (use_cache) {
-        const uint cache_entry = find_entry(surf.P, surf.plane_N, params);
-        if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
-            const uvec4 voxel = g_cache_voxels[cache_entry];
-            cache_voxel_t unpacked = unpack_voxel_data(voxel);
-
-            vec3 color = unpacked.radiance;
-            if (unpacked.sample_count > 0) {
-                color /= float(unpacked.sample_count);
+        bool use_cache = get_diff_depth(ray.depth) > 0;
+        use_cache = use_cache || (cone_width > mix(1.0, 1.5, cache_rand.x) * voxel_size);
+        use_cache = use_cache && (inter.t > mix(1.0, 2.0, cache_rand.y) * voxel_size);
+        if (use_cache) {
+            const uint cache_entry = find_entry(surf.P, surf.plane_N, params);
+            if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
+                const uvec4 voxel = g_cache_voxels[cache_entry];
+                cache_voxel_t unpacked = unpack_voxel_data(voxel);
+                if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
+                    vec3 color = unpacked.radiance / float(unpacked.sample_count);
+                    color /= params.exposure;
+                    color *= vec3(ray.c[0], ray.c[1], ray.c[2]);
+                    return color;
+                }
             }
-            color /= params.exposure;
-            color *= vec3(ray.c[0], ray.c[1], ray.c[2]);
-            return color;
         }
     }
 #endif

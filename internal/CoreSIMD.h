@@ -7381,6 +7381,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
         use_cache |= simd_cast(cone_width > mix(fvec<S>{1.0f}, fvec<S>{1.5f}, cache_rand[0]) * voxel_size);
         use_cache &= simd_cast(inter.t > mix(fvec<S>{1.0f}, fvec<S>{2.0f}, cache_rand[1]) * voxel_size);
         use_cache &= is_active_lane;
+        use_cache &= (mat_type != int(eShadingNode::Emissive));
         if (use_cache.not_all_zeros()) {
             for (int i = 0; i < S; ++i) {
                 if (use_cache[i] == 0) {
@@ -7390,22 +7391,24 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                 const fvec4 P = {surf.P[0][i], surf.P[1][i], surf.P[2][i], 0.0f};
                 const fvec4 plane_N = {surf.plane_N[0][i], surf.plane_N[1][i], surf.plane_N[2][i], 0.0f};
 
+                use_cache.set(i, 0);
+
                 const uint32_t cache_entry = find_entry(sc.spatial_cache_entries, P, plane_N, sc.spatial_cache_grid);
                 if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
                     const packed_cache_voxel_t &voxel = sc.spatial_cache_voxels[cache_entry];
                     cache_voxel_t unpacked = unpack_voxel_data(voxel);
+                    if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
+                        fvec4 color = fvec4{unpacked.radiance[0], unpacked.radiance[1], unpacked.radiance[2], 0.0f} /
+                                      float(unpacked.sample_count);
+                        color /= sc.spatial_cache_grid.exposure;
+                        color *= fvec4{ray.c[0][i], ray.c[1][i], ray.c[2][i], 0.0f};
 
-                    fvec4 color = fvec4{unpacked.radiance[0], unpacked.radiance[1], unpacked.radiance[2], 0.0f};
-                    if (unpacked.sample_count) {
-                        color /= float(unpacked.sample_count);
+                        out_rgba[0].set(i, color[0]);
+                        out_rgba[1].set(i, color[1]);
+                        out_rgba[2].set(i, color[2]);
+                        out_rgba[3].set(i, 1.0f);
+                        use_cache.set(i, -1);
                     }
-                    color /= sc.spatial_cache_grid.exposure;
-                    color *= fvec4{ray.c[0][i], ray.c[1][i], ray.c[2][i], 0.0f};
-
-                    out_rgba[0].set(i, color[0]);
-                    out_rgba[1].set(i, color[1]);
-                    out_rgba[2].set(i, color[2]);
-                    out_rgba[3].set(i, 1.0f);
                 }
             }
         }
@@ -8078,10 +8081,10 @@ void Ray::NS::SpatialCacheUpdate(const cache_grid_params_t &params, Span<const h
             fvec4 rad = fvec4{radiance[y * img_w + x].v} * params.exposure;
 
             cache_data_t &cache = cache_data[y * (img_w / RAD_CACHE_DOWNSAMPLING_FACTOR) + x];
-            cache.sample_weight[0][0] = r.c[0][j];
-            cache.sample_weight[0][1] = r.c[1][j];
-            cache.sample_weight[0][2] = r.c[2][j];
-            if (inter.v[j] < 0.0f || inter.obj_index[j] < 0) {
+            cache.sample_weight[0][0] *= r.c[0][j];
+            cache.sample_weight[0][1] *= r.c[1][j];
+            cache.sample_weight[0][2] *= r.c[2][j];
+            if (inter.v[j] < 0.0f || inter.obj_index[j] < 0 || cache.path_len == RAD_CACHE_PROPAGATION_DEPTH) {
                 for (int k = 0; k < cache.path_len; ++k) {
                     rad *= make_fvec3(cache.sample_weight[k]);
                     if (cache.cache_entries[k] != HASH_GRID_INVALID_CACHE_ENTRY) {
@@ -8094,12 +8097,12 @@ void Ray::NS::SpatialCacheUpdate(const cache_grid_params_t &params, Span<const h
                     memcpy(cache.sample_weight[k], cache.sample_weight[k - 1], 3 * sizeof(float));
                 }
 
+                cache.sample_weight[0][0] = cache.sample_weight[0][1] = cache.sample_weight[0][2] = 1.0f;
                 cache.cache_entries[0] = insert_entry(entries, P, N, params);
                 if (cache.cache_entries[0] != HASH_GRID_INVALID_CACHE_ENTRY) {
                     accumulate_cache_voxel(voxels_curr[cache.cache_entries[0]], rad, 1);
                 }
-
-                cache.path_len = std::min(cache.path_len + 1, RAD_CACHE_PROPAGATION_DEPTH - 1);
+                ++cache.path_len;
 
                 for (int k = 1; k < cache.path_len; ++k) {
                     rad *= make_fvec3(cache.sample_weight[k]);
