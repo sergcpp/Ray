@@ -2134,11 +2134,15 @@ vec3 ShadeSurface(const hit_data_t inter, const ray_data_t ray, inout vec3 out_b
             const uint cache_entry = find_entry(surf.P, surf.plane_N, params);
             if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
                 const uvec4 voxel = g_cache_voxels[cache_entry];
-                cache_voxel_t unpacked = unpack_voxel_data(voxel);
+                const cache_voxel_t unpacked = unpack_voxel_data(voxel);
                 if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
                     vec3 color = unpacked.radiance / float(unpacked.sample_count);
                     color /= params.exposure;
                     color *= vec3(ray.c[0], ray.c[1], ray.c[2]);
+                    const float sum = color.r + color.g + color.b;
+                    if (sum > g_params.limit_indirect) {
+                        color *= (g_params.limit_indirect / sum);
+                    }
                     return color;
                 }
             }

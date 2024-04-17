@@ -7396,12 +7396,16 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                 const uint32_t cache_entry = find_entry(sc.spatial_cache_entries, P, plane_N, sc.spatial_cache_grid);
                 if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
                     const packed_cache_voxel_t &voxel = sc.spatial_cache_voxels[cache_entry];
-                    cache_voxel_t unpacked = unpack_voxel_data(voxel);
+                    const cache_voxel_t unpacked = unpack_voxel_data(voxel);
                     if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
                         fvec4 color = fvec4{unpacked.radiance[0], unpacked.radiance[1], unpacked.radiance[2], 0.0f} /
                                       float(unpacked.sample_count);
                         color /= sc.spatial_cache_grid.exposure;
                         color *= fvec4{ray.c[0][i], ray.c[1][i], ray.c[2][i], 0.0f};
+                        const float sum = hsum(color);
+                        if (sum > limits[1]) {
+                            color *= (limits[1] / sum);
+                        }
 
                         out_rgba[0].set(i, color[0]);
                         out_rgba[1].set(i, color[1]);
