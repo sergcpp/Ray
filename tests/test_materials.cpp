@@ -26,7 +26,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                        const eDenoiseMethod denoise = eDenoiseMethod::None, const bool partial = false,
                        const char *textures[] = nullptr, const eTestScene test_scene = eTestScene::Standard) {
     run_material_test(arch_list, preferred_device, test_name, mat_desc, sample_count, sample_count, 0.0f, min_psnr,
-                      pix_thres, denoise, partial, textures, test_scene);
+                      pix_thres, denoise, partial, false, textures, test_scene);
 }
 
 template <typename MatDesc>
@@ -34,7 +34,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                        const MatDesc &mat_desc, const int min_sample_count, const int max_sample_count,
                        const float variance_threshold, const double min_psnr, const int pix_thres,
                        const eDenoiseMethod denoise = eDenoiseMethod::None, const bool partial = false,
-                       const char *textures[] = nullptr, const eTestScene test_scene = eTestScene::Standard) {
+                       const bool caching = false, const char *textures[] = nullptr,
+                       const eTestScene test_scene = eTestScene::Standard) {
     using namespace std::chrono;
 
     char name_buf[1024];
@@ -49,6 +50,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
     s.h = test_img_h;
     s.preferred_device = preferred_device;
     s.validation_level = g_validation_level;
+    s.use_spatial_cache = caching;
 
     ThreadPool threads(std::thread::hardware_concurrency());
 
@@ -1354,7 +1356,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 10;
-    const int PixThres = 2282;
+    const int PixThres = 2286;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1396,7 +1398,7 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 39;
-    const int PixThres = 5378;
+    const int PixThres = 5382;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1412,6 +1414,27 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
 
     run_material_test(arch_list, preferred_device, "complex_mat5_clipped", metal_mat_desc, SampleCount, VeryFastMinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_Clipped);
+}
+
+void test_complex_mat5_caching(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 31;
+    const int PixThres = 4697;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = Ray::TextureHandle{0};
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
+    metal_mat_desc.normal_map = Ray::TextureHandle{1};
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_caching", metal_mat_desc, SampleCount, SampleCount,
+                      0.0f, VeryFastMinPSNR, PixThres, eDenoiseMethod::None, false, true, textures,
+                      eTestScene::Standard);
 }
 
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
@@ -1433,7 +1456,8 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_material_test(arch_list, preferred_device, "complex_mat5_adaptive", metal_mat_desc, MinSampleCount,
-                      MaxSampleCount, VarianceThreshold, FastMinPSNR, PixThres, eDenoiseMethod::NLM, false, textures);
+                      MaxSampleCount, VarianceThreshold, FastMinPSNR, PixThres, eDenoiseMethod::NLM, false, false,
+                      textures);
 }
 
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
@@ -1539,9 +1563,9 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 }
 
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 47;
+    const int SampleCount = 48;
     const double MinPSNR = 24.0;
-    const int PixThres = 1328;
+    const int PixThres = 1272;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
