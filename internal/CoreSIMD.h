@@ -6579,6 +6579,7 @@ void Ray::NS::Sample_DiffuseNode(const ray_data_t<S> &ray, const ivec<S> &mask, 
         where(mask, new_ray.c[i]) = F[i] * mix_weight / F[3];
     })
     where(mask, new_ray.pdf) = F[3];
+    where(mask, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT;
 }
 
 template <int S>
@@ -6646,6 +6647,7 @@ void Ray::NS::Sample_GlossyNode(const ray_data_t<S> &ray, const ivec<S> &mask, c
         where(mask, new_ray.c[i]) = F[i] * safe_div_pos(mix_weight, F[3]);
     })
     where(mask, new_ray.pdf) = F[3];
+    where(mask, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT * min(alpha[0], alpha[1]);
 }
 
 template <int S>
@@ -6716,6 +6718,7 @@ void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const ivec<S> &mas
     push_ior_stack(~is_backfacing & mask, new_ray.ior, int_ior);
 
     where(mask, new_ray.pdf) = F[3];
+    where(mask, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT * min(alpha[0], alpha[1]);
 }
 
 template <int S>
@@ -6880,6 +6883,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
             where(sample_diff_lobe, new_ray.c[i]) = safe_div_pos(F[i] * mix_weight, lobe_weights.diffuse);
         })
         where(sample_diff_lobe, new_ray.pdf) = F[3];
+        where(sample_diff_lobe, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT;
 
         assert((secondary_mask & sample_diff_lobe).all_zeros());
         secondary_mask |= sample_diff_lobe;
@@ -6910,6 +6914,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
             where(sample_spec_lobe, new_ray.c[i]) = safe_div_pos(F[i] * mix_weight, F[3]);
         })
         where(sample_spec_lobe, new_ray.pdf) = F[3];
+        where(sample_spec_lobe, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT * min(alpha[0], alpha[1]);
 
         assert(((sample_spec_lobe & mask) != sample_spec_lobe).all_zeros());
         assert((secondary_mask & sample_spec_lobe).all_zeros());
@@ -6939,6 +6944,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
             where(sample_coat_lobe, new_ray.c[i]) = 0.25f * F[i] * safe_div_pos(mix_weight, F[3]);
         })
         where(sample_coat_lobe, new_ray.pdf) = F[3];
+        where(sample_coat_lobe, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT * min(alpha[0], alpha[1]);
 
         assert((secondary_mask & sample_coat_lobe).all_zeros());
         secondary_mask |= sample_coat_lobe;
@@ -6971,6 +6977,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
                 mask_ray_depth(ray.depth) + pack_depth(ivec<S>{0}, ivec<S>{1}, ivec<S>{0}, ivec<S>{0});
 
             UNROLLED_FOR(i, 3, { where(sample_trans_spec_lobe, new_ray.o[i]) = new_p[i]; })
+            where(sample_trans_spec_lobe, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT * min(alpha[0], alpha[1]);
         }
 
         const ivec<S> sample_trans_refr_lobe = ~sample_trans_spec_lobe & sample_trans_lobe;
@@ -6993,6 +7000,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
                 where(sample_trans_refr_lobe, V[i]) = temp_V[i];
                 where(sample_trans_refr_lobe, new_ray.o[i]) = new_p[i];
             })
+            where(sample_trans_refr_lobe, new_ray.cone_spread) += MAX_CONE_SPREAD_INCREMENT * min(alpha[0], alpha[1]);
 
             pop_ior_stack(trans.backfacing & sample_trans_refr_lobe, new_ray.ior);
             push_ior_stack(~trans.backfacing & sample_trans_refr_lobe, new_ray.ior, trans.int_ior);

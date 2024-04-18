@@ -94,6 +94,11 @@ const int ATLAS_TEX_YCOCG_BIT = 16384;         // 0b0100000000000000
 const int ATLAS_TEX_HEIGHT_BITS = 16383;       // 0b0011111111111111
 
 //
+// Light transport
+//
+const float MAX_CONE_SPREAD_INCREMENT = 0.05f;
+
+//
 // Spatial hashing
 //
 const uint HASH_GRID_POSITION_BIT_NUM = 17u;
