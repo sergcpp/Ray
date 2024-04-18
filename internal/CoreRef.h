@@ -75,7 +75,7 @@ struct shadow_ray_t {
     // origin
     float o[3];
     // four 7-bit ray depth counters
-    int depth;
+    uint32_t depth;
     // direction and distance
     float d[3], dist;
     // throughput color of ray

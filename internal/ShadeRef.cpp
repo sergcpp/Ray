@@ -1352,10 +1352,6 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
                     fvec4 color = make_fvec3(unpacked.radiance) / float(unpacked.sample_count);
                     color /= sc.spatial_cache_grid.exposure;
                     color *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
-                    const float sum = hsum(color);
-                    if (sum > limits[1]) {
-                        color *= (limits[1] / sum);
-                    }
                     return color_rgba_t{color.get<0>(), color.get<1>(), color.get<2>(), color.get<3>()};
                 }
             }

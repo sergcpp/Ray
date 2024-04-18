@@ -7402,10 +7402,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                                       float(unpacked.sample_count);
                         color /= sc.spatial_cache_grid.exposure;
                         color *= fvec4{ray.c[0][i], ray.c[1][i], ray.c[2][i], 0.0f};
-                        const float sum = hsum(color);
-                        if (sum > limits[1]) {
-                            color *= (limits[1] / sum);
-                        }
 
                         out_rgba[0].set(i, color[0]);
                         out_rgba[1].set(i, color[1]);
