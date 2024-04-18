@@ -2137,8 +2137,7 @@ vec3 ShadeSurface(const hit_data_t inter, const ray_data_t ray, inout vec3 out_b
         const uint grid_level = calc_grid_level(surf.P, params);
         const float voxel_size = calc_voxel_size(grid_level, params);
 
-        bool use_cache = get_diff_depth(ray.depth) > 0;
-        use_cache = use_cache || (cone_width > mix(1.0, 1.5, cache_rand.x) * voxel_size);
+        bool use_cache = cone_width > mix(1.0, 1.5, cache_rand.x) * voxel_size;
         use_cache = use_cache && (inter.t > mix(1.0, 2.0, cache_rand.y) * voxel_size);
         if (use_cache) {
             const uint cache_entry = find_entry(surf.P, surf.plane_N, params);

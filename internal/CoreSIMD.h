@@ -7385,8 +7385,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
         const uvec<S> grid_level = calc_grid_level(surf.P, sc.spatial_cache_grid);
         const fvec<S> voxel_size = calc_voxel_size(grid_level, sc.spatial_cache_grid);
 
-        ivec<S> use_cache = get_diff_depth(ray.depth) > 0;
-        use_cache |= simd_cast(cone_width > mix(fvec<S>{1.0f}, fvec<S>{1.5f}, cache_rand[0]) * voxel_size);
+        ivec<S> use_cache = simd_cast(cone_width > mix(fvec<S>{1.0f}, fvec<S>{1.5f}, cache_rand[0]) * voxel_size);
         use_cache &= simd_cast(inter.t > mix(fvec<S>{1.0f}, fvec<S>{2.0f}, cache_rand[1]) * voxel_size);
         use_cache &= is_active_lane;
         use_cache &= (mat_type != int(eShadingNode::Emissive));

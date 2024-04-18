@@ -1349,8 +1349,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         const uint32_t grid_level = calc_grid_level(surf.P, sc.spatial_cache_grid);
         const float voxel_size = calc_voxel_size(grid_level, sc.spatial_cache_grid);
 
-        bool use_cache = get_diff_depth(ray.depth) > 0;
-        use_cache |= cone_width > mix(1.0f, 1.5f, cache_rand.get<0>()) * voxel_size;
+        bool use_cache = cone_width > mix(1.0f, 1.5f, cache_rand.get<0>()) * voxel_size;
         use_cache &= inter.t > mix(1.0f, 2.0f, cache_rand.get<1>()) * voxel_size;
         if (use_cache) {
             const uint32_t cache_entry =
