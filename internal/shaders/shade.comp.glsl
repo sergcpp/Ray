@@ -2139,10 +2139,6 @@ vec3 ShadeSurface(const hit_data_t inter, const ray_data_t ray, inout vec3 out_b
                     vec3 color = unpacked.radiance / float(unpacked.sample_count);
                     color /= params.exposure;
                     color *= vec3(ray.c[0], ray.c[1], ray.c[2]);
-                    const float sum = color.r + color.g + color.b;
-                    if (sum > g_params.limit_indirect) {
-                        color *= (g_params.limit_indirect / sum);
-                    }
                     return color;
                 }
             }

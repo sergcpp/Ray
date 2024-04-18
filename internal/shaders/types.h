@@ -47,7 +47,7 @@ struct ray_data_t {
     float ior[4];
 	float cone_width, cone_spread;
 	uint xy;
-        uint depth;
+    uint depth;
 };
 
 struct shadow_ray_t {
