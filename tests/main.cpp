@@ -86,6 +86,7 @@ void test_complex_mat2(const char *arch_list[], const char *preferred_device);
 void test_complex_mat3(const char *arch_list[], const char *preferred_device);
 void test_complex_mat4(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5(const char *arch_list[], const char *preferred_device);
+void test_complex_mat5_caching(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device);
@@ -256,6 +257,7 @@ int main(int argc, char *argv[]) {
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat3, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat4, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_caching, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_clipped, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_adaptive, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_regions, arch_list, device_name));

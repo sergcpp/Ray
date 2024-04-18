@@ -447,18 +447,17 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                 }
             }
 
+            VkPhysicalDeviceFeatures2KHR device_features2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR};
+
+            VkPhysicalDeviceShaderAtomicInt64Features atomic_int64_features = {
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR};
             if (shader_buf_int64_atomics_supported) {
-                VkPhysicalDeviceFeatures2KHR device_features2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR};
-
-                VkPhysicalDeviceShaderAtomicInt64Features atomic_int64_features = {
-                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR};
                 device_features2.pNext = &atomic_int64_features;
-
-                api.vkGetPhysicalDeviceFeatures2KHR(physical_devices[i], &device_features2);
-
-                shader_int64_supported = (device_features2.features.shaderInt64 == VK_TRUE);
-                shader_buf_int64_atomics_supported = (atomic_int64_features.shaderBufferInt64Atomics == VK_TRUE);
             }
+            api.vkGetPhysicalDeviceFeatures2KHR(physical_devices[i], &device_features2);
+
+            shader_int64_supported = (device_features2.features.shaderInt64 == VK_TRUE);
+            shader_buf_int64_atomics_supported &= (atomic_int64_features.shaderBufferInt64Atomics == VK_TRUE);
         }
 
         uint32_t queue_family_count;
