@@ -1532,6 +1532,7 @@ void Sample_DiffuseNode(const ray_data_t ray, const surface_t surf, const vec3 b
     new_ray.c[1] = F[1] * mix_weight / F[3];
     new_ray.c[2] = F[2] * mix_weight / F[3];
     new_ray.pdf = F[3];
+    new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT;
 }
 
 vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray, const surface_t surf,
@@ -1582,10 +1583,10 @@ void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 ba
                        const float spec_F0, const vec2 rand, const float mix_weight,
                        inout ray_data_t new_ray) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+    const vec2 alpha = calc_alpha(roughness, 0.0, regularize_alpha);
 
     vec3 V;
-    const vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, calc_alpha(roughness, 0.0, regularize_alpha),
-                                           spec_ior, spec_F0, base_color, base_color, rand, V);
+    const vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha, spec_ior, spec_F0, base_color, base_color, rand, V);
 
     new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
     new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
@@ -1598,6 +1599,7 @@ void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 ba
     new_ray.c[1] = F[1] * mix_weight / F[3];
     new_ray.c[2] = F[2] * mix_weight / F[3];
     new_ray.pdf = F[3];
+    new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * min(alpha.x, alpha.y);
 }
 
 vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray, const surface_t surf,
@@ -1639,11 +1641,11 @@ void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec
                            const float roughness, const float regularize_alpha, const bool is_backfacing, const float int_ior,
                            const float ext_ior, const vec2 rand, const float mix_weight, inout ray_data_t new_ray) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+    const vec2 alpha = calc_alpha(roughness, 0.0, regularize_alpha);
     const float eta = is_backfacing ? (int_ior / ext_ior) : (ext_ior / int_ior);
 
     vec4 _V;
-    const vec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I,
-                                             calc_alpha(roughness, 0.0, regularize_alpha), eta, base_color, rand, _V);
+    const vec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, alpha, eta, base_color, rand, _V);
 
     const vec3 V = _V.xyz;
     const float m = _V[3];
@@ -1667,6 +1669,7 @@ void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec
     vec3 new_o = offset_ray(surf.P, -surf.plane_N);
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
     new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+    new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * min(alpha.x, alpha.y);
 }
 
 struct diff_params_t {
@@ -1820,15 +1823,16 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             new_ray.c[1] = F[1] * mix_weight / lobe_weights.diffuse;
             new_ray.c[2] = F[2] * mix_weight / lobe_weights.diffuse;
             new_ray.pdf = F[3];
+            new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT;
         }
     } else [[dont_flatten]] if (mix_rand < lobe_weights.diffuse + lobe_weights.specular) {
         //
         // Main specular lobe
         //
         if (spec_depth < get_spec_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
+            const vec2 alpha = calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha);
             vec3 V;
-            vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I,
-                                             calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha),
+            vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha,
                                              spec.ior, spec.F0, spec.tmp_col, vec3(1.0), rand, V);
             F[3] *= lobe_weights.specular;
 
@@ -1842,16 +1846,17 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
 
             const vec3 new_o = offset_ray(surf.P, surf.plane_N);
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+            new_ray.d[0] = V [0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+            new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * min(alpha.x, alpha.y);
         }
     } else [[dont_flatten]] if (mix_rand < lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat) {
         //
         // Clearcoat lobe (secondary specular)
         //
         if (spec_depth < get_spec_depth(g_params.max_ray_depth) && total_depth < g_params.max_total_depth) {
+            const float alpha = calc_alpha(coat.roughness, 0.0, regularize_alpha).x;
             vec3 V;
-            vec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I,
-                                                     calc_alpha(coat.roughness, 0.0, regularize_alpha).x,
+            vec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I, alpha,
                                                      coat.ior, coat.F0, rand, V);
             F[3] *= lobe_weights.clearcoat;
 
@@ -1866,6 +1871,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             const vec3 new_o = offset_ray(surf.P, surf.plane_N);
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
             new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+            new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * alpha;
         }
     } else /*if (mix_rand < lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat + lobe_weights.refraction)*/ {
         //
@@ -1879,7 +1885,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             vec4 F;
             vec3 V;
             [[dont_flatten]] if (mix_rand < trans.fresnel) {
-                F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, calc_alpha(spec.roughness, 0.0f, regularize_alpha),
+                const vec2 alpha = calc_alpha(spec.roughness, 0.0f, regularize_alpha);
+                F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha,
                                             1.0 /* ior */, 0.0 /* F0 */, vec3(1.0), vec3(1.0), rand, V);
 
                 new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
@@ -1887,9 +1894,11 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
 
                 const vec3 new_o = offset_ray(surf.P, surf.plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+                new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * min(alpha.x, alpha.y);
             } else {
+                const vec2 alpha = calc_alpha(trans.roughness, 0.0f, regularize_alpha);
                 vec4 _V;
-                F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, calc_alpha(trans.roughness, 0.0f, regularize_alpha),
+                F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, alpha,
                                               trans.eta, diff.base_color, rand, _V);
                 V = _V.xyz;
 
@@ -1898,6 +1907,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
 
                 const vec3 new_o = offset_ray(surf.P, -surf.plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+                new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * min(alpha.x, alpha.y);
 
                 if (!trans.backfacing) {
                     // Entering the surface, push new value
