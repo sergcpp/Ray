@@ -89,6 +89,14 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
         }
     }
 }
+
+uint16_t encode_snorm_u16(const float f) { return uint16_t(std::round(clamp((f + 1) / 2.0f, 0.0f, 1.0f) * 65535.0f)); }
+
+uint32_t encode_cosines(const float cos_a, const float cos_b) {
+    const uint32_t a = uint32_t(std::floor(65535.0f * ((cos_a + 1.0f) / 2.0f)));
+    const uint32_t b = uint32_t(std::floor(65535.0f * ((cos_b + 1.0f) / 2.0f)));
+    return (a << 16) | b;
+}
 } // namespace Ray
 
 void Ray::CanonicalToDir(const float p[2], const float y_rotation, float out_d[3]) {
@@ -124,6 +132,19 @@ void Ray::DirToCanonical(const float d[3], const float y_rotation, float out_p[2
 
     out_p[0] = (cos_theta + 1.0f) / 2.0f;
     out_p[1] = phi / (2.0f * PI);
+}
+
+uint32_t Ray::EncodeOctDir(const float d[3]) {
+    const float denom = fabsf(d[0]) + fabsf(d[1]) + fabsf(d[2]);
+    const float v[3] = {d[0] / denom, d[1] / denom, d[2] / denom};
+    if (v[2] < 0.0f) {
+        const uint16_t x = encode_snorm_u16((1.0f - fabsf(v[1])) * copysignf(1.0f, v[0]));
+        const uint16_t y = encode_snorm_u16((1.0f - fabsf(v[0])) * copysignf(1.0f, v[1]));
+        return (uint32_t(x) << 16) | y;
+    }
+    const uint16_t x = encode_snorm_u16(v[0]);
+    const uint16_t y = encode_snorm_u16(v[1]);
+    return (uint32_t(x) << 16) | y;
 }
 
 // Used to convert 16x16 sphere sector coordinates to single value
@@ -507,7 +528,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
 
             uint32_t space_axis = 0;
             const Ref::fvec4 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2.0f,
-                                  c_right = (split_data.right_bounds[0] + split_data.right_bounds[1]) / 2.0f;
+                             c_right = (split_data.right_bounds[0] + split_data.right_bounds[1]) / 2.0f;
 
             const Ref::fvec4 dist = abs(c_left - c_right);
 
@@ -520,7 +541,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
             }
 
             const Ref::fvec4 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
-                                  bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
+                             bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
             out_nodes.emplace_back();
             bvh_node_t &n = out_nodes.back();
@@ -849,11 +870,8 @@ uint32_t Ray::FlattenBVH_r(const light_bvh_node_t *nodes, const uint32_t node_in
         new_node.child[1] = cur_node.prim_count;
 
         new_node.flux[0] = cur_node.flux;
-        new_node.axis[0][0] = cur_node.axis[0];
-        new_node.axis[1][0] = cur_node.axis[1];
-        new_node.axis[2][0] = cur_node.axis[2];
-        new_node.cos_omega_n[0] = cosf(cur_node.omega_n);
-        new_node.cos_omega_e[0] = cosf(cur_node.omega_e);
+        new_node.axis[0] = EncodeOctDir(cur_node.axis);
+        new_node.cos_omega_ne[0] = encode_cosines(cosf(cur_node.omega_n), cosf(cur_node.omega_e));
 
         return new_node_index;
     }
@@ -962,19 +980,17 @@ uint32_t Ray::FlattenBVH_r(const light_bvh_node_t *nodes, const uint32_t node_in
             new_node.bbox_max[2][i] = nodes[sorted_children[i]].bbox_max[2];
 
             new_node.flux[i] = nodes[sorted_children[i]].flux;
-            new_node.axis[0][i] = nodes[sorted_children[i]].axis[0];
-            new_node.axis[1][i] = nodes[sorted_children[i]].axis[1];
-            new_node.axis[2][i] = nodes[sorted_children[i]].axis[2];
-            new_node.cos_omega_n[i] = cosf(nodes[sorted_children[i]].omega_n);
-            new_node.cos_omega_e[i] = cosf(nodes[sorted_children[i]].omega_e);
+            new_node.axis[i] = EncodeOctDir(nodes[sorted_children[i]].axis);
+            new_node.cos_omega_ne[i] =
+                encode_cosines(cosf(nodes[sorted_children[i]].omega_n), cosf(nodes[sorted_children[i]].omega_e));
         } else {
             // Init as invalid bounding box
             new_node.bbox_min[0][i] = new_node.bbox_min[1][i] = new_node.bbox_min[2][i] = 0.0f;
             new_node.bbox_max[0][i] = new_node.bbox_max[1][i] = new_node.bbox_max[2][i] = 0.0f;
             // Init as zero light
             new_node.flux[i] = 0.0f;
-            new_node.axis[0][i] = new_node.axis[1][i] = new_node.axis[2][i] = 0.0f;
-            new_node.cos_omega_n[i] = new_node.cos_omega_e[i] = 0.0f;
+            new_node.axis[i] = 0;
+            new_node.cos_omega_ne[i] = 0;
         }
     }
 

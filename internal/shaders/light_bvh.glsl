@@ -96,12 +96,34 @@ float sin_sub_clamped(const float sin_omega_a, const float cos_omega_a, const fl
     return sin_omega_a * cos_omega_b - cos_omega_a * sin_omega_b;
 }
 
+float _copysign(const float val, const float sign) {
+    return sign < 0.0 ? -abs(val) : abs(val);
+}
+
+vec3 decode_oct_dir(const uint oct) {
+    vec3 ret;
+    ret.x = -1.0 + 2.0 * float((oct >> 16) & 0x0000ffff) / 65535.0;
+    ret.y = -1.0 + 2.0 * float(oct & 0x0000ffff) / 65535.0;
+    ret.z = 1.0 - abs(ret.x) - abs(ret.y);
+    if (ret.z < 0.0) {
+        const float temp = ret.x;
+        ret.x = (1.0 - abs(ret.y)) * _copysign(1.0, temp);
+        ret.y = (1.0 - abs(temp)) * _copysign(1.0, ret.y);
+    }
+    return normalize(ret);
+}
+
+vec2 decode_cosines(const uint val) {
+    const uvec2 ab = uvec2((val >> 16) & 0x0000ffff, (val & 0x0000ffff));
+    return 2.0 * (vec2(ab) / 65535.0) - 1.0;
+}
+
 float calc_lnode_importance(const light_wbvh_node_t n, const vec3 P, out float importance[8]) {
     float total_importance = 0.0;
     [[unroll]] for (int i = 0; i < 8; ++i) {
         float mul = 1.0, v_len2 = 1.0;
         if (n.bbox_min[0][i] > -MAX_DIST) {
-            const vec3 axis = vec3(n.axis[0][i], n.axis[1][i], n.axis[2][i]);
+            const vec3 axis = decode_oct_dir(n.axis[i]);
             const vec3 ext = vec3(n.bbox_max[0][i] - n.bbox_min[0][i],
                                   n.bbox_max[1][i] - n.bbox_min[1][i],
                                   n.bbox_max[2][i] - n.bbox_min[2][i]);
@@ -126,14 +148,14 @@ float calc_lnode_importance(const light_wbvh_node_t n, const vec3 P, out float i
             }
             const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
 
-            const float cos_omega_n = n.cos_omega_n[i];
-            const float sin_omega_n = sqrt(1.0 - cos_omega_n * cos_omega_n);
+            const vec2 cos_omega_ne = decode_cosines(n.cos_omega_ne[i]);
+            const float sin_omega_n = sqrt(1.0 - cos_omega_ne[0] * cos_omega_ne[0]);
 
-            const float cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_n);
-            const float sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_n);
+            const float cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const float sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
             const float cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
-            mul = cos_omega > n.cos_omega_e[i] ? cos_omega : 0.0;
+            mul = cos_omega > cos_omega_ne[1] ? cos_omega : 0.0;
         }
         importance[i] = n.flux[i] * mul / v_len2;
         total_importance += importance[i];

@@ -96,9 +96,8 @@ struct light_wbvh_node_t {
     float bbox_max[3][8];
     uint child[8];
     float flux[8];
-    float axis[3][8];
-    float cos_omega_n[8];
-    float cos_omega_e[8];
+    uint axis[8];
+    uint cos_omega_ne[8];
 };
 
 struct vertex_t {
