@@ -657,6 +657,13 @@ template <typename T, int S> fixed_size_simd<T, S> inclusive_scan(const fixed_si
     return res;
 }
 
+template <typename T, int S>
+fixed_size_simd<T, S> copysign(const fixed_size_simd<T, S> &val, const fixed_size_simd<T, S> &sign) {
+    fixed_size_simd<T, S> res;
+    UNROLLED_FOR_S(i, S, { res.template set<i>(std::copysign(val.template get<i>(), sign.template get<i>())); });
+    return res;
+}
+
 template <typename T, typename U, int S> class simd_where_expression {
     const fixed_size_simd<T, S> &mask_;
     fixed_size_simd<T, S> &comp_;

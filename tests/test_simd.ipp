@@ -217,6 +217,13 @@ using namespace Ray::NS;
     require(v19.get<2>() == 9.0f);
     require(v19.get<3>() == 7.0f);
 
+    const fvec4 v20 = copysign(v3, fvec4{-1, 2, -3, -4});
+
+    require(v20[0] == Approx(-5));
+    require(v20[1] == Approx(7));
+    require(v20[2] == Approx(-9));
+    require(v20[3] == Approx(-11));
+
     printf("OK\n");
 }
 
@@ -800,8 +807,7 @@ using namespace Ray::NS;
 
     const ivec8 v12i = {-1, 2, 6, 13, 17, 20, 24, 31};
     const fvec8 v12 = gather(gather_source + 2, v12i);
-    const fvec8 v12_masked =
-        gather(fvec8{69}, gather_source + 2, ivec8{-1, 0, -1, 0, -1, 0, -1, 0}, v12i);
+    const fvec8 v12_masked = gather(fvec8{69}, gather_source + 2, ivec8{-1, 0, -1, 0, -1, 0, -1, 0}, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
@@ -887,6 +893,17 @@ using namespace Ray::NS;
     require(v19.get<5>() == 14.0f);
     require(v19.get<6>() == 15.0f);
     require(v19.get<7>() == 1.0f);
+
+    const fvec8 v20 = copysign(v3, fvec8{-1, 2, -3, -4, -1, 2, -3, -4});
+
+    require(v20[0] == Approx(-5));
+    require(v20[1] == Approx(7));
+    require(v20[2] == Approx(-9));
+    require(v20[3] == Approx(-11));
+    require(v20[4] == Approx(-13));
+    require(v20[5] == Approx(14));
+    require(v20[6] == Approx(-15));
+    require(v20[7] == Approx(-3));
 
     printf("OK\n");
 }
@@ -1130,6 +1147,7 @@ using namespace Ray::NS;
     require(v20.get<6>() == 15);
     require(v20.get<7>() == 1);
 
+
     printf("OK\n");
 }
 
@@ -1368,7 +1386,7 @@ using namespace Ray::NS;
     printf("Test fvec16 (%s)\t| ", fvec16::is_native() ? "hard" : "soft");
 
     fvec16 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,
-                                        9.0f, 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f};
+                                   9.0f, 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f};
 
     require(v2[0] == 42.0f);
     require(v2[1] == 42.0f);
@@ -1663,8 +1681,7 @@ using namespace Ray::NS;
     require(v55[14] == Approx(0));
     require(v55[15] == Approx(0.4142));
 
-    fvec16 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f,
-                      3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
+    fvec16 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f, 3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
     require(hsum(v9) == Approx(108.0f));
 
     auto v10 = simd_cast(v2 < v9);
@@ -1696,8 +1713,8 @@ using namespace Ray::NS;
 
     const ivec16 v12i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
     const fvec16 v12 = gather(gather_source + 2, v12i);
-    const fvec16 v12_masked = gather(fvec16{69}, gather_source + 2,
-                                          ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v12i);
+    const fvec16 v12_masked =
+        gather(fvec16{69}, gather_source + 2, ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
@@ -1835,6 +1852,25 @@ using namespace Ray::NS;
     require(v19.get<13>() == 14.0f);
     require(v19.get<14>() == 15.0f);
     require(v19.get<15>() == 1.0f);
+
+    const fvec16 v20 = copysign(v3, fvec16{-1, 2, -3, -4, -1, 2, -3, -4, -1, 2, -3, -4, -1, 2, -3, -4});
+
+    require(v20[0] == Approx(-5));
+    require(v20[1] == Approx(7));
+    require(v20[2] == Approx(-9));
+    require(v20[3] == Approx(-11));
+    require(v20[4] == Approx(-13));
+    require(v20[5] == Approx(14));
+    require(v20[6] == Approx(-15));
+    require(v20[7] == Approx(-3));
+    require(v20[8] == Approx(-5));
+    require(v20[9] == Approx(7));
+    require(v20[10] == Approx(-9));
+    require(v20[11] == Approx(-11));
+    require(v20[12] == Approx(-13));
+    require(v20[13] == Approx(14));
+    require(v20[14] == Approx(-15));
+    require(v20[15] == Approx(-3));
 
     printf("OK\n");
 }
@@ -2068,8 +2104,8 @@ using namespace Ray::NS;
 
     const ivec16 v9i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
     const ivec16 v9 = gather(gather_source + 2, v9i);
-    const ivec16 v9_masked = gather(ivec16{69}, gather_source + 2,
-                                         ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v9i);
+    const ivec16 v9_masked =
+        gather(ivec16{69}, gather_source + 2, ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
@@ -2173,7 +2209,7 @@ using namespace Ray::NS;
     require(v14[15] == 0);
 
     const ivec16 v15 = {-2147483647, 1, -42, 42, -2147483647, 1, -42, 42,
-                             -2147483647, 1, -42, 42, -2147483647, 1, -42, 42};
+                        -2147483647, 1, -42, 42, -2147483647, 1, -42, 42};
     const ivec16 v16 = srai(v15, 31);
     require((v16 != ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}).all_zeros());
 
@@ -2198,7 +2234,7 @@ using namespace Ray::NS;
     require(v18[15] == 36);
 
     const uvec16 vmask = {0xffffffff, 0, 0, 0xffffffff, 0xffffffff, 0, 0, 0xffffffff,
-                               0xffffffff, 0, 0, 0xffffffff, 0xffffffff, 0, 0, 0xffffffff};
+                          0xffffffff, 0, 0, 0xffffffff, 0xffffffff, 0, 0, 0xffffffff};
 
     ivec16 v19 = v3;
     where(vmask, v19) = v2;
@@ -2453,8 +2489,8 @@ using namespace Ray::NS;
 
     const ivec16 v9i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
     const uvec16 v9 = gather(gather_source + 2, v9i);
-    const uvec16 v9_masked = gather(uvec16{69}, gather_source + 2,
-                                         ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v9i);
+    const uvec16 v9_masked =
+        gather(uvec16{69}, gather_source + 2, ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
@@ -2516,7 +2552,7 @@ using namespace Ray::NS;
     require(memcmp(masked_scatter_destination, masked_scatter_expected, sizeof(masked_scatter_destination)) == 0);
 
     const uvec16 v11 = {0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0,
-                             0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
+                        0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
     uvec16 v12 = {0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0};
 
     v12 |= v11;
@@ -2539,7 +2575,7 @@ using namespace Ray::NS;
     require(v12[15] == 0);
 
     const uvec16 v13 = {0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0,
-                             0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
+                        0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0, 0xffffffff, 0};
     uvec16 v14 = {0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0, 0, 0xffffffff, 0, 0};
 
     v14 &= v13;

@@ -45,6 +45,8 @@ template <> class fixed_size_simd<float, 8> {
     friend class fixed_size_simd<int, 8>;
     friend class fixed_size_simd<unsigned, 8>;
 
+    force_inline fixed_size_simd(const __m256 vec) : vec_(vec) {}
+
   public:
     force_inline fixed_size_simd() = default;
     force_inline fixed_size_simd(const float f) { vec_ = _mm256_set1_ps(f); }
@@ -142,6 +144,13 @@ template <> class fixed_size_simd<float, 8> {
         return v1;
     }
 #endif
+
+    friend force_inline fixed_size_simd<float, 8> vectorcall copysign(const fixed_size_simd<float, 8> val,
+                                                                      const fixed_size_simd<float, 8> sign) {
+        const __m256 sign_mask = _mm256_and_ps(sign.vec_, _mm256_set1_ps(-0.0f));
+        const __m256 abs_val = _mm256_andnot_ps(sign_mask, val.vec_);
+        return _mm256_or_ps(abs_val, sign_mask);
+    }
 
     force_inline void store_to(float *f) const { _mm256_storeu_ps(f, vec_); }
     force_inline void store_to(float *f, vector_aligned_tag) const { _mm256_store_ps(f, vec_); }
@@ -265,6 +274,8 @@ template <> class fixed_size_simd<int, 8> {
 
     friend class fixed_size_simd<float, 8>;
     friend class fixed_size_simd<unsigned, 8>;
+
+    force_inline fixed_size_simd(const __m256i vec) : vec_(vec) {}
 
   public:
     force_inline fixed_size_simd() = default;
@@ -457,30 +468,22 @@ template <> class fixed_size_simd<int, 8> {
 
     force_inline static fixed_size_simd<int, 8> vectorcall and_not(const fixed_size_simd<int, 8> v1,
                                                                    const fixed_size_simd<int, 8> v2) {
-        fixed_size_simd<int, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator&(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
-        fixed_size_simd<int, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator|(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
-        fixed_size_simd<int, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator^(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
-        fixed_size_simd<int, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator+(const fixed_size_simd<int, 8> v1,
@@ -709,6 +712,8 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend class fixed_size_simd<float, 8>;
     friend class fixed_size_simd<int, 8>;
 
+    force_inline fixed_size_simd(const __m256i vec) : vec_(vec) {}
+
   public:
     force_inline fixed_size_simd() = default;
     force_inline fixed_size_simd(const unsigned f) { vec_ = _mm256_set1_epi32(f); }
@@ -819,11 +824,7 @@ template <> class fixed_size_simd<unsigned, 8> {
         return *this;
     }
 
-    force_inline explicit vectorcall operator fixed_size_simd<float, 8>() const {
-        fixed_size_simd<float, 8> ret;
-        ret.vec_ = _mm256_cvtepi32_ps(vec_);
-        return ret;
-    }
+    force_inline explicit vectorcall operator fixed_size_simd<float, 8>() const { return _mm256_cvtepi32_ps(vec_); }
 
     force_inline explicit vectorcall operator fixed_size_simd<int, 8>() const {
         fixed_size_simd<int, 8> ret;
@@ -906,30 +907,22 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     force_inline static fixed_size_simd<unsigned, 8> vectorcall and_not(const fixed_size_simd<unsigned, 8> v1,
                                                                         const fixed_size_simd<unsigned, 8> v2) {
-        fixed_size_simd<unsigned, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator&(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
-        fixed_size_simd<unsigned, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator|(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
-        fixed_size_simd<unsigned, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator^(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
-        fixed_size_simd<unsigned, 8> temp;
-        temp.vec_ = _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
-        return temp;
+        return _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
     }
 
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator+(const fixed_size_simd<unsigned, 8> v1,
@@ -1116,22 +1109,14 @@ avx2_inline fixed_size_simd<float, 8> fixed_size_simd<float, 8>::operator~() con
 }
 
 force_inline fixed_size_simd<float, 8> fixed_size_simd<float, 8>::operator-() const {
-    fixed_size_simd<float, 8> temp;
     __m256 m = _mm256_set1_ps(-0.0f);
-    temp.vec_ = _mm256_xor_ps(vec_, m);
-    return temp;
+    return _mm256_xor_ps(vec_, m);
 }
 
-force_inline fixed_size_simd<float, 8>::operator fixed_size_simd<int, 8>() const {
-    fixed_size_simd<int, 8> ret;
-    ret.vec_ = _mm256_cvttps_epi32(vec_);
-    return ret;
-}
+force_inline fixed_size_simd<float, 8>::operator fixed_size_simd<int, 8>() const { return _mm256_cvttps_epi32(vec_); }
 
 force_inline fixed_size_simd<float, 8>::operator fixed_size_simd<unsigned, 8>() const {
-    fixed_size_simd<unsigned, 8> ret;
-    ret.vec_ = _mm256_cvttps_epi32(vec_);
-    return ret;
+    return _mm256_cvttps_epi32(vec_);
 }
 
 force_inline fixed_size_simd<int, 8>::operator fixed_size_simd<unsigned, 8>() const {
@@ -1140,11 +1125,7 @@ force_inline fixed_size_simd<int, 8>::operator fixed_size_simd<unsigned, 8>() co
     return ret;
 }
 
-force_inline fixed_size_simd<float, 8> fixed_size_simd<float, 8>::sqrt() const {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_sqrt_ps(vec_);
-    return temp;
-}
+force_inline fixed_size_simd<float, 8> fixed_size_simd<float, 8>::sqrt() const { return _mm256_sqrt_ps(vec_); }
 
 avx2_inline fixed_size_simd<float, 8> fixed_size_simd<float, 8>::log() const {
     fixed_size_simd<float, 8> ret;
@@ -1154,134 +1135,96 @@ avx2_inline fixed_size_simd<float, 8> fixed_size_simd<float, 8>::log() const {
 
 force_inline fixed_size_simd<float, 8> vectorcall min(const fixed_size_simd<float, 8> v1,
                                                       const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_min_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_min_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall max(const fixed_size_simd<float, 8> v1,
                                                       const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_max_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_max_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall clamp(const fixed_size_simd<float, 8> v1,
                                                         const fixed_size_simd<float, 8> min,
                                                         const fixed_size_simd<float, 8> max) {
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_max_ps(min.vec_, _mm256_min_ps(v1.vec_, max.vec_));
-    return ret;
+    return _mm256_max_ps(min.vec_, _mm256_min_ps(v1.vec_, max.vec_));
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall and_not(const fixed_size_simd<float, 8> v1,
                                                           const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_andnot_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_andnot_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall floor(const fixed_size_simd<float, 8> v1) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_floor_ps(v1.vec_);
-    return temp;
+    return _mm256_floor_ps(v1.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall ceil(const fixed_size_simd<float, 8> v1) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_ceil_ps(v1.vec_);
-    return temp;
+    return _mm256_ceil_ps(v1.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator&(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_and_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_and_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator|(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_or_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_or_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator^(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_xor_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_xor_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator+(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_add_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_add_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator-(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_sub_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_sub_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator*(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_mul_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_mul_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator/(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> temp;
-    temp.vec_ = _mm256_div_ps(v1.vec_, v2.vec_);
-    return temp;
+    return _mm256_div_ps(v1.vec_, v2.vec_);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator<(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_LT_OS);
-    return ret;
+    return _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_LT_OS);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator<=(const fixed_size_simd<float, 8> v1,
                                                              const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_LE_OS);
-    return ret;
+    return _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_LE_OS);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator>(const fixed_size_simd<float, 8> v1,
                                                             const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_GT_OS);
-    return ret;
+    return _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_GT_OS);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator>=(const fixed_size_simd<float, 8> v1,
                                                              const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_GE_OS);
-    return ret;
+    return _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_GE_OS);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator==(const fixed_size_simd<float, 8> v1,
                                                              const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_EQ_OS);
-    return ret;
+    return _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_EQ_OS);
 }
 
 force_inline fixed_size_simd<float, 8> vectorcall operator!=(const fixed_size_simd<float, 8> v1,
                                                              const fixed_size_simd<float, 8> v2) {
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_NEQ_OS);
-    return ret;
+    return _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_NEQ_OS);
 }
 
 inline fixed_size_simd<float, 8> vectorcall pow(const fixed_size_simd<float, 8> v1,
@@ -1369,9 +1312,7 @@ force_inline fixed_size_simd<float, 8> vectorcall select(const fixed_size_simd<U
                                                          const fixed_size_simd<float, 8> vec1,
                                                          const fixed_size_simd<float, 8> vec2) {
     validate_mask(mask);
-    fixed_size_simd<float, 8> ret;
-    ret.vec_ = _mm256_blendv_ps(vec2.vec_, vec1.vec_, _mm_cast<__m256>(mask.vec_));
-    return ret;
+    return _mm256_blendv_ps(vec2.vec_, vec1.vec_, _mm_cast<__m256>(mask.vec_));
 }
 
 template <typename U>
@@ -1379,10 +1320,8 @@ force_inline fixed_size_simd<int, 8> vectorcall select(const fixed_size_simd<U, 
                                                        const fixed_size_simd<int, 8> vec1,
                                                        const fixed_size_simd<int, 8> vec2) {
     validate_mask(mask);
-    fixed_size_simd<int, 8> ret;
-    ret.vec_ = _mm256_castps_si256(
+    return _mm256_castps_si256(
         _mm256_blendv_ps(_mm256_castsi256_ps(vec2.vec_), _mm256_castsi256_ps(vec1.vec_), _mm_cast<__m256>(mask.vec_)));
-    return ret;
 }
 
 template <typename U>
@@ -1390,10 +1329,8 @@ force_inline fixed_size_simd<unsigned, 8> vectorcall select(const fixed_size_sim
                                                             const fixed_size_simd<unsigned, 8> vec1,
                                                             const fixed_size_simd<unsigned, 8> vec2) {
     validate_mask(mask);
-    fixed_size_simd<unsigned, 8> ret;
-    ret.vec_ = _mm256_castps_si256(
+    return _mm256_castps_si256(
         _mm256_blendv_ps(_mm256_castsi256_ps(vec2.vec_), _mm256_castsi256_ps(vec1.vec_), _mm_cast<__m256>(mask.vec_)));
-    return ret;
 }
 
 } // namespace NS
