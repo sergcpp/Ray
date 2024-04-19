@@ -114,11 +114,10 @@ static_assert(sizeof(wbvh_node_t) == 224, "!");
 
 struct light_wbvh_node_t : public wbvh_node_t {
     float flux[8];
-    float axis[3][8];
-    float cos_omega_n[8];
-    float cos_omega_e[8];
+    uint32_t axis[8];
+    uint32_t cos_omega_ne[8];
 };
-static_assert(sizeof(light_wbvh_node_t) == 416, "!");
+static_assert(sizeof(light_wbvh_node_t) == 320, "!");
 
 struct atlas_texture_t {
     uint16_t width;
@@ -397,6 +396,8 @@ force_inline void rgbe_to_rgb(const uint8_t rgbe[4], float out_rgb[3]) {
 
 void CanonicalToDir(const float p[2], float y_rotation, float out_d[3]);
 void DirToCanonical(const float d[3], float y_rotation, float out_p[2]);
+
+uint32_t EncodeOctDir(const float d[3]);
 
 extern const uint8_t morton_table_16[];
 extern const int morton_table_256[];

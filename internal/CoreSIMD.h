@@ -4,6 +4,7 @@
 //  Macros 'USE_XXX' define template instantiation of simd_vec classes.
 //  Template parameter S defines width of vectors used. Usualy it is equal to ray packet size.
 
+#include <array>
 #include <vector>
 
 #include <cfloat>
@@ -2698,14 +2699,54 @@ force_inline fvec<S> sin_sub_clamped(const fvec<S> &sinTheta_a, const fvec<S> &c
     return ret;
 }
 
+force_inline fvec4 decode_oct_dir(const uint32_t oct) {
+    fvec4 ret = 0.0f;
+    ret.set<0>(-1.0f + 2.0f * float((oct >> 16) & 0x0000ffff) / 65535.0f);
+    ret.set<1>(-1.0f + 2.0f * float(oct & 0x0000ffff) / 65535.0f);
+    ret.set<2>(1.0f - fabsf(ret.get<0>()) - fabsf(ret.get<1>()));
+    if (ret.get<2>() < 0.0f) {
+        const float temp = ret.get<0>();
+        ret.set<0>((1.0f - fabsf(ret.get<1>())) * copysignf(1.0f, temp));
+        ret.set<1>((1.0f - fabsf(temp)) * copysignf(1.0f, ret.get<1>()));
+    }
+    return normalize(ret);
+}
+
+template <int S> force_inline std::array<fvec<S>, 3> decode_oct_dir(const uvec<S> &oct) {
+    const uvec<S> x = (oct >> 16) & 0x0000ffff;
+    const uvec<S> y = oct & 0x0000ffff;
+    std::array<fvec<S>, 3> out_dir;
+    out_dir[0] = -1.0f + 2.0f * fvec<S>(x) / 65535.0f;
+    out_dir[1] = -1.0f + 2.0f * fvec<S>(y) / 65535.0f;
+    out_dir[2] = 1.0f - abs(out_dir[0]) - abs(out_dir[1]);
+    const fvec<S> temp = out_dir[0];
+    where(out_dir[2] < 0.0f, out_dir[0]) = (1.0f - abs(out_dir[1])) * copysign(1.0f, temp);
+    where(out_dir[2] < 0.0f, out_dir[1]) = (1.0f - abs(temp)) * copysign(1.0f, out_dir[1]);
+    normalize(out_dir.data());
+    return out_dir;
+}
+
+force_inline fvec2 decode_cosines(const uint32_t val) {
+    const uvec2 ab = uvec2((val >> 16) & 0x0000ffff, (val & 0x0000ffff));
+    return 2.0f * (fvec2(ab) / 65535.0f) - 1.0f;
+}
+
+template <int S> force_inline std::array<fvec<S>, 2> decode_cosines(const uvec<S> &val) {
+    const uvec<S> a = (val >> 16) & 0x0000ffff;
+    const uvec<S> b = (val & 0x0000ffff);
+    std::array<fvec<S>, 2> ret;
+    ret[0] = 2.0f * (fvec<S>(a) / 65535.0f) - 1.0f;
+    ret[1] = 2.0f * (fvec<S>(b) / 65535.0f) - 1.0f;
+    return ret;
+}
+
 template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const float P[3], float importance[8]) {
     for (int i = 0; i < 8; i += S) {
         fvec<S> mul = 1.0f, v_len2 = 1.0f;
 
         const ivec<S> mask = simd_cast(fvec<S>{&n.bbox_min[0][i], vector_aligned} > -MAX_DIST);
         if (mask.not_all_zeros()) {
-            const fvec<S> axis[3] = {fvec<S>{&n.axis[0][i], vector_aligned}, fvec<S>{&n.axis[1][i], vector_aligned},
-                                     fvec<S>{&n.axis[2][i], vector_aligned}};
+            const std::array<fvec<S>, 3> axis = decode_oct_dir(uvec<S>{&n.axis[i], vector_aligned});
             const fvec<S> ext[3] = {
                 fvec<S>{&n.bbox_max[0][i], vector_aligned} - fvec<S>{&n.bbox_min[0][i], vector_aligned},
                 fvec<S>{&n.bbox_max[1][i], vector_aligned} - fvec<S>{&n.bbox_min[1][i], vector_aligned},
@@ -2723,23 +2764,22 @@ template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const fl
 
             where(mask, v_len2) = max(dist2, extent);
 
-            const fvec<S> cos_omega_w = dot3(axis, wi);
-            const fvec<S> sin_omega_w = sqrt(1.0f - cos_omega_w * cos_omega_w);
+            const fvec<S> cos_omega_w = dot3(axis.data(), wi);
+            const fvec<S> sin_omega_w = safe_sqrt(1.0f - cos_omega_w * cos_omega_w);
 
             fvec<S> cos_omega_b = safe_sqrt(1.0f - safe_div_pos(extent * extent, dist2));
             where(dist2 < extent * extent, cos_omega_b) = -1.0f;
             const fvec<S> sin_omega_b = sqrt(1.0f - cos_omega_b * cos_omega_b);
 
-            const fvec<S> cos_omega_n = fvec<S>{&n.cos_omega_n[i], vector_aligned};
-            const fvec<S> sin_omega_n = sqrt(1.0f - cos_omega_n * cos_omega_n);
+            const std::array<fvec<S>, 2> cos_omega_ne = decode_cosines(uvec<S>{&n.cos_omega_ne[i], vector_aligned});
+            const fvec<S> sin_omega_n = sqrt(1.0f - cos_omega_ne[0] * cos_omega_ne[0]);
 
-            const fvec<S> cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_n);
-            const fvec<S> sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_n);
+            const fvec<S> cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const fvec<S> sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
             const fvec<S> cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
-            const fvec<S> cos_omega_e = fvec<S>{&n.cos_omega_e[i], vector_aligned};
             where(mask, mul) = 0.0f;
-            where(mask & simd_cast(cos_omega > cos_omega_e), mul) = cos_omega;
+            where(mask & simd_cast(cos_omega > cos_omega_ne[1]), mul) = cos_omega;
         }
 
         const fvec<S> imp = fvec<S>{&n.flux[i], vector_aligned} * mul / v_len2;
@@ -2752,7 +2792,7 @@ template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const fv
         fvec<S> mul = 1.0f, v_len2 = 1.0f;
 
         if (n.bbox_min[0][i] > -MAX_DIST) {
-            const float axis[3] = {n.axis[0][i], n.axis[1][i], n.axis[2][i]};
+            const fvec4 axis = decode_oct_dir(n.axis[i]);
             const float ext[3] = {n.bbox_max[0][i] - n.bbox_min[0][i], n.bbox_max[1][i] - n.bbox_min[1][i],
                                   n.bbox_max[2][i] - n.bbox_min[2][i]};
             const float extent = 0.5f * sqrtf(ext[0] * ext[0] + ext[1] * ext[1] + ext[2] * ext[2]);
@@ -2767,23 +2807,23 @@ template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const fv
 
             v_len2 = max(dist2, extent);
 
-            const fvec<S> cos_omega_w = dot3(axis, wi);
+            const fvec<S> cos_omega_w = dot3(value_ptr(axis), wi);
             const fvec<S> sin_omega_w = safe_sqrt(1.0f - cos_omega_w * cos_omega_w);
 
             fvec<S> cos_omega_b = safe_sqrt(1.0f - safe_div_pos(extent * extent, dist2));
             where(dist2 < extent * extent, cos_omega_b) = -1.0f;
             const fvec<S> sin_omega_b = sqrt(1.0f - cos_omega_b * cos_omega_b);
 
-            const float cos_omega_n = n.cos_omega_n[i];
-            const float sin_omega_n = sqrtf(1.0f - cos_omega_n * cos_omega_n);
+            const fvec2 cos_omega_ne = decode_cosines(n.cos_omega_ne[i]);
+            const float sin_omega_n = sqrtf(1.0f - cos_omega_ne.get<0>() * cos_omega_ne.get<0>());
 
             const fvec<S> cos_omega_x =
-                cos_sub_clamped(sin_omega_w, cos_omega_w, fvec<S>{sin_omega_n}, fvec<S>{cos_omega_n});
+                cos_sub_clamped(sin_omega_w, cos_omega_w, fvec<S>{sin_omega_n}, fvec<S>{cos_omega_ne.get<0>()});
             const fvec<S> sin_omega_x =
-                sin_sub_clamped(sin_omega_w, cos_omega_w, fvec<S>{sin_omega_n}, fvec<S>{cos_omega_n});
+                sin_sub_clamped(sin_omega_w, cos_omega_w, fvec<S>{sin_omega_n}, fvec<S>{cos_omega_ne.get<0>()});
             const fvec<S> cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
-            mul = select(cos_omega > n.cos_omega_e[i], cos_omega, fvec<S>{0.0f});
+            mul = select(cos_omega > cos_omega_ne.get<1>(), cos_omega, fvec<S>{0.0f});
         }
 
         importance[i] = safe_div_pos(n.flux[i] * mul, v_len2);

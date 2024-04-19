@@ -1,6 +1,7 @@
 ﻿#include "CoreRef.h"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <tuple>
 #include <utility>
@@ -757,9 +758,9 @@ float calc_lnode_importance(const light_bvh_node_t &n, const fvec4 &P) {
     return n.flux * mul / v_len2;
 }
 
-force_inline fvec4 dot(const fvec4 v1[3], const fvec4 v2[3]) { return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]; }
+force_inline fvec4 dot3(const fvec4 v1[3], const fvec4 v2[3]) { return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]; }
 
-force_inline fvec4 length(const fvec4 v[3]) { return sqrt(dot(v, v)); }
+force_inline fvec4 length(const fvec4 v[3]) { return sqrt(dot3(v, v)); }
 
 force_inline fvec4 cos_sub_clamped(const fvec4 &sin_omega_a, const fvec4 &cos_omega_a, const fvec4 &sin_omega_b,
                                    const fvec4 &cos_omega_b) {
@@ -775,14 +776,57 @@ force_inline fvec4 sin_sub_clamped(const fvec4 &sin_omega_a, const fvec4 &cos_om
     return ret;
 }
 
+force_inline fvec4 decode_oct_dir(const uint32_t oct) {
+    fvec4 ret = 0.0f;
+    ret.set<0>(-1.0f + 2.0f * float((oct >> 16) & 0x0000ffff) / 65535.0f);
+    ret.set<1>(-1.0f + 2.0f * float(oct & 0x0000ffff) / 65535.0f);
+    ret.set<2>(1.0f - fabsf(ret.get<0>()) - fabsf(ret.get<1>()));
+    if (ret.get<2>() < 0.0f) {
+        const float temp = ret.get<0>();
+        ret.set<0>((1.0f - fabsf(ret.get<1>())) * copysignf(1.0f, temp));
+        ret.set<1>((1.0f - fabsf(temp)) * copysignf(1.0f, ret.get<1>()));
+    }
+    return normalize(ret);
+}
+
+force_inline fvec4 normalize(std::array<fvec4, 3> &v) {
+    const fvec4 l = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    v[0] = (v[0] / l);
+    v[1] = (v[1] / l);
+    v[2] = (v[2] / l);
+    return l;
+}
+
+force_inline std::array<fvec4, 3> decode_oct_dir(const uvec4 &oct) {
+    const uvec4 x = (oct >> 16) & 0x0000ffff;
+    const uvec4 y = oct & 0x0000ffff;
+    std::array<fvec4, 3> out_dir;
+    out_dir[0] = -1.0f + 2.0f * fvec4(x) / 65535.0f;
+    out_dir[1] = -1.0f + 2.0f * fvec4(y) / 65535.0f;
+    out_dir[2] = 1.0f - abs(out_dir[0]) - abs(out_dir[1]);
+    const fvec4 temp = out_dir[0];
+    where(out_dir[2] < 0.0f, out_dir[0]) = (1.0f - abs(out_dir[1])) * copysign(1.0f, temp);
+    where(out_dir[2] < 0.0f, out_dir[1]) = (1.0f - abs(temp)) * copysign(1.0f, out_dir[1]);
+    normalize(out_dir);
+    return out_dir;
+}
+
+force_inline std::array<fvec4, 2> decode_cosines(const uvec4 &val) {
+    const uvec4 a = (val >> 16) & 0x0000ffff;
+    const uvec4 b = (val & 0x0000ffff);
+    std::array<fvec4, 2> ret;
+    ret[0] = 2.0f * (fvec4(a) / 65535.0f) - 1.0f;
+    ret[1] = 2.0f * (fvec4(b) / 65535.0f) - 1.0f;
+    return ret;
+}
+
 void calc_lnode_importance(const light_wbvh_node_t &n, const fvec4 &P, float importance[8]) {
     for (int i = 0; i < 8; i += 4) {
         fvec4 mul = 1.0f, v_len2 = 1.0f;
 
         const ivec4 mask = simd_cast(fvec4{&n.bbox_min[0][i], vector_aligned} > -MAX_DIST);
         if (mask.not_all_zeros()) {
-            const fvec4 axis[3] = {fvec4{&n.axis[0][i], vector_aligned}, fvec4{&n.axis[1][i], vector_aligned},
-                                   fvec4{&n.axis[2][i], vector_aligned}};
+            const std::array<fvec4, 3> axis = decode_oct_dir(uvec4{&n.axis[i], vector_aligned});
             const fvec4 ext[3] = {fvec4{&n.bbox_max[0][i], vector_aligned} - fvec4{&n.bbox_min[0][i], vector_aligned},
                                   fvec4{&n.bbox_max[1][i], vector_aligned} - fvec4{&n.bbox_min[1][i], vector_aligned},
                                   fvec4{&n.bbox_max[2][i], vector_aligned} - fvec4{&n.bbox_min[2][i], vector_aligned}};
@@ -793,29 +837,28 @@ void calc_lnode_importance(const light_wbvh_node_t &n, const fvec4 &P, float imp
                 0.5f * (fvec4{&n.bbox_min[1][i], vector_aligned} + fvec4{&n.bbox_max[1][i], vector_aligned}),
                 0.5f * (fvec4{&n.bbox_min[2][i], vector_aligned} + fvec4{&n.bbox_max[2][i], vector_aligned})};
             fvec4 wi[3] = {P.get<0>() - pc[0], P.get<1>() - pc[1], P.get<2>() - pc[2]};
-            const fvec4 dist2 = dot(wi, wi);
+            const fvec4 dist2 = dot3(wi, wi);
             const fvec4 dist = sqrt(dist2);
             UNROLLED_FOR(j, 3, { wi[j] /= dist; })
 
             where(mask, v_len2) = max(dist2, extent);
 
-            const fvec4 cos_omega_w = dot(axis, wi);
+            const fvec4 cos_omega_w = dot3(axis.data(), wi);
             const fvec4 sin_omega_w = sqrt(max(1.0f - cos_omega_w * cos_omega_w, 0.0f));
 
             fvec4 cos_omega_b = sqrt(max(1.0f - (extent * extent) / dist2, 0.0f));
             where(dist2 < extent * extent, cos_omega_b) = -1.0f;
             const fvec4 sin_omega_b = sqrt(1.0f - cos_omega_b * cos_omega_b);
 
-            const fvec4 cos_omega_n = fvec4{&n.cos_omega_n[i], vector_aligned};
-            const fvec4 sin_omega_n = sqrt(1.0f - cos_omega_n * cos_omega_n);
+            const std::array<fvec4, 2> cos_omega_ne = decode_cosines(uvec4{&n.cos_omega_ne[i], vector_aligned});
+            const fvec4 sin_omega_n = sqrt(1.0f - cos_omega_ne[0] * cos_omega_ne[0]);
 
-            const fvec4 cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_n);
-            const fvec4 sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_n);
+            const fvec4 cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const fvec4 sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
             const fvec4 cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
-            const fvec4 cos_omega_e = fvec4{&n.cos_omega_e[i], vector_aligned};
             where(mask, mul) = 0.0f;
-            where(mask & simd_cast(cos_omega > cos_omega_e), mul) = cos_omega;
+            where(mask & simd_cast(cos_omega > cos_omega_ne[1]), mul) = cos_omega;
         }
 
         const fvec4 imp = fvec4{&n.flux[i], vector_aligned} * mul / v_len2;
