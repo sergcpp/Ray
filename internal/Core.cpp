@@ -852,8 +852,8 @@ uint32_t Ray::FlattenBVH_r(const light_bvh_node_t *nodes, const uint32_t node_in
         new_node.axis[0][0] = cur_node.axis[0];
         new_node.axis[1][0] = cur_node.axis[1];
         new_node.axis[2][0] = cur_node.axis[2];
-        new_node.omega_n[0] = cur_node.omega_n;
-        new_node.omega_e[0] = cur_node.omega_e;
+        new_node.cos_omega_n[0] = cosf(cur_node.omega_n);
+        new_node.cos_omega_e[0] = cosf(cur_node.omega_e);
 
         return new_node_index;
     }
@@ -965,8 +965,8 @@ uint32_t Ray::FlattenBVH_r(const light_bvh_node_t *nodes, const uint32_t node_in
             new_node.axis[0][i] = nodes[sorted_children[i]].axis[0];
             new_node.axis[1][i] = nodes[sorted_children[i]].axis[1];
             new_node.axis[2][i] = nodes[sorted_children[i]].axis[2];
-            new_node.omega_n[i] = nodes[sorted_children[i]].omega_n;
-            new_node.omega_e[i] = nodes[sorted_children[i]].omega_e;
+            new_node.cos_omega_n[i] = cosf(nodes[sorted_children[i]].omega_n);
+            new_node.cos_omega_e[i] = cosf(nodes[sorted_children[i]].omega_e);
         } else {
             // Init as invalid bounding box
             new_node.bbox_min[0][i] = new_node.bbox_min[1][i] = new_node.bbox_min[2][i] = 0.0f;
@@ -974,7 +974,7 @@ uint32_t Ray::FlattenBVH_r(const light_bvh_node_t *nodes, const uint32_t node_in
             // Init as zero light
             new_node.flux[i] = 0.0f;
             new_node.axis[0][i] = new_node.axis[1][i] = new_node.axis[2][i] = 0.0f;
-            new_node.omega_n[i] = new_node.omega_e[i] = 0.0f;
+            new_node.cos_omega_n[i] = new_node.cos_omega_e[i] = 0.0f;
         }
     }
 
