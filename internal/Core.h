@@ -115,8 +115,8 @@ static_assert(sizeof(wbvh_node_t) == 224, "!");
 struct light_wbvh_node_t : public wbvh_node_t {
     float flux[8];
     float axis[3][8];
-    float omega_n[8];
-    float omega_e[8];
+    float cos_omega_n[8];
+    float cos_omega_e[8];
 };
 static_assert(sizeof(light_wbvh_node_t) == 416, "!");
 
