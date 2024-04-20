@@ -30,7 +30,7 @@ class ILog;
 struct gpu_device_t;
 namespace Dx {
 static const int MaxFramesInFlight = 6;
-static const int MaxTimestampQueries = 256;
+static const int MaxTimestampQueries = 1024;
 
 class Buffer;
 class BumpAlloc;

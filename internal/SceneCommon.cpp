@@ -5,7 +5,7 @@
 
 namespace Ray {
 Ref::fvec4 rgb_to_rgbe(const Ref::fvec4 &rgb) {
-    float max_component = fmaxf(fmaxf(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
+    const float max_component = fmaxf(fmaxf(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
     if (max_component < 1e-32) {
         return Ref::fvec4{0.0f};
     }
