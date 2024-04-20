@@ -24,11 +24,13 @@ Features:
     https://developer.nvidia.com/orca/amazon-lumberyard-bistro \
     https://wirewheelsclub.com/models/1965-ford-mustang-fastback \
     https://evermotion.org/shop/show_product/scene-1-ai43-archinteriors-for-blender/14564 \
-    https://www.blendermarket.com/products/blender-eevee-modern-villa
+    https://www.blendermarket.com/products/blender-eevee-modern-villa \
+    https://www.beeple-crap.com/resources
 
   <div>
     <div float="left" >
-      <img src="images/scene18.jpg" width="89.8%" />
+      <img src="images/scene18.jpg" width="53.5%" />
+      <img src="images/scene19.jpg" width="35.8%" />
     </div>
     <div float="left" >
       <img src="images/scene11.jpg" width="44.7%" />
