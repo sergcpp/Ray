@@ -91,6 +91,9 @@ class RendererBase {
     /// Tells whether this is a hardware accelerated renderer
     virtual bool is_hwrt() const { return false; }
 
+    /// Tells whether spatial caching is enabled
+    virtual bool is_spatial_caching_enabled() const { return false; }
+
     /// Returns size of rendered image
     virtual std::pair<int, int> size() const = 0;
 

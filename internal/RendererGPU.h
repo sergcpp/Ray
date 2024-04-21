@@ -292,6 +292,8 @@ class Renderer : public RendererBase {
 
     bool is_hwrt() const override { return use_hwrt_; }
 
+    bool is_spatial_caching_enabled() const override { return use_spatial_cache_; }
+
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
     color_data_rgba_t get_pixels_ref() const override { return get_pixels_ref(true); }
