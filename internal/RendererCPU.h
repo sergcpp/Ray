@@ -223,6 +223,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     const char *device_name() const override { return "CPU"; }
 
+    bool is_spatial_caching_enabled() const override { return use_spatial_cache_; }
+
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
     color_data_rgba_t get_pixels_ref() const override { return {final_buf_.data(), w_}; }
