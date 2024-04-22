@@ -787,12 +787,12 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
 void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const cache_grid_params_t &params,
                                                    const Buffer &inout_entries, const Buffer &inout_voxels_curr,
                                                    const Buffer &voxels_prev) {
-    SmallVector<TransitionInfo, 16> res_transitions = {{&voxels_prev, eResState::ShaderResource},
-                                                       {&inout_entries, eResState::UnorderedAccess},
-                                                       {&inout_voxels_curr, eResState::UnorderedAccess}};
+    const TransitionInfo res_transitions[] = {{&voxels_prev, eResState::ShaderResource},
+                                              {&inout_entries, eResState::UnorderedAccess},
+                                              {&inout_voxels_curr, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    SmallVector<Binding, 16> bindings = {
+    const Binding bindings[] = {
         {eBindTarget::SBufRO, CacheResolve::CACHE_VOXELS_PREV_BUF_SLOT, voxels_prev},
         {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries},
         {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_VOXELS_CURR_BUF_SLOT, inout_voxels_curr}};
@@ -802,12 +802,12 @@ void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const 
     memcpy(&uniform_params.cam_pos_prev[0], params.cam_pos_prev, 3 * sizeof(float));
     uniform_params.cache_w = (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR);
     uniform_params.entries_count = inout_entries.size() / sizeof(uint64_t);
-    const bool cam_moved = length2(Ref::make_fvec3(params.cam_pos_curr) - Ref::make_fvec3(params.cam_pos_prev)) > FLT_EPS;
+    const bool cam_moved =
+        length2(Ref::make_fvec3(params.cam_pos_curr) - Ref::make_fvec3(params.cam_pos_prev)) > FLT_EPS;
     uniform_params.cam_moved = cam_moved ? 1.0f : 0.0f;
 
-    assert((uniform_params.entries_count % 64) == 0);
-
-    const uint32_t grp_count[3] = {uniform_params.entries_count / 64, 1, 1};
+    assert((uniform_params.entries_count % CacheResolve::LOCAL_GROUP_SIZE_X) == 0);
+    const uint32_t grp_count[3] = {uniform_params.entries_count / CacheResolve::LOCAL_GROUP_SIZE_X, 1, 1};
     DispatchCompute(cmd_buf, pi_spatial_cache_resolve_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }

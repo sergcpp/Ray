@@ -41,12 +41,12 @@ bool hash_map_find(const uint64_t hash_key, inout uint cache_entry) {
     return false;
 }
 
-layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
+layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = 1, local_size_z = 1) in;
 
-shared uint g_temp[2];
+shared uint g_temp[4];
 
 void main() {
-    const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
+    const int index = int(gl_GlobalInvocationID.x);
 
     if ((gl_LocalInvocationIndex % 32) == 0) {
         g_temp[gl_LocalInvocationIndex / 32] = 0;
@@ -58,64 +58,66 @@ void main() {
     grid_params.log_base = RAD_CACHE_GRID_LOGARITHM_BASE;
     grid_params.scale = RAD_CACHE_GRID_SCALE;
 
+    uvec4 packed_data = uvec4(0);
+
     const uint64_t hash_key = g_inout_cache_entries[index];
-    if (hash_key == HASH_GRID_INVALID_HASH_KEY) {
-        return;
-    }
+    if (hash_key != HASH_GRID_INVALID_HASH_KEY) {
+        const uvec4 voxel_prev = g_cache_voxels_prev[index];
+        const uvec4 voxel_curr = g_inout_cache_voxels_curr[index];
+        packed_data = voxel_prev + voxel_curr;
+        uint sample_count = packed_data.w & RAD_CACHE_SAMPLE_COUNTER_BIT_MASK;
 
-    const uvec4 voxel_prev = g_cache_voxels_prev[index];
-    const uvec4 voxel_curr = g_inout_cache_voxels_curr[index];
-    uvec4 packed_data = voxel_prev + voxel_curr;
-    uint sample_count = packed_data.w & RAD_CACHE_SAMPLE_COUNTER_BIT_MASK;
+        if (RAD_CACHE_FILTER_ADJACENT_LEVELS && g_params.cam_moved > 0.5 && sample_count < RAD_CACHE_SAMPLE_COUNT_MIN && voxel_curr.w != 0) {
+            const uint64_t adjacent_level_hash = get_adjacent_level_hash(hash_key, grid_params);
 
-    if (RAD_CACHE_FILTER_ADJACENT_LEVELS && g_params.cam_moved > 0.5 && sample_count < RAD_CACHE_SAMPLE_COUNT_MIN && voxel_curr.w != 0) {
-        const uint64_t adjacent_level_hash = get_adjacent_level_hash(hash_key, grid_params);
+            uint cache_entry = HASH_GRID_INVALID_CACHE_ENTRY;
+            if (hash_map_find(adjacent_level_hash, cache_entry)) {
+                const uvec4 adjacent_voxel_prev = g_cache_voxels_prev[cache_entry];
+                const uint adjacent_sample_count = adjacent_voxel_prev.w & RAD_CACHE_SAMPLE_COUNTER_BIT_MASK;
+                if (adjacent_sample_count > RAD_CACHE_SAMPLE_COUNT_MIN) {
+                    /*packed_data.xyz += adjacent_voxel_prev.xyz;
+                    sample_count += adjacent_sample_count;*/
 
-        uint cache_entry = HASH_GRID_INVALID_CACHE_ENTRY;
-        if (hash_map_find(adjacent_level_hash, cache_entry)) {
-            const uvec4 adjacent_voxel_prev = g_cache_voxels_prev[cache_entry];
-            const uint adjacent_sample_count = adjacent_voxel_prev.w & RAD_CACHE_SAMPLE_COUNTER_BIT_MASK;
-            if (adjacent_sample_count > RAD_CACHE_SAMPLE_COUNT_MIN) {
-                /*packed_data.xyz += adjacent_voxel_prev.xyz;
-                sample_count += adjacent_sample_count;*/
-
-                // less 'sticky' version
-                const float k = float(RAD_CACHE_SAMPLE_COUNT_MIN) / float(adjacent_sample_count);
-                packed_data.xyz += uvec3(vec3(adjacent_voxel_prev.xyz) * k);
-                sample_count += RAD_CACHE_SAMPLE_COUNT_MIN;
+                    // less 'sticky' version
+                    const float k = float(RAD_CACHE_SAMPLE_COUNT_MIN) / float(adjacent_sample_count);
+                    packed_data.xyz += uvec3(vec3(adjacent_voxel_prev.xyz) * k);
+                    sample_count += RAD_CACHE_SAMPLE_COUNT_MIN;
+                }
             }
         }
-    }
 
-    if (sample_count > RAD_CACHE_SAMPLE_COUNT_MAX) {
-        const float k = float(RAD_CACHE_SAMPLE_COUNT_MAX) / float(sample_count);
-        packed_data.xyz = uvec3(vec3(packed_data.xyz) * k);
-        sample_count = RAD_CACHE_SAMPLE_COUNT_MAX;
-    }
+        if (sample_count > RAD_CACHE_SAMPLE_COUNT_MAX) {
+            const float k = float(RAD_CACHE_SAMPLE_COUNT_MAX) / float(sample_count);
+            packed_data.xyz = uvec3(vec3(packed_data.xyz) * k);
+            sample_count = RAD_CACHE_SAMPLE_COUNT_MAX;
+        }
 
-    uint frame_count = (voxel_prev.w >> RAD_CACHE_SAMPLE_COUNTER_BIT_NUM) & RAD_CACHE_FRAME_COUNTER_BIT_MASK;
-    packed_data.w = sample_count;
+        uint frame_count = (voxel_prev.w >> RAD_CACHE_SAMPLE_COUNTER_BIT_NUM) & RAD_CACHE_FRAME_COUNTER_BIT_MASK;
+        packed_data.w = sample_count;
 
-    if ((voxel_curr.w & RAD_CACHE_FRAME_COUNTER_BIT_MASK) == 0) {
-        ++frame_count;
-        packed_data.w |= (frame_count & RAD_CACHE_FRAME_COUNTER_BIT_MASK) << RAD_CACHE_SAMPLE_COUNTER_BIT_NUM;
-    }
+        if ((voxel_curr.w & RAD_CACHE_FRAME_COUNTER_BIT_MASK) == 0) {
+            ++frame_count;
+            packed_data.w |= (frame_count & RAD_CACHE_FRAME_COUNTER_BIT_MASK) << RAD_CACHE_SAMPLE_COUNTER_BIT_NUM;
+        }
 
-    if (frame_count > RAD_CACHE_STALE_FRAME_NUM_MAX) {
-        packed_data = uvec4(0);
-        if (!RAD_CACHE_ENABLE_COMPACTION) {
-            g_inout_cache_entries[index] = uint64_t(HASH_GRID_INVALID_HASH_KEY);
+        if (frame_count > RAD_CACHE_STALE_FRAME_NUM_MAX) {
+            packed_data = uvec4(0);
+            if (!RAD_CACHE_ENABLE_COMPACTION) {
+                g_inout_cache_entries[index] = uint64_t(HASH_GRID_INVALID_HASH_KEY);
+            }
         }
     }
 
     if (RAD_CACHE_ENABLE_COMPACTION) {
         g_inout_cache_entries[index] = uint64_t(HASH_GRID_INVALID_HASH_KEY);
         g_inout_cache_voxels_curr[index] = uvec4(0);
-        if (packed_data.w != 0) {
-            groupMemoryBarrier(); barrier();
-            atomicOr(g_temp[gl_LocalInvocationIndex / 32], (1u << (gl_LocalInvocationIndex % 32)));
-            groupMemoryBarrier(); barrier();
 
+        groupMemoryBarrier(); barrier();
+        const uint temp = (packed_data.w != 0) ? 1u : 0u;
+        atomicOr(g_temp[gl_LocalInvocationIndex / 32], (temp << (gl_LocalInvocationIndex % 32)));
+        groupMemoryBarrier(); barrier();
+
+        if (packed_data.w != 0) {
             const uint val = g_temp[gl_LocalInvocationIndex / 32] & ((1u << (gl_LocalInvocationIndex % 32)) - 1);
             const uint ndx = hash_map_base_slot(index) + bitCount(val);
 
