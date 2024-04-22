@@ -13,8 +13,7 @@ struct Params {
     float cam_moved;
 };
 
-const int LOCAL_GROUP_SIZE_X = 8;
-const int LOCAL_GROUP_SIZE_Y = 8;
+const int LOCAL_GROUP_SIZE_X = 256;
 
 const int CACHE_VOXELS_PREV_BUF_SLOT = 3;
 const int HITS_BUF_SLOT = 4;
