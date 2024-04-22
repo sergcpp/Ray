@@ -749,10 +749,10 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
     SmallVector<TransitionInfo, 16> res_transitions = {{&indir_args, eResState::IndirectArgument},
                                                        {&counters, eResState::ShaderResource},
                                                        {&inters, eResState::ShaderResource},
-                                                       {&cache_data, eResState::ShaderResource},
                                                        {&rays, eResState::ShaderResource},
                                                        {&radiance_img, eResState::ShaderResource},
                                                        {&depth_normals_img, eResState::ShaderResource},
+                                                       {&cache_data, eResState::UnorderedAccess},
                                                        {&inout_entries, eResState::UnorderedAccess},
                                                        {&inout_voxels_curr, eResState::UnorderedAccess}};
     if (!ctx_->int64_atomics_supported()) {

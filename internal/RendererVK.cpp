@@ -1569,24 +1569,26 @@ void Ray::Vk::Renderer::ResolveSpatialCache(const SceneBase &scene,
 
     timestamps_[ctx_->backend_frame].cache_resolve[0] = ctx_->WriteTimestamp(cmd_buf, true);
 
-    DebugMarker _(ctx_.get(), cmd_buf, "ResolveSpatialCache");
+    { // Resolve spatial cache
+        DebugMarker _(ctx_.get(), cmd_buf, "ResolveSpatialCache");
 
-    const camera_t &cam = s.cams_[s.current_cam()._index];
+        const camera_t &cam = s.cams_[s.current_cam()._index];
 
-    cache_grid_params_t params;
-    memcpy(params.cam_pos_curr, cam.origin, 3 * sizeof(float));
-    memcpy(params.cam_pos_prev, s.spatial_cache_cam_pos_prev_, 3 * sizeof(float));
+        cache_grid_params_t params;
+        memcpy(params.cam_pos_curr, cam.origin, 3 * sizeof(float));
+        memcpy(params.cam_pos_prev, s.spatial_cache_cam_pos_prev_, 3 * sizeof(float));
 
-    kernel_SpatialCacheResolve(cmd_buf, params, s.spatial_cache_entries_.buf(), s.spatial_cache_voxels_curr_.buf(),
-                               s.spatial_cache_voxels_prev_.buf());
+        kernel_SpatialCacheResolve(cmd_buf, params, s.spatial_cache_entries_.buf(), s.spatial_cache_voxels_curr_.buf(),
+                                   s.spatial_cache_voxels_prev_.buf());
 
-    std::swap(s.spatial_cache_voxels_prev_, s.spatial_cache_voxels_curr_);
-    s.spatial_cache_voxels_curr_.buf().Fill(0, s.spatial_cache_voxels_curr_.buf().size(), 0, cmd_buf);
+        std::swap(s.spatial_cache_voxels_prev_, s.spatial_cache_voxels_curr_);
+        s.spatial_cache_voxels_curr_.buf().Fill(0, s.spatial_cache_voxels_curr_.buf().size(), 0, cmd_buf);
+
+        // Store previous camera position
+        memcpy(s.spatial_cache_cam_pos_prev_, cam.origin, 3 * sizeof(float));
+    }
 
     timestamps_[ctx_->backend_frame].cache_resolve[1] = ctx_->WriteTimestamp(cmd_buf, false);
-
-    // Store previous camera position
-    memcpy(s.spatial_cache_cam_pos_prev_, cam.origin, 3 * sizeof(float));
 
 #if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
