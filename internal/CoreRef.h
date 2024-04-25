@@ -1,7 +1,7 @@
 #pragma once
 
-#include <vector>
 #include <cfloat>
+#include <vector>
 
 #include "Core.h"
 
@@ -191,11 +191,7 @@ force_inline float safe_div_neg(const float a, const float b) {
 
 force_inline void safe_invert(const float v[3], float out_v[3]) {
     for (int i = 0; i < 3; ++i) {
-        if (fabsf(v[i]) > FLT_EPS) {
-            out_v[i] = 1.0f / v[i];
-        } else {
-            out_v[i] = (v[i] >= 0.0f) ? FLT_MAX : -FLT_MAX;
-        }
+        out_v[i] = (fabsf(v[i]) > FLT_EPS) ? (1.0f / v[i]) : copysignf(FLT_MAX, v[i]);
     }
 }
 

@@ -96,10 +96,6 @@ float sin_sub_clamped(const float sin_omega_a, const float cos_omega_a, const fl
     return sin_omega_a * cos_omega_b - cos_omega_a * sin_omega_b;
 }
 
-float _copysign(const float val, const float sign) {
-    return sign < 0.0 ? -abs(val) : abs(val);
-}
-
 vec3 decode_oct_dir(const uint oct) {
     vec3 ret;
     ret.x = -1.0 + 2.0 * float((oct >> 16) & 0x0000ffff) / 65535.0;
