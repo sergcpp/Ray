@@ -74,14 +74,14 @@ vec3 normalize_len(const vec3 v, out float len) {
     return v / (len = length(v));
 }
 
+float _copysign(const float val, const float sign) {
+    return sign < 0.0 ? -abs(val) : abs(val);
+}
+
 vec3 safe_invert(vec3 v) {
     vec3 ret;
     [[unroll]] for (int i = 0; i < 3; ++i) {
-        [[flatten]] if (abs(v[i]) > FLT_EPS) {
-            ret[i] = 1.0 / v[i];
-        } else {
-            ret[i] = (v[i] >= 0.0) ? FLT_MAX : -FLT_MAX;
-        }
+        ret[i] = (abs(v[i]) > FLT_EPS) ? (1.0 / v[i]) : _copysign(FLT_MAX, v[i]);
     }
     return ret;
 }

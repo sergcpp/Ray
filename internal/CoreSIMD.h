@@ -676,7 +676,7 @@ template <int S> force_inline fvec<S> safe_inv_pos(const fvec<S> &a) {
 
 template <int S> force_inline fvec<S> safe_div(const fvec<S> &a, const fvec<S> &b) {
 #if USE_SAFE_MATH
-    const fvec<S> denom = select(b != 0.0f, b, fvec<S>{FLT_EPS});
+    const fvec<S> denom = select(b != 0.0f, b, copysign(fvec<S>{FLT_EPS}, b));
     return a / denom;
 #else
     return a / b;
@@ -1426,55 +1426,19 @@ template <int StackSize, typename T = stack_entry_t> class TraversalStateStack_S
 };
 
 template <int S>
-force_inline void comp_aux_inv_values(const fvec<S> o[3], const fvec<S> d[3], fvec<S> inv_d[3], fvec<S> inv_d_o[3]) {
+void comp_aux_inv_values(const fvec<S> o[3], const fvec<S> d[3], fvec<S> inv_d[3], fvec<S> inv_d_o[3]) {
     for (int i = 0; i < 3; i++) {
-        const fvec<S> denom = select(d[i] != 0.0f, d[i], fvec<S>{FLT_EPS});
+        const fvec<S> denom = select(abs(d[i]) > FLT_EPS, d[i], copysign(fvec<S>{FLT_EPS}, d[i]));
 
         inv_d[i] = 1.0f / denom;
         inv_d_o[i] = o[i] * inv_d[i];
-
-        const fvec<S> d_is_plus_zero = (d[i] <= FLT_EPS) & (d[i] >= 0.0f);
-        where(d_is_plus_zero, inv_d[i]) = MAX_DIST;
-        where(d_is_plus_zero, inv_d_o[i]) = MAX_DIST;
-
-        const fvec<S> d_is_minus_zero = (d[i] >= -FLT_EPS) & (d[i] < 0.0f);
-        where(d_is_minus_zero, inv_d[i]) = -MAX_DIST;
-        where(d_is_minus_zero, inv_d_o[i]) = -MAX_DIST;
     }
 }
 
-force_inline void comp_aux_inv_values(const float o[3], const float d[3], float inv_d[3], float inv_d_o[3]) {
-    if (d[0] <= FLT_EPS && d[0] >= 0) {
-        inv_d[0] = MAX_DIST;
-        inv_d_o[0] = MAX_DIST;
-    } else if (d[0] >= -FLT_EPS && d[0] < 0) {
-        inv_d[0] = -MAX_DIST;
-        inv_d_o[0] = -MAX_DIST;
-    } else {
-        inv_d[0] = 1.0f / d[0];
-        inv_d_o[0] = inv_d[0] * o[0];
-    }
-
-    if (d[1] <= FLT_EPS && d[1] >= 0) {
-        inv_d[1] = MAX_DIST;
-        inv_d_o[1] = MAX_DIST;
-    } else if (d[1] >= -FLT_EPS && d[1] < 0) {
-        inv_d[1] = -MAX_DIST;
-        inv_d_o[1] = -MAX_DIST;
-    } else {
-        inv_d[1] = 1.0f / d[1];
-        inv_d_o[1] = inv_d[1] * o[1];
-    }
-
-    if (d[2] <= FLT_EPS && d[2] >= 0) {
-        inv_d[2] = MAX_DIST;
-        inv_d_o[2] = MAX_DIST;
-    } else if (d[2] >= -FLT_EPS && d[2] < 0) {
-        inv_d[2] = -MAX_DIST;
-        inv_d_o[2] = -MAX_DIST;
-    } else {
-        inv_d[2] = 1.0f / d[2];
-        inv_d_o[2] = inv_d[2] * o[2];
+void comp_aux_inv_values(const float o[3], const float d[3], float inv_d[3], float inv_d_o[3]) {
+    for (int i = 0; i < 3; ++i) {
+        inv_d[i] = (fabsf(d[i]) > FLT_EPS) ? (1.0f / d[i]) : copysignf(FLT_MAX, d[i]);
+        inv_d_o[i] = (fabsf(d[i]) > FLT_EPS) ? (inv_d[i] * o[i]) : copysignf(FLT_MAX, d[i]);
     }
 }
 
