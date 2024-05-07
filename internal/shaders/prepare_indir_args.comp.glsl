@@ -21,7 +21,7 @@ layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 void main() {
     // store previous value
-    g_counters[6] = g_counters[1];
+    g_counters[8] = g_counters[1];
     { // secondary rays
         uint ray_count = g_counters[0];
 
@@ -36,15 +36,15 @@ void main() {
         { // arguments for sorting
             const int BlockSize = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
             uint blocks_count = (ray_count + BlockSize - 1) / BlockSize;
-            g_counters[4] = ray_count;
-            g_out_indir_args[12] = blocks_count;
-            g_out_indir_args[13] = 1;
-            g_out_indir_args[14] = 1;
+            g_counters[6] = ray_count;
+            g_out_indir_args[18] = blocks_count;
+            g_out_indir_args[19] = 1;
+            g_out_indir_args[20] = 1;
 
-            g_counters[5] = blocks_count;
-            g_out_indir_args[15] = SORT_BINS_COUNT * ((blocks_count + BlockSize - 1) / BlockSize);
-            g_out_indir_args[16] = 1;
-            g_out_indir_args[17] = 1;
+            g_counters[7] = blocks_count;
+            g_out_indir_args[21] = SORT_BINS_COUNT * ((blocks_count + BlockSize - 1) / BlockSize);
+            g_out_indir_args[22] = 1;
+            g_out_indir_args[23] = 1;
         }
 
         g_counters[0] = 0;
@@ -63,5 +63,20 @@ void main() {
 
         g_counters[2] = 0;
         g_counters[3] = sh_ray_count;
+    }
+    { // sky rays
+        uint sky_ray_count = g_counters[4];
+
+        g_out_indir_args[12] = (sky_ray_count + 63) / 64;
+        g_out_indir_args[13] = 1;
+        g_out_indir_args[14] = 1;
+
+        // unused
+        g_out_indir_args[15] = sky_ray_count;
+        g_out_indir_args[16] = 1;
+        g_out_indir_args[17] = 1;
+
+        g_counters[4] = 0;
+        g_counters[5] = sky_ray_count;
     }
 }

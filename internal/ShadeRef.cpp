@@ -723,8 +723,8 @@ void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, c
     const fvec2 alpha = calc_alpha(roughness, 0.0f, regularize_alpha);
 
     fvec4 V;
-    const fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha,
-                                            spec_ior, spec_F0, base_color, base_color, rand, V);
+    const fvec4 F =
+        Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha, spec_ior, spec_F0, base_color, base_color, rand, V);
 
     new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
     new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
@@ -779,8 +779,7 @@ void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &sur
     const float eta = is_backfacing ? (int_ior / ext_ior) : (ext_ior / int_ior);
 
     fvec4 V;
-    const fvec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, alpha,
-                                              eta, base_color, rand, V);
+    const fvec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, alpha, eta, base_color, rand, V);
 
     new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
     new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
@@ -932,8 +931,8 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
             const fvec2 alpha = calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha);
             fvec4 V;
-            fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha, spec.ior,
-                                              spec.F0, spec.tmp_col, fvec4{1.0f}, rand, V);
+            fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha, spec.ior, spec.F0, spec.tmp_col,
+                                              fvec4{1.0f}, rand, V);
             const float pdf = F.get<3>() * lobe_weights.specular;
 
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
@@ -953,8 +952,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
             const float alpha = calc_alpha(coat.roughness, 0.0f, regularize_alpha).get<0>();
             fvec4 V;
-            fvec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I, alpha,
-                                                      coat.ior, coat.F0, rand, V);
+            fvec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I, alpha, coat.ior, coat.F0, rand, V);
             const float pdf = F.get<3>() * lobe_weights.clearcoat;
 
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
@@ -982,8 +980,8 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             fvec4 F, V;
             if (mix_rand < trans.fresnel) {
                 const fvec2 alpha = calc_alpha(spec.roughness, 0.0f, regularize_alpha);
-                F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha, 1.0f /* ior */,
-                                            0.0f /* F0 */, fvec4{1.0f}, fvec4{1.0f}, rand, V);
+                F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha, 1.0f /* ior */, 0.0f /* F0 */,
+                                            fvec4{1.0f}, fvec4{1.0f}, rand, V);
 
                 new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
                 new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
@@ -991,8 +989,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
                 new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * fminf(alpha.get<0>(), alpha.get<1>());
             } else {
                 const fvec2 alpha = calc_alpha(trans.roughness, 0.0f, regularize_alpha);
-                F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, alpha, trans.eta,
-                                              diff.base_color, rand, V);
+                F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, alpha, trans.eta, diff.base_color, rand, V);
 
                 new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
                 new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
@@ -1154,12 +1151,12 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_d
 
 Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float limits[2],
                                          const eSpatialCacheMode cache_mode, const hit_data_t &inter,
-                                         const ray_data_t &ray, const uint32_t rand_seq[], const uint32_t rand_seed,
-                                         const int iteration, const scene_data_t &sc,
+                                         const ray_data_t &ray, const uint32_t ray_index, const uint32_t rand_seq[],
+                                         const uint32_t rand_seed, const int iteration, const scene_data_t &sc,
                                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                         int *out_shadow_rays_count, color_rgba_t *out_base_color,
-                                         color_rgba_t *out_depth_normal) {
+                                         int *out_shadow_rays_count, uint32_t *out_def_sky, int *out_def_sky_count,
+                                         color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
     const fvec4 I = make_fvec3(ray.d);
     const fvec4 ro = make_fvec3(ray.o);
 
@@ -1171,6 +1168,11 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     const fvec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
 
     if (inter.v < 0.0f) {
+        if (out_def_sky && ray.cone_spread < sc.env.sky_map_spread_angle) {
+            out_def_sky[(*out_def_sky_count)++] = ray_index;
+            return color_rgba_t{};
+        }
+
         float pdf_factor;
         if (USE_HIERARCHICAL_NEE) {
             pdf_factor = (get_total_depth(ray.depth) < ps.max_total_depth) ? safe_div_pos(1.0f, inter.u) : -1.0f;
@@ -1633,8 +1635,8 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
                             const eSpatialCacheMode cache_mode, const scene_data_t &sc,
                             const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                             int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
-                            int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                            color_rgba_t *out_depth_normal) {
+                            uint32_t *out_def_sky, int *out_def_sky_count, int img_w, float mix_factor,
+                            color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
     const float limits[2] = {(ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX,
                              (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX};
     for (int i = 0; i < int(inters.size()); ++i) {
@@ -1645,9 +1647,10 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
         const int y = r.xy & 0x0000ffff;
 
         color_rgba_t base_color = {}, depth_normal = {};
-        const color_rgba_t col = ShadeSurface(ps, limits, cache_mode, inter, r, rand_seq, rand_seed, iteration, sc,
-                                              textures, out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
-                                              out_shadow_rays_count, &base_color, &depth_normal);
+        const color_rgba_t col =
+            ShadeSurface(ps, limits, cache_mode, inter, r, i, rand_seq, rand_seed, iteration, sc, textures,
+                         out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
+                         out_def_sky, out_def_sky_count, &base_color, &depth_normal);
         out_color[y * img_w + x] = col;
 
         if (out_base_color) {
@@ -1676,8 +1679,8 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, const float clamp_direc
                               const eSpatialCacheMode cache_mode, const scene_data_t &sc,
                               const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                               int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
-                              int img_w, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                              color_rgba_t *out_depth_normal) {
+                              uint32_t *out_def_sky, int *out_def_sky_count, int img_w, color_rgba_t *out_color,
+                              color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
     const float limits[2] = {(clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX,
                              (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX};
     for (int i = 0; i < int(inters.size()); ++i) {
@@ -1688,9 +1691,10 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, const float clamp_direc
         const int y = r.xy & 0x0000ffff;
 
         color_rgba_t base_color = {}, depth_normal = {};
-        color_rgba_t col = ShadeSurface(ps, limits, cache_mode, inter, r, rand_seq, rand_seed, iteration, sc, textures,
-                                        out_secondary_rays, out_secondary_rays_count, out_shadow_rays,
-                                        out_shadow_rays_count, &base_color, &depth_normal);
+        color_rgba_t col =
+            ShadeSurface(ps, limits, cache_mode, inter, r, i, rand_seq, rand_seed, iteration, sc, textures,
+                         out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
+                         out_def_sky, out_def_sky_count, &base_color, &depth_normal);
         if (cache_mode != eSpatialCacheMode::Update) {
             auto old_val = Ref::fvec4{out_color[y * img_w + x].v, Ref::vector_aligned};
             old_val += make_fvec3(col.v);

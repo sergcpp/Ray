@@ -28,9 +28,9 @@ Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_co
     SceneBase::log_ = log;
     SetEnvironment({});
     if (use_spatial_cache) {
-        spatial_cache_entries_.resize(1 << 22, 0);
-        spatial_cache_voxels_curr_.resize(1 << 22, {});
-        spatial_cache_voxels_prev_.resize(1 << 22, {});
+        spatial_cache_entries_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, 0);
+        spatial_cache_voxels_curr_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, {});
+        spatial_cache_voxels_prev_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, {});
     }
 }
 
@@ -825,7 +825,6 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
             const std::pair<uint32_t, uint32_t> lights_index = lights_.Allocate(uint32_t(new_lights.size()));
             for (uint32_t i = 0; i < uint32_t(new_lights.size()); ++i) {
                 lights_[lights_index.first + i] = new_lights[i];
-                li_indices_.push_back(lights_index.first + i);
             }
 
             mi.lights_index = lights_index.first;
@@ -869,10 +868,12 @@ void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, ParallelForFun
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
     env_.light_index = 0xffffffff;
+    env_.sky_map_spread_angle = 0.0f;
 
     if (env_.env_map != InvalidTextureHandle._index &&
         (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
         PrepareSkyEnvMap_nolock(parallel_for);
+        env_.sky_map_spread_angle = 2 * PI / float(env_.envmap_resolution);
     }
 
     if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
@@ -974,10 +975,10 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(
     }
 
     // Find directional light sources
-    std::vector<uint32_t> dir_lights;
+    dir_lights_.clear();
     for (auto it = lights_.cbegin(); it != lights_.cend(); ++it) {
         if (it->type == LIGHT_TYPE_DIR) {
-            dir_lights.push_back(it.index());
+            dir_lights_.push_back(it.index());
         }
     }
 
@@ -991,7 +992,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(
 
     const int SkyEnvRes[] = {env_.envmap_resolution, env_.envmap_resolution / 2};
     const std::vector<color_rgba8_t> rgbe_pixels =
-        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights, parallel_for);
+        CalcSkyEnvTexture(env_.atmosphere, SkyEnvRes, lights_.data(), dir_lights_, parallel_for);
 
     const int storage = 0;
     const int index = tex_storage_rgba_.Allocate(rgbe_pixels, SkyEnvRes, false);

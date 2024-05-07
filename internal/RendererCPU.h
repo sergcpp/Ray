@@ -8,6 +8,7 @@
 
 #include "../Log.h"
 #include "../RendererBase.h"
+#include "AtmosphereRef.h"
 #include "CDFUtils.h"
 #include "CoreRef.h"
 #include "DenoiseRef.h"
@@ -85,15 +86,19 @@ class SIMDPolicy {
         return Ref::SortRays_CPU(rays, root_min, cell_size, hash_values, scan_values, chunks, chunks_temp);
     }
 
-    static force_inline void ShadePrimary(
-        const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
-        const uint32_t rand_seq[], const uint32_t rand_seed, const int iteration, const eSpatialCacheMode cache_mode,
-        const scene_data_t &sc, const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-        int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-        float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
+    static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters,
+                                          Span<const ray_data_t> rays, const uint32_t rand_seq[],
+                                          const uint32_t rand_seed, const int iteration,
+                                          const eSpatialCacheMode cache_mode, const scene_data_t &sc,
+                                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
+                                          int *out_shadow_rays_count, uint32_t *out_def_sky, int *out_def_sky_count,
+                                          int img_w, float mix_factor, color_rgba_t *out_color,
+                                          color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
         Ref::ShadePrimary(ps, inters, rays, rand_seq, rand_seed, iteration, cache_mode, sc, textures,
-                          out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
-                          mix_factor, out_color, out_base_color, out_depth_normal);
+                          out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
+                          out_def_sky, out_def_sky_count, img_w, mix_factor, out_color, out_base_color,
+                          out_depth_normal);
     }
 
     static force_inline void ShadeSecondary(const pass_settings_t &ps, const float clamp_direct,
@@ -102,11 +107,26 @@ class SIMDPolicy {
                                             const eSpatialCacheMode cache_mode, const scene_data_t &sc,
                                             const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                             int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                            int *out_shadow_rays_count, int img_w, color_rgba_t *out_color,
-                                            color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
+                                            int *out_shadow_rays_count, uint32_t *out_def_sky, int *out_def_sky_count,
+                                            int img_w, color_rgba_t *out_color, color_rgba_t *out_base_color,
+                                            color_rgba_t *out_depth_normal) {
         Ref::ShadeSecondary(ps, clamp_direct, inters, rays, rand_seq, rand_seed, iteration, cache_mode, sc, textures,
-                            out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w,
-                            out_color, out_base_color, out_depth_normal);
+                            out_secondary_rays, out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count,
+                            out_def_sky, out_def_sky_count, img_w, out_color, out_base_color, out_depth_normal);
+    }
+
+    static force_inline void ShadeSkyPrimary(const pass_settings_t &ps, Span<const hit_data_t> inters,
+                                             Span<const ray_data_t> rays, Span<const uint32_t> ray_indices,
+                                             const scene_data_t &sc, const int iteration, const int img_w,
+                                             color_rgba_t *out_color) {
+        Ref::ShadeSkyPrimary(ps, inters, rays, ray_indices, sc, iteration, img_w, out_color);
+    }
+
+    static force_inline void ShadeSkySecondary(const pass_settings_t &ps, const float clamp_direct,
+                                               Span<const hit_data_t> inters, Span<const ray_data_t> rays,
+                                               Span<const uint32_t> ray_indices, const scene_data_t &sc,
+                                               const int iteration, const int img_w, color_rgba_t *out_color) {
+        Ref::ShadeSkySecondary(ps, clamp_direct, inters, rays, ray_indices, sc, iteration, img_w, out_color);
     }
 
     static force_inline void SpatialCacheUpdate(const cache_grid_params_t &params, Span<const hit_data_t> inters,
@@ -313,6 +333,7 @@ template <typename SIMDPolicy> struct PassData {
     aligned_vector<typename SIMDPolicy::RayHashType> hash_values;
     std::vector<int> head_flags;
     std::vector<uint32_t> scan_values;
+    std::vector<uint32_t> deferred_sky_indexes;
 
     std::vector<ray_chunk_t> chunks, chunks_temp;
     std::vector<uint32_t> skeleton;
@@ -371,10 +392,13 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
                                   s.materials_.empty() ? nullptr : &s.materials_[0],
                                   {s.lights_.data(), s.lights_.capacity()},
                                   {s.li_indices_},
+                                  {s.dir_lights_},
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   {s.light_nodes_},
                                   {s.light_wnodes_},
+                                  {s.sky_transmittance_lut_},
+                                  {s.sky_multiscatter_lut_},
                                   cache_grid_params,
                                   {s.spatial_cache_entries_},
                                   {s.spatial_cache_voxels_prev_}};
@@ -437,14 +461,18 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
     p.secondary_rays.resize(p.primary_rays.size());
     p.shadow_rays.resize(p.primary_rays.size());
+    p.deferred_sky_indexes.resize(p.primary_rays.size());
 
-    int secondary_rays_count = 0, shadow_rays_count = 0;
+    int secondary_rays_count = 0, shadow_rays_count = 0, def_sky_count = 0;
 
     const eSpatialCacheMode cache_mode = use_spatial_cache_ ? eSpatialCacheMode::Query : eSpatialCacheMode::None;
     SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays, rand_seq, rand_seed, region.iteration,
                              cache_mode, sc_data, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
-                             &p.shadow_rays[0], &shadow_rays_count, w_, mix_factor, temp_buf_.data(),
-                             base_color_buf_.data(), depth_normals_buf_.data());
+                             &p.shadow_rays[0], &shadow_rays_count, &p.deferred_sky_indexes[0], &def_sky_count, w_,
+                             mix_factor, temp_buf_.data(), base_color_buf_.data(), depth_normals_buf_.data());
+    SIMDPolicy::ShadeSkyPrimary(cam.pass_settings, p.intersections, p.primary_rays,
+                                {&p.deferred_sky_indexes[0], def_sky_count}, sc_data, region.iteration, w_,
+                                temp_buf_.data());
 
     const auto time_after_prim_shade = high_resolution_clock::now();
 
@@ -502,17 +530,20 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
         const auto time_secondary_shade_start = high_resolution_clock::now();
 
         int rays_count = secondary_rays_count;
-        secondary_rays_count = 0;
-        shadow_rays_count = 0;
+        secondary_rays_count = shadow_rays_count = def_sky_count = 0;
         std::swap(p.primary_rays, p.secondary_rays);
 
         // Use direct clamping value only for the first intersection with lightsource
         const float clamp_direct = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
-        SIMDPolicy::ShadeSecondary(
-            cam.pass_settings, clamp_direct, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
-            Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq, rand_seed,
-            region.iteration, cache_mode, sc_data, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
-            &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data(), nullptr, nullptr);
+        SIMDPolicy::ShadeSecondary(cam.pass_settings, clamp_direct,
+                                   Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
+                                   Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq,
+                                   rand_seed, region.iteration, cache_mode, sc_data, s.tex_storages_,
+                                   &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count,
+                                   &p.deferred_sky_indexes[0], &def_sky_count, w_, temp_buf_.data(), nullptr, nullptr);
+        SIMDPolicy::ShadeSkySecondary(cam.pass_settings, clamp_direct, p.intersections, p.primary_rays,
+                                      {&p.deferred_sky_indexes[0], def_sky_count}, sc_data, region.iteration, w_,
+                                      temp_buf_.data());
 
         const auto time_secondary_shadow_start = high_resolution_clock::now();
 
@@ -998,10 +1029,13 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
                                   s.materials_.empty() ? nullptr : &s.materials_[0],
                                   {s.lights_.data(), s.lights_.capacity()},
                                   {s.li_indices_},
+                                  {},
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   {s.light_nodes_},
                                   {s.light_wnodes_},
+                                  {},
+                                  {},
                                   cache_grid_params,
                                   {},
                                   {}};
@@ -1050,8 +1084,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
 
     SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays, rand_seq, rand_seed,
                              region.iteration + 1, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
-                             &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count, w_,
-                             1.0f, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
+                             &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count,
+                             nullptr, nullptr, w_, 1.0f, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
 
     SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                 cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data, tlas_root,
@@ -1092,7 +1126,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
         SIMDPolicy::ShadeSecondary(cam.pass_settings, clamp_direct, intersections, rays, rand_seq, rand_seed,
                                    region.iteration + 1, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
                                    &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count,
-                                   w_, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
+                                   nullptr, nullptr, w_, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
 
         SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                     cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_indirect, sc_data,

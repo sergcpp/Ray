@@ -28,6 +28,10 @@ float saturate(float val) {
     return clamp(val, 0.0, 1.0);
 }
 
+vec2 saturate(vec2 val) {
+    return clamp(val, vec2(0.0), vec2(1.0));
+}
+
 vec3 saturate(vec3 val) {
     return clamp(val, vec3(0.0), vec3(1.0));
 }
@@ -78,6 +82,22 @@ float _copysign(const float val, const float sign) {
     return sign < 0.0 ? -abs(val) : abs(val);
 }
 
+float from_unit_to_sub_uvs(const float u, const float resolution) {
+    return (u + 0.5 / resolution) * (resolution / (resolution + 1.0));
+}
+float from_sub_uvs_to_unit(const float u, const float resolution) {
+    return (u - 0.5 / resolution) * (resolution / (resolution - 1.0));
+}
+
+float power_heuristic(const float a, const float b) {
+    const float t = a * a;
+    return t / (b * b + t);
+}
+
+float linstep(const float smin, const float smax, const float x) {
+    return saturate((x - smin) / (smax - smin));
+}
+
 vec3 safe_invert(vec3 v) {
     vec3 ret;
     [[unroll]] for (int i = 0; i < 3; ++i) {
@@ -94,6 +114,16 @@ vec3 srgb_to_linear(vec3 col) {
         } else {
             ret[i] = col[i] / 12.92;
         }
+    }
+    return ret;
+}
+
+float _srgb_to_linear(float col) {
+    float ret;
+    [[flatten]] if (col > 0.04045) {
+        ret = pow((col + 0.055) / 1.055, 2.4);
+    } else {
+        ret = col / 12.92;
     }
     return ret;
 }

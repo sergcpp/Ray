@@ -40,6 +40,7 @@ static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t), "!");
 static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t), "!");
 static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t), "!");
 static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t), "!");
+static_assert(sizeof(Types::atmosphere_params_t) == sizeof(Ray::atmosphere_params_t), "!");
 
 static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE, "!");
 static_assert(Types::LIGHT_TYPE_DIR == Ray::LIGHT_TYPE_DIR, "!");
@@ -134,16 +135,25 @@ namespace Vk {
 #include "shaders/output/primary_ray_gen_simple.comp.spv.inl"
 #include "shaders/output/shade_primary_atlas.comp.spv.inl"
 #include "shaders/output/shade_primary_atlas_cache_query.comp.spv.inl"
+#include "shaders/output/shade_primary_atlas_cache_query_sky.comp.spv.inl"
 #include "shaders/output/shade_primary_atlas_cache_update.comp.spv.inl"
+#include "shaders/output/shade_primary_atlas_sky.comp.spv.inl"
 #include "shaders/output/shade_primary_bindless.comp.spv.inl"
 #include "shaders/output/shade_primary_bindless_cache_query.comp.spv.inl"
+#include "shaders/output/shade_primary_bindless_cache_query_sky.comp.spv.inl"
 #include "shaders/output/shade_primary_bindless_cache_update.comp.spv.inl"
+#include "shaders/output/shade_primary_bindless_sky.comp.spv.inl"
 #include "shaders/output/shade_secondary_atlas.comp.spv.inl"
 #include "shaders/output/shade_secondary_atlas_cache_query.comp.spv.inl"
+#include "shaders/output/shade_secondary_atlas_cache_query_sky.comp.spv.inl"
 #include "shaders/output/shade_secondary_atlas_cache_update.comp.spv.inl"
+#include "shaders/output/shade_secondary_atlas_sky.comp.spv.inl"
 #include "shaders/output/shade_secondary_bindless.comp.spv.inl"
 #include "shaders/output/shade_secondary_bindless_cache_query.comp.spv.inl"
+#include "shaders/output/shade_secondary_bindless_cache_query_sky.comp.spv.inl"
 #include "shaders/output/shade_secondary_bindless_cache_update.comp.spv.inl"
+#include "shaders/output/shade_secondary_bindless_sky.comp.spv.inl"
+#include "shaders/output/shade_sky.comp.spv.inl"
 #include "shaders/output/sort_hash_rays.comp.spv.inl"
 #include "shaders/output/sort_init_count_table.comp.spv.inl"
 #include "shaders/output/sort_reduce.comp.spv.inl"
@@ -271,6 +281,11 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
                Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_spv}
                                      : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_spv}),
                eShaderType::Comp, log};
+    sh_shade_primary_sky_ =
+        Shader{"Shade (Primary) (Sky)", ctx_.get(),
+               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_sky_comp_spv}
+                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_sky_comp_spv}),
+               eShaderType::Comp, log};
     sh_shade_primary_cache_update_ =
         Shader{"Shade (Primary) (Cache Update)", ctx_.get(),
                Inflate(use_bindless_
@@ -282,11 +297,22 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_comp_spv}
                               : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_comp_spv}),
         eShaderType::Comp, log};
+    sh_shade_primary_cache_query_sky_ = Shader{
+        "Shade (Primary) (Cache Query) (Sky)", ctx_.get(),
+        Inflate(use_bindless_
+                    ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_spv}
+                    : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_spv}),
+        eShaderType::Comp, log};
     sh_shade_secondary_ =
         Shader{"Shade (Secondary)", ctx_.get(),
                Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_spv}
                                      : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_spv}),
                eShaderType::Comp, log};
+    sh_shade_secondary_sky_ = Shader{
+        "Shade (Secondary) (Sky)", ctx_.get(),
+        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_sky_comp_spv}
+                              : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_sky_comp_spv}),
+        eShaderType::Comp, log};
     sh_shade_secondary_cache_update_ =
         Shader{"Shade (Secondary) (Cache Update)", ctx_.get(),
                Inflate(use_bindless_
@@ -298,6 +324,16 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
                Inflate(use_bindless_
                            ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_comp_spv}
                            : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_comp_spv}),
+               eShaderType::Comp, log};
+    sh_shade_secondary_cache_query_sky_ = Shader{
+        "Shade (Secondary) (Cache Query) (Sky)", ctx_.get(),
+        Inflate(use_bindless_
+                    ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_spv}
+                    : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_spv}),
+        eShaderType::Comp, log};
+
+    sh_shade_sky_ =
+        Shader{"Shade Sky", ctx_.get(), Inflate(Span<const uint8_t>{internal_shaders_output_shade_sky_comp_spv}),
                eShaderType::Comp, log};
 
     if (use_hwrt_) {
@@ -380,15 +416,22 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_intersect_scene_indirect_, log};
     prog_intersect_area_lights_ = Program{"Intersect Area Lights", ctx_.get(), &sh_intersect_area_lights_, log};
     prog_shade_primary_ = Program{"Shade (Primary)", ctx_.get(), &sh_shade_primary_, log};
+    prog_shade_primary_sky_ = Program{"Shade (Primary) (Sky)", ctx_.get(), &sh_shade_primary_sky_, log};
     prog_shade_primary_cache_update_ =
         Program{"Shade (Primary) (Cache Update)", ctx_.get(), &sh_shade_primary_cache_update_, log};
     prog_shade_primary_cache_query_ =
         Program{"Shade (Primary) (Cache Query)", ctx_.get(), &sh_shade_primary_cache_query_, log};
+    prog_shade_primary_cache_query_sky_ =
+        Program{"Shade (Primary) (Cache Query) (Sky)", ctx_.get(), &sh_shade_primary_cache_query_sky_, log};
     prog_shade_secondary_ = Program{"Shade (Secondary)", ctx_.get(), &sh_shade_secondary_, log};
+    prog_shade_secondary_sky_ = Program{"Shade (Secondary) (Sky)", ctx_.get(), &sh_shade_secondary_sky_, log};
     prog_shade_secondary_cache_update_ =
         Program{"Shade (Secondary) (Cache Update)", ctx_.get(), &sh_shade_secondary_cache_update_, log};
     prog_shade_secondary_cache_query_ =
         Program{"Shade (Secondary) (Cache Query)", ctx_.get(), &sh_shade_secondary_cache_query_, log};
+    prog_shade_secondary_cache_query_sky_ =
+        Program{"Shade (Secondary) (Cache Query) (Sky)", ctx_.get(), &sh_shade_secondary_cache_query_sky_, log};
+    prog_shade_sky_ = Program{"Shade Sky", ctx_.get(), &sh_shade_sky_, log};
     prog_intersect_scene_shadow_ = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_intersect_scene_shadow_, log};
     prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
     prog_mix_incremental_ = Program{"Mix Incremental", ctx_.get(), &sh_mix_incremental_, log};
@@ -428,11 +471,16 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         !pi_intersect_scene_indirect_.Init(ctx_.get(), &prog_intersect_scene_indirect_, log) ||
         !pi_intersect_area_lights_.Init(ctx_.get(), &prog_intersect_area_lights_, log) ||
         !pi_shade_primary_.Init(ctx_.get(), &prog_shade_primary_, log) ||
+        !pi_shade_primary_sky_.Init(ctx_.get(), &prog_shade_primary_sky_, log) ||
         !pi_shade_primary_cache_update_.Init(ctx_.get(), &prog_shade_primary_cache_update_, log) ||
         !pi_shade_primary_cache_query_.Init(ctx_.get(), &prog_shade_primary_cache_query_, log) ||
+        !pi_shade_primary_cache_query_sky_.Init(ctx_.get(), &prog_shade_primary_cache_query_sky_, log) ||
         !pi_shade_secondary_.Init(ctx_.get(), &prog_shade_secondary_, log) ||
+        !pi_shade_secondary_sky_.Init(ctx_.get(), &prog_shade_secondary_sky_, log) ||
         !pi_shade_secondary_cache_update_.Init(ctx_.get(), &prog_shade_secondary_cache_update_, log) ||
         !pi_shade_secondary_cache_query_.Init(ctx_.get(), &prog_shade_secondary_cache_query_, log) ||
+        !pi_shade_secondary_cache_query_sky_.Init(ctx_.get(), &prog_shade_secondary_cache_query_sky_, log) ||
+        !pi_shade_sky_.Init(ctx_.get(), &prog_shade_sky_, log) ||
         !pi_intersect_scene_shadow_.Init(ctx_.get(), &prog_intersect_scene_shadow_, log) ||
         !pi_prepare_indir_args_.Init(ctx_.get(), &prog_prepare_indir_args_, log) ||
         !pi_mix_incremental_.Init(ctx_.get(), &prog_mix_incremental_, log) ||
@@ -463,6 +511,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
         Buffer{"Indir Args (1/2)", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
     indir_args_buf_[1] =
         Buffer{"Indir Args (2/2)", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
+
+    atmosphere_params_buf_ = Buffer{"Atmosphere Params", ctx_.get(), eBufType::Uniform, sizeof(atmosphere_params_t)};
 
     { // zero out counters, upload random sequence
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -572,32 +622,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
     cache_grid_params.exposure = std::pow(2.0f, cam.exposure);
 
-    const scene_data_t sc_data = {&s.env_,
-                                  s.mesh_instances_.gpu_buf(),
-                                  s.mi_indices_.buf(),
-                                  s.meshes_.gpu_buf(),
-                                  s.vtx_indices_.gpu_buf(),
-                                  s.vertices_.gpu_buf(),
-                                  s.nodes_.gpu_buf(),
-                                  s.tris_.gpu_buf(),
-                                  s.tri_indices_.gpu_buf(),
-                                  s.tri_materials_.gpu_buf(),
-                                  s.materials_.gpu_buf(),
-                                  s.tex_atlases_,
-                                  s.atlas_textures_.gpu_buf(),
-                                  s.lights_.gpu_buf(),
-                                  s.li_indices_.buf(),
-                                  int(s.li_indices_.size()),
-                                  s.visible_lights_count_,
-                                  s.blocker_lights_count_,
-                                  s.light_wnodes_.buf(),
-                                  s.rt_tlas_,
-                                  s.env_map_qtree_.tex,
-                                  int(s.env_map_qtree_.mips.size()),
-                                  cache_grid_params,
-                                  s.spatial_cache_entries_.buf(),
-                                  s.spatial_cache_voxels_prev_.buf()};
-
 #if !RUN_IN_LOCKSTEP
     ctx_->api().vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
     ctx_->api().vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
@@ -656,7 +680,52 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
     ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
+    if (s.env_.sky_map_spread_angle > 0.0f) {
+        Buffer temp_upload_buf{"Temp atmosphere params upload", ctx_.get(), eBufType::Upload,
+                               sizeof(atmosphere_params_t)};
+        { // update stage buffer
+            uint8_t *mapped_ptr = temp_upload_buf.Map();
+            memcpy(mapped_ptr, &s.env_.atmosphere, sizeof(atmosphere_params_t));
+            temp_upload_buf.Unmap();
+        }
+        CopyBufferToBuffer(temp_upload_buf, 0, atmosphere_params_buf_, 0, sizeof(atmosphere_params_t), cmd_buf);
+    }
+
     //////////////////////////////////////////////////////////////////////////////////
+
+    const scene_data_t sc_data = {s.env_,
+                                  s.mesh_instances_.gpu_buf(),
+                                  s.mi_indices_.buf(),
+                                  s.meshes_.gpu_buf(),
+                                  s.vtx_indices_.gpu_buf(),
+                                  s.vertices_.gpu_buf(),
+                                  s.nodes_.gpu_buf(),
+                                  s.tris_.gpu_buf(),
+                                  s.tri_indices_.gpu_buf(),
+                                  s.tri_materials_.gpu_buf(),
+                                  s.materials_.gpu_buf(),
+                                  s.tex_atlases_,
+                                  s.atlas_textures_.gpu_buf(),
+                                  s.lights_,
+                                  s.li_indices_.buf(),
+                                  int(s.li_indices_.size()),
+                                  s.dir_lights_,
+                                  s.visible_lights_count_,
+                                  s.blocker_lights_count_,
+                                  s.light_wnodes_.buf(),
+                                  s.rt_tlas_,
+                                  s.env_map_qtree_.tex,
+                                  int(s.env_map_qtree_.mips.size()),
+                                  cache_grid_params,
+                                  s.spatial_cache_entries_.buf(),
+                                  s.spatial_cache_voxels_prev_.buf(),
+                                  atmosphere_params_buf_,
+                                  s.sky_transmittance_lut_tex_,
+                                  s.sky_multiscatter_lut_tex_,
+                                  s.sky_moon_tex_,
+                                  s.sky_weather_tex_,
+                                  s.sky_cirrus_tex_,
+                                  s.sky_noise3d_tex_};
 
     TransitionSceneResources(cmd_buf, sc_data);
 
@@ -713,20 +782,29 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
     const eSpatialCacheMode cache_mode = use_spatial_cache_ ? eSpatialCacheMode::Query : eSpatialCacheMode::None;
 
+    timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
+
     { // shade primary hits
         DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
-        timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, cache_mode, s.env_, indir_args_buf_[0], 0, prim_hits_buf_,
                                 prim_rays_buf_, sc_data, random_seq_buf_, rand_seed, region.iteration, rect,
                                 s.tex_atlases_, s.bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_,
-                                counters_buf_, temp_buf1_, temp_depth_normals_buf_);
-        timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
+                                ray_hashes_bufs_[0], counters_buf_, temp_buf1_, temp_depth_normals_buf_);
     }
 
     { // prepare indirect args
         DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
         kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
     }
+
+    if (sc_data.env.sky_map_spread_angle > 0.0f) {
+        DebugMarker _(ctx_.get(), cmd_buf, "ShadeSkyPrimary");
+        kernel_ShadeSkyPrimary(cmd_buf, cam.pass_settings, s.env_, indir_args_buf_[0], 4, prim_hits_buf_,
+                               prim_rays_buf_, ray_hashes_bufs_[0], counters_buf_, sc_data, region.iteration,
+                               temp_buf0_);
+    }
+
+    timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
 
     { // trace shadow rays
         DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
@@ -785,21 +863,31 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, false));
 
+        timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
+
+        const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
         { // shade secondary hits
             DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
-            timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
-            const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, cache_mode, clamp_val, s.env_, indir_args_buf_[0], 0,
                                       prim_hits_buf_, secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed,
                                       region.iteration, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
-                                      prim_rays_buf_, shadow_rays_buf_, counters_buf_, temp_depth_normals_buf_);
-            timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
+                                      prim_rays_buf_, shadow_rays_buf_, ray_hashes_bufs_[0], counters_buf_,
+                                      temp_depth_normals_buf_);
         }
 
         { // prepare indirect args
             DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
             kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
         }
+
+        if (sc_data.env.sky_map_spread_angle > 0.0f) {
+            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSkySecondary");
+            kernel_ShadeSkySecondary(cmd_buf, cam.pass_settings, clamp_val, s.env_, indir_args_buf_[0], 4,
+                                     prim_hits_buf_, secondary_rays_buf_, ray_hashes_bufs_[0], counters_buf_, sc_data,
+                                     region.iteration, temp_buf0_);
+        }
+
+        timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
 
         { // trace shadow rays
             DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
@@ -1342,7 +1430,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
     cache_grid_params.exposure = std::pow(2.0f, cam.exposure);
 
-    const scene_data_t sc_data = {&s.env_,
+    const scene_data_t sc_data = {s.env_,
                                   s.mesh_instances_.gpu_buf(),
                                   s.mi_indices_.buf(),
                                   s.meshes_.gpu_buf(),
@@ -1355,9 +1443,10 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   s.materials_.gpu_buf(),
                                   s.tex_atlases_,
                                   s.atlas_textures_.gpu_buf(),
-                                  s.lights_.gpu_buf(),
+                                  s.lights_,
                                   s.li_indices_.buf(),
                                   int(s.li_indices_.size()),
+                                  s.dir_lights_,
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   s.light_wnodes_.buf(),
@@ -1366,7 +1455,14 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   int(s.env_map_qtree_.mips.size()),
                                   cache_grid_params,
                                   s.spatial_cache_entries_.buf(),
-                                  s.spatial_cache_voxels_curr_.buf()};
+                                  s.spatial_cache_voxels_curr_.buf(),
+                                  atmosphere_params_buf_,
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {}};
 
 #if !RUN_IN_LOCKSTEP
     ctx_->api().vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
@@ -1447,7 +1543,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, s.env_, indir_args_buf_[0], 0,
                                 prim_hits_buf_, prim_rays_buf_, sc_data, random_seq_buf_, rand_seed,
                                 region.iteration + 1, rect, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
-                                secondary_rays_buf_, shadow_rays_buf_, counters_buf_, temp_buf1_,
+                                secondary_rays_buf_, shadow_rays_buf_, {}, counters_buf_, temp_buf1_,
                                 temp_depth_normals_buf_);
     }
 
@@ -1517,8 +1613,8 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, clamp_val, s.env_,
                                       indir_args_buf_[1], 0, prim_hits_buf_, secondary_rays_buf_, sc_data,
                                       random_seq_buf_, rand_seed, region.iteration + 1, s.tex_atlases_,
-                                      s.bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_, counters_buf_,
-                                      temp_depth_normals_buf_);
+                                      s.bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_, {},
+                                      counters_buf_, temp_depth_normals_buf_);
         }
 
         { // prepare indirect args
@@ -1912,7 +2008,7 @@ bool Ray::Vk::Renderer::InitUNetFilterPipelines() {
            pi_convolution_32_3_img_.Init(ctx_.get(), &prog_convolution_32_3_img_, log);
 }
 
-void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings,
+void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &ps,
                                               const scene_data_t &sc_data, const Buffer &rand_seq,
                                               const uint32_t rand_seed, const int iteration, const rect_t &rect,
                                               const uint32_t node_index, const float cam_fwd[3], const float clip_dist,
@@ -1961,8 +2057,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
     uniform_params.rect[3] = rect.h;
     uniform_params.node_index = node_index;
     uniform_params.clip_dist = clip_dist;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.min_transp_depth = ps.min_transp_depth;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
     uniform_params.rand_seed = rand_seed;
     uniform_params.iteration = iteration;
     if (cam_fwd) {
@@ -1977,7 +2073,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &settings,
+void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &ps,
                                                      const scene_data_t &sc_data, const Buffer &rand_seq,
                                                      const uint32_t rand_seed, const int iteration, const rect_t &rect,
                                                      const uint32_t node_index, const float cam_fwd[3],
@@ -2010,8 +2106,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
     uniform_params.rect[3] = rect.h;
     uniform_params.node_index = node_index;
     uniform_params.clip_dist = clip_dist;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.min_transp_depth = ps.min_transp_depth;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
     uniform_params.rand_seed = rand_seed;
     uniform_params.iteration = iteration;
     if (cam_fwd) {
@@ -2026,7 +2122,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
 
 void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args,
                                               const int indir_args_index, const Buffer &counters,
-                                              const pass_settings_t &settings, const scene_data_t &sc_data,
+                                              const pass_settings_t &ps, const scene_data_t &sc_data,
                                               const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
                                               uint32_t node_index, const float cam_fwd[3], const float clip_dist,
                                               Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
@@ -2074,8 +2170,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
     IntersectScene::Params uniform_params = {};
     uniform_params.node_index = node_index;
     uniform_params.clip_dist = clip_dist;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.min_transp_depth = ps.min_transp_depth;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
     uniform_params.rand_seed = rand_seed;
     uniform_params.iteration = iteration;
     if (cam_fwd) {
@@ -2088,7 +2184,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
 }
 
 void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(
-    CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_index, const pass_settings_t &settings,
+    CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_index, const pass_settings_t &ps,
     const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
     const uint32_t node_index, const float cam_fwd[3], const float clip_dist, Span<const TextureAtlas> tex_atlases,
     const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits) {
@@ -2115,8 +2211,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(
     IntersectScene::Params uniform_params = {};
     uniform_params.node_index = node_index;
     uniform_params.clip_dist = clip_dist;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.min_transp_depth = ps.min_transp_depth;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
     uniform_params.rand_seed = rand_seed;
     uniform_params.iteration = iteration;
     if (cam_fwd) {
@@ -2129,12 +2225,12 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(
 }
 
 void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
-    CommandBuffer cmd_buf, const pass_settings_t &settings, const eSpatialCacheMode cache_usage,
-    const environment_t &env, const Buffer &indir_args, const int indir_args_index, const Buffer &hits,
-    const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
-    const int iteration, const rect_t &rect, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters,
-    const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
+    CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, const environment_t &env,
+    const Buffer &indir_args, const int indir_args_index, const Buffer &hits, const Buffer &rays,
+    const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
+    const rect_t &rect, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
+    const Buffer &inout_counters, const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -2142,6 +2238,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                                               {&out_img, eResState::UnorderedAccess},
                                               {&out_rays, eResState::UnorderedAccess},
                                               {&out_sh_rays, eResState::UnorderedAccess},
+                                              {&out_sky_rays, eResState::UnorderedAccess},
                                               {&inout_counters, eResState::UnorderedAccess},
                                               {&out_base_color, eResState::UnorderedAccess},
                                               {&out_depth_normals, eResState::UnorderedAccess}};
@@ -2149,7 +2246,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
 
     SmallVector<Binding, 32> bindings = {{eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
                                          {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
-                                         {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights},
+                                         {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
                                          {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
                                          {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
                                          {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
@@ -2164,12 +2261,13 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
                                          {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
                                          {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
-
+    if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
+        bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
+    }
     if (cache_usage == eSpatialCacheMode::Query) {
         bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_ENTRIES_BUF_SLOT, sc_data.spatial_cache_entries);
         bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_VOXELS_BUF_SLOT, sc_data.spatial_cache_voxels);
     }
-
     if (out_base_color.ready()) {
         bindings.emplace_back(eBindTarget::Image, Shade::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
     }
@@ -2185,12 +2283,12 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     uniform_params.iteration = iteration;
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
-    uniform_params.regularize_alpha = settings.regularize_alpha;
+    uniform_params.regularize_alpha = ps.regularize_alpha;
 
-    uniform_params.max_ray_depth = Ref::pack_ray_depth(settings.max_diff_depth, settings.max_spec_depth,
-                                                       settings.max_refr_depth, settings.max_transp_depth);
-    uniform_params.max_total_depth = settings.max_total_depth;
-    uniform_params.min_total_depth = settings.min_total_depth;
+    uniform_params.max_ray_depth =
+        Ref::pack_ray_depth(ps.max_diff_depth, ps.max_spec_depth, ps.max_refr_depth, ps.max_transp_depth);
+    uniform_params.max_total_depth = ps.max_total_depth;
+    uniform_params.min_total_depth = ps.min_total_depth;
 
     uniform_params.rand_seed = rand_seed;
 
@@ -2204,12 +2302,12 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
-    uniform_params.env_light_index = sc_data.env->light_index;
+    uniform_params.env_light_index = sc_data.env.light_index;
 
-    uniform_params.limit_direct = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
-    uniform_params.limit_indirect = (settings.clamp_direct != 0.0f) ? 3.0f * settings.clamp_direct : FLT_MAX;
+    uniform_params.sky_map_spread_angle = env.sky_map_spread_angle;
 
-    uniform_params.cache_entries_count = sc_data.spatial_cache_entries.size() / sizeof(uint64_t);
+    uniform_params.limit_direct = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
+    uniform_params.limit_indirect = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
 
     memcpy(&uniform_params.cam_pos_and_exposure[0], sc_data.spatial_cache_grid.cam_pos_curr, 3 * sizeof(float));
     uniform_params.cam_pos_and_exposure[3] = sc_data.spatial_cache_grid.exposure;
@@ -2218,7 +2316,13 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     if (cache_usage == eSpatialCacheMode::Update) {
         pi = &pi_shade_primary_cache_update_;
     } else if (cache_usage == eSpatialCacheMode::Query) {
-        pi = &pi_shade_primary_cache_query_;
+        if (sc_data.env.sky_map_spread_angle > 0.0f) {
+            pi = &pi_shade_primary_cache_query_sky_;
+        } else {
+            pi = &pi_shade_primary_cache_query_;
+        }
+    } else if (sc_data.env.sky_map_spread_angle > 0.0f) {
+        pi = &pi_shade_primary_sky_;
     }
 
     if (use_bindless_) {
@@ -2238,12 +2342,12 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
 }
 
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
-    CommandBuffer cmd_buf, const pass_settings_t &settings, const eSpatialCacheMode cache_usage, float clamp_direct,
+    CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, float clamp_direct,
     const environment_t &env, const Buffer &indir_args, const int indir_args_index, const Buffer &hits,
     const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
     const int iteration, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters,
-    const Texture2D &out_depth_normals) {
+    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
+    const Buffer &inout_counters, const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -2251,13 +2355,14 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
                                               {&out_img, eResState::UnorderedAccess},
                                               {&out_rays, eResState::UnorderedAccess},
                                               {&out_sh_rays, eResState::UnorderedAccess},
+                                              {&out_sky_rays, eResState::UnorderedAccess},
                                               {&inout_counters, eResState::UnorderedAccess},
                                               {&out_depth_normals, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     SmallVector<Binding, 32> bindings = {{eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
                                          {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
-                                         {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights},
+                                         {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
                                          {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
                                          {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
                                          {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
@@ -2272,6 +2377,9 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
                                          {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
                                          {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
+        bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
+    }
     if (cache_usage == eSpatialCacheMode::Update) {
         bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     } else if (cache_usage == eSpatialCacheMode::Query) {
@@ -2283,12 +2391,12 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     uniform_params.iteration = iteration;
     uniform_params.li_count = sc_data.li_count;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
-    uniform_params.regularize_alpha = settings.regularize_alpha;
+    uniform_params.regularize_alpha = ps.regularize_alpha;
 
-    uniform_params.max_ray_depth = Ref::pack_ray_depth(settings.max_diff_depth, settings.max_spec_depth,
-                                                       settings.max_refr_depth, settings.max_transp_depth);
-    uniform_params.max_total_depth = settings.max_total_depth;
-    uniform_params.min_total_depth = settings.min_total_depth;
+    uniform_params.max_ray_depth =
+        Ref::pack_ray_depth(ps.max_diff_depth, ps.max_spec_depth, ps.max_refr_depth, ps.max_transp_depth);
+    uniform_params.max_total_depth = ps.max_total_depth;
+    uniform_params.min_total_depth = ps.min_total_depth;
 
     uniform_params.rand_seed = rand_seed;
 
@@ -2302,12 +2410,12 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
-    uniform_params.env_light_index = sc_data.env->light_index;
+    uniform_params.env_light_index = sc_data.env.light_index;
+
+    uniform_params.sky_map_spread_angle = env.sky_map_spread_angle;
 
     uniform_params.limit_direct = (clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX;
-    uniform_params.limit_indirect = (settings.clamp_indirect != 0.0f) ? 3.0f * settings.clamp_indirect : FLT_MAX;
-
-    uniform_params.cache_entries_count = sc_data.spatial_cache_entries.size() / sizeof(uint64_t);
+    uniform_params.limit_indirect = (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX;
 
     memcpy(&uniform_params.cam_pos_and_exposure[0], sc_data.spatial_cache_grid.cam_pos_curr, 3 * sizeof(float));
     uniform_params.cam_pos_and_exposure[3] = sc_data.spatial_cache_grid.exposure;
@@ -2316,7 +2424,13 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     if (cache_usage == eSpatialCacheMode::Update) {
         pi = &pi_shade_secondary_cache_update_;
     } else if (cache_usage == eSpatialCacheMode::Query) {
-        pi = &pi_shade_secondary_cache_query_;
+        if (sc_data.env.sky_map_spread_angle > 0.0f) {
+            pi = &pi_shade_secondary_cache_query_sky_;
+        } else {
+            pi = &pi_shade_secondary_cache_query_;
+        }
+    } else if (sc_data.env.sky_map_spread_angle > 0.0f) {
+        pi = &pi_shade_secondary_sky_;
     }
 
     if (use_bindless_) {
@@ -2336,7 +2450,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
 }
 
 void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
-    CommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args, const int indir_args_index,
+    CommandBuffer cmd_buf, const pass_settings_t &ps, const Buffer &indir_args, const int indir_args_index,
     const Buffer &counters, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
     const int iteration, const uint32_t node_index, const float clamp_val, Span<const TextureAtlas> tex_atlases,
     const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Texture2D &out_img) {
@@ -2359,7 +2473,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, IntersectSceneShadow::SH_RAYS_BUF_SLOT, sh_rays},
         {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
-        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
         {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
@@ -2383,7 +2497,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
 
     IntersectSceneShadow::Params uniform_params = {};
     uniform_params.node_index = node_index;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
     uniform_params.lights_node_index = 0; // tree root
     uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
     uniform_params.clamp_val = (clamp_val != 0.0f) ? 3.0f * clamp_val : FLT_MAX;
