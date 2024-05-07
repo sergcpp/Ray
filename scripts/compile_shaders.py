@@ -188,27 +188,48 @@ def main():
 
     # Shading
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas.comp.spv",
-                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_sky.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_cache_update.comp.spv",
-                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_UPDATE=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_UPDATE=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=0")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_cache_query.comp.spv",
-                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_cache_query_sky.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless.comp.spv",
-                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_sky.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_cache_update.comp.spv",
-                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_UPDATE=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_UPDATE=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=0")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_cache_query.comp.spv",
-                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas.comp.spv", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0")
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_cache_query_sky.comp.spv",
+                         defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1 -DDETAILED_SKY=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas_sky.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DDETAILED_SKY=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas_cache_update.comp.spv",
-                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_UPDATE=1")
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_UPDATE=1 -DDETAILED_SKY=0")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas_cache_query.comp.spv",
-                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1")
-    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless.comp.spv", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1")
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas_cache_query_sky.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0 -DCACHE_QUERY=1 -DDETAILED_SKY=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless_sky.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DDETAILED_SKY=1")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless_cache_update.comp.spv",
-                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_UPDATE=1")
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_UPDATE=1 -DDETAILED_SKY=0")
     compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless_cache_query.comp.spv",
-                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1")
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1 -DDETAILED_SKY=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless_cache_query_sky.comp.spv",
+                         defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1 -DDETAILED_SKY=1")
+
+    # Sky
+    compile_shader_async(src_name="shade_sky.comp.glsl", spv_name="shade_sky.comp.spv", defines="")
 
     # Scene intersection (shadow)
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_atlas.comp.spv",

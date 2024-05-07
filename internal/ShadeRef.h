@@ -103,21 +103,23 @@ void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, con
 
 // Shade
 color_rgba_t ShadeSurface(const pass_settings_t &ps, const float limits[2], eSpatialCacheMode cache_mode,
-                          const hit_data_t &inter, const ray_data_t &ray, const uint32_t rand_seq[], uint32_t rand_seed,
-                          int iteration, const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
-                          ray_data_t *out_secondary_rays, int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                          int *out_shadow_rays_count, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
+                          const hit_data_t &inter, const ray_data_t &ray, uint32_t ray_index, const uint32_t rand_seq[],
+                          uint32_t rand_seed, int iteration, const scene_data_t &sc,
+                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
+                          uint32_t *out_def_sky, int *out_def_sky_count, color_rgba_t *out_base_color,
+                          color_rgba_t *out_depth_normal);
 void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
                   const uint32_t rand_seq[], uint32_t rand_seed, int iteration, eSpatialCacheMode cache_mode,
                   const scene_data_t &sc, const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                  int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
-                  float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                  color_rgba_t *out_depth_normal);
+                  int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
+                  uint32_t *out_def_sky, int *out_def_sky_count, int img_w, float mix_factor, color_rgba_t *out_color,
+                  color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
 void ShadeSecondary(const pass_settings_t &ps, float clamp_direct, Span<const hit_data_t> inters,
                     Span<const ray_data_t> rays, const uint32_t rand_seq[], uint32_t rand_seed, int iteration,
                     eSpatialCacheMode cache_mode, const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
                     ray_data_t *out_secondary_rays, int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                    int *out_shadow_rays_count, int img_w, color_rgba_t *out_color, color_rgba_t *out_base_color,
-                    color_rgba_t *out_depth_normal);
+                    int *out_shadow_rays_count, uint32_t *out_def_sky, int *out_def_sky_count, int img_w,
+                    color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
 } // namespace Ref
 } // namespace Ray

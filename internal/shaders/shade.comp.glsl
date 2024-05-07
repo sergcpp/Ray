@@ -77,7 +77,7 @@ layout(std430, binding = CACHE_VOXELS_BUF_SLOT) readonly buffer CacheVoxels {
 
 bool hash_map_find(const uint64_t hash_key, inout uint cache_entry) {
     const uint hash = hash64(hash_key);
-    const uint slot = hash % g_params.cache_entries_count;
+    const uint slot = hash % HASH_GRID_CACHE_ENTRIES_COUNT;
     const uint base_slot = hash_map_base_slot(slot);
     for (uint bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
         const uint64_t stored_hash_key = (uint64_t(g_cache_entries[base_slot + bucket_offset].y) << 32u) | g_cache_entries[base_slot + bucket_offset].x;
@@ -110,6 +110,12 @@ layout(std430, binding = OUT_SH_RAYS_BUF_SLOT) writeonly buffer OutShRays {
     shadow_ray_t g_out_sh_rays[];
 };
 
+#if DETAILED_SKY
+layout(std430, binding = OUT_SKY_RAYS_BUF_SLOT) writeonly buffer OutSkyRays {
+    uint g_out_sky_rays[];
+};
+#endif
+
 layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
     uint g_inout_counters[];
 };
@@ -130,11 +136,6 @@ vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
     const uint shuffled_i = uint(nested_uniform_scramble_base2(_sample, i_seed) & (RAND_SAMPLES_COUNT - 1));
     return vec2(scramble_unorm(x_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 0]),
                 scramble_unorm(y_seed, g_random_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1]));
-}
-
-float power_heuristic(float a, float b) {
-    float t = a * a;
-    return t / (b * b + t);
 }
 
 float pow5(float v) { return (v * v) * (v * v) * v; }
@@ -1930,7 +1931,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
     }
 }
 
-vec3 ShadeSurface(const hit_data_t inter, const ray_data_t ray, inout vec3 out_base_color, inout vec3 out_normals) {
+vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t ray, inout vec3 out_base_color, inout vec3 out_normals) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
@@ -1947,6 +1948,13 @@ vec3 ShadeSurface(const hit_data_t inter, const ray_data_t ray, inout vec3 out_b
     const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
 
     [[dont_flatten]] if (inter.v < 0.0) {
+#if DETAILED_SKY
+        if (ray.cone_spread < g_params.sky_map_spread_angle) {
+            const uint index = atomicAdd(g_inout_counters[4], 1);
+            g_out_sky_rays[index] = ray_index;
+            return vec3(0.0);
+        }
+#endif
 #if USE_HIERARCHICAL_NEE
         const float pdf_factor = (total_depth < g_params.max_total_depth) ? (1.0 / inter.u) : -1.0;
 #else
@@ -2440,7 +2448,7 @@ void main() {
     const ray_data_t ray = g_rays[index];
 
     vec3 base_color = vec3(0.0), normals = vec3(0.0);
-    vec3 col = ShadeSurface(inter, ray, base_color, normals);
+    vec3 col = ShadeSurface(index, inter, ray, base_color, normals);
 
 #if !PRIMARY && !CACHE_UPDATE
     col += imageLoad(g_out_img, ivec2(x, y)).rgb;

@@ -30,10 +30,10 @@ const uint TEX_SRGB_BIT = (1u << 24);           // 0b00000001
 const uint TEX_RECONSTRUCT_Z_BIT = (2u << 24);  // 0b00000010
 const uint TEX_YCOCG_BIT = (4u << 24);          // 0b00000100
 
-const uint TEXTURES_SAMPLER_SLOT = 21;
-const uint TEXTURES_SIZE_SLOT = 22;
-const uint TEXTURES_BUF_SLOT = 23;
-const uint TEXTURE_ATLASES_SLOT = 24;
+const uint TEXTURES_SAMPLER_SLOT = 22;
+const uint TEXTURES_SIZE_SLOT = 23;
+const uint TEXTURES_BUF_SLOT = 24;
+const uint TEXTURE_ATLASES_SLOT = 25;
 
 const int FILTER_BOX = 0;
 const int FILTER_GAUSSIAN = 1;
@@ -205,6 +205,41 @@ struct cache_data_t {
     uint cache_entries[RAD_CACHE_PROPAGATION_DEPTH];
     float sample_weight[RAD_CACHE_PROPAGATION_DEPTH][3];
     int path_len;
+};
+
+struct atmosphere_params_t {
+    float planet_radius;
+    float viewpoint_height;
+    float atmosphere_height;
+    float rayleigh_height;
+    //
+    float mie_height;
+    float clouds_height_beg;
+    float clouds_height_end;
+    float clouds_variety;
+    //
+    float clouds_density;
+    float clouds_offset_x;
+    float clouds_offset_z;
+    float cirrus_clouds_amount;
+    //
+    float cirrus_clouds_height;
+    float ozone_height_center;
+    float ozone_half_width;
+    float atmosphere_density;
+    //
+    float stars_brightness;
+    float moon_radius;
+    float moon_distance;
+    float _unused;
+    //
+    vec4 moon_dir;
+    vec4 rayleigh_scattering;
+    vec4 mie_scattering;
+    vec4 mie_extinction;
+    vec4 mie_absorption;
+    vec4 ozone_absorbtion;
+    vec4 ground_albedo;
 };
 
 INTERFACE_END

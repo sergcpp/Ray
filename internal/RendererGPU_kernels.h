@@ -11,6 +11,7 @@
 #include "shaders/prepare_indir_args_interface.h"
 #include "shaders/primary_ray_gen_interface.h"
 #include "shaders/shade_interface.h"
+#include "shaders/shade_sky_interface.h"
 #include "shaders/sort_hash_rays_interface.h"
 #include "shaders/sort_init_count_table_interface.h"
 #include "shaders/sort_reduce_interface.h"
@@ -87,7 +88,7 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::SBufRO, IntersectAreaLights::RAYS_BUF_SLOT, rays},
-                                {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights},
+                                {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
                                 {eBindTarget::SBufRO, IntersectAreaLights::WNODES_BUF_SLOT, sc_data.light_wnodes},
                                 {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
                                 {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
@@ -810,4 +811,97 @@ void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const 
     const uint32_t grp_count[3] = {uniform_params.entries_count / CacheResolve::LOCAL_GROUP_SIZE_X, 1, 1};
     DispatchCompute(cmd_buf, pi_spatial_cache_resolve_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
+}
+
+inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass_settings_t &ps, const float limit,
+                                               const environment_t &env, const Buffer &indir_args,
+                                               const int indir_args_index, const Buffer &hits, const Buffer &rays,
+                                               const Buffer &ray_indices, const Buffer &counters,
+                                               const scene_data_t &sc_data, const int iteration,
+                                               const Texture2D &out_img) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&hits, eResState::ShaderResource},
+                                              {&rays, eResState::ShaderResource},
+                                              {&ray_indices, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::UBuf, ShadeSky::ATMOSPHERE_PARAMS_BUF_SLOT, sc_data.atmosphere_params},
+        {eBindTarget::SBufRO, ShadeSky::RAY_INDICES_BUF_SLOT, ray_indices},
+        {eBindTarget::SBufRO, ShadeSky::HITS_BUF_SLOT, hits},
+        {eBindTarget::SBufRO, ShadeSky::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, ShadeSky::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::Tex2D, ShadeSky::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+        {eBindTarget::Tex2DSampled, ShadeSky::TRANSMITTANCE_LUT_SLOT, sc_data.transmittance_lut},
+        {eBindTarget::Tex2DSampled, ShadeSky::MULTISCATTER_LUT_SLOT, sc_data.multiscatter_lut},
+        {eBindTarget::Tex2DSampled, ShadeSky::MOON_TEX_SLOT, sc_data.moon_tex},
+        {eBindTarget::Tex2DSampled, ShadeSky::WEATHER_TEX_SLOT, sc_data.weather_tex},
+        {eBindTarget::Tex2DSampled, ShadeSky::CIRRUS_TEX_SLOT, sc_data.cirrus_tex},
+        {eBindTarget::Tex3DSampled, ShadeSky::NOISE3D_TEX_SLOT, sc_data.noise3d_tex},
+        {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, out_img}};
+
+    const uint32_t rand_seed = Ref::hash(iteration);
+
+    ShadeSky::Params uniform_params = {};
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.env_rotation = env.env_map_rotation;
+    uniform_params.back_rotation = env.back_map_rotation;
+    uniform_params.limit = limit;
+    uniform_params.max_total_depth = ps.max_total_depth;
+    uniform_params.li_count = sc_data.li_count;
+    uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
+    uniform_params.env_light_index = sc_data.env.light_index;
+
+    if (!sc_data.dir_lights.empty()) {
+        for (const uint32_t li : sc_data.dir_lights) {
+            const light_t &l = sc_data.lights.at(li);
+
+            memcpy(uniform_params.light_dir, l.dir.dir, 3 * sizeof(float));
+            uniform_params.light_dir[3] = l.dir.angle;
+            memcpy(uniform_params.light_col, l.col, 3 * sizeof(float));
+            if (l.dir.angle != 0.0f) {
+                const float radius = tanf(l.dir.angle);
+                uniform_params.light_col[0] *= (PI * radius * radius);
+                uniform_params.light_col[1] *= (PI * radius * radius);
+                uniform_params.light_col[2] *= (PI * radius * radius);
+            }
+
+            DispatchComputeIndirect(cmd_buf, pi_shade_sky_, indir_args,
+                                    indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                                    sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+        }
+    } else if (sc_data.env.atmosphere.stars_brightness > 0.0f) {
+        // Use fake lightsource (to light up the moon)
+        const fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
+                    light_col = {144809.866891f, 129443.618266f, 127098.894121f, 0.0f};
+
+        memcpy(uniform_params.light_dir, value_ptr(light_dir), 3 * sizeof(float));
+        uniform_params.light_dir[3] = 0.0f;
+        memcpy(uniform_params.light_col, value_ptr(light_col), 3 * sizeof(float));
+
+        DispatchComputeIndirect(cmd_buf, pi_shade_sky_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
+                                bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
+                                ctx_->log());
+    }
+}
+
+inline void Ray::NS::Renderer::kernel_ShadeSkyPrimary(CommandBuffer cmd_buf, const pass_settings_t &ps,
+                                                      const environment_t &env, const Buffer &indir_args,
+                                                      const int indir_args_index, const Buffer &hits,
+                                                      const Buffer &rays, const Buffer &ray_indices,
+                                                      const Buffer &counters, const scene_data_t &sc_data,
+                                                      const int iteration, const Texture2D &out_img) {
+    const float limit = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
+    kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, counters, sc_data,
+                    iteration, out_img);
+}
+
+inline void Ray::NS::Renderer::kernel_ShadeSkySecondary(
+    CommandBuffer cmd_buf, const pass_settings_t &ps, const float clamp_direct, const environment_t &env,
+    const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays, const Buffer &ray_indices,
+    const Buffer &counters, const scene_data_t &sc_data, int iteration, const Texture2D &out_img) {
+    const float limit = (clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX;
+    kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, counters, sc_data,
+                    iteration, out_img);
 }

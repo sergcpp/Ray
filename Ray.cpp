@@ -49,16 +49,6 @@ RENDERDOC_DevicePointer g_rdoc_device = {};
 extern const std::pair<uint32_t, const char *> KnownGPUVendors[] = {
     {0x1002, "AMD"}, {0x10DE, "NVIDIA"}, {0x8086, "INTEL"}, {0x13B5, "ARM"}};
 extern const int KnownGPUVendorsCount = 4;
-
-bool EndsWith(const std::string &str1, const char *str2) {
-    size_t len = strlen(str2);
-    for (size_t i = 0; i < len; i++) {
-        if (str1[str1.length() - i] != str2[len - i]) {
-            return false;
-        }
-    }
-    return true;
-}
 } // namespace Ray
 
 Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bitmask<eRendererType> enabled_types) {

@@ -377,6 +377,7 @@ struct environment_t {
     uint32_t light_index;
     uint32_t env_map_res;  // 16-bit
     uint32_t back_map_res; // 16-bit
+    float sky_map_spread_angle;
     int envmap_resolution;
     atmosphere_params_t atmosphere;
 };
@@ -497,10 +498,12 @@ struct scene_data_t {
     const material_t *materials;
     Span<const light_t> lights;
     Span<const uint32_t> li_indices;
+    Span<const uint32_t> dir_lights;
     uint32_t visible_lights_count;
     uint32_t blocker_lights_count;
     Span<const light_bvh_node_t> light_nodes;
     Span<const light_wbvh_node_t> light_wnodes;
+    Span<const float> sky_transmittance_lut, sky_multiscatter_lut;
     const cache_grid_params_t &spatial_cache_grid;
     Span<const uint64_t> spatial_cache_entries;
     Span<const packed_cache_voxel_t> spatial_cache_voxels;
@@ -516,6 +519,22 @@ force_inline float sqr(const float x) { return x * x; }
 force_inline float mix(float x, float y, float a) { return x * (1.0f - a) + y * a; }
 
 force_inline float log_base(const float x, const float base) { return logf(x) / logf(base); }
+
+force_inline float linstep(const float smin, const float smax, const float x) {
+    return saturate((x - smin) / (smax - smin));
+}
+
+force_inline float smoothstep(const float edge0, const float edge1, const float x) {
+    const float t = saturate((x - edge0) / (edge1 - edge0));
+    return t * t * (3.0f - 2.0f * t);
+}
+
+force_inline float from_unit_to_sub_uvs(const float u, const float resolution) {
+    return (u + 0.5f / resolution) * (resolution / (resolution + 1.0f));
+}
+force_inline float from_sub_uvs_to_unit(const float u, const float resolution) {
+    return (u - 0.5f / resolution) * (resolution / (resolution - 1.0f));
+}
 
 force_inline float calc_voxel_size(const uint32_t grid_level, const cache_grid_params_t &params) {
     return powf(params.log_base, float(grid_level)) / (params.scale * powf(params.log_base, HASH_GRID_LEVEL_BIAS));

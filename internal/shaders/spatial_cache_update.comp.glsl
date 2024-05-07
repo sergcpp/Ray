@@ -116,7 +116,7 @@ layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, lo
 
 void main() {
     const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
-    if (index >= g_counters[6]) {
+    if (index >= g_counters[8]) {
         return;
     }
 
