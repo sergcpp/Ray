@@ -192,6 +192,7 @@ template <> class fixed_size_simd<float, 16> {
     }
     friend force_inline fixed_size_simd<float, 16> vectorcall pow(fixed_size_simd<float, 16> v1,
                                                                   fixed_size_simd<float, 16> v2);
+    friend force_inline fixed_size_simd<float, 16> vectorcall exp(fixed_size_simd<float, 16> v1);
     friend force_inline fixed_size_simd<float, 16> vectorcall normalize(fixed_size_simd<float, 16> v1);
     friend force_inline fixed_size_simd<float, 16> vectorcall normalize_len(fixed_size_simd<float, 16> v1,
                                                                             float &out_len);
@@ -926,6 +927,13 @@ inline fixed_size_simd<float, 16> vectorcall pow(const fixed_size_simd<float, 16
     _mm512_store_ps(comp1, v1.vec_);
     _mm512_store_ps(comp2, v2.vec_);
     UNROLLED_FOR(i, 16, { comp1[i] = powf(comp1[i], comp2[i]); })
+    return fixed_size_simd<float, 16>{comp1, vector_aligned};
+}
+
+inline fixed_size_simd<float, 16> vectorcall exp(const fixed_size_simd<float, 16> v1) {
+    alignas(64) float comp1[16];
+    _mm512_store_ps(comp1, v1.vec_);
+    UNROLLED_FOR(i, 16, { comp1[i] = expf(comp1[i]); })
     return fixed_size_simd<float, 16>{comp1, vector_aligned};
 }
 
