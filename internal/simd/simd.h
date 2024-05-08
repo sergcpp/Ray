@@ -492,6 +492,12 @@ template <typename T, int S> class fixed_size_simd {
         return ret;
     }
 
+    friend fixed_size_simd<T, S> exp(const fixed_size_simd<T, S> &v1) {
+        fixed_size_simd<T, S> ret;
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = std::exp(v1.comp_[i]); })
+        return ret;
+    }
+
     friend force_inline fixed_size_simd<T, S> normalize(const fixed_size_simd<T, S> &v1) { return v1 / v1.length(); }
 
     friend force_inline fixed_size_simd<T, S> normalize_len(const fixed_size_simd<T, S> &v1, T &out_len) {
@@ -554,10 +560,6 @@ force_inline fixed_size_simd<T, S> max(const fixed_size_simd<T, S> &v1, const fi
 template <typename T, int S> force_inline fixed_size_simd<T, S> abs(const fixed_size_simd<T, S> &v) {
     // TODO: find faster implementation
     return max(v, -v);
-}
-
-template <typename T, int S> force_inline fixed_size_simd<T, S> exp(const fixed_size_simd<T, S> &v) {
-    return pow(fixed_size_simd<T, S>{std::exp(1.0f)}, v);
 }
 
 template <typename T, int S>

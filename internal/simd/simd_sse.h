@@ -278,6 +278,13 @@ template <> class fixed_size_simd<float, 4> {
         return fixed_size_simd<float, 4>{comp1, vector_aligned};
     }
 
+    friend fixed_size_simd<float, 4> vectorcall exp(const fixed_size_simd<float, 4> v1) {
+        alignas(16) float comp1[4];
+        _mm_store_ps(comp1, v1.vec_);
+        UNROLLED_FOR(i, 4, { comp1[i] = expf(comp1[i]); })
+        return fixed_size_simd<float, 4>{comp1, vector_aligned};
+    }
+
     friend force_inline fixed_size_simd<float, 4> vectorcall normalize(const fixed_size_simd<float, 4> v1) {
         return v1 / v1.length();
     }
