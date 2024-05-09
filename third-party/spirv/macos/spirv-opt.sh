@@ -41,5 +41,7 @@
 --eliminate-dead-branches \
 --merge-blocks \
 --simplify-instructions \
+--strip-debug \
+--strip-nonsemantic \
 --validate-after-all \
 "$@"
