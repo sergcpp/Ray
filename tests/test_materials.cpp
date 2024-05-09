@@ -96,7 +96,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     renderer->Resize(test_img_w, test_img_h);
                 }
 
-                snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
+                snprintf(name_buf, sizeof(name_buf), "Test %-25s", test_name);
                 schedule_render_jobs(threads, *renderer, scene.get(), s, current_sample_count, denoise, partial,
                                      name_buf);
 

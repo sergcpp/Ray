@@ -99,7 +99,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             setup_test_scene(threads, *scene, -1, 0.0f, mat_desc, textures, eTestScene::Standard);
 
             char name_buf[1024];
-            snprintf(name_buf, sizeof(name_buf), "Test %s", TestName);
+            snprintf(name_buf, sizeof(name_buf), "Test %-25s", TestName);
             schedule_render_jobs(threads, *renderer, scene.get(), s, SampleCount, eDenoiseMethod::None, false,
                                  name_buf);
 
