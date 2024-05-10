@@ -28,9 +28,12 @@
 #pragma intrinsic(_InterlockedCompareExchange)
 #pragma intrinsic(_InterlockedCompareExchange64)
 
-#define InterlockedExchangeAdd _InterlockedExchangeAdd
-#define InterlockedCompareExchange _InterlockedCompareExchange
-#define InterlockedCompareExchange64 _InterlockedCompareExchange64
+#define Ray_InterlockedExchangeAdd(x, y) _InterlockedExchangeAdd((long *)(x), y)
+#define Ray_InterlockedCompareExchange(x, y, z) _InterlockedCompareExchange((long *)(x), y, z)
+#define Ray_InterlockedCompareExchange64(x, y, z) _InterlockedCompareExchange64((long long *)(x), y, z)
+
+static_assert(sizeof(long) == 4, "!");
+static_assert(sizeof(long long) == 8, "!");
 
 #ifdef _M_IX86
 // Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls
@@ -49,9 +52,9 @@ force_inline unsigned char _BitScanForward64(unsigned long *Index, unsigned __in
 #endif
 #else
 
-#define InterlockedExchangeAdd __sync_fetch_and_add
-#define InterlockedCompareExchange(dst, exch, comp) __sync_val_compare_and_swap(dst, comp, exch)
-#define InterlockedCompareExchange64(dst, exch, comp) __sync_val_compare_and_swap(dst, comp, exch)
+#define Ray_InterlockedExchangeAdd __sync_fetch_and_add
+#define Ray_InterlockedCompareExchange(dst, exch, comp) __sync_val_compare_and_swap(dst, comp, exch)
+#define Ray_InterlockedCompareExchange64(dst, exch, comp) __sync_val_compare_and_swap(dst, comp, exch)
 
 #endif
 

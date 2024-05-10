@@ -93,8 +93,8 @@ bool hash_map_insert(Span<uint64_t> entries, const uint64_t hash_key, uint32_t &
     const uint32_t base_slot = hash_map_base_slot(slot);
     for (uint32_t bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE && base_slot < entries.size();
          ++bucket_offset) {
-        const uint64_t prev_hash_key = InterlockedCompareExchange64((long long *)&entries[base_slot + bucket_offset],
-                                                                    hash_key, HASH_GRID_INVALID_HASH_KEY);
+        const uint64_t prev_hash_key =
+            Ray_InterlockedCompareExchange64(&entries[base_slot + bucket_offset], hash_key, HASH_GRID_INVALID_HASH_KEY);
         if (prev_hash_key == HASH_GRID_INVALID_HASH_KEY || prev_hash_key == hash_key) {
             cache_entry = base_slot + bucket_offset;
             return true;
@@ -137,10 +137,18 @@ fvec4 hash_grid_debug(const fvec4 &p, const fvec4 &n, const cache_grid_params_t 
 void accumulate_cache_voxel(packed_cache_voxel_t &voxel, const fvec4 &r, const uint32_t sample_data) {
     const uvec4 data = uvec4(r * RAD_CACHE_RADIANCE_SCALE);
 
-    InterlockedExchangeAdd((long *)&voxel.v[0], data.get<0>());
-    InterlockedExchangeAdd((long *)&voxel.v[1], data.get<1>());
-    InterlockedExchangeAdd((long *)&voxel.v[2], data.get<2>());
-    InterlockedExchangeAdd((long *)&voxel.v[3], sample_data);
+    if (data.get<0>()) {
+        Ray_InterlockedExchangeAdd(&voxel.v[0], data.get<0>());
+    }
+    if (data.get<1>()) {
+        Ray_InterlockedExchangeAdd(&voxel.v[1], data.get<1>());
+    }
+    if (data.get<2>()) {
+        Ray_InterlockedExchangeAdd(&voxel.v[2], data.get<2>());
+    }
+    if (sample_data) {
+        Ray_InterlockedExchangeAdd(&voxel.v[3], sample_data);
+    }
 }
 } // namespace Ref
 } // namespace Ray
