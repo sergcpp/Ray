@@ -44,7 +44,7 @@ enum class eBufType : uint8_t {
 
 struct BufHandle {
     ID3D12Resource *buf = nullptr;
-    PoolRef srv_uav_ref;
+    PoolRef cbv_srv_uav_ref;
     uint32_t generation = 0;
 
     explicit operator bool() const { return buf != nullptr; }

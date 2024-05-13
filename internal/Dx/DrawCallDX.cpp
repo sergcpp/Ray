@@ -148,11 +148,11 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        } else if (b.trg == eBindTarget::SBufRO) {
+        } else if (b.trg == eBindTarget::UBuf || b.trg == eBindTarget::SBufRO) {
             if (b.offset == 0) {
                 D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
-                    b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
-                src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.buf->handle().srv_uav_ref.offset;
+                    b.handle.buf->handle().cbv_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+                src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.buf->handle().cbv_srv_uav_ref.offset;
 
                 D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
                 dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
@@ -177,8 +177,8 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
         } else if (b.trg == eBindTarget::SBufRW) {
             if (b.offset == 0) {
                 D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
-                    b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
-                src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.buf->handle().srv_uav_ref.offset + 1);
+                    b.handle.buf->handle().cbv_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+                src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.buf->handle().cbv_srv_uav_ref.offset + 1);
 
                 D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
                 dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
