@@ -118,6 +118,9 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     size_ = new_size;
     assert(size_ > 0);
+    if (type_ == eBufType::Uniform) {
+        size_ = ((size_ + 255) / 256) * 256;
+    }
 
     ID3D12Device *device = ctx_->device();
 
@@ -164,8 +167,20 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     const bool requires_uav = (type_ == eBufType::Storage || type_ == eBufType::Indirect);
 
-    const PoolRef new_srv_uav_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
-    { // Create default SRV
+    const PoolRef new_cbv_srv_uav_ref =
+        ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
+    if (type_ == eBufType::Uniform) {
+        // Create default CBV
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
+        cbv_desc.BufferLocation = new_buf->GetGPUVirtualAddress();
+        cbv_desc.SizeInBytes = size_;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_cbv_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) *
+                           new_cbv_srv_uav_ref.offset;
+        device->CreateConstantBufferView(&cbv_desc, dest_handle);
+    } else {
+        // Create default SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
@@ -175,9 +190,9 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
         srv_desc.Buffer.NumElements = size_ / sizeof(uint32_t);
         srv_desc.Buffer.StructureByteStride = 0;
 
-        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        dest_handle.ptr +=
-            device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * new_srv_uav_ref.offset;
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_cbv_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) *
+                           new_cbv_srv_uav_ref.offset;
         device->CreateShaderResourceView(new_buf, &srv_desc, dest_handle);
     }
     if (requires_uav) { // Create default UAV
@@ -189,9 +204,9 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
         uav_desc.Buffer.NumElements = size_ / sizeof(uint32_t);
         uav_desc.Buffer.StructureByteStride = 0;
 
-        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_cbv_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
         dest_handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) *
-                           (new_srv_uav_ref.offset + 1);
+                           (new_cbv_srv_uav_ref.offset + 1);
         device->CreateUnorderedAccessView(new_buf, nullptr, &uav_desc, dest_handle);
     }
 
@@ -222,16 +237,16 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
             // destroy previous buffer
             handle_.buf->Release();
-            ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.srv_uav_ref);
+            ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.cbv_srv_uav_ref);
         } else {
             // destroy previous buffer
             ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.buf);
-            ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.srv_uav_ref);
+            ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.cbv_srv_uav_ref);
         }
     }
 
     handle_.buf = new_buf;
-    handle_.srv_uav_ref = new_srv_uav_ref;
+    handle_.cbv_srv_uav_ref = new_cbv_srv_uav_ref;
     handle_.generation = g_GenCounter++;
     resource_state = new_buf_state;
 }
@@ -240,7 +255,7 @@ void Ray::Dx::Buffer::Free() {
     assert(mapped_offset_ == 0xffffffff && mapped_size_ == 0 && !mapped_ptr_);
     if (handle_.buf) {
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.buf);
-        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.srv_uav_ref);
+        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.cbv_srv_uav_ref);
 
         handle_ = {};
         size_ = 0;
