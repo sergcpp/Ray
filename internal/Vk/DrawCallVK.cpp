@@ -44,9 +44,11 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
                                                                             : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             new_write.descriptorCount = 1;
             new_write.pImageInfo = &info;
-        } else if (b.trg == eBindTarget::Tex3D) {
+        } else if (b.trg == eBindTarget::Tex3D || b.trg == eBindTarget::Tex3DSampled) {
             auto &info = img_sampler_infos[descr_sizes.img_sampler_count++];
-            info.sampler = b.handle.tex3d->handle().sampler;
+            if (b.trg == eBindTarget::Tex3DSampled) {
+                info.sampler = b.handle.tex3d->handle().sampler;
+            }
             info.imageView = b.handle.tex3d->handle().views[0];
             info.imageLayout = VKImageLayoutForState(b.handle.tex3d->resource_state);
 
@@ -54,7 +56,8 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
             new_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             new_write.dstBinding = b.loc;
             new_write.dstArrayElement = b.offset;
-            new_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            new_write.descriptorType = (b.trg == eBindTarget::Tex3DSampled) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                                                                            : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             new_write.descriptorCount = 1;
             new_write.pImageInfo = &info;
         } else if (b.trg == eBindTarget::Tex2DArray || b.trg == eBindTarget::Tex2DArraySampled) {

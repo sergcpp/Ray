@@ -193,6 +193,18 @@ bool Ray::Vk::Shader::InitFromSPIRV(Span<const uint32_t> shader_code, const eSha
                 new_item.loc = decorations.binding;
                 new_item.set = decorations.descriptor_set;
                 new_item.count = props.runtime_array ? 0 : props.count;
+            } else if (storage_class == eSPIRVStorageClass::Uniform) {
+                const spirv_buffer_props_t props = parse_buffer_props(ps, result_id);
+                const spirv_decoration_t &decorations = ps.decorations[result_id];
+
+                Descr &new_item = unif_bindings.emplace_back();
+                if (debug_name) {
+                    new_item.name = debug_name;
+                }
+                new_item.desc_type = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                new_item.loc = decorations.binding;
+                new_item.set = decorations.descriptor_set;
+                new_item.count = props.runtime_array ? 0 : props.count;
             }
         } break;
         }
