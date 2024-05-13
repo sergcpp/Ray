@@ -161,7 +161,7 @@ void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture2
 
     const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_FULL_IMG_SLOT, full_buf},
                                 {eBindTarget::Image, Postprocess::IN_HALF_IMG_SLOT, half_buf},
-                                {eBindTarget::Tex3D, Postprocess::TONEMAP_LUT_SLOT, tonemap_lut_},
+                                {eBindTarget::Tex3DSampled, Postprocess::TONEMAP_LUT_SLOT, tonemap_lut_},
                                 {eBindTarget::Image, Postprocess::OUT_IMG_SLOT, out_pixels},
                                 {eBindTarget::Image, Postprocess::OUT_VARIANCE_IMG_SLOT, out_variance},
                                 {eBindTarget::Image, Postprocess::OUT_REQ_SAMPLES_IMG_SLOT, out_req_samples}};
@@ -229,7 +229,7 @@ void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
 
     SmallVector<Binding, 16> bindings = {{eBindTarget::Tex2DSampled, NLMFilter::IN_IMG_SLOT, img_buf},
                                          {eBindTarget::Tex2DSampled, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
-                                         {eBindTarget::Tex3D, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
+                                         {eBindTarget::Tex3DSampled, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
                                          {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
 
@@ -411,7 +411,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
         {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset, input_buf},
         {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
-        {eBindTarget::Tex3D, Convolution::TONEMAP_LUT_SLOT, tonemap_lut_},
+        {eBindTarget::Tex3DSampled, Convolution::TONEMAP_LUT_SLOT, tonemap_lut_},
         {eBindTarget::Image, Convolution::OUT_IMG_SLOT, out_img},
         {eBindTarget::Image, Convolution::OUT_TONEMAPPED_IMG_SLOT, out_tonemapped_img}};
 
