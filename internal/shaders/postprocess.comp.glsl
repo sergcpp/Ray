@@ -47,7 +47,7 @@ void main() {
     [[dont_flatten]] if (g_params.tonemap_mode == 0) {
         tonemapped_res = TonemapStandard(g_params.inv_gamma, full_val);
     } else {
-        tonemapped_res = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, full_val);
+        tonemapped_res = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, full_val);
     }
 #if DEBUG_ADAPTIVE_SAMPLING
     if ((g_params.iteration % 5) != 0 /*&& req_samples >= g_params.iteration*/) {

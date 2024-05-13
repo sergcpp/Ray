@@ -220,7 +220,7 @@ void main() {
     [[dont_flatten]] if (g_params.tonemap_mode == 0) {
         sum_output = TonemapStandard(g_params.inv_gamma, sum_output);
     } else {
-        sum_output = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, sum_output);
+        sum_output = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, sum_output);
     }
     imageStore(g_out_img, gi, sum_output);
 }
