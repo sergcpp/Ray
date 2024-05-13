@@ -537,8 +537,8 @@ void main() {
                 val0 = TonemapStandard(g_params.inv_gamma, val0);
                 val1 = TonemapStandard(g_params.inv_gamma, val1);
             } else {
-                val0 = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, val0);
-                val1 = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, val1);
+                val0 = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, val0);
+                val1 = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, val1);
             }
         #endif
             imageStore(g_out_tonemapped_img, ivec2(x + j * 16 + jj, y), val0);
@@ -829,8 +829,8 @@ void main() {
             val0 = TonemapStandard(g_params.inv_gamma, val0);
             val1 = TonemapStandard(g_params.inv_gamma, val1);
         } else {
-            val0 = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, val0);
-            val1 = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, val1);
+            val0 = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, val0);
+            val1 = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, val1);
         }
     #endif
         imageStore(g_out_tonemapped_img, ivec2(x + j, y), val0);
