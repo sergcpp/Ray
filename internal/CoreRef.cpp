@@ -2411,7 +2411,7 @@ Ray::Ref::fvec4 Ray::Ref::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage,
 
 #if USE_STOCH_TEXTURE_FILTERING
     // Jitter UVs
-    uvs += rand - 0.5f;
+    uvs += rand;
     const ivec2 iuvs = ivec2(uvs);
 
     const auto &p00 = storage.Get(tex, iuvs.get<0>(), iuvs.get<1>(), 0);

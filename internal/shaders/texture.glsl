@@ -66,12 +66,14 @@ vec3 SampleLatlong_RGBE(const uint index, ivec2 tex_size, const vec3 dir, const 
     const float u = fract(0.5 * phi / PI);
 
     const uint tex = (index & 0x00ffffff);
-    const vec2 uvs = vec2(u, theta) * vec2(tex_size);
 
 #if USE_STOCH_TEXTURE_FILTERING
-    const vec4 p00 = texelFetch(g_textures[nonuniformEXT(tex)], min(ivec2(uvs + rand - 0.5), tex_size - 1), 0);
+    const vec2 uvs = vec2(u, theta) + (rand / tex_size);
+    const vec4 p00 = textureLod(sampler2D(g_textures[nonuniformEXT(tex)], g_sampler), uvs, 0.0);
     return rgbe_to_rgb(p00);
 #else // USE_STOCH_TEXTURE_FILTERING
+    const vec2 uvs = vec2(u, theta) * vec2(tex_size);
+
     const vec4 p00 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(0, 0));
     const vec4 p01 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(1, 0));
     const vec4 p10 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(0, 1));
