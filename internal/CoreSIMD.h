@@ -4956,17 +4956,17 @@ void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint3
     where(phi < 0.0f, phi) += 2 * PI;
     where(phi > 2 * PI, phi) -= 2 * PI;
 
-    const fvec<S> u = 0.5f * phi / PI;
+    const fvec<S> u = fract(0.5f * phi / PI);
 
     const int tex = int(index & 0x00ffffff);
     float sz[2];
     storage.GetFRes(tex, 0, sz);
 
-    fvec<S> uvs[2] = {clamp(u * sz[0], 0.0f, sz[0] - 1.0f), clamp(theta * sz[1], 0.0f, sz[1] - 1.0f)};
+    fvec<S> uvs[2] = {u * sz[0], theta * sz[1]};
 
 #if USE_STOCH_TEXTURE_FILTERING
-    uvs[0] += rand[0] - 0.5f;
-    uvs[1] += rand[1] - 0.5f;
+    uvs[0] += rand[0];
+    uvs[1] += rand[1];
 
     const ivec<S> iuvs[2] = {ivec<S>(uvs[0]), ivec<S>(uvs[1])};
 
