@@ -235,7 +235,7 @@ force_inline fvec4 FetchWeatherTex(const int x, const int y) {
 }
 
 fvec4 SampleWeatherTex(fvec4 uv) {
-    uv = uv * fvec4(WEATHER_TEX_RES);
+    uv = fract(uv - 0.5f / WEATHER_TEX_RES) * fvec4(WEATHER_TEX_RES);
     auto iuv0 = ivec4{uv};
     iuv0 = clamp(iuv0, ivec4{0}, ivec4{WEATHER_TEX_RES - 1});
     const ivec4 iuv1 = (iuv0 + 1) & ivec4{WEATHER_TEX_RES - 1};
@@ -257,7 +257,7 @@ force_inline float Fetch3dNoiseTex(const int x, const int y, const int z) {
 }
 
 float Sample3dNoiseTex(fvec4 uvw) {
-    uvw *= NOISE_3D_RES;
+    uvw = fract(uvw - 0.5f / NOISE_3D_RES) * NOISE_3D_RES;
     ivec4 iuvw0 = ivec4(uvw);
     iuvw0 = clamp(iuvw0, ivec4{0}, ivec4{NOISE_3D_RES - 1});
     const ivec4 iuvw1 = (iuvw0 + 1) & ivec4{NOISE_3D_RES - 1};
@@ -305,7 +305,7 @@ float GetCloudsDensity(const atmosphere_params_t &params, fvec4 local_position, 
 
     fvec4 weather_uv = {local_position.get<0>() + params.clouds_offset_x,
                         local_position.get<2>() + params.clouds_offset_z, 0.0f, 0.0f};
-    weather_uv = fract(weather_uv * 0.00007f);
+    weather_uv *= 0.00007f;
 
     const fvec4 weather_sample = SampleWeatherTex(weather_uv);
 
@@ -320,7 +320,6 @@ float GetCloudsDensity(const atmosphere_params_t &params, fvec4 local_position, 
     }
 
     local_position /= 1.5f * (params.clouds_height_end - params.clouds_height_beg);
-    local_position = fract(local_position);
 
     const float noise_read = Sample3dNoiseTex(local_position);
     return 3.0f * Ray::mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, out_height_fraction) *
