@@ -360,7 +360,7 @@ float GetCloudsDensity(vec3 local_position, out float out_local_height, out floa
 
     vec2 weather_uv = vec2(local_position.x + g_atmosphere_params.clouds_offset_x,
                            local_position.z + g_atmosphere_params.clouds_offset_z);
-    weather_uv = fract(weather_uv * 0.00007);
+    weather_uv *= 0.00007;
 
     const vec3 weather_sample = textureLod(g_weather_tex, weather_uv, 0.0).xyz;
 
@@ -375,7 +375,6 @@ float GetCloudsDensity(vec3 local_position, out float out_local_height, out floa
     }
 
     local_position /= 1.5 * (g_atmosphere_params.clouds_height_end - g_atmosphere_params.clouds_height_beg);
-    local_position = fract(local_position);
 
     const float noise_read = textureLod(g_noise3d_tex, local_position, 0.0).x;
     return 3.0 * mix(max(0.0, 1.0 - cloud_type * 2.0), 1.0, out_height_fraction) *
