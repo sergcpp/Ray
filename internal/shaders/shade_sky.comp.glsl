@@ -683,6 +683,9 @@ void main() {
 
     vec3 sky_color = IntegrateScattering(vec3(0.0, g_atmosphere_params.viewpoint_height, 0.0), I, MAX_DIST, rand_hash);
 
+    const vec3 env_col = is_indirect(r.depth) ? g_params.env_col.xyz : g_params.back_col.xyz;
+    sky_color *= env_col;
+
 #if USE_NEE
 
 #if USE_HIERARCHICAL_NEE
