@@ -8,6 +8,8 @@ INTERFACE_START(ShadeSky)
 struct Params {
     vec4 light_dir;
     vec4 light_col;
+    vec4 env_col;
+    vec4 back_col;
     //
     uint rand_seed;
     int env_qtree_levels;

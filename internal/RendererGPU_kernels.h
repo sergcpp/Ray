@@ -844,6 +844,8 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
     const uint32_t rand_seed = Ref::hash(iteration);
 
     ShadeSky::Params uniform_params = {};
+    memcpy(&uniform_params.env_col[0], env.env_col, 3 * sizeof(float));
+    memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
     uniform_params.rand_seed = rand_seed;
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
