@@ -269,7 +269,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
 
     std::unique_ptr<color_rg8_t[]> repacked_normalmap;
-    bool reconstruct_z = false;
+    bool reconstruct_z = _t.reconstruct_z;
 
     const void *tex_data = _t.data.data();
 
@@ -468,7 +468,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     uint32_t data_size[16] = {};
 
     std::unique_ptr<uint8_t[]> repacked_data;
-    bool reconstruct_z = false, is_YCoCg = _t.is_YCoCg;
+    bool reconstruct_z = _t.reconstruct_z, is_YCoCg = _t.is_YCoCg;
 
     if (_t.format == eTextureFormat::RGBA8888) {
         if (!_t.is_normalmap) {
