@@ -349,8 +349,7 @@ std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint3
     //
     // Allocate memory
     //
-    Buffer scratch_buf =
-        Buffer("BLAS Scratch Buf", ctx_, eBufType::Storage, next_power_of_two(needed_build_scratch_size));
+    Buffer scratch_buf = Buffer("BLAS Scratch Buf", ctx_, eBufType::Storage, needed_build_scratch_size);
     VkDeviceAddress scratch_addr = scratch_buf.vk_device_address();
 
     Buffer acc_structs_buf("BLAS Before-Compaction Buf", ctx_, eBufType::AccStructure, needed_total_acc_struct_size);
