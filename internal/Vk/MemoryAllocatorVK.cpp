@@ -15,13 +15,12 @@ uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProper
             // skip for now
             continue;
         }
-        if (mem_type_bits & 1u) {
+        if (mem_type_bits & (1u << i)) {
             if ((mem_type.propertyFlags & desired_mem_flags) == desired_mem_flags &&
                 mem_properties->memoryHeaps[mem_type.heapIndex].size >= desired_size) {
                 return i;
             }
         }
-        mem_type_bits = (mem_type_bits >> 1u);
     }
     return 0xffffffff;
 }
