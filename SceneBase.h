@@ -188,6 +188,7 @@ struct tex_desc_t {
     bool is_YCoCg = false;             ///< Texture is in YCoCg format
     bool force_no_compression = false; ///< Disable compression (guarantee the best quality)
     bool generate_mipmaps = false;     ///< Generate mipmaps for this texture
+    bool reconstruct_z = false;        ///< Reconstruct normalmap z component (instead of setting it to 1)
 };
 
 /// Directional lightsource description

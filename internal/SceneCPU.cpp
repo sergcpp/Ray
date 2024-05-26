@@ -64,7 +64,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     const int res[2] = {_t.w, _t.h};
 
     bool use_compression = use_tex_compression_ && !_t.force_no_compression;
-    bool reconstruct_z = false, is_YCoCg = _t.is_YCoCg;
+    bool reconstruct_z = _t.reconstruct_z, is_YCoCg = _t.is_YCoCg;
 
     int storage = -1, index = -1;
     if (_t.format == eTextureFormat::RGBA8888) {
