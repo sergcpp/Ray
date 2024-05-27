@@ -101,7 +101,7 @@ struct TransitionInfo {
         : p_buf(_p_buf), new_state(_new_state), update_internal_state(true) {}
 };
 
-void TransitionResourceStates(void *_cmd_buf, eStageBits src_stages_mask, eStageBits dst_stages_mask,
+void TransitionResourceStates(VkCommandBuffer cmd_buf, eStageBits src_stages_mask, eStageBits dst_stages_mask,
                               Span<const TransitionInfo> transitions);
 } // namespace Vk
 } // namespace Ray

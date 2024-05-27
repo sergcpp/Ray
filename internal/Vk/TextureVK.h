@@ -69,9 +69,9 @@ class Texture2D {
 
     void Free();
 
-    void InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_buf, MemoryAllocators *mem_allocs, const Tex2DParams &p,
+    void InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, const Tex2DParams &p,
                          ILog *log);
-    void InitFromRAWData(Buffer &sbuf, int data_off[6], void *_cmd_buf, MemoryAllocators *mem_allocs,
+    void InitFromRAWData(Buffer &sbuf, int data_off[6], VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
                          const Tex2DParams &p, ILog *log);
 
   public:
@@ -86,9 +86,9 @@ class Texture2D {
               const Tex2DParams &_params, ILog *log)
         : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, ready_(true), name_(name), params(_params) {}
     Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
-              void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
+              VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6], const Tex2DParams &p,
-              Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
+              Buffer &stage_buf, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const Texture2D &rhs) = delete;
     Texture2D(Texture2D &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Texture2D();
@@ -103,13 +103,13 @@ class Texture2D {
         params = _params;
         ready_ = true;
     }
-    void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf,
+    void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf,
               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
-    void Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf,
+    void Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf,
               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
 
     bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, eTexBlock block, bool is_srgb,
-                 void *_cmd_buf, MemoryAllocators *mem_allocs, ILog *log);
+                 VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, ILog *log);
 
     Context *ctx() const { return ctx_; }
     const TexHandle &handle() const { return handle_; }
@@ -136,18 +136,18 @@ class Texture2D {
     void ApplySampling(const SamplingParams sampling, ILog *log) { SetSampling(sampling); }
 
     void SetSubImage(int level, int offsetx, int offsety, int sizex, int sizey, eTexFormat format, const Buffer &sbuf,
-                     void *_cmd_buf, int data_off, int data_len);
+                     VkCommandBuffer cmd_buf, int data_off, int data_len);
 };
 
-void CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, uint32_t src_level, uint32_t src_x, uint32_t src_y,
+void CopyImageToImage(VkCommandBuffer cmd_buf, Texture2D &src_tex, uint32_t src_level, uint32_t src_x, uint32_t src_y,
                       Texture2D &dst_tex, uint32_t dst_level, uint32_t dst_x, uint32_t dst_y, uint32_t width,
                       uint32_t height);
 
 void CopyImageToBuffer(const Texture2D &src_tex, int level, int x, int y, int w, int h, const Buffer &dst_buf,
-                       void *_cmd_buf, int data_off);
+                       VkCommandBuffer cmd_buf, int data_off);
 
-void ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf);
-void ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd_buf);
+void ClearColorImage(Texture2D &tex, const float rgba[4], VkCommandBuffer cmd_buf);
+void ClearColorImage(Texture2D &tex, const uint32_t rgba[4], VkCommandBuffer cmd_buf);
 
 class Texture1D {
     Buffer *buf_ = nullptr;
@@ -206,7 +206,7 @@ class Texture3D {
     void Init(const Tex3DParams &params, MemoryAllocators *mem_allocs, ILog *log);
 
     void SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez, eTexFormat format,
-                     const Buffer &sbuf, void *_cmd_buf, int data_off, int data_len);
+                     const Buffer &sbuf, VkCommandBuffer cmd_buf, int data_off, int data_len);
 };
 
 VkFormat VKFormatFromTexFormat(eTexFormat format);

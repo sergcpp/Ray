@@ -98,7 +98,7 @@ class Buffer {
     template <typename T = uint8_t> T *mapped_ptr() const { return reinterpret_cast<T *>(mapped_ptr_); }
 
     void UpdateSubRegion(uint32_t offset, uint32_t size, const Buffer &init_buf, uint32_t init_off = 0,
-                         void *cmd_buf = nullptr);
+                         VkCommandBuffer cmd_buf = {});
 
     void Resize(uint32_t new_size, bool keep_content = true);
     void Free();
@@ -111,17 +111,17 @@ class Buffer {
     uint8_t *MapRange(uint32_t offset, uint32_t size, bool persistent = false);
     void Unmap();
 
-    void Fill(uint32_t dst_offset, uint32_t size, uint32_t data, void *_cmd_buf);
-    void UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, void *_cmd_buf);
+    void Fill(uint32_t dst_offset, uint32_t size, uint32_t data, VkCommandBuffer cmd_buf);
+    void UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, VkCommandBuffer cmd_buf);
 
     mutable eResState resource_state = eResState::Undefined;
 };
 
 void CopyBufferToBuffer(Buffer &src, uint32_t src_offset, Buffer &dst, uint32_t dst_offset, uint32_t size,
-                        void *_cmd_buf);
+                        VkCommandBuffer cmd_buf);
 // Update buffer using stage buffer
 bool UpdateBuffer(Buffer &dst, uint32_t dst_offset, uint32_t data_size, const void *data, Buffer &stage,
-                  uint32_t map_offset, uint32_t map_size, void *_cmd_buf);
+                  uint32_t map_offset, uint32_t map_size, VkCommandBuffer cmd_buf);
 
 } // namespace Vk
 } // namespace Ray

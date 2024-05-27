@@ -183,17 +183,17 @@ Ray::Vk::Texture2D::Texture2D(const char *name, Context *ctx, const Tex2DParams 
 }
 
 Ray::Vk::Texture2D::Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size,
-                              const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs,
+                              const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
                               eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
-    Init(data, size, p, stage_buf, _cmd_buf, mem_allocs, load_status, log);
+    Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
 
 Ray::Vk::Texture2D::Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6],
-                              const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs,
+                              const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
                               eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
-    Init(data, size, p, stage_buf, _cmd_buf, mem_allocs, load_status, log);
+    Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
 
 Ray::Vk::Texture2D::~Texture2D() { Free(); }
@@ -223,7 +223,7 @@ void Ray::Vk::Texture2D::Init(const Tex2DParams &p, MemoryAllocators *mem_allocs
     ready_ = true;
 }
 
-void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf, void *_cmd_buf,
+void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf, VkCommandBuffer cmd_buf,
                               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
@@ -236,7 +236,7 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         _p.format = eTexFormat::RawRGBA8888;
         _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
 
-        InitFromRAWData(&sbuf, 0, _cmd_buf, mem_allocs, _p, log);
+        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, _p, log);
         // mark it as not ready
         ready_ = false;
         (*load_status) = eTexLoadStatus::CreatedDefault;
@@ -245,7 +245,7 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         memcpy(stage_data, data, size);
         sbuf.Unmap();
 
-        InitFromRAWData(&sbuf, 0, _cmd_buf, mem_allocs, p, log);
+        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, p, log);
 
         ready_ = true;
         (*load_status) = eTexLoadStatus::CreatedFromData;
@@ -253,7 +253,7 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
 }
 
 void Ray::Vk::Texture2D::Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &sbuf,
-                              void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
+                              VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
@@ -266,7 +266,7 @@ void Ray::Vk::Texture2D::Init(const void *data[6], const int size[6], const Tex2
         _p.format = eTexFormat::RawRGBA8888;
         _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
 
-        InitFromRAWData(sbuf, data_off, _cmd_buf, mem_allocs, _p, log);
+        InitFromRAWData(sbuf, data_off, cmd_buf, mem_allocs, _p, log);
         // mark it as not ready
         ready_ = false;
         cubemap_ready_ = 0;
@@ -287,7 +287,7 @@ void Ray::Vk::Texture2D::Init(const void *data[6], const int size[6], const Tex2
         }
         sbuf.Unmap();
 
-        InitFromRAWData(sbuf, data_off, _cmd_buf, mem_allocs, p, log);
+        InitFromRAWData(sbuf, data_off, cmd_buf, mem_allocs, p, log);
 
         ready_ = (cubemap_ready_ & (1u << 0u)) == 1;
         for (unsigned i = 1; i < 6; i++) {
@@ -314,7 +314,7 @@ void Ray::Vk::Texture2D::Free() {
 }
 
 bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                                 const eTexBlock block, const bool is_srgb, void *_cmd_buf,
+                                 const eTexBlock block, const bool is_srgb, VkCommandBuffer cmd_buf,
                                  MemoryAllocators *mem_allocs, ILog *log) {
     VkImage new_image = VK_NULL_HANDLE;
     VkImageView new_image_view = VK_NULL_HANDLE;
@@ -473,8 +473,6 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         }
 
         if (copy_regions_count) {
-            auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
             VkPipelineStageFlags src_stages = 0, dst_stages = 0;
             SmallVector<VkImageMemoryBarrier, 2> barriers;
 
@@ -558,7 +556,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     return true;
 }
 
-void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_buf, MemoryAllocators *mem_allocs,
+void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
                                          const Tex2DParams &p, ILog *log) {
     Free();
 
@@ -692,7 +690,6 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
     if (sbuf) {
         assert(p.samples == 1);
         assert(sbuf && sbuf->type() == eBufType::Upload);
-        auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
         VkPipelineStageFlags src_stages = 0, dst_stages = 0;
         SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -789,7 +786,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
     }
 }
 
-void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_cmd_buf, MemoryAllocators *mem_allocs,
+void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
                                          const Tex2DParams &p, ILog *log) {
     assert(p.w > 0 && p.h > 0);
     Free();
@@ -897,7 +894,6 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
 
     assert(p.samples == 1);
     assert(sbuf.type() == eBufType::Upload);
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -974,15 +970,13 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
 }
 
 void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const int offsety, const int sizex,
-                                     const int sizey, const eTexFormat format, const Buffer &sbuf, void *_cmd_buf,
+                                     const int sizey, const eTexFormat format, const Buffer &sbuf, VkCommandBuffer cmd_buf,
                                      const int data_off, const int data_len) {
     assert(format == params.format);
     assert(params.samples == 1);
     assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
     assert(offsety >= 0 && offsety + sizey <= std::max(params.h >> level, 1));
-
     assert(sbuf.type() == eBufType::Upload);
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -1089,11 +1083,9 @@ void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Vk::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
+void Ray::Vk::CopyImageToImage(VkCommandBuffer cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
                                const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level, const uint32_t dst_x,
                                const uint32_t dst_y, const uint32_t width, const uint32_t height) {
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
     assert(src_tex.resource_state == eResState::CopySrc);
     assert(dst_tex.resource_state == eResState::CopyDst);
 
@@ -1123,9 +1115,7 @@ void Ray::Vk::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_
 }
 
 void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const int x, const int y, const int w,
-                                const int h, const Buffer &dst_buf, void *_cmd_buf, const int data_off) {
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
+                                const int h, const Buffer &dst_buf, VkCommandBuffer cmd_buf, const int data_off) {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
     SmallVector<VkImageMemoryBarrier, 1> img_barriers;
@@ -1195,8 +1185,7 @@ void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
                                                 dst_buf.vk_handle(), 1, &region);
 }
 
-void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], VkCommandBuffer cmd_buf) {
     assert(tex.resource_state == eResState::CopyDst);
 
     VkClearColorValue clear_val = {};
@@ -1211,8 +1200,7 @@ void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_bu
                                           1, &clear_range);
 }
 
-void Ray::Vk::ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+void Ray::Vk::ClearColorImage(Texture2D &tex, const uint32_t rgba[4], VkCommandBuffer cmd_buf) {
     assert(tex.resource_state == eResState::CopyDst);
 
     VkClearColorValue clear_val = {};
@@ -1455,15 +1443,13 @@ void Ray::Vk::Texture3D::Free() {
 }
 
 void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez,
-                                     eTexFormat format, const Buffer &sbuf, void *_cmd_buf, int data_off,
+                                     eTexFormat format, const Buffer &sbuf, VkCommandBuffer cmd_buf, int data_off,
                                      int data_len) {
     assert(format == params.format);
     assert(offsetx >= 0 && offsetx + sizex <= params.w);
     assert(offsety >= 0 && offsety + sizey <= params.h);
     assert(offsetz >= 0 && offsetz + sizez <= params.d);
-
     assert(sbuf.type() == eBufType::Upload);
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;

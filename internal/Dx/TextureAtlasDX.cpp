@@ -499,9 +499,7 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
 }
 
 void Ray::Dx::TextureAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
-                                         const Buffer &dst_buf, void *_cmd_buf, const int data_off) const {
-    auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
-
+                                         const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf, const int data_off) const {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
     if (resource_state != eResState::CopySrc) {

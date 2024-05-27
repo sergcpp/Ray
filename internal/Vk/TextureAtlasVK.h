@@ -52,7 +52,7 @@ class TextureAtlas {
 
     int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
 
-    void CopyRegionTo(int page, int x, int y, int w, int h, const Buffer &dst_buf, void *_cmd_buf, int data_off) const;
+    void CopyRegionTo(int page, int x, int y, int w, int h, const Buffer &dst_buf, VkCommandBuffer cmd_buf, int data_off) const;
 
     mutable eResState resource_state = eResState::Undefined;
 };

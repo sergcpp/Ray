@@ -75,9 +75,8 @@ Ray::Dx::Buffer &Ray::Dx::Buffer::operator=(Buffer &&rhs) noexcept {
 }
 
 void Ray::Dx::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size, const Buffer &init_buf,
-                                      const uint32_t init_off, void *_cmd_buf) {
+                                      const uint32_t init_off, ID3D12GraphicsCommandList *cmd_buf) {
     assert(init_buf.type_ == eBufType::Upload || init_buf.type_ == eBufType::Readback);
-    auto cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList *>(_cmd_buf);
 
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
@@ -324,9 +323,8 @@ void Ray::Dx::Buffer::Unmap() {
     mapped_size_ = 0;
 }
 
-void Ray::Dx::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const uint32_t data, void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList *>(_cmd_buf);
-
+void Ray::Dx::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const uint32_t data,
+                           ID3D12GraphicsCommandList *cmd_buf) {
     ID3D12Device *device = ctx_->device();
 
     SmallVector<D3D12_RESOURCE_BARRIER, 1> barriers;
@@ -397,7 +395,8 @@ void Ray::Dx::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
     resource_state = eResState::UnorderedAccess;
 }
 
-void Ray::Dx::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, void *_cmd_buf) {
+void Ray::Dx::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data,
+                                      ID3D12GraphicsCommandList *cmd_buf) {
     if (type_ == eBufType::Upload) {
         uint8_t *mapped_ptr = Map();
         memcpy(mapped_ptr, data, size);
@@ -410,14 +409,12 @@ void Ray::Dx::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const 
         memcpy(mapped_ptr, data, size);
         temp_upload_buf.Unmap();
 
-        CopyBufferToBuffer(temp_upload_buf, 0, *this, dst_offset, size, _cmd_buf);
+        CopyBufferToBuffer(temp_upload_buf, 0, *this, dst_offset, size, cmd_buf);
     }
 }
 
 void Ray::Dx::CopyBufferToBuffer(Buffer &src, const uint32_t src_offset, Buffer &dst, const uint32_t dst_offset,
-                                 const uint32_t size, void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList *>(_cmd_buf);
-
+                                 const uint32_t size, ID3D12GraphicsCommandList *cmd_buf) {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
     if (/*dst.resource_state != eResState::Undefined &&*/ src.resource_state != eResState::CopySrc) {
