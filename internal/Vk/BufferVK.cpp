@@ -92,9 +92,8 @@ VkDeviceAddress Ray::Vk::Buffer::vk_device_address() const {
 }
 
 void Ray::Vk::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size, const Buffer &init_buf,
-                                      const uint32_t init_off, void *_cmd_buf) {
+                                      const uint32_t init_off, VkCommandBuffer cmd_buf) {
     assert(init_buf.type_ == eBufType::Upload || init_buf.type_ == eBufType::Readback);
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 2> barriers;
@@ -312,9 +311,8 @@ void Ray::Vk::Buffer::Unmap() {
     mapped_offset_ = 0xffffffff;
 }
 
-void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const uint32_t data, void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
+void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const uint32_t data,
+                           VkCommandBuffer cmd_buf) {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> barriers;
 
@@ -347,9 +345,7 @@ void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
     resource_state = eResState::CopyDst;
 }
 
-void Ray::Vk::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
+void Ray::Vk::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, VkCommandBuffer cmd_buf) {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> barriers;
 
@@ -383,9 +379,7 @@ void Ray::Vk::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const 
 }
 
 void Ray::Vk::CopyBufferToBuffer(Buffer &src, const uint32_t src_offset, Buffer &dst, const uint32_t dst_offset,
-                                 const uint32_t size, void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
+                                 const uint32_t size, VkCommandBuffer cmd_buf) {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 2> barriers;
 

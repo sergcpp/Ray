@@ -7,6 +7,7 @@
 #include "../../Span.h"
 
 enum D3D12_RESOURCE_STATES;
+struct ID3D12GraphicsCommandList;
 
 namespace Ray {
 namespace Dx {
@@ -104,7 +105,7 @@ struct TransitionInfo {
         : p_buf(_p_buf), new_state(_new_state), update_internal_state(true) {}
 };
 
-void TransitionResourceStates(void *_cmd_buf, eStageBits src_stages_mask, eStageBits dst_stages_mask,
+void TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, eStageBits src_stages_mask, eStageBits dst_stages_mask,
                               Span<const TransitionInfo> transitions);
 } // namespace Vk
 } // namespace Ray

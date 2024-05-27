@@ -17,8 +17,8 @@
 #include <WinPixEventRuntime/pix3.h>
 #endif
 
-Ray::Dx::DebugMarker::DebugMarker(Context *, void *_cmd_buf, const char *name)
-    : cmd_buf_((ID3D12GraphicsCommandList *)_cmd_buf) {
+Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf, const char *name)
+    : cmd_buf_(_cmd_buf) {
 #ifdef ENABLE_PIX
     PIXBeginEvent(cmd_buf_, 0, name);
 #else

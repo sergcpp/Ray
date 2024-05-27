@@ -50,10 +50,8 @@ D3D12_RESOURCE_STATES Ray::Dx::DXResourceState(const eResState state) { return g
 // uint32_t Ray::Vk::VKPipelineStagesForState(const eResState state) { return
 // g_pipeline_stages_per_state_vk[int(state)]; }
 
-void Ray::Dx::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stages_mask,
+void Ray::Dx::TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, const eStageBits src_stages_mask,
                                        const eStageBits dst_stages_mask, Span<const TransitionInfo> transitions) {
-    auto cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList *>(_cmd_buf);
-
     SmallVector<D3D12_RESOURCE_BARRIER, 64> barriers;
 
     for (const TransitionInfo &transition : transitions) {

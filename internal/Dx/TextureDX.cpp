@@ -146,17 +146,17 @@ Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const Tex2DParams 
 }
 
 Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size,
-                              const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs,
+                              const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
                               eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
-    Init(data, size, p, stage_buf, _cmd_buf, mem_allocs, load_status, log);
+    Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
 
 Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6],
-                              const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs,
+                              const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
                               eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
-    Init(data, size, p, stage_buf, _cmd_buf, mem_allocs, load_status, log);
+    Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
 
 Ray::Dx::Texture2D::~Texture2D() { Free(); }
@@ -186,7 +186,7 @@ void Ray::Dx::Texture2D::Init(const Tex2DParams &p, MemoryAllocators *mem_allocs
     ready_ = true;
 }
 
-void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf, void *_cmd_buf,
+void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf,
                               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
@@ -200,7 +200,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         _p.format = eTexFormat::RawRGBA8888;
         _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
 
-        InitFromRAWData(&sbuf, 0, _cmd_buf, mem_allocs, _p, log);
+        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, _p, log);
         // mark it as not ready
         ready_ = false;
         (*load_status) = eTexLoadStatus::CreatedDefault;
@@ -210,7 +210,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(size));
         sbuf.Unmap();
 
-        InitFromRAWData(&sbuf, 0, _cmd_buf, mem_allocs, p, log);
+        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, p, log);
 
         ready_ = true;
         (*load_status) = eTexLoadStatus::CreatedFromData;
@@ -218,7 +218,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
 }
 
 void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &sbuf,
-                              void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
+                              ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
@@ -232,7 +232,7 @@ void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2
         _p.format = eTexFormat::RawRGBA8888;
         _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
 
-        InitFromRAWData(sbuf, data_off, _cmd_buf, mem_allocs, _p, log);
+        InitFromRAWData(sbuf, data_off, cmd_buf, mem_allocs, _p, log);
         // mark it as not ready
         ready_ = false;
         cubemap_ready_ = 0;
@@ -254,7 +254,7 @@ void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2
         sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
         sbuf.Unmap();
 
-        InitFromRAWData(sbuf, data_off, _cmd_buf, mem_allocs, p, log);
+        InitFromRAWData(sbuf, data_off, cmd_buf, mem_allocs, p, log);
 
         ready_ = (cubemap_ready_ & (1u << 0u)) == 1;
         for (unsigned i = 1; i < 6; i++) {
@@ -277,7 +277,7 @@ void Ray::Dx::Texture2D::Free() {
 }
 
 bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                                 const eTexBlock block, const bool is_srgb, void *_cmd_buf,
+                                 const eTexBlock block, const bool is_srgb, ID3D12GraphicsCommandList *cmd_buf,
                                  MemoryAllocators *mem_allocs, ILog *log) {
     ID3D12Resource *new_image = nullptr;
     // VkImageView new_image_view = VK_NULL_HANDLE;
@@ -523,7 +523,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     return true;
 }
 
-void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_buf, MemoryAllocators *mem_allocs,
+void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
                                          const Tex2DParams &p, ILog *log) {
     Free();
 
@@ -740,7 +740,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
     }
 }
 
-void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_cmd_buf, MemoryAllocators *mem_allocs,
+void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
                                          const Tex2DParams &p, ILog *log) {
     assert(p.w > 0 && p.h > 0);
     Free();
@@ -931,15 +931,13 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
 }
 
 void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const int offsety, const int sizex,
-                                     const int sizey, const eTexFormat format, const Buffer &sbuf, void *_cmd_buf,
+                                     const int sizey, const eTexFormat format, const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf,
                                      const int data_off, const int data_len) {
     assert(format == params.format);
     assert(params.samples == 1);
     assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
     assert(offsety >= 0 && offsety + sizey <= std::max(params.h >> level, 1));
-
     assert(sbuf.type() == eBufType::Upload);
-    auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
 
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
@@ -1032,11 +1030,9 @@ void Ray::Dx::Texture2D::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Dx::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
+void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
                                const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level, const uint32_t dst_x,
                                const uint32_t dst_y, const uint32_t width, const uint32_t height) {
-    auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
-
     assert(src_tex.resource_state == eResState::CopySrc);
     assert(dst_tex.resource_state == eResState::CopyDst);
 
@@ -1062,9 +1058,7 @@ void Ray::Dx::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_
 }
 
 void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const int x, const int y, const int w,
-                                const int h, const Buffer &dst_buf, void *_cmd_buf, const int data_off) {
-    auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
-
+                                const int h, const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf, const int data_off) {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
     if (src_tex.resource_state != eResState::CopySrc) {
@@ -1126,8 +1120,7 @@ void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
     cmd_buf->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, &src_region);
 }
 
-void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, void *_cmd_buf) {
-    auto cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList *>(_cmd_buf);
+void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, ID3D12GraphicsCommandList *cmd_buf) {
     assert(tex.resource_state == eResState::UnorderedAccess);
 
     Context *ctx = tex.ctx();
@@ -1375,15 +1368,13 @@ void Ray::Dx::Texture3D::Free() {
 }
 
 void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez,
-                                     eTexFormat format, const Buffer &sbuf, void *_cmd_buf, int data_off,
+                                     eTexFormat format, const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf, int data_off,
                                      int data_len) {
     assert(format == params.format);
     assert(offsetx >= 0 && offsetx + sizex <= params.w);
     assert(offsety >= 0 && offsety + sizey <= params.h);
     assert(offsetz >= 0 && offsetz + sizez <= params.d);
-
     assert(sbuf.type() == eBufType::Upload);
-    auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
 
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 

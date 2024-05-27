@@ -74,9 +74,9 @@ class Texture2D {
 
     void Free();
 
-    void InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_buf, MemoryAllocators *mem_allocs, const Tex2DParams &p,
+    void InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs, const Tex2DParams &p,
                          ILog *log);
-    void InitFromRAWData(Buffer &sbuf, int data_off[6], void *_cmd_buf, MemoryAllocators *mem_allocs,
+    void InitFromRAWData(Buffer &sbuf, int data_off[6], ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
                          const Tex2DParams &p, ILog *log);
 
   public:
@@ -92,9 +92,9 @@ class Texture2D {
               const Tex2DParams &_params, ILog *log)
         : handle_{img, /*view, VK_NULL_HANDLE, sampler,*/ 0}, ready_(true), name_(name), params(_params) {}
     Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
-              void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
+              ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6], const Tex2DParams &p,
-              Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
+              Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const Texture2D &rhs) = delete;
     Texture2D(Texture2D &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Texture2D();
@@ -109,13 +109,13 @@ class Texture2D {
         params = _params;
         ready_ = true;
     }
-    void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf,
+    void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf,
               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
-    void Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf,
+    void Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf,
               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
 
     bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, eTexBlock block, bool is_srgb,
-                 void *_cmd_buf, MemoryAllocators *mem_allocs, ILog *log);
+                 ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs, ILog *log);
 
     Context *ctx() { return ctx_; }
     const TexHandle &handle() const { return handle_; }
@@ -143,22 +143,22 @@ class Texture2D {
     void ApplySampling(const SamplingParams sampling, ILog *log) { SetSampling(sampling); }
 
     void SetSubImage(int level, int offsetx, int offsety, int sizex, int sizey, eTexFormat format, const Buffer &sbuf,
-                     void *_cmd_buf, int data_off, int data_len);
+                     ID3D12GraphicsCommandList *cmd_buf, int data_off, int data_len);
 };
 
-void CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, uint32_t src_level, uint32_t src_x, uint32_t src_y,
+void CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture2D &src_tex, uint32_t src_level, uint32_t src_x, uint32_t src_y,
                       Texture2D &dst_tex, uint32_t dst_level, uint32_t dst_x, uint32_t dst_y, uint32_t width,
                       uint32_t height);
 
 void CopyImageToBuffer(const Texture2D &src_tex, int level, int x, int y, int w, int h, const Buffer &dst_buf,
-                       void *_cmd_buf, int data_off);
+                       ID3D12GraphicsCommandList *cmd_buf, int data_off);
 
-void _ClearColorImage(Texture2D &tex, const void *rgba, void *_cmd_buf);
-inline void ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf) {
-    _ClearColorImage(tex, rgba, _cmd_buf);
+void _ClearColorImage(Texture2D &tex, const void *rgba, ID3D12GraphicsCommandList *cmd_buf);
+inline void ClearColorImage(Texture2D &tex, const float rgba[4], ID3D12GraphicsCommandList *cmd_buf) {
+    _ClearColorImage(tex, rgba, cmd_buf);
 }
-inline void ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd_buf) {
-    _ClearColorImage(tex, rgba, _cmd_buf);
+inline void ClearColorImage(Texture2D &tex, const uint32_t rgba[4], ID3D12GraphicsCommandList *cmd_buf) {
+    _ClearColorImage(tex, rgba, cmd_buf);
 }
 
 /*class Texture1D {
@@ -218,7 +218,7 @@ class Texture3D {
     void Init(const Tex3DParams &params, MemoryAllocators *mem_allocs, ILog *log);
 
     void SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez, eTexFormat format,
-                     const Buffer &sbuf, void *_cmd_buf, int data_off, int data_len);
+                     const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf, int data_off, int data_len);
 };
 
 DXGI_FORMAT DXFormatFromTexFormat(eTexFormat format);
