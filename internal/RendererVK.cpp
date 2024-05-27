@@ -1865,6 +1865,7 @@ bool Ray::Vk::Renderer::InitUNetFilterPipelines() {
         return Inflate(use_fp16_ ? (use_coop_matrix_ ? coop_shader : fp16_shader) : default_shader);
     };
 
+AGAIN:
     sh_convolution_Img_9_32_ = Shader{"Convolution Img 9 32", ctx_.get(),
                                       select_unpack_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_spv,
                                                            internal_shaders_output_convolution_Img_9_32_fp16_comp_spv,
@@ -1989,23 +1990,30 @@ bool Ray::Vk::Renderer::InitUNetFilterPipelines() {
         Program{"Convolution Concat 64 9 64", ctx_.get(), &sh_convolution_concat_64_9_64_, log};
     prog_convolution_32_3_img_ = Program{"Convolution 32 3 Img", ctx_.get(), &sh_convolution_32_3_img_, log};
 
-    return pi_convolution_Img_9_32_.Init(ctx_.get(), &prog_convolution_Img_9_32_, log) &&
-           pi_convolution_32_32_Downsample_.Init(ctx_.get(), &prog_convolution_32_32_Downsample_, log) &&
-           pi_convolution_32_48_Downsample_.Init(ctx_.get(), &prog_convolution_32_48_Downsample_, log) &&
-           pi_convolution_48_64_Downsample_.Init(ctx_.get(), &prog_convolution_48_64_Downsample_, log) &&
-           pi_convolution_64_80_Downsample_.Init(ctx_.get(), &prog_convolution_64_80_Downsample_, log) &&
-           pi_convolution_64_64_.Init(ctx_.get(), &prog_convolution_64_64_, log) &&
-           pi_convolution_64_32_.Init(ctx_.get(), &prog_convolution_64_32_, log) &&
-           pi_convolution_80_96_.Init(ctx_.get(), &prog_convolution_80_96_, log) &&
-           pi_convolution_96_96_.Init(ctx_.get(), &prog_convolution_96_96_, log) &&
-           pi_convolution_112_112_.Init(ctx_.get(), &prog_convolution_112_112_, log) &&
-           pi_convolution_concat_96_64_112_.Init(ctx_.get(), &prog_convolution_concat_96_64_112_, log) &&
-           pi_convolution_concat_112_48_96_.Init(ctx_.get(), &prog_convolution_concat_112_48_96_, log) &&
-           pi_convolution_concat_96_32_64_.Init(ctx_.get(), &prog_convolution_concat_96_32_64_, log) &&
-           pi_convolution_concat_64_3_64_.Init(ctx_.get(), &prog_convolution_concat_64_3_64_, log) &&
-           pi_convolution_concat_64_6_64_.Init(ctx_.get(), &prog_convolution_concat_64_6_64_, log) &&
-           pi_convolution_concat_64_9_64_.Init(ctx_.get(), &prog_convolution_concat_64_9_64_, log) &&
-           pi_convolution_32_3_img_.Init(ctx_.get(), &prog_convolution_32_3_img_, log);
+    const bool result = pi_convolution_Img_9_32_.Init(ctx_.get(), &prog_convolution_Img_9_32_, log) &&
+                        pi_convolution_32_32_Downsample_.Init(ctx_.get(), &prog_convolution_32_32_Downsample_, log) &&
+                        pi_convolution_32_48_Downsample_.Init(ctx_.get(), &prog_convolution_32_48_Downsample_, log) &&
+                        pi_convolution_48_64_Downsample_.Init(ctx_.get(), &prog_convolution_48_64_Downsample_, log) &&
+                        pi_convolution_64_80_Downsample_.Init(ctx_.get(), &prog_convolution_64_80_Downsample_, log) &&
+                        pi_convolution_64_64_.Init(ctx_.get(), &prog_convolution_64_64_, log) &&
+                        pi_convolution_64_32_.Init(ctx_.get(), &prog_convolution_64_32_, log) &&
+                        pi_convolution_80_96_.Init(ctx_.get(), &prog_convolution_80_96_, log) &&
+                        pi_convolution_96_96_.Init(ctx_.get(), &prog_convolution_96_96_, log) &&
+                        pi_convolution_112_112_.Init(ctx_.get(), &prog_convolution_112_112_, log) &&
+                        pi_convolution_concat_96_64_112_.Init(ctx_.get(), &prog_convolution_concat_96_64_112_, log) &&
+                        pi_convolution_concat_112_48_96_.Init(ctx_.get(), &prog_convolution_concat_112_48_96_, log) &&
+                        pi_convolution_concat_96_32_64_.Init(ctx_.get(), &prog_convolution_concat_96_32_64_, log) &&
+                        pi_convolution_concat_64_3_64_.Init(ctx_.get(), &prog_convolution_concat_64_3_64_, log) &&
+                        pi_convolution_concat_64_6_64_.Init(ctx_.get(), &prog_convolution_concat_64_6_64_, log) &&
+                        pi_convolution_concat_64_9_64_.Init(ctx_.get(), &prog_convolution_concat_64_9_64_, log) &&
+                        pi_convolution_32_3_img_.Init(ctx_.get(), &prog_convolution_32_3_img_, log);
+    if (!result && use_coop_matrix_) {
+        ctx_->log()->Warning("Failed to initialize UNet pipelines, retrying without cooperative matrix!");
+        use_coop_matrix_ = false;
+        goto AGAIN;
+    }
+
+    return result;
 }
 
 void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &ps,
