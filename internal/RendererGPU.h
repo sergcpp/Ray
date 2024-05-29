@@ -466,6 +466,12 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     w_ = w;
     h_ = h;
 
+    if (unet_tensors_heap_) {
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        UpdateUNetFilterMemory(cmd_buf);
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    }
+
     Clear(color_rgba_t{});
 }
 
