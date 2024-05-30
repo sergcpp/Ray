@@ -1677,7 +1677,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         Tex2DParams params;
         params.w = params.h = CIRRUS_TEX_RES;
         params.format = eTexFormat::RawRG88;
-        //params.flags = eTexFlags::SRGB;
+        // params.flags = eTexFlags::SRGB;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
         params.sampling.filter = eTexFilter::BilinearNoMipmap;
         params.sampling.wrap = eTexWrap::Repeat;
@@ -1707,8 +1707,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
 
         sky_noise3d_tex_ = Texture3D{"Noise 3d Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
 
-        const uint32_t data_len =
-            NOISE_3D_RES * NOISE_3D_RES * round_up(NOISE_3D_RES, TextureDataPitchAlignment);
+        const uint32_t data_len = NOISE_3D_RES * NOISE_3D_RES * round_up(NOISE_3D_RES, TextureDataPitchAlignment);
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, data_len);
         uint8_t *mapped_ptr = stage_buf.Map();
 
@@ -1796,43 +1795,57 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     { // initialize the first quadtree level
         env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
 
-        for (int y = 0; y < size[1]; ++y) {
-            for (int x = 0; x < size[0]; ++x) {
-                const uint8_t *col_rgbe = &rgbe_data[4 * (y * pitch + x)];
-                fvec4 col_rgb;
-                rgbe_to_rgb(col_rgbe, value_ptr(col_rgb));
+        static const float FilterWeights[][5] = {{1 / 273.0f, 4 / 273.0f, 7 / 273.0f, 4 / 273.0f, 1 / 273.0f},    //
+                                                 {4 / 273.0f, 16 / 273.0f, 26 / 273.0f, 16 / 273.0f, 4 / 273.0f}, //
+                                                 {7 / 273.0f, 26 / 273.0f, 41 / 273.0f, 26 / 273.0f, 7 / 273.0f}, //
+                                                 {4 / 273.0f, 16 / 273.0f, 26 / 273.0f, 16 / 273.0f, 4 / 273.0f}, //
+                                                 {1 / 273.0f, 4 / 273.0f, 7 / 273.0f, 4 / 273.0f, 1 / 273.0f}};
+        static const float FilterSize = 0.5f;
 
-                const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
+        for (int qy = 0; qy < cur_res; ++qy) {
+            for (int qx = 0; qx < cur_res; ++qx) {
+                for (int jj = -2; jj <= 2; ++jj) {
+                    for (int ii = -2; ii <= 2; ++ii) {
+                        const Ref::fvec2 q = {(float(qx) + 0.5f + ii * FilterSize) / cur_res,
+                                              (float(qy) + 0.5f + jj * FilterSize) / cur_res};
+                        fvec4 dir;
+                        CanonicalToDir(value_ptr(q), 0.0f, value_ptr(dir));
 
-                for (int jj = -1; jj <= 1; ++jj) {
-                    const float theta = PI * float(y + jj) / float(size[1]);
-                    for (int ii = -1; ii <= 1; ++ii) {
-                        const float phi = 2.0f * PI * float(x + ii) / float(size[0]);
-                        auto dir = fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
-                                         std::sin(theta) * std::sin(phi), 0.0f};
+                        const float theta = acosf(clamp(dir.get<1>(), -1.0f, 1.0f)) / PI;
+                        float phi = atan2f(dir.get<2>(), dir.get<0>());
+                        if (phi < 0) {
+                            phi += 2 * PI;
+                        }
+                        if (phi > 2 * PI) {
+                            phi -= 2 * PI;
+                        }
 
-                        fvec2 q;
-                        DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
+                        const float u = Ref::fract(0.5f * phi / PI);
 
-                        int qx = clamp(int(cur_res * q[0]), 0, cur_res - 1);
-                        int qy = clamp(int(cur_res * q[1]), 0, cur_res - 1);
+                        const fvec2 uvs = fvec2{u, theta} * fvec2(size);
+                        const ivec2 iuvs = clamp(ivec2(uvs), ivec2(0), size - 1);
+
+                        const uint8_t *col_rgbe = &rgbe_data[4 * (iuvs.get<1>() * pitch + iuvs.get<0>())];
+                        fvec4 col_rgb;
+                        rgbe_to_rgb(col_rgbe, value_ptr(col_rgb));
+                        const float cur_lum = (col_rgb.get<0>() + col_rgb.get<1>() + col_rgb.get<2>());
 
                         int index = 0;
                         index |= (qx & 1) << 0;
                         index |= (qy & 1) << 1;
 
-                        qx /= 2;
-                        qy /= 2;
+                        const int _qx = (qx / 2);
+                        const int _qy = (qy / 2);
 
-                        fvec4 &qvec = env_map_qtree_.mips[0][qy * cur_res / 2 + qx];
-                        qvec.set(index, std::max(qvec[index], cur_lum));
+                        auto &qvec = env_map_qtree_.mips[0][_qy * cur_res / 2 + _qx];
+                        qvec.set(index, qvec[index] + cur_lum * FilterWeights[ii + 2][jj + 2]);
                     }
                 }
             }
         }
 
         for (const fvec4 &v : env_map_qtree_.mips[0]) {
-            total_lum += (v[0] + v[1] + v[2] + v[3]);
+            total_lum += hsum(v);
         }
 
         cur_res /= 2;
@@ -1870,7 +1883,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     // Determine how many levels was actually required
     //
 
-    const float LumFractThreshold = 0.01f;
+    const float LumFractThreshold = 0.005f;
 
     cur_res = 2;
     int the_last_required_lod = 0;
