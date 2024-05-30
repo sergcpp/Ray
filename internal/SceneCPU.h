@@ -88,7 +88,7 @@ class Scene : public SceneCommon {
     struct {
         int res = -1;
         float medium_lum = 0.0f;
-        SmallVector<aligned_vector<float, 16>, 16> mips;
+        SmallVector<aligned_vector<Ref::fvec4>, 16> mips;
     } env_map_qtree_;
 
     mutable std::vector<uint64_t> spatial_cache_entries_;

@@ -1025,45 +1025,58 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     float total_lum = 0.0f;
 
     { // initialize the first quadtree level
-        env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
 
-        for (int y = 0; y < size[1]; ++y) {
-            for (int x = 0; x < size[0]; ++x) {
-                const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, x, y, 0);
-                const Ref::fvec4 col_rgb = Ref::rgbe_to_rgb(col_rgbe);
+        static const float FilterWeights[][5] = {{1 / 273.0f, 4 / 273.0f, 7 / 273.0f, 4 / 273.0f, 1 / 273.0f},    //
+                                                 {4 / 273.0f, 16 / 273.0f, 26 / 273.0f, 16 / 273.0f, 4 / 273.0f}, //
+                                                 {7 / 273.0f, 26 / 273.0f, 41 / 273.0f, 26 / 273.0f, 7 / 273.0f}, //
+                                                 {4 / 273.0f, 16 / 273.0f, 26 / 273.0f, 16 / 273.0f, 4 / 273.0f}, //
+                                                 {1 / 273.0f, 4 / 273.0f, 7 / 273.0f, 4 / 273.0f, 1 / 273.0f}};
+        static const float FilterSize = 0.5f;
 
-                const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
+        for (int qy = 0; qy < cur_res; ++qy) {
+            for (int qx = 0; qx < cur_res; ++qx) {
+                for (int jj = -2; jj <= 2; ++jj) {
+                    for (int ii = -2; ii <= 2; ++ii) {
+                        const Ref::fvec2 q = {(float(qx) + 0.5f + ii * FilterSize) / cur_res,
+                                              (float(qy) + 0.5f + jj * FilterSize) / cur_res};
+                        Ref::fvec4 dir;
+                        CanonicalToDir(value_ptr(q), 0.0f, value_ptr(dir));
 
-                for (int jj = -1; jj <= 1; ++jj) {
-                    const float theta = PI * float(y + jj) / float(size[1]);
-                    for (int ii = -1; ii <= 1; ++ii) {
-                        const float phi = 2.0f * PI * float(x + ii) / float(size[0]);
+                        const float theta = acosf(clamp(dir.get<1>(), -1.0f, 1.0f)) / PI;
+                        float phi = atan2f(dir.get<2>(), dir.get<0>());
+                        if (phi < 0) {
+                            phi += 2 * PI;
+                        }
+                        if (phi > 2 * PI) {
+                            phi -= 2 * PI;
+                        }
 
-                        auto dir = Ref::fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
+                        const float u = Ref::fract(0.5f * phi / PI);
 
-                        Ref::fvec2 q;
-                        DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
+                        const Ref::fvec2 uvs = Ref::fvec2{u, theta} * Ref::fvec2(size);
+                        const Ref::ivec2 iuvs = clamp(Ref::ivec2(uvs), Ref::ivec2(0), size - 1);
 
-                        int qx = clamp(int(cur_res * q[0]), 0, cur_res - 1);
-                        int qy = clamp(int(cur_res * q[1]), 0, cur_res - 1);
+                        const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, iuvs.get<0>(), iuvs.get<1>(), 0);
+                        const Ref::fvec4 col_rgb = Ref::rgbe_to_rgb(col_rgbe);
+                        const float cur_lum = (col_rgb.get<0>() + col_rgb.get<1>() + col_rgb.get<2>());
 
                         int index = 0;
                         index |= (qx & 1) << 0;
                         index |= (qy & 1) << 1;
 
-                        qx /= 2;
-                        qy /= 2;
+                        const int _qx = (qx / 2);
+                        const int _qy = (qy / 2);
 
-                        auto &qvec =
-                            reinterpret_cast<Ref::fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
-                        qvec.set(index, fmaxf(qvec[index], cur_lum));
+                        auto &qvec = env_map_qtree_.mips[0][_qy * cur_res / 2 + _qx];
+                        qvec.set(index, qvec[index] + cur_lum * FilterWeights[ii + 2][jj + 2]);
                     }
                 }
             }
         }
 
-        for (const float v : env_map_qtree_.mips[0]) {
-            total_lum += v;
+        for (const Ref::fvec4 &v : env_map_qtree_.mips[0]) {
+            total_lum += hsum(v);
         }
 
         cur_res /= 2;
@@ -1072,9 +1085,8 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     env_map_qtree_.medium_lum = total_lum / float(cur_res * cur_res);
 
     while (cur_res > 1) {
-        env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
-        const auto *prev_mip =
-            reinterpret_cast<const Ref::fvec4 *>(env_map_qtree_.mips[env_map_qtree_.mips.size() - 2].data());
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
+        const auto &prev_mip = env_map_qtree_.mips[env_map_qtree_.mips.size() - 2];
 
         for (int y = 0; y < cur_res; ++y) {
             for (int x = 0; x < cur_res; ++x) {
@@ -1088,7 +1100,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
                 const int qx = (x / 2);
                 const int qy = (y / 2);
 
-                env_map_qtree_.mips.back()[4 * (qy * cur_res / 2 + qx) + index] = res_lum;
+                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx].set(index, res_lum);
             }
         }
 
@@ -1099,13 +1111,13 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     // Determine how many levels was actually required
     //
 
-    static const float LumFractThreshold = 0.01f;
+    static const float LumFractThreshold = 0.005f;
 
     cur_res = 2;
     int the_last_required_lod = 0;
     for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
         the_last_required_lod = lod;
-        const auto *cur_mip = reinterpret_cast<const Ref::fvec4 *>(env_map_qtree_.mips[lod].data());
+        const auto &cur_mip = env_map_qtree_.mips[lod];
 
         bool subdivision_required = false;
         for (int y = 0; y < (cur_res / 2) && !subdivision_required; ++y) {
@@ -1137,7 +1149,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
 
     env_.qtree_levels = int(env_map_qtree_.mips.size());
     for (int i = 0; i < env_.qtree_levels; ++i) {
-        env_.qtree_mips[i] = env_map_qtree_.mips[i].data();
+        env_.qtree_mips[i] = value_ptr(env_map_qtree_.mips[i][0]);
     }
     for (int i = env_.qtree_levels; i < countof(env_.qtree_mips); ++i) {
         env_.qtree_mips[i] = nullptr;
