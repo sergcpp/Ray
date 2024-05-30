@@ -1613,6 +1613,12 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
     { // Write sky image
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
+        const TransitionInfo res_transition = {&temp_img_, eResState::CopyDst};
+        TransitionResourceStates(cmd_buf, AllStages, AllStages, {&res_transition, 1});
+
+        static const float rgba[4] = {};
+        ClearColorImage(temp_img_, rgba, cmd_buf);
+
         const TransitionInfo res_transitions[] = {{&atmosphere_params_buf_, eResState::UniformBuffer},
                                                   {&sky_transmittance_lut_tex_, eResState::ShaderResource},
                                                   {&sky_multiscatter_lut_tex_, eResState::ShaderResource},
