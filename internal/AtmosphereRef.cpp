@@ -210,7 +210,7 @@ fvec4 SampleTransmittanceLUT(Span<const float> lut, fvec2 uv) {
 }
 
 fvec4 SampleMultiscatterLUT(Span<const float> lut, fvec2 uv) {
-    uv = uv * fvec2(SKY_MULTISCATTER_LUT_RES);
+    uv = fract(uv - 0.5f / SKY_MULTISCATTER_LUT_RES) * fvec2(SKY_MULTISCATTER_LUT_RES);
     auto iuv0 = ivec2(uv);
     iuv0 = clamp(iuv0, ivec2{0, 0}, ivec2{SKY_MULTISCATTER_LUT_RES - 1});
     const ivec2 iuv1 = min(iuv0 + 1, ivec2{SKY_MULTISCATTER_LUT_RES - 1});

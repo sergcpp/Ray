@@ -229,7 +229,8 @@ def main():
                          defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1 -DCACHE_QUERY=1 -DDETAILED_SKY=1")
 
     # Sky
-    compile_shader_async(src_name="shade_sky.comp.glsl", spv_name="shade_sky.comp.spv", defines="")
+    compile_shader_async(src_name="shade_sky.comp.glsl", spv_name="shade_sky.comp.spv", defines="-DBAKE=0")
+    compile_shader_async(src_name="shade_sky.comp.glsl", spv_name="bake_sky.comp.spv", defines="-DBAKE=1")
 
     # Scene intersection (shadow)
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_atlas.comp.spv",

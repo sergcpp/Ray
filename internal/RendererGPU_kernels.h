@@ -826,7 +826,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
                                               {&out_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    SmallVector<Binding, 32> bindings = {
+    const Binding bindings[] = {
         {eBindTarget::UBuf, ShadeSky::ATMOSPHERE_PARAMS_BUF_SLOT, sc_data.atmosphere_params},
         {eBindTarget::SBufRO, ShadeSky::RAY_INDICES_BUF_SLOT, ray_indices},
         {eBindTarget::SBufRO, ShadeSky::HITS_BUF_SLOT, hits},

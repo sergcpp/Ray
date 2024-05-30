@@ -14,6 +14,7 @@ layout (binding = ATMOSPHERE_PARAMS_BUF_SLOT, std140) uniform AtmosphereParams {
     atmosphere_params_t g_atmosphere_params;
 };
 
+#if !BAKE
 layout(std430, binding = RAY_INDICES_BUF_SLOT) readonly buffer RayIndices {
     uint g_ray_indices[];
 };
@@ -30,6 +31,9 @@ layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
     ray_data_t g_rays[];
 };
 
+layout(binding = ENV_QTREE_TEX_SLOT) uniform texture2D g_env_qtree;
+#endif
+
 layout(binding = TRANSMITTANCE_LUT_SLOT) uniform sampler2D g_trasmittance_lut;
 layout(binding = MULTISCATTER_LUT_SLOT) uniform sampler2D g_multiscatter_lut;
 
@@ -37,8 +41,6 @@ layout(binding = MOON_TEX_SLOT) uniform sampler2D g_moon_tex;
 layout(binding = WEATHER_TEX_SLOT) uniform sampler2D g_weather_tex;
 layout(binding = CIRRUS_TEX_SLOT) uniform sampler2D g_cirrus_tex;
 layout(binding = NOISE3D_TEX_SLOT) uniform sampler3D g_noise3d_tex;
-
-layout(binding = ENV_QTREE_TEX_SLOT) uniform texture2D g_env_qtree;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
 
@@ -663,6 +665,19 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
+#if BAKE
+    const int x = int(gl_GlobalInvocationID.x),
+              y = int(gl_GlobalInvocationID.y);
+
+    const uint px_hash = hash((x << 16) | y);
+    const uint rand_hash = px_hash;
+
+    const float phi = 2.0 * PI * (x + 0.5) / float(g_params.res[0]);
+    const float theta = PI * float(y) / float(g_params.res[1]);
+    const vec3 I = vec3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
+
+    const vec3 sky_color = IntegrateScattering(vec3(0.0, g_atmosphere_params.viewpoint_height, 0.0), I, MAX_DIST, rand_hash);
+#else // BAKE
     const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
     if (index >= g_counters[5]) {
         return;
@@ -716,7 +731,7 @@ void main() {
     if (sum > g_params.limit) {
         sky_color *= (g_params.limit / sum);
     }
-
+#endif // BAKE
     const vec3 col = imageLoad(g_out_img, ivec2(x, y)).xyz;
     imageStore(g_out_img, ivec2(x, y), vec4(col + sky_color, 1.0));
 }

@@ -21,6 +21,7 @@
 #include "Dx/ContextDX.h"
 #include "TextureParams.h"
 #include "TextureUtils.h"
+#include "inflate/Inflate.h"
 
 namespace Ray {
 uint32_t next_power_of_two(uint32_t v);
@@ -35,7 +36,11 @@ void to_dxr_xform(const float xform[16], float matrix[3][4]) {
     }
 }
 
+namespace Dx {
+#include "shaders/output/bake_sky.comp.cso.inl"
+
 const uint32_t AccStructAlignment = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT;
+} // namespace Dx
 } // namespace Ray
 
 Ray::Dx::Scene::~Scene() {
@@ -58,6 +63,13 @@ Ray::Dx::Scene::~Scene() {
     }
 
     bindless_textures_.clear();
+}
+
+bool Ray::Dx::Scene::InitPipelines() {
+    sh_bake_sky_ =
+        Shader{"Bake Sky", ctx_, Inflate(internal_shaders_output_bake_sky_comp_cso), eShaderType::Comp, log_};
+    prog_bake_sky_ = Program{"Bake Sky", ctx_, &sh_bake_sky_, log_};
+    return pi_bake_sky_.Init(ctx_, &prog_bake_sky_, log_);
 }
 
 void Ray::Dx::Scene::GenerateTextureMips_nolock() {}

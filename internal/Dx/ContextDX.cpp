@@ -432,6 +432,8 @@ void Ray::Dx::EndSingleTimeCommands(void *api, ID3D12Device *device, ID3D12Comma
     command_list->Release();
 }
 
+void Ray::Dx::InsertReadbackMemoryBarrier(void *api, CommandBuffer command_list) {}
+
 int Ray::Dx::Context::WriteTimestamp(ID3D12GraphicsCommandList *cmd_buf, const bool start) {
     const uint32_t query_index = query_counts_[backend_frame]++;
     assert(query_index < MaxTimestampQueries);

@@ -20,6 +20,9 @@ struct Params {
     float limit;
     int max_total_depth;
     int li_count;
+    //
+    ivec2 res;
+    ivec2 _pad;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
