@@ -294,7 +294,7 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
     parallel_for(0, res[1], [&](const int y) {
         const float theta = PI * float(y) / float(res[1]);
         for (int x = 0; x < res[0]; ++x) {
-            const uint32_t px_hash = Ref::hash((x << 16)| x);
+            const uint32_t px_hash = Ref::hash((x << 16)| y);
 
             const float phi = 2.0f * PI * (x + 0.5f) / float(res[0]);
             auto ray_dir = Ref::fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};

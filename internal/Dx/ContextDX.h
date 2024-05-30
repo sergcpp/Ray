@@ -169,5 +169,7 @@ CommandBuffer BegSingleTimeCommands(void *api, ID3D12Device *device, ID3D12Comma
 void EndSingleTimeCommands(void *api, ID3D12Device *device, ID3D12CommandQueue *cmd_queue, CommandBuffer command_list,
                            ID3D12CommandAllocator *temp_command_allocator);
 
+void InsertReadbackMemoryBarrier(void *api, CommandBuffer command_list);
+
 } // namespace Dx
 } // namespace Ray

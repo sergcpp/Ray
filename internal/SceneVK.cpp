@@ -13,6 +13,7 @@
 #include "TextureParams.h"
 #include "TextureUtils.h"
 #include "Vk/ContextVK.h"
+#include "inflate/Inflate.h"
 
 namespace Ray {
 uint32_t next_power_of_two(uint32_t v);
@@ -27,11 +28,9 @@ void to_khr_xform(const float xform[16], float matrix[3][4]) {
 }
 
 namespace Vk {
-VkDeviceSize align_up(const VkDeviceSize size, const VkDeviceSize alignment) {
-    return (size + alignment - 1) & ~(alignment - 1);
-}
+#include "shaders/output/bake_sky.comp.spv.inl"
 
-const VkDeviceSize AccStructAlignment = 256;
+const int AccStructAlignment = 256;
 } // namespace Vk
 } // namespace Ray
 
@@ -57,6 +56,12 @@ Ray::Vk::Scene::~Scene() {
     bindless_textures_.clear();
     ctx_->api().vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.descr_layout, nullptr);
     ctx_->api().vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.rt_descr_layout, nullptr);
+}
+
+bool Ray::Vk::Scene::InitPipelines() {
+    sh_bake_sky_ = Shader{"Bake Sky", ctx_, Inflate(internal_shaders_output_bake_sky_comp_spv), eShaderType::Comp, log_};
+    prog_bake_sky_ = Program{"Bake Sky", ctx_, &sh_bake_sky_, log_};
+    return pi_bake_sky_.Init(ctx_, &prog_bake_sky_, log_);
 }
 
 void Ray::Vk::Scene::GenerateTextureMips_nolock() {
@@ -342,7 +347,7 @@ std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint3
 
     const uint32_t needed_build_scratch_size = uint32_t(size_info.buildScratchSize);
     const uint32_t needed_total_acc_struct_size =
-        uint32_t(align_up(size_info.accelerationStructureSize, AccStructAlignment));
+        uint32_t(round_up(int(size_info.accelerationStructureSize), AccStructAlignment));
 
     const std::pair<uint32_t, uint32_t> blas_index = rt_mesh_blases_.Allocate(1);
 

@@ -512,8 +512,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
     indir_args_buf_[1] =
         Buffer{"Indir Args (2/2)", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
 
-    atmosphere_params_buf_ = Buffer{"Atmosphere Params", ctx_.get(), eBufType::Uniform, sizeof(atmosphere_params_t)};
-
     { // zero out counters, upload random sequence
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
@@ -680,17 +678,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
     ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
-    if (s.env_.sky_map_spread_angle > 0.0f) {
-        Buffer temp_upload_buf{"Temp atmosphere params upload", ctx_.get(), eBufType::Upload,
-                               sizeof(atmosphere_params_t)};
-        { // update stage buffer
-            uint8_t *mapped_ptr = temp_upload_buf.Map();
-            memcpy(mapped_ptr, &s.env_.atmosphere, sizeof(atmosphere_params_t));
-            temp_upload_buf.Unmap();
-        }
-        CopyBufferToBuffer(temp_upload_buf, 0, atmosphere_params_buf_, 0, sizeof(atmosphere_params_t), cmd_buf);
-    }
-
     //////////////////////////////////////////////////////////////////////////////////
 
     const scene_data_t sc_data = {s.env_,
@@ -719,14 +706,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                   cache_grid_params,
                                   s.spatial_cache_entries_.buf(),
                                   s.spatial_cache_voxels_prev_.buf(),
-                                  atmosphere_params_buf_,
+                                  s.atmosphere_params_buf_,
                                   s.sky_transmittance_lut_tex_,
                                   s.sky_multiscatter_lut_tex_,
                                   s.sky_moon_tex_,
                                   s.sky_weather_tex_,
                                   s.sky_cirrus_tex_,
                                   s.sky_noise3d_tex_};
-
     TransitionSceneResources(cmd_buf, sc_data);
 
     VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -1456,7 +1442,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   cache_grid_params,
                                   s.spatial_cache_entries_.buf(),
                                   s.spatial_cache_voxels_curr_.buf(),
-                                  atmosphere_params_buf_,
+                                  s.atmosphere_params_buf_,
                                   {},
                                   {},
                                   {},
@@ -1740,12 +1726,7 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) con
             CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, pixel_readback_buf_, cmd_buf, 0);
         }
 
-        VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-        mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        mem_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-
-        ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1,
-                                         &mem_barrier, 0, nullptr, 0, nullptr);
+        InsertReadbackMemoryBarrier(ctx_->api(), cmd_buf);
 
 #if RUN_IN_LOCKSTEP
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
@@ -1809,12 +1790,7 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
             CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, readback_buffer_to_use, cmd_buf, 0);
         }
 
-        VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-        mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        mem_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-
-        ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1,
-                                         &mem_barrier, 0, nullptr, 0, nullptr);
+        InsertReadbackMemoryBarrier(ctx_->api(), cmd_buf);
 
 #if RUN_IN_LOCKSTEP
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());

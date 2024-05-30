@@ -172,5 +172,7 @@ VkCommandBuffer BegSingleTimeCommands(const Api &api, VkDevice device, VkCommand
 void EndSingleTimeCommands(const Api &api, VkDevice device, VkQueue cmd_queue, VkCommandBuffer command_buf,
                            VkCommandPool temp_command_pool);
 
+void InsertReadbackMemoryBarrier(const Api &api, VkCommandBuffer cmd_buf);
+
 } // namespace Vk
 } // namespace Ray

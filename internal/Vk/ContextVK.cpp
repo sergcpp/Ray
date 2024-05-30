@@ -840,6 +840,15 @@ void Ray::Vk::EndSingleTimeCommands(const Api &api, VkDevice device, VkQueue cmd
     api.vkFreeCommandBuffers(device, temp_command_pool, 1, &command_buf);
 }
 
+void Ray::Vk::InsertReadbackMemoryBarrier(const Api &api, VkCommandBuffer cmd_buf) {
+    VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    mem_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+
+    api.vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mem_barrier, 0,
+                             nullptr, 0, nullptr);
+}
+
 int Ray::Vk::Context::WriteTimestamp(VkCommandBuffer cmd_buf, const bool start) {
     api_.vkCmdWriteTimestamp(cmd_buf, start ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                              query_pools_[backend_frame], query_counts_[backend_frame]);

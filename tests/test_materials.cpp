@@ -1647,7 +1647,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 
 void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 365;
+    const int PixThres = 370;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};

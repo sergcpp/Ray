@@ -128,7 +128,6 @@ class Renderer : public RendererBase {
         count_table_buf_, reduce_table_buf_;
     Buffer counters_buf_, indir_args_buf_[2];
 
-    Buffer atmosphere_params_buf_;
     Buffer temp_cache_data_buf_, temp_lock_buf_;
 
     Buffer pixel_readback_buf_, base_color_readback_buf_, depth_normals_readback_buf_;

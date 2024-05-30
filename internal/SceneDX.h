@@ -2,6 +2,10 @@
 
 #include "Dx/AccStructureDX.h"
 #include "Dx/DescriptorPoolDX.h"
+#include "Dx/DrawCallDX.h"
+#include "Dx/PipelineDX.h"
+#include "Dx/ProgramDX.h"
+#include "Dx/ShaderDX.h"
 #include "Dx/SparseStorageDX.h"
 #include "Dx/TextureAtlasDX.h"
 #include "Dx/TextureDX.h"

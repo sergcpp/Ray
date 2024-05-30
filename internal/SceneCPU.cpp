@@ -1038,8 +1038,8 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
             for (int qx = 0; qx < cur_res; ++qx) {
                 for (int jj = -2; jj <= 2; ++jj) {
                     for (int ii = -2; ii <= 2; ++ii) {
-                        const Ref::fvec2 q = {(float(qx) + 0.5f + ii * FilterSize) / cur_res,
-                                              (float(qy) + 0.5f + jj * FilterSize) / cur_res};
+                        const Ref::fvec2 q = {Ref::fract(1.0f + (float(qx) + 0.5f + ii * FilterSize) / cur_res),
+                                              Ref::fract(1.0f + (float(qy) + 0.5f + jj * FilterSize) / cur_res)};
                         Ref::fvec4 dir;
                         CanonicalToDir(value_ptr(q), 0.0f, value_ptr(dir));
 
