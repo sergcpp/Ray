@@ -124,8 +124,6 @@ class Scene : public SceneCommon {
 
     Pipeline pi_bake_sky_;
 
-    Texture2D temp_img_;
-
     bool InitPipelines();
 
     MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);
@@ -1608,16 +1606,16 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
     p.h = res[1];
     p.format = eTexFormat::RawRGBA32F;
     p.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer;
-    temp_img_ = Texture2D{"Temp Sky Tex", ctx_, p, ctx_->default_memory_allocs(), log_};
+    Texture2D temp_img = Texture2D{"Temp Sky Tex", ctx_, p, ctx_->default_memory_allocs(), log_};
 
     { // Write sky image
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-        const TransitionInfo res_transition = {&temp_img_, eResState::CopyDst};
+        const TransitionInfo res_transition = {&temp_img, eResState::CopyDst};
         TransitionResourceStates(cmd_buf, AllStages, AllStages, {&res_transition, 1});
 
         static const float rgba[4] = {};
-        ClearColorImage(temp_img_, rgba, cmd_buf);
+        ClearColorImage(temp_img, rgba, cmd_buf);
 
         const TransitionInfo res_transitions[] = {{&atmosphere_params_buf_, eResState::UniformBuffer},
                                                   {&sky_transmittance_lut_tex_, eResState::ShaderResource},
@@ -1626,7 +1624,7 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
                                                   {&sky_weather_tex_, eResState::ShaderResource},
                                                   {&sky_cirrus_tex_, eResState::ShaderResource},
                                                   {&sky_noise3d_tex_, eResState::ShaderResource},
-                                                  {&temp_img_, eResState::UnorderedAccess}};
+                                                  {&temp_img, eResState::UnorderedAccess}};
         TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
         const Binding bindings[] = {
@@ -1637,7 +1635,7 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
             {eBindTarget::Tex2DSampled, ShadeSky::WEATHER_TEX_SLOT, sky_weather_tex_},
             {eBindTarget::Tex2DSampled, ShadeSky::CIRRUS_TEX_SLOT, sky_cirrus_tex_},
             {eBindTarget::Tex3DSampled, ShadeSky::NOISE3D_TEX_SLOT, sky_noise3d_tex_},
-            {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, temp_img_}};
+            {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, temp_img}};
 
         ShadeSky::Params uniform_params = {};
         uniform_params.res[0] = res[0];
@@ -1684,7 +1682,7 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
 
     { // Readback texture data
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        CopyImageToBuffer(temp_img_, 0, 0, 0, res[0], res[1], temp_readback_buf, cmd_buf, 0);
+        CopyImageToBuffer(temp_img, 0, 0, 0, res[0], res[1], temp_readback_buf, cmd_buf, 0);
         InsertReadbackMemoryBarrier(ctx_->api(), cmd_buf);
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
