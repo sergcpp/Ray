@@ -155,6 +155,13 @@ class RendererBase {
         const SceneBase &scene,
         const std::function<void(int, int, ParallelForFunction &&)> &parallel_for = parallel_for_serial) = 0;
 
+    /** @brief Reset spatial radiance cache
+        @param scene reference to a scene
+    */
+    virtual void ResetSpatialCache(
+        const SceneBase &scene,
+        const std::function<void(int, int, ParallelForFunction &&)> &parallel_for = parallel_for_serial) = 0;
+
     /// Structure that holds render timings (in microseconds)
     struct stats_t {
         unsigned long long time_primary_ray_gen_us;

@@ -305,6 +305,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     void UpdateSpatialCache(const SceneBase &scene, RegionContext &region) override;
     void ResolveSpatialCache(const SceneBase &scene,
                              const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
+    void ResetSpatialCache(const SceneBase &scene,
+                           const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
@@ -1195,6 +1197,23 @@ void Ray::Cpu::Renderer<SIMDPolicy>::ResolveSpatialCache(
         std::lock_guard<std::mutex> _(mtx_);
         stats_.time_cache_resolve_us += (unsigned long long)duration<double, std::micro>{time_end - time_start}.count();
     }
+}
+
+template <typename SIMDPolicy>
+void Ray::Cpu::Renderer<SIMDPolicy>::ResetSpatialCache(
+    const SceneBase &scene, const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    const auto &s = dynamic_cast<const Cpu::Scene &>(scene);
+
+    std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
+
+    static const int ResetPortion = 32768 * 4;
+    assert((s.spatial_cache_entries_.size() % ResetPortion) == 0);
+    const int JobsCount = int(s.spatial_cache_entries_.size() / ResetPortion);
+
+    parallel_for(0, JobsCount, [&](const int i) {
+        auto it = begin(s.spatial_cache_voxels_prev_) + i * ResetPortion;
+        std::fill(it, it + ResetPortion, packed_cache_voxel_t{});
+    });
 }
 
 template <typename SIMDPolicy>
