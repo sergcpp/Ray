@@ -1669,6 +1669,84 @@ void Ray::Dx::Renderer::ResolveSpatialCache(const SceneBase &scene,
 #endif
 }
 
+void Ray::Dx::Renderer::ResetSpatialCache(const SceneBase &scene,
+                                          const std::function<void(int, int, ParallelForFunction &&)> &) {
+    if (!use_spatial_cache_) {
+        return;
+    }
+
+    const auto &s = dynamic_cast<const Dx::Scene &>(scene);
+
+#if !RUN_IN_LOCKSTEP
+    if (ctx_->in_flight_fence(ctx_->backend_frame)->GetCompletedValue() < ctx_->fence_values[ctx_->backend_frame]) {
+        HRESULT hr = ctx_->in_flight_fence(ctx_->backend_frame)
+                         ->SetEventOnCompletion(ctx_->fence_values[ctx_->backend_frame], ctx_->fence_event());
+        if (FAILED(hr)) {
+            return;
+        }
+
+        WaitForSingleObject(ctx_->fence_event(), INFINITE);
+    }
+
+    ++ctx_->fence_values[ctx_->backend_frame];
+#endif
+
+    ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
+    ctx_->DestroyDeferredResources(ctx_->backend_frame);
+    ctx_->default_descr_alloc()->Reset();
+    ctx_->uniform_data_buf_offs[ctx_->backend_frame] = 0;
+
+#if RUN_IN_LOCKSTEP
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+#else
+    ID3D12CommandAllocator *cmd_alloc = ctx_->draw_cmd_alloc(ctx_->backend_frame);
+    CommandBuffer cmd_buf = ctx_->draw_cmd_buf();
+
+    HRESULT hr = cmd_alloc->Reset();
+    if (FAILED(hr)) {
+        ctx_->log()->Error("Failed to reset command allocator!");
+    }
+
+    hr = cmd_buf->Reset(cmd_alloc, nullptr);
+    if (FAILED(hr)) {
+        ctx_->log()->Error("Failed to reset command list!");
+        return;
+    }
+#endif
+
+    { // Reset spatial cache
+        DebugMarker _(ctx_.get(), cmd_buf, "ResetSpatialCache");
+        s.spatial_cache_voxels_prev_.buf().Fill(0, s.spatial_cache_voxels_prev_.buf().size(), 0, cmd_buf);
+    }
+
+#if RUN_IN_LOCKSTEP
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+#else
+    ctx_->ResolveTimestampQueries(ctx_->backend_frame);
+
+    hr = cmd_buf->Close();
+    if (FAILED(hr)) {
+        return;
+    }
+
+    const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
+
+    ID3D12CommandList *pp_cmd_bufs[] = {cmd_buf};
+    ctx_->graphics_queue()->ExecuteCommandLists(1, pp_cmd_bufs);
+
+    hr = ctx_->graphics_queue()->Signal(ctx_->in_flight_fence(ctx_->backend_frame),
+                                        ctx_->fence_values[ctx_->backend_frame]);
+    if (FAILED(hr)) {
+        return;
+    }
+
+    ctx_->render_finished_semaphore_is_set[ctx_->backend_frame] = true;
+    ctx_->render_finished_semaphore_is_set[prev_frame] = false;
+
+    ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
+#endif
+}
+
 Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());

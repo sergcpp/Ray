@@ -343,6 +343,8 @@ class Renderer : public RendererBase {
     void UpdateSpatialCache(const SceneBase &scene, RegionContext &region) override;
     void ResolveSpatialCache(const SceneBase &scene,
                              const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
+    void ResetSpatialCache(const SceneBase &scene,
+                           const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
