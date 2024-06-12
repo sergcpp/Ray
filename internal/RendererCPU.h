@@ -1202,6 +1202,10 @@ void Ray::Cpu::Renderer<SIMDPolicy>::ResolveSpatialCache(
 template <typename SIMDPolicy>
 void Ray::Cpu::Renderer<SIMDPolicy>::ResetSpatialCache(
     const SceneBase &scene, const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    if (!use_spatial_cache_) {
+        return;
+    }
+
     const auto &s = dynamic_cast<const Cpu::Scene &>(scene);
 
     std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
