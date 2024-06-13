@@ -1,11 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
-#if defined(GL_ES) || defined(VULKAN)
-    precision highp int;
-    precision highp float;
-#endif
-
 #include "prepare_indir_args_interface.h"
 #include "sort_common.h"
 
