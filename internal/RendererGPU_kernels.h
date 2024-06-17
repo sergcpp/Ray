@@ -862,6 +862,8 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
             memcpy(uniform_params.light_dir, l.dir.dir, 3 * sizeof(float));
             uniform_params.light_dir[3] = l.dir.angle;
             memcpy(uniform_params.light_col, l.col, 3 * sizeof(float));
+            memcpy(uniform_params.light_col_point, l.col, 3 * sizeof(float));
+            uniform_params.light_col[3] = cosf(l.dir.angle);
             if (l.dir.angle != 0.0f) {
                 const float radius = tanf(l.dir.angle);
                 uniform_params.light_col[0] *= (PI * radius * radius);
@@ -881,6 +883,8 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
         memcpy(uniform_params.light_dir, value_ptr(light_dir), 3 * sizeof(float));
         uniform_params.light_dir[3] = 0.0f;
         memcpy(uniform_params.light_col, value_ptr(light_col), 3 * sizeof(float));
+        memcpy(uniform_params.light_col_point, value_ptr(light_col), 3 * sizeof(float));
+        uniform_params.light_col[3] = 0.0f;
 
         DispatchComputeIndirect(cmd_buf, pi_shade_sky_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
                                 bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
