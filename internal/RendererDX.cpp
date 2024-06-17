@@ -1328,6 +1328,8 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
 
     const auto &s = dynamic_cast<const Dx::Scene &>(scene);
 
+    ++region.cache_iteration;
+
     const uint32_t tlas_root = s.tlas_root_;
 
     float root_min[3], cell_size[3];
@@ -1476,7 +1478,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         s.bindless_tex_data_.srv_descr_table.gpu_ptr = srv_gpu_handle.ptr;
     }
 
-    const uint32_t rand_seed = Ref::hash(Ref::hash(region.iteration / RAND_SAMPLES_COUNT));
+    const uint32_t rand_seed = Ref::hash(Ref::hash((region.cache_iteration - 1) / RAND_SAMPLES_COUNT));
 
     timestamps_[ctx_->backend_frame].cache_update[0] = ctx_->WriteTimestamp(cmd_buf, true);
 
@@ -1484,7 +1486,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
         kernel_GeneratePrimaryRays(cmd_buf, cam, rand_seed, rect, (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR),
                                    (h_ / RAD_CACHE_DOWNSAMPLING_FACTOR), random_seq_buf_, filter_table_,
-                                   region.iteration + 1, false, required_samples_buf_, counters_buf_, prim_rays_buf_);
+                                   region.cache_iteration, false, required_samples_buf_, counters_buf_, prim_rays_buf_);
     }
 
     { // prepare indirect args
@@ -1495,7 +1497,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     { // trace primary rays
         DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
         kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
-                              random_seq_buf_, rand_seed, region.iteration + 1, tlas_root, cam.fwd,
+                              random_seq_buf_, rand_seed, region.cache_iteration, tlas_root, cam.fwd,
                               cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
                               prim_hits_buf_);
     }
@@ -1504,7 +1506,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, s.env_, indir_args_buf_[0], 0,
                                 prim_hits_buf_, prim_rays_buf_, sc_data, random_seq_buf_, rand_seed,
-                                region.iteration + 1, rect, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
+                                region.cache_iteration, rect, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
                                 secondary_rays_buf_, shadow_rays_buf_, {}, counters_buf_, temp_buf1_,
                                 temp_depth_normals_buf_);
     }
@@ -1517,7 +1519,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     { // trace shadow rays
         DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[1], 2, counters_buf_, sc_data,
-                                    random_seq_buf_, rand_seed, region.iteration + 1, tlas_root,
+                                    random_seq_buf_, rand_seed, region.cache_iteration, tlas_root,
                                     cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
                                     shadow_rays_buf_, temp_buf0_);
     }
@@ -1552,7 +1554,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         { // trace secondary rays
             DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
             kernel_IntersectScene(cmd_buf, indir_args_buf_[1], 0, counters_buf_, cam.pass_settings, sc_data,
-                                  random_seq_buf_, rand_seed, region.iteration + 1, tlas_root, nullptr, -1.0f,
+                                  random_seq_buf_, rand_seed, region.cache_iteration, tlas_root, nullptr, -1.0f,
                                   s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
         }
 
@@ -1567,7 +1569,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
             const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, clamp_val, s.env_,
                                       indir_args_buf_[1], 0, prim_hits_buf_, secondary_rays_buf_, sc_data,
-                                      random_seq_buf_, rand_seed, region.iteration + 1, s.tex_atlases_,
+                                      random_seq_buf_, rand_seed, region.cache_iteration, s.tex_atlases_,
                                       s.bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_, {},
                                       counters_buf_, temp_depth_normals_buf_);
         }
@@ -1580,7 +1582,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         { // trace shadow rays
             DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
-                                        random_seq_buf_, rand_seed, region.iteration + 1, tlas_root,
+                                        random_seq_buf_, rand_seed, region.cache_iteration, tlas_root,
                                         cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
                                         shadow_rays_buf_, temp_buf0_);
         }

@@ -62,6 +62,7 @@ class RegionContext {
 
   public:
     int iteration = 0; ///< Number of rendered samples per pixel
+    int cache_iteration = 0;
 
     explicit RegionContext(const rect_t &rect) : rect_(rect) {}
 

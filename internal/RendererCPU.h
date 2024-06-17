@@ -1008,6 +1008,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
 
     std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
 
+    ++region.cache_iteration;
+
     camera_t cam = s.cams_[s.current_cam()._index];
     cam.fstop = 0.0f;
     cam.filter = ePixelFilter::Box;
@@ -1064,16 +1066,16 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
     const auto time_start = high_resolution_clock::now();
 
     const uint32_t *rand_seq = __pmj02_samples;
-    const uint32_t rand_seed = Ref::hash(Ref::hash(region.iteration / RAND_SAMPLES_COUNT));
+    const uint32_t rand_seed = Ref::hash(Ref::hash((region.cache_iteration - 1) / RAND_SAMPLES_COUNT));
 
     if (cam.type != eCamType::Geo) {
         SIMDPolicy::GeneratePrimaryRays(cam, rect, (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR),
                                         (h_ / RAD_CACHE_DOWNSAMPLING_FACTOR), rand_seq, rand_seed, nullptr,
-                                        region.iteration + 1, nullptr, p.primary_rays, p.intersections);
+                                        region.cache_iteration, nullptr, p.primary_rays, p.intersections);
         if (tlas_root != 0xffffffff) {
             SIMDPolicy::TraceRays(p.primary_rays, cam.pass_settings.min_transp_depth,
                                   cam.pass_settings.max_transp_depth, sc_data, tlas_root, false, s.tex_storages_,
-                                  rand_seq, rand_seed, region.iteration + 1, p.intersections);
+                                  rand_seq, rand_seed, region.cache_iteration, p.intersections);
         }
     } else {
         assert(false && "Unsupported camera type!");
@@ -1085,13 +1087,13 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
     SIMDPolicy::ShadePrimary(cam.pass_settings, p.intersections, p.primary_rays, rand_seq, rand_seed,
-                             region.iteration + 1, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
+                             region.cache_iteration, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
                              &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count,
                              nullptr, nullptr, w_, 1.0f, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
 
     SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                 cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data, tlas_root,
-                                rand_seq, rand_seed, region.iteration + 1, s.tex_storages_, w_, temp_buf_.data());
+                                rand_seq, rand_seed, region.cache_iteration, s.tex_storages_, w_, temp_buf_.data());
 
     rect_fill<cache_data_t>(temp_cache_data_, (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR), rect, cache_data_t{});
     SIMDPolicy::SpatialCacheUpdate(cache_grid_params, p.intersections, p.primary_rays, temp_cache_data_,
@@ -1116,7 +1118,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
         auto intersections = Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), secondary_rays_count};
 
         SIMDPolicy::TraceRays(rays, cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth, sc_data,
-                              tlas_root, true, s.tex_storages_, rand_seq, rand_seed, region.iteration + 1,
+                              tlas_root, true, s.tex_storages_, rand_seq, rand_seed, region.cache_iteration,
                               p.intersections);
 
         secondary_rays_count = 0;
@@ -1126,13 +1128,13 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
         // Use direct clamping value only for the first intersection with lightsource
         const float clamp_direct = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
         SIMDPolicy::ShadeSecondary(cam.pass_settings, clamp_direct, intersections, rays, rand_seq, rand_seed,
-                                   region.iteration + 1, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
+                                   region.cache_iteration, eSpatialCacheMode::Update, sc_data, s.tex_storages_,
                                    &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count,
                                    nullptr, nullptr, w_, temp_buf_.data(), nullptr, raw_filtered_buf_.data());
 
         SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                     cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_indirect, sc_data,
-                                    tlas_root, rand_seq, rand_seed, region.iteration + 1, s.tex_storages_, w_,
+                                    tlas_root, rand_seq, rand_seed, region.cache_iteration, s.tex_storages_, w_,
                                     temp_buf_.data());
 
         SIMDPolicy::SpatialCacheUpdate(cache_grid_params, intersections, rays, temp_cache_data_, temp_buf_.data(),
