@@ -1598,6 +1598,14 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
     tlas_root_node_ = bvh_nodes[0];
 }
 
+//#define DUMP_SKY_ENV
+#ifdef DUMP_SKY_ENV
+extern "C" {
+int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
+            const char **err);
+}
+#endif
+
 inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const atmosphere_params_t &params,
                                                                          const int res[2], const light_t lights[],
                                                                          Span<const uint32_t> dir_lights) {
@@ -1651,6 +1659,8 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
                 memcpy(uniform_params.light_dir, l.dir.dir, 3 * sizeof(float));
                 uniform_params.light_dir[3] = l.dir.angle;
                 memcpy(uniform_params.light_col, l.col, 3 * sizeof(float));
+                memcpy(uniform_params.light_col_point, l.col, 3 * sizeof(float));
+                uniform_params.light_col[3] = cosf(l.dir.angle);
                 if (l.dir.angle != 0.0f) {
                     const float radius = tanf(l.dir.angle);
                     uniform_params.light_col[0] *= (PI * radius * radius);
@@ -1669,6 +1679,8 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
             memcpy(uniform_params.light_dir, value_ptr(light_dir), 3 * sizeof(float));
             uniform_params.light_dir[3] = 0.0f;
             memcpy(uniform_params.light_col, value_ptr(light_col), 3 * sizeof(float));
+            memcpy(uniform_params.light_col_point, value_ptr(light_col), 3 * sizeof(float));
+            uniform_params.light_col[3] = 0.0f;
 
             DispatchCompute(cmd_buf, pi_bake_sky_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                             ctx_->default_descr_alloc(), ctx_->log());
@@ -1690,6 +1702,10 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
     std::vector<color_rgba8_t> rgbe_pixels(res[0] * res[1]);
 
     const float *f32_data = reinterpret_cast<const float *>(temp_readback_buf.Map());
+#ifdef DUMP_SKY_ENV
+    const char *err = nullptr;
+    SaveEXR(f32_data, res[0], res[1], 4, 0, "sky.exr", &err);
+#endif
     for (int i = 0; i < res[0] * res[1]; ++i) {
         Ref::fvec4 color(&f32_data[4 * i]);
         color = rgb_to_rgbe(color);

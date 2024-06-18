@@ -616,13 +616,9 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
     // Sun disk (bake directional light into the texture)
     //
     if (g_params.light_dir.w > 0.0 && planet_intersection.x < 0.0 && light_brightness > 0.0) {
-        const float cos_theta = cos(g_params.light_dir.w);
-        vec3 sun_disk = total_transmittance * smoothstep(cos_theta - SKY_SUN_BLEND_VAL, cos_theta + SKY_SUN_BLEND_VAL, costh);
-        // 'de-multiply' by disk area (to get original brightness)
-        const float radius = tan(g_params.light_dir.w);
-        sun_disk /= (PI * radius * radius);
-
-        total_radiance += sun_disk * g_params.light_col.xyz;
+        const float cos_theta = g_params.light_col.w;
+        const vec3 sun_disk = total_transmittance * smoothstep(cos_theta - SKY_SUN_BLEND_VAL, cos_theta + SKY_SUN_BLEND_VAL, costh);
+        total_radiance += sun_disk * g_params.light_col_point.xyz;
     }
 
     //

@@ -65,8 +65,9 @@ Ray::Dx::MemAllocation Ray::Dx::MemoryAllocator::Allocate(const uint32_t alignme
     auto allocation = alloc_.Alloc(alignment, size);
 
     if (allocation.block == 0xffffffff) {
-        const bool res =
-            AllocateNewPool(std::max(size, std::min(max_pool_size_, uint32_t(pools_.back().size * growth_factor_))));
+        const uint32_t required_size = FreelistAlloc::rounded_size(size + alignment);
+        const bool res = AllocateNewPool(
+            std::max(required_size, std::min(max_pool_size_, uint32_t(pools_.back().size * growth_factor_))));
         if (!res) {
             // allocation failed (out of memory)
             return {};
