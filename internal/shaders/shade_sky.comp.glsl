@@ -257,7 +257,7 @@ vec3 IntegrateScatteringMain(const vec3 ray_start, const vec3 ray_dir, float ray
             const vec3 multiscattered_lum = textureLod(g_multiscatter_lut, uv2, 0.0).xyz;
 
             const vec3 phase_times_scattering = medium.scattering_ray * phase_r + medium.scattering_mie * phase_m;
-            S += (planet_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col.xyz;
+            S += (planet_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col_point.xyz;
         } else if (g_atmosphere_params.moon_radius > 0.0) {
             // moon reflection contribution  (totally fake)
             const float view_zenith_cos_angle = dot(g_atmosphere_params.moon_dir.xyz, up_vector);
@@ -269,7 +269,7 @@ vec3 IntegrateScatteringMain(const vec3 ray_start, const vec3 ray_dir, float ray
             const vec3 multiscattered_lum = textureLod(g_multiscatter_lut, uv2, 0.0).xyz;
 
             const vec3 phase_times_scattering = medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
-            S += SKY_MOON_SUN_RELATION * (light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col.xyz;
+            S += SKY_MOON_SUN_RELATION * (light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col_point.xyz;
         }
 
         // 1 is the integration of luminance over the 4pi of a sphere, and assuming an isotropic phase function
@@ -298,7 +298,7 @@ vec3 IntegrateScatteringMain(const vec3 ray_start, const vec3 ray_dir, float ray
         const vec2 uv = LutTransmittanceParamsToUv(local_height + g_atmosphere_params.planet_radius, view_zenith_cos_angle);
         const vec3 light_transmittance = textureLod(g_trasmittance_lut, uv, 0.0).xyz;
         radiance += g_atmosphere_params.ground_albedo.xyz * saturate(dot(up_vector, g_params.light_dir.xyz)) *
-                    inout_transmittance * light_transmittance * g_params.light_col.xyz;
+                    inout_transmittance * light_transmittance * g_params.light_col_point.xyz;
     }
 
     return radiance;
@@ -434,7 +434,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
     const float moon_costh = dot(ray_dir, moon_dir);
     const vec3 moon_phase_w = PhaseWrenninge(moon_costh);
 
-    const float light_brightness = g_params.light_col.x + g_params.light_col.y + g_params.light_col.z;
+    const float light_brightness = g_params.light_col_point.x + g_params.light_col_point.y + g_params.light_col_point.z;
 
     vec3 total_radiance = vec3(0.0), total_transmittance = vec3(1.0);
 
@@ -540,7 +540,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
             float cloud_blend = linstep(SKY_CLOUDS_HORIZON_CUTOFF + 0.25, SKY_CLOUDS_HORIZON_CUTOFF, ray_dir.y);
             cloud_blend = 1.0 - pow(cloud_blend, 5.0);
 
-            total_radiance += cloud_blend * clouds * g_params.light_col.xyz;
+            total_radiance += cloud_blend * clouds * g_params.light_col_point.xyz;
             total_transmittance = mix(transmittance_before, total_transmittance, cloud_blend);
         }
     }
@@ -586,10 +586,10 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
         }
 
         if (g_params.light_dir.y > -0.025) {
-            total_radiance += total_transmittance * GetLightEnergy(0.002, dC, phase_w) * light_transmittance * dC * g_params.light_col.xyz;
+            total_radiance += total_transmittance * GetLightEnergy(0.002, dC, phase_w) * light_transmittance * dC * g_params.light_col_point.xyz;
         } else if (g_atmosphere_params.moon_radius > 0.0) {
             total_radiance += SKY_MOON_SUN_RELATION * total_transmittance * GetLightEnergy(0.002, dC, moon_phase_w) *
-                            moon_transmittance * dC * g_params.light_col.xyz;
+                            moon_transmittance * dC * g_params.light_col_point.xyz;
         }
         total_transmittance *= exp(-dC * 0.002 * 1000.0);
     }
@@ -618,7 +618,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
     if (g_params.light_dir.w > 0.0 && planet_intersection.x < 0.0 && light_brightness > 0.0) {
         const float cos_theta = g_params.light_col.w;
         const vec3 sun_disk = total_transmittance * smoothstep(cos_theta - SKY_SUN_BLEND_VAL, cos_theta + SKY_SUN_BLEND_VAL, costh);
-        total_radiance += sun_disk * g_params.light_col_point.xyz;
+        total_radiance += sun_disk * g_params.light_col.xyz;
     }
 
     //
