@@ -101,7 +101,7 @@ float linstep(const float smin, const float smax, const float x) {
 vec3 safe_invert(vec3 v) {
     vec3 ret;
     [[unroll]] for (int i = 0; i < 3; ++i) {
-        ret[i] = (abs(v[i]) > FLT_EPS) ? (1.0 / v[i]) : _copysign(FLT_MAX, v[i]);
+        ret[i] = 1.0 / ((abs(v[i]) > FLT_EPS) ? v[i] : _copysign(FLT_EPS, v[i]));
     }
     return ret;
 }
