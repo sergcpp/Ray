@@ -1466,8 +1466,8 @@ void comp_aux_inv_values(const fvec<S> o[3], const fvec<S> d[3], fvec<S> inv_d[3
 
 void comp_aux_inv_values(const float o[3], const float d[3], float inv_d[3], float inv_d_o[3]) {
     for (int i = 0; i < 3; ++i) {
-        inv_d[i] = (fabsf(d[i]) > FLT_EPS) ? (1.0f / d[i]) : copysignf(FLT_MAX, d[i]);
-        inv_d_o[i] = (fabsf(d[i]) > FLT_EPS) ? (inv_d[i] * o[i]) : copysignf(FLT_MAX, d[i]);
+        inv_d[i] = 1.0f / ((fabsf(d[i]) > FLT_EPS) ? d[i] : copysignf(FLT_EPS, d[i]));
+        inv_d_o[i] = inv_d[i] * o[i];
     }
 }
 

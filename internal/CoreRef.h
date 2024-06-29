@@ -191,7 +191,7 @@ force_inline float safe_div_neg(const float a, const float b) {
 
 force_inline void safe_invert(const float v[3], float out_v[3]) {
     for (int i = 0; i < 3; ++i) {
-        out_v[i] = (fabsf(v[i]) > FLT_EPS) ? (1.0f / v[i]) : copysignf(FLT_MAX, v[i]);
+        out_v[i] = 1.0f / ((fabsf(v[i]) > FLT_EPS) ? v[i] : copysignf(FLT_EPS, v[i]));
     }
 }
 
