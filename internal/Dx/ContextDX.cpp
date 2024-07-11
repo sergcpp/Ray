@@ -36,6 +36,9 @@ void DebugReportCallback(D3D12_MESSAGE_CATEGORY Category, D3D12_MESSAGE_SEVERITY
     if (ID == D3D12_MESSAGE_ID_CORRUPTED_PARAMETER2) {
         return;
     }
+    if (ID == D3D12_MESSAGE_ID_LIVE_DEVICE && strstr(pDescription, "Refcount: 2")) {
+        return;
+    }
     auto *ctx = reinterpret_cast<const Context *>(pContext);
     ctx->log()->Error("%s\n", pDescription);
 }
@@ -52,15 +55,6 @@ void Ray::Dx::Context::Destroy() {
     if ((p)) {                                                                                                         \
         (p)->Release();                                                                                                \
         (p) = 0;                                                                                                       \
-    }
-
-    if (debug_callback_cookie_) {
-        ID3D12InfoQueue1 *info_queue;
-        HRESULT hr = device_->QueryInterface(IID_PPV_ARGS(&info_queue));
-        if (SUCCEEDED(hr)) {
-            info_queue->UnregisterMessageCallback(debug_callback_cookie_);
-            debug_callback_cookie_ = {};
-        }
     }
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
@@ -88,10 +82,23 @@ void Ray::Dx::Context::Destroy() {
     SAFE_RELEASE(temp_command_allocator_);
     SAFE_RELEASE(indirect_dispatch_cmd_signature_);
 
+    SAFE_RELEASE(device5_);
+
     if (validation_level_) {
         ID3D12DebugDevice *debug_device = nullptr;
         if (device_ && SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&debug_device)))) {
             debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+            debug_device->Release();
+        }
+    }
+
+    if (debug_callback_cookie_) {
+        ID3D12InfoQueue1 *info_queue = {};
+        HRESULT hr = device_->QueryInterface(IID_PPV_ARGS(&info_queue));
+        if (SUCCEEDED(hr)) {
+            info_queue->UnregisterMessageCallback(debug_callback_cookie_);
+            debug_callback_cookie_ = {};
+            info_queue->Release();
         }
     }
 
@@ -200,7 +207,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
     command_list_->Close();
 
     if (validation_level) {
-        ID3D12InfoQueue1 *info_queue;
+        ID3D12InfoQueue1 *info_queue = {};
         hr = device_->QueryInterface(IID_PPV_ARGS(&info_queue));
         if (SUCCEEDED(hr)) {
             hr = info_queue->RegisterMessageCallback(DebugReportCallback,
@@ -209,6 +216,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
             if (FAILED(hr)) {
                 log->Error("Failed to register message callback!");
             }
+            info_queue->Release();
         }
     }
 
@@ -218,6 +226,8 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
         return false;
     }
     timestamp_period_us_ = 1000000.0 / double(timestamp_frequency);
+
+    // Destroy();
 
     DXGI_ADAPTER_DESC1 desc;
     best_adapter->GetDesc1(&desc);
@@ -250,26 +260,30 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
     }
     max_combined_image_samplers_ = std::min(max_sampled_images_, max_samplers_);
 
-    hr = device_->QueryInterface(IID_PPV_ARGS(&device1_));
+    ID3D12Device1 *device1 = {};
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device1));
     if (SUCCEEDED(hr)) {
         D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1 = {};
-        hr = device1_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &options1, sizeof(options1));
+        hr = device1->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &options1, sizeof(options1));
         if (SUCCEEDED(hr)) {
             if (options1.Int64ShaderOps == TRUE) {
                 int64_supported_ = true;
             }
         }
+        device1->Release();
     }
 
-    hr = device_->QueryInterface(IID_PPV_ARGS(&device4_));
+    ID3D12Device4 *device4 = {};
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device4));
     if (SUCCEEDED(hr)) {
         D3D12_FEATURE_DATA_D3D12_OPTIONS4 options4 = {};
-        hr = device4_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &options4, sizeof(options4));
+        hr = device4->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &options4, sizeof(options4));
         if (SUCCEEDED(hr)) {
             if (options4.Native16BitShaderOpsSupported == TRUE) {
                 fp16_supported_ = true;
             }
         }
+        device4->Release();
     }
 
     hr = device_->QueryInterface(IID_PPV_ARGS(&device5_));
@@ -283,15 +297,17 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
         }
     }
 
-    hr = device_->QueryInterface(IID_PPV_ARGS(&device9_));
+    ID3D12Device9 *device9 = {};
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device9));
     if (SUCCEEDED(hr)) {
         D3D12_FEATURE_DATA_D3D12_OPTIONS9 feature_support = {};
-        hr = device9_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS9, &feature_support, sizeof(feature_support));
+        hr = device9->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS9, &feature_support, sizeof(feature_support));
         if (SUCCEEDED(hr)) {
             if (feature_support.AtomicInt64OnTypedResourceSupported == TRUE) {
                 int64_atomics_supported_ = true;
             }
         }
+        device9->Release();
     }
 
     subgroup_supported_ = true;
