@@ -120,7 +120,7 @@ bool g_catch_flt_exceptions = false;
 bool g_determine_sample_count = false;
 bool g_minimal_output = false;
 bool g_nohwrt = false;
-int g_validation_level = 0;
+int g_validation_level = 1;
 
 #ifdef _WIN32
 #ifndef NOMINMAX
