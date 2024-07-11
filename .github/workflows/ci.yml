@@ -115,7 +115,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--device NV --nocpu"
+          test-args: "--device NV --nocpu -vl 0"
   test-windows-x86_64-gpu-amd:
     runs-on: [ windows, x86_64, amd ]
     needs:
@@ -131,7 +131,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--device AMD --nocpu -vl 1"
+          test-args: "--device AMD --nocpu"
   test-windows-x86_64-gpu-arc:
     runs-on: [ windows, x86_64, arc ]
     needs:
@@ -147,7 +147,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--device Arc --nocpu -vl 1"
+          test-args: "--device Arc --nocpu"
   test-windows-x86_64-gpu-xe:
     runs-on: [ windows, x86_64, xe ]
     needs:
@@ -163,7 +163,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--device Xe --nocpu -vl 1"
+          test-args: "--device Xe --nocpu"
   test-windows-arm64-cpu:
     runs-on: [ windows, arm64 ]
     needs:
@@ -195,7 +195,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
-          test-args: "--device Adreno --nocpu -vl 1"
+          test-args: "--device Adreno --nocpu"
   test-linux-x86_64-cpu:
     runs-on: [ linux, x86_64 ]
     needs:
@@ -227,7 +227,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
-          test-args: "--device AMD --nocpu --nohwrt -vl 1"
+          test-args: "--device AMD --nocpu --nohwrt"
   test-linux-x86_64-gpu-nv:
     runs-on: [ linux, x86_64, nv ]
     needs:
@@ -243,7 +243,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
-          test-args: "--device NV --nocpu -vl 1"
+          test-args: "--device NV --nocpu"
   test-macos-arm64-cpu:
     runs-on: [ macos, arm64 ]
     needs:
@@ -275,7 +275,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
-          test-args: "--device M1 --nocpu -vl 1"
+          test-args: "--device M1 --nocpu"
   test-macos-x86_64-cpu:
     runs-on: [ macos, x86_64 ]
     needs:
