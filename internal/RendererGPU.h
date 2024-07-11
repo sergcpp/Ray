@@ -39,6 +39,7 @@ struct scene_data_t {
     const Texture2D &moon_tex;
     const Texture2D &weather_tex;
     const Texture2D &cirrus_tex;
+    const Texture2D &curl_tex;
     const Texture3D &noise3d_tex;
 };
 

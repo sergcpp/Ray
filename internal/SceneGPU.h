@@ -22,6 +22,8 @@ extern const int NOISE_3D_RES;
 extern const uint8_t __3d_noise_tex[];
 extern const int CIRRUS_TEX_RES;
 extern const uint8_t __cirrus_tex[];
+extern const int CURL_TEX_RES;
+extern const uint8_t __curl_tex[];
 
 Ref::fvec4 rgb_to_rgbe(const Ref::fvec4 &rgb);
 namespace NS {
@@ -82,7 +84,7 @@ class Scene : public SceneCommon {
     std::vector<uint32_t> dir_lights_; // compacted list of all directional lights
 
     Texture2D sky_transmittance_lut_tex_, sky_multiscatter_lut_tex_;
-    Texture2D sky_moon_tex_, sky_weather_tex_, sky_cirrus_tex_;
+    Texture2D sky_moon_tex_, sky_weather_tex_, sky_cirrus_tex_, sky_curl_tex_;
     Texture3D sky_noise3d_tex_;
 
     LightHandle env_map_light_ = InvalidLightHandle;
@@ -1598,7 +1600,7 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
     tlas_root_node_ = bvh_nodes[0];
 }
 
-//#define DUMP_SKY_ENV
+// #define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
 int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
@@ -1642,6 +1644,7 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
             {eBindTarget::Tex2DSampled, ShadeSky::MOON_TEX_SLOT, sky_moon_tex_},
             {eBindTarget::Tex2DSampled, ShadeSky::WEATHER_TEX_SLOT, sky_weather_tex_},
             {eBindTarget::Tex2DSampled, ShadeSky::CIRRUS_TEX_SLOT, sky_cirrus_tex_},
+            {eBindTarget::Tex2DSampled, ShadeSky::CURL_TEX_SLOT, sky_curl_tex_},
             {eBindTarget::Tex3DSampled, ShadeSky::NOISE3D_TEX_SLOT, sky_noise3d_tex_},
             {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, temp_img}};
 
@@ -1826,6 +1829,35 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         sky_cirrus_tex_.SetSubImage(0, 0, 0, CIRRUS_TEX_RES, CIRRUS_TEX_RES, eTexFormat::RawRG88, stage_buf, cmd_buf, 0,
                                     stage_buf.size());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+        stage_buf.FreeImmediate();
+    }
+
+    if (!sky_curl_tex_.ready()) {
+        Tex2DParams params;
+        params.w = params.h = CURL_TEX_RES;
+        params.format = eTexFormat::RawRGBA8888;
+        params.flags = eTexFlags::SRGB;
+        params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
+        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.wrap = eTexWrap::Repeat;
+
+        sky_curl_tex_ = Texture2D{"Curl Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
+
+        Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 4 * CURL_TEX_RES * CURL_TEX_RES);
+        uint8_t *mapped_ptr = stage_buf.Map();
+        for (int i = 0; i < CURL_TEX_RES * CURL_TEX_RES; ++i) {
+            mapped_ptr[4 * i + 0] = __curl_tex[3 * i + 0];
+            mapped_ptr[4 * i + 1] = __curl_tex[3 * i + 1];
+            mapped_ptr[4 * i + 2] = __curl_tex[3 * i + 2];
+            mapped_ptr[4 * i + 3] = 255;
+        }
+        stage_buf.Unmap();
+
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        sky_curl_tex_.SetSubImage(0, 0, 0, CURL_TEX_RES, CURL_TEX_RES, eTexFormat::RawRGBA8888, stage_buf, cmd_buf, 0,
+                                  stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         stage_buf.FreeImmediate();
