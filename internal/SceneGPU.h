@@ -1633,6 +1633,7 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
                                                   {&sky_moon_tex_, eResState::ShaderResource},
                                                   {&sky_weather_tex_, eResState::ShaderResource},
                                                   {&sky_cirrus_tex_, eResState::ShaderResource},
+                                                  {&sky_curl_tex_, eResState::ShaderResource},
                                                   {&sky_noise3d_tex_, eResState::ShaderResource},
                                                   {&temp_img, eResState::UnorderedAccess}};
         TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);

@@ -762,6 +762,9 @@ inline void Ray::NS::Renderer::TransitionSceneResources(CommandBuffer cmd_buf, c
     if (sc_data.cirrus_tex.ready() && sc_data.cirrus_tex.resource_state != eResState::ShaderResource) {
         res_transitions.emplace_back(&sc_data.cirrus_tex, eResState::ShaderResource);
     }
+    if (sc_data.curl_tex.ready() && sc_data.curl_tex.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.curl_tex, eResState::ShaderResource);
+    }
     if (sc_data.noise3d_tex.handle() && sc_data.noise3d_tex.resource_state != eResState::ShaderResource) {
         res_transitions.emplace_back(&sc_data.noise3d_tex, eResState::ShaderResource);
     }
