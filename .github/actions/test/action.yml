@@ -19,5 +19,5 @@ runs:
         chmod +x ./${{ inputs.bin-dir }}/${{ inputs.bin-name }}
         WORK_DIR=`pwd`
         cd ../../builds/Ray/tests
-        $WORK_DIR/${{ inputs.bin-dir }}/${{ inputs.bin-name }} -j4 ${{ inputs.test-args }}
+        $WORK_DIR/${{ inputs.bin-dir }}/${{ inputs.bin-name }} ${{ inputs.test-args }}
       shell: bash

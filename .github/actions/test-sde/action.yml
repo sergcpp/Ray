@@ -16,5 +16,5 @@ runs:
     - run: |
         WORK_DIR=`pwd`
         cd ../../builds/Ray/tests
-        sde ${{ inputs.sde-args }} -- $WORK_DIR/${{ inputs.bin-dir }}/test_Ray -j4 ${{ inputs.test-args }}
+        sde ${{ inputs.sde-args }} -- $WORK_DIR/${{ inputs.bin-dir }}/test_Ray ${{ inputs.test-args }}
       shell: bash

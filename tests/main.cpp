@@ -186,9 +186,7 @@ int main(int argc, char *argv[]) {
         threads_count = 1;
     }
 
-    if (threads_count > 1) {
-        g_minimal_output = true;
-    }
+    g_minimal_output = true;
 
 #if defined(_WIN32) && !defined(__clang__)
     const bool enable_fp_exceptions = !nocpu || full_tests;
