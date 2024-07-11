@@ -294,7 +294,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--nogpu"
+          test-args: "--nogpu -j4"
   test-windows-x86_64-gpu-nv:
     runs-on: [ windows, x86_64, nv ]
     needs:
@@ -374,7 +374,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
-          test-args: "--nogpu"
+          test-args: "--nogpu -j4"
   test-windows-arm64-gpu-adreno:
     runs-on: [ windows, arm64, adreno ]
     needs:
@@ -406,7 +406,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
-          test-args: "--nogpu"
+          test-args: "--nogpu -j4"
   test-linux-x86_64-gpu-amd:
     runs-on: [ linux, x86_64, amd ]
     needs:
@@ -454,7 +454,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
-          test-args: "--nogpu"
+          test-args: "--nogpu -j4"
   test-macos-arm64-gpu-m1:
     runs-on: [ macos, arm64, m1 ]
     needs:
@@ -486,7 +486,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
-          test-args: "--nogpu"
+          test-args: "--nogpu -j4"
   test-windows-x86_64-cpu-sse2:
     runs-on: [ windows, x86_64, win10 ]
     needs:
@@ -502,7 +502,7 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--arch SSE2 --nogpu"
+          test-args: "--arch SSE2 --nogpu -j4"
           sde-args: "-p4p"
   test-windows-x86_64-cpu-sse41:
     runs-on: [ windows, x86_64, win10 ]
@@ -519,7 +519,7 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--arch SSE41 --nogpu"
+          test-args: "--arch SSE41 --nogpu -j4"
           sde-args: "-pnr"
   test-windows-x86_64-cpu-avx:
     runs-on: [ windows, x86_64 ]
@@ -536,7 +536,7 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--arch AVX --nogpu"
+          test-args: "--arch AVX --nogpu -j4"
           sde-args: "-snb"
   test-windows-x86_64-cpu-avx2:
     runs-on: [ windows, x86_64 ]
@@ -553,7 +553,7 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--arch AVX2 --nogpu"
+          test-args: "--arch AVX2 --nogpu -j4"
           sde-args: "-hsw"
   test-windows-x86_64-cpu-avx512:
     runs-on: [ windows, x86_64 ]
@@ -570,7 +570,7 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
-          test-args: "--arch AVX512 --nogpu"
+          test-args: "--arch AVX512 --nogpu -j4"
           sde-args: "-future"
   test-linux-x86_64-cpu-tsan:
     runs-on: [ linux, x86_64 ]
@@ -588,7 +588,7 @@ jobs:
         with:
           bin-name: "test_Ray-tsan"
           bin-dir: "linux-x86_64-tsan"
-          test-args: "--nogpu"
+          test-args: "--nogpu -j4"
   test-windows-x86_64-cpu-asan:
     runs-on: [ windows, x86_64 ]
     needs:
@@ -605,7 +605,7 @@ jobs:
         with:
           bin-name: "test_Ray-asan"
           bin-dir: "windows-x86_64-asan"
-          test-args: "--nogpu"
+          test-args: "--nogpu -j4"
   test-windows-x86_64-gpu-nv-asan:
     runs-on: [ windows, x86_64, nv ]
     needs:
@@ -638,7 +638,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
-          test-args: "--nogpu --time_limit 2.95"
+          test-args: "--nogpu -j4 --time_limit 2.95"
   test-windows-arm64-gpu-perf:
     runs-on: [ windows, arm64, perf, adreno ]
     needs:
@@ -654,4 +654,4 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
-          test-args: "--nocpu --time_limit 5.4"
+          test-args: "--nocpu -j4 --time_limit 5.4"
