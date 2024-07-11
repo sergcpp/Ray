@@ -712,6 +712,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                   s.sky_moon_tex_,
                                   s.sky_weather_tex_,
                                   s.sky_cirrus_tex_,
+                                  s.sky_curl_tex_,
                                   s.sky_noise3d_tex_};
     TransitionSceneResources(cmd_buf, sc_data);
 
@@ -1445,6 +1446,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   s.spatial_cache_entries_.buf(),
                                   s.spatial_cache_voxels_curr_.buf(),
                                   s.atmosphere_params_buf_,
+                                  {},
                                   {},
                                   {},
                                   {},

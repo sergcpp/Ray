@@ -1625,7 +1625,7 @@ void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 13;
+    const int SampleCount = 14;
     const double MinPSNR = 24.05;
     const int PixThres = 5219;
 
@@ -1646,7 +1646,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 12;
+    const int SampleCount = 14;
     const int PixThres = 370;
 
     Ray::principled_mat_desc_t metal_mat_desc;

@@ -40,7 +40,8 @@ const int MULTISCATTER_LUT_SLOT = 10;
 const int MOON_TEX_SLOT = 11;
 const int WEATHER_TEX_SLOT = 12;
 const int CIRRUS_TEX_SLOT = 13;
-const int NOISE3D_TEX_SLOT = 14;
+const int CURL_TEX_SLOT = 14;
+const int NOISE3D_TEX_SLOT = 15;
 
 const int OUT_IMG_SLOT = 0;
 

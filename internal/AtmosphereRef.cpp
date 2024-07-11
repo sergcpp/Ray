@@ -7,6 +7,7 @@
 namespace Ray {
 #include "precomputed/__3d_noise_tex.inl"
 #include "precomputed/__cirrus_tex.inl"
+#include "precomputed/__curl_tex.inl"
 #include "precomputed/__moon_tex.inl"
 #include "precomputed/__weather_tex.inl"
 
@@ -284,6 +285,26 @@ float Sample3dNoiseTex(fvec4 uvw) {
     return ((1.0f - k.get<2>()) * n0xx + k.get<2>() * n1xx) / 255.0f;
 }
 
+force_inline fvec4 FetchCurlTex(const int x, const int y) {
+    return fvec4{float(__curl_tex[3 * (y * CURL_TEX_RES + x) + 0]), float(__curl_tex[3 * (y * CURL_TEX_RES + x) + 1]),
+                 float(__curl_tex[3 * (y * CURL_TEX_RES + x) + 2]), 0.0f};
+}
+
+fvec4 SampleCurlTex(fvec4 uv) {
+    uv = fract(uv - 0.5f / CURL_TEX_RES) * fvec4(CURL_TEX_RES);
+    auto iuv0 = ivec4{uv};
+    iuv0 = clamp(iuv0, ivec4{0}, ivec4{CURL_TEX_RES - 1, CURL_TEX_RES - 1, 0, 0});
+    const ivec4 iuv1 = (iuv0 + 1) & ivec4{CURL_TEX_RES - 1, CURL_TEX_RES - 1, 0, 0};
+
+    const fvec4 m00 = FetchCurlTex(iuv0.get<0>(), iuv0.get<1>()), m01 = FetchCurlTex(iuv1.get<0>(), iuv0.get<1>()),
+                m10 = FetchCurlTex(iuv0.get<0>(), iuv1.get<1>()), m11 = FetchCurlTex(iuv1.get<0>(), iuv1.get<1>());
+
+    const fvec4 k = fract(uv);
+    const fvec4 m0 = m01 * k.get<0>() + m00 * (1.0f - k.get<0>()), m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
+
+    return srgb_to_linear((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
+}
+
 // Taken from https://github.com/armory3d/armory_ci/blob/master/build_untitled/compiled/Shaders/world_pass.frag.glsl
 float GetDensityHeightGradientForPoint(float height, float cloud_type) {
     const auto stratusGrad = fvec4(0.02f, 0.05f, 0.09f, 0.11f);
@@ -320,6 +341,14 @@ float GetCloudsDensity(const atmosphere_params_t &params, fvec4 local_position, 
     }
 
     local_position /= 1.5f * (params.clouds_height_end - params.clouds_height_beg);
+
+    // TODO: Apply animated cloud offset here
+    const fvec4 curl_read0 = SampleCurlTex(8.0f * fvec4{local_position.get<0>(), local_position.get<2>(), 0.0f, 0.0f});
+    local_position += curl_read0 * out_height_fraction * 0.25f;
+
+    fvec4 curl_read1 = SampleCurlTex(16.0f * fvec4{local_position.get<1>(), local_position.get<0>(), 0.0f, 0.0f});
+    curl_read1 = fvec4{curl_read1.get<1>(), curl_read1.get<2>(), curl_read1.get<0>(), 0.0f};
+    local_position += curl_read1 * (1.0f - out_height_fraction) * 0.05f;
 
     const float noise_read = Sample3dNoiseTex(local_position);
     return 3.0f * Ray::mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, out_height_fraction) *
@@ -398,7 +427,6 @@ fvec4 SampleMoonTex(fvec4 uv) {
                 m10 = FetchMoonTex(iuv0.get<0>(), iuv1.get<1>()), m11 = FetchMoonTex(iuv1.get<0>(), iuv1.get<1>());
 
     const fvec4 k = fract(uv);
-
     const fvec4 m0 = m01 * k.get<0>() + m00 * (1.0f - k.get<0>()), m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
 
     return srgb_to_linear((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
@@ -419,7 +447,6 @@ fvec4 SampleCirrusTex(fvec4 uv) {
                 m10 = FetchCirrusTex(iuv0.get<0>(), iuv1.get<1>()), m11 = FetchCirrusTex(iuv1.get<0>(), iuv1.get<1>());
 
     const fvec4 k = fract(uv);
-
     const fvec4 m0 = m01 * k.get<0>() + m00 * (1.0f - k.get<0>()), m1 = m11 * k.get<0>() + m10 * (1.0f - k.get<0>());
 
     return srgb_to_linear((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));

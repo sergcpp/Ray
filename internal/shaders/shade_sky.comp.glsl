@@ -40,6 +40,7 @@ layout(binding = MULTISCATTER_LUT_SLOT) uniform sampler2D g_multiscatter_lut;
 layout(binding = MOON_TEX_SLOT) uniform sampler2D g_moon_tex;
 layout(binding = WEATHER_TEX_SLOT) uniform sampler2D g_weather_tex;
 layout(binding = CIRRUS_TEX_SLOT) uniform sampler2D g_cirrus_tex;
+layout(binding = CURL_TEX_SLOT) uniform sampler2D g_curl_tex;
 layout(binding = NOISE3D_TEX_SLOT) uniform sampler3D g_noise3d_tex;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
@@ -377,6 +378,13 @@ float GetCloudsDensity(vec3 local_position, out float out_local_height, out floa
     }
 
     local_position /= 1.5 * (g_atmosphere_params.clouds_height_end - g_atmosphere_params.clouds_height_beg);
+
+    // TODO: Apply animated cloud offset here
+    const vec3 curl_read0 = textureLod(g_curl_tex, 8.0 * local_position.xz, 0.0).xyz;
+    local_position += curl_read0 * out_height_fraction * 0.25;
+
+    const vec3 curl_read1 = textureLod(g_curl_tex, 16.0 * local_position.yx, 0.0).yzx;
+    local_position += curl_read1 * (1.0 - out_height_fraction) * 0.05;
 
     const float noise_read = textureLod(g_noise3d_tex, local_position, 0.0).x;
     return 3.0 * mix(max(0.0, 1.0 - cloud_type * 2.0), 1.0, out_height_fraction) *

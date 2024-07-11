@@ -838,6 +838,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
         {eBindTarget::Tex2DSampled, ShadeSky::MOON_TEX_SLOT, sc_data.moon_tex},
         {eBindTarget::Tex2DSampled, ShadeSky::WEATHER_TEX_SLOT, sc_data.weather_tex},
         {eBindTarget::Tex2DSampled, ShadeSky::CIRRUS_TEX_SLOT, sc_data.cirrus_tex},
+        {eBindTarget::Tex2DSampled, ShadeSky::CURL_TEX_SLOT, sc_data.curl_tex},
         {eBindTarget::Tex3DSampled, ShadeSky::NOISE3D_TEX_SLOT, sc_data.noise3d_tex},
         {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, out_img}};
 
