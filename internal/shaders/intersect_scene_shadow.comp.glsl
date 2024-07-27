@@ -163,7 +163,7 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
             uint prim_count = floatBitsToUint(n.bbox_max.w);
             for (uint i = prim_index; i < prim_index + prim_count; ++i) {
                 mesh_instance_t mi = g_mesh_instances[g_mi_indices[i]];
-                if ((mi.block_ndx.w & (1u << RAY_TYPE_SHADOW)) == 0) {
+                if ((mi.block_ndx.w & RAY_TYPE_SHADOW_BIT) == 0) {
                     continue;
                 }
 
@@ -285,7 +285,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         rayQueryInitializeEXT(rq,                       // rayQuery
                               g_tlas,                   // topLevel
                               0,                        // rayFlags
-                              (1u << RAY_TYPE_SHADOW),  // cullMask
+                              RAY_TYPE_SHADOW_BIT,      // cullMask
                               ro,                       // origin
                               0.0,                      // tMin
                               rd,                       // direction
@@ -400,15 +400,15 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
         } else {
             const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
             light_t l = g_lights[light_index];
-            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) == 0) {
+            [[dont_flatten]] if ((LIGHT_RAY_VISIBILITY(l) & RAY_TYPE_SHADOW_BIT) == 0) {
                 // Skip non-blocking light
                 continue;
             }
-            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0 && r.dist >= 0.0) { // sky portal
+            [[dont_flatten]] if (LIGHT_SKY_PORTAL(l) && r.dist >= 0.0) {
                 continue;
             }
 
-            const uint light_type = (l.type_and_param0.x & 0x7);
+            const uint light_type = LIGHT_TYPE(l);
             if (light_type == LIGHT_TYPE_RECT) {
                 vec3 light_pos = l.RECT_POS;
                 vec3 light_u = l.RECT_U;

@@ -78,6 +78,7 @@ void main() {
 
     vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
+    uint rt = (1u << get_ray_type(ray.depth));
 
     hit_data_t inter = g_inout_hits[index];
 
@@ -110,18 +111,18 @@ void main() {
         } else {
             const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
             light_t l = g_lights[light_index];
-            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 5)) == 0) {
+            [[dont_flatten]] if (!LIGHT_VISIBLE(l) || (LIGHT_RAY_VISIBILITY(l) & rt) == 0) {
                 // Skip invisible light
                 continue;
             }
-            [[dont_flatten]] if (inter.v >= 0.0 && (l.type_and_param0.x & (1 << 6)) != 0) {
+            [[dont_flatten]] if (inter.v >= 0.0 && LIGHT_SKY_PORTAL(l)) {
                 // Portal lights affect only missed rays
                 continue;
             }
 
-            bool no_shadow = (l.type_and_param0.x & (1 << 4)) == 0;
+            bool no_shadow = !LIGHT_CAST_SHADOW(l);
 
-            const uint light_type = (l.type_and_param0.x & 0x7);
+            const uint light_type = LIGHT_TYPE(l);
             if (light_type == LIGHT_TYPE_SPHERE) {
                 vec3 light_pos = l.SPH_POS;
                 vec3 op = light_pos - ro;

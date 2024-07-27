@@ -1180,16 +1180,18 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const directional_light_desc_t 
     light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
-    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
-    l.blocking = false;
+    l.cast_shadow = _l.cast_shadow;
+    l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
+    l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
+    l.ray_visibility |= (_l.refraction_visibility << RAY_TYPE_REFR);
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
     l.dir.dir[1] = -_l.direction[1];
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
-    if (l.dir.angle != 0.0f) {
+    if (l.dir.angle > 0.0f) {
         const float radius = std::tan(l.dir.angle);
         const float mul = 1.0f / (PI * radius * radius);
         l.col[0] *= mul;
@@ -1207,9 +1209,11 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const sphere_light_desc_t &_l) 
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
-    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible && (_l.radius > 0.0f);
-    l.blocking = false;
+    l.cast_shadow = _l.cast_shadow;
+    l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
+    l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
+    l.ray_visibility |= (_l.refraction_visibility << RAY_TYPE_REFR);
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
@@ -1228,9 +1232,11 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const spot_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
-    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
-    l.blocking = false;
+    l.cast_shadow = _l.cast_shadow;
+    l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
+    l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
+    l.ray_visibility |= (_l.refraction_visibility << RAY_TYPE_REFR);
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
@@ -1251,10 +1257,15 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
-    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
-    l.blocking = _l.sky_portal;
+    l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
+    l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
+    l.ray_visibility |= (_l.refraction_visibility << RAY_TYPE_REFR);
+    if (_l.sky_portal) {
+        l.ray_visibility |= (1u << RAY_TYPE_SHADOW);
+    }
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -1280,10 +1291,15 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
-    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
-    l.blocking = _l.sky_portal;
+    l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
+    l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
+    l.ray_visibility |= (_l.refraction_visibility << RAY_TYPE_REFR);
+    if (_l.sky_portal) {
+        l.ray_visibility |= (1u << RAY_TYPE_SHADOW);
+    }
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -1309,10 +1325,12 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, co
     light_t l = {};
 
     l.type = LIGHT_TYPE_LINE;
-    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
-    l.blocking = false;
+    l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
+    l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
+    l.ray_visibility |= (_l.refraction_visibility << RAY_TYPE_REFR);
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -1342,23 +1360,13 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
     mesh_instance_t mi = {};
     mi.mesh_index = mi_desc.mesh._index;
     mi.lights_index = 0xffffffff;
-    mi.ray_visibility = 0x000000ff;
 
-    if (!mi_desc.camera_visibility) {
-        mi.ray_visibility &= ~(1u << RAY_TYPE_CAMERA);
-    }
-    if (!mi_desc.diffuse_visibility) {
-        mi.ray_visibility &= ~(1u << RAY_TYPE_DIFFUSE);
-    }
-    if (!mi_desc.specular_visibility) {
-        mi.ray_visibility &= ~(1u << RAY_TYPE_SPECULAR);
-    }
-    if (!mi_desc.refraction_visibility) {
-        mi.ray_visibility &= ~(1u << RAY_TYPE_REFR);
-    }
-    if (!mi_desc.shadow_visibility) {
-        mi.ray_visibility &= ~(1u << RAY_TYPE_SHADOW);
-    }
+    mi.ray_visibility = 0;
+    mi.ray_visibility |= (mi_desc.camera_visibility << RAY_TYPE_CAMERA);
+    mi.ray_visibility |= (mi_desc.diffuse_visibility << RAY_TYPE_DIFFUSE);
+    mi.ray_visibility |= (mi_desc.specular_visibility << RAY_TYPE_SPECULAR);
+    mi.ray_visibility |= (mi_desc.refraction_visibility << RAY_TYPE_REFR);
+    mi.ray_visibility |= (mi_desc.shadow_visibility << RAY_TYPE_SHADOW);
 
     const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.emplace();
 
@@ -1411,7 +1419,9 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
                 new_light.cast_shadow = 1;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;
-                new_light.blocking = 0;
+                new_light.ray_visibility = mi.ray_visibility;
+                new_light.ray_visibility &= ~RAY_TYPE_CAMERA_BIT;
+                new_light.ray_visibility &= ~RAY_TYPE_SHADOW_BIT;
                 new_light.tri.tri_index = tri;
                 new_light.tri.mi_index = mi_index.first;
                 new_light.tri.tex_index = mat.textures[BASE_TEXTURE];
@@ -1516,6 +1526,9 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
             l.visible = 1;
             l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
+            l.ray_visibility |= RAY_TYPE_DIFFUSE_BIT;
+            l.ray_visibility |= RAY_TYPE_SPECULAR_BIT;
+            l.ray_visibility |= RAY_TYPE_REFR_BIT;
 
             const std::pair<uint32_t, uint32_t> li = lights_.push(l);
             env_map_light_ = LightHandle{li.first, li.second};
@@ -2204,7 +2217,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
         if (l.visible) {
             ++visible_lights_count_;
         }
-        if (l.blocking) {
+        if ((l.ray_visibility & RAY_TYPE_SHADOW_BIT) != 0) {
             ++blocker_lights_count_;
         }
 

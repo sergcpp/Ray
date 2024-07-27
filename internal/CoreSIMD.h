@@ -116,6 +116,7 @@ template <int S> struct surface_t {
 template <int S> struct light_sample_t {
     fvec<S> col[3] = {0.0f, 0.0f, 0.0f}, L[3] = {0.0f, 0.0f, 0.0f}, lp[3] = {0.0f, 0.0f, 0.0f};
     fvec<S> area = 0.0f, dist_mul = 1.0f, pdf = 0.0f;
+    ivec<S> ray_flags = 0;
     // TODO: merge these two into bitflags
     ivec<S> cast_shadow = -1, from_env = 0;
 
@@ -5559,6 +5560,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
 
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = sampled_dir[i]; })
             where(ray_queue[index], ls.area) = l.sph.area;
+            where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;
@@ -5598,6 +5600,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 where(ray_queue[index], ls.pdf) = safe_div_pos(1.0f, ls.area * cos_theta);
             }
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = P[i] + ls.L[i]; })
+            where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;
@@ -5633,6 +5636,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             })
 
             where(ray_queue[index], ls.area) = l.rect.area;
+            where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             const fvec<S> cos_theta =
                 -ls.L[0] * light_forward[0] - ls.L[1] * light_forward[1] - ls.L[2] * light_forward[2];
@@ -5678,6 +5682,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
 
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i]; })
             where(ray_queue[index], ls.area) = l.disk.area;
+            where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             float light_forward[3];
             cross(l.disk.u, l.disk.v, light_forward);
@@ -5743,6 +5748,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
 
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i]; })
             where(ray_queue[index], ls.area) = l.line.area;
+            where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             const fvec<S> cos_theta = 1.0f - abs(dot3(ls.L, light_dir));
             fvec<S> pdf = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
@@ -5778,6 +5784,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                       light_forward[2] * light_forward[2]);
             where(ray_queue[index], ls.area) = 0.5f * light_fwd_len;
             UNROLLED_FOR(i, 3, { light_forward[i] /= light_fwd_len; })
+            where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             fvec<S> lp[3] = {};
             fvec<S> luvs[2] = {};
@@ -5889,6 +5896,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             where(ray_queue[index], ls.dist_mul) = MAX_DIST;
             where(ray_queue[index], ls.pdf) = dir_and_pdf[3];
             where(ray_queue[index], ls.from_env) = -1;
+            where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
         }
 
         ++index;
@@ -5909,6 +5917,10 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
     alignas(S * 4) float inter_t[S];
     r.mask.store_to(ray_masks, vector_aligned);
     inout_inter.t.store_to(inter_t, vector_aligned);
+
+    const uvec<S> _ray_flags = uvec<S>(1 << get_ray_type(r.depth));
+    alignas(S * 4) uint32_t ray_flags[S];
+    _ray_flags.store_to(ray_flags, vector_aligned);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_masks[ri]) {
@@ -6012,7 +6024,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                 const uint32_t light_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
                 assert(nodes[cur.index].child[1] == 1);
                 const light_t &l = lights[light_index];
-                if (!l.visible) {
+                if (!l.visible || (l.ray_visibility & ray_flags[ri]) == 0) {
                     continue;
                 }
                 // Portal lights affect only missed rays
@@ -6275,7 +6287,7 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
                 const int light_index = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS);
                 assert(nodes[cur.index].child[1] == 1);
                 const light_t &l = lights[light_index];
-                if (!l.blocking) {
+                if ((l.ray_visibility & RAY_TYPE_SHADOW_BIT) == 0) {
                     continue;
                 }
                 const ivec<S> portal_mask = l.sky_portal ? env_ray : -1;
@@ -6791,7 +6803,8 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
     fvec<S> lcol[3] = {0.0f, 0.0f, 0.0f};
     fvec<S> bsdf_pdf = 0.0f;
 
-    const ivec<S> eval_diff_lobe = simd_cast(lobe_weights.diffuse > 0.0f) & _is_frontfacing & mask;
+    const ivec<S> eval_diff_lobe =
+        simd_cast(lobe_weights.diffuse > 0.0f) & ((ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0) & _is_frontfacing & mask;
     if (eval_diff_lobe.not_all_zeros()) {
         fvec<S> diff_col[4];
         Evaluate_PrincipledDiffuse_BSDF(nI, surf.N, ls.L, diff.roughness, diff.base_color, diff.sheen_color, false,
@@ -6817,6 +6830,7 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
 
     const std::array<fvec<S>, 2> spec_alpha = calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha);
     const ivec<S> eval_spec_lobe = simd_cast(lobe_weights.specular > 0.0f) &
+                                   ((ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) &
                                    simd_cast(spec_alpha[0] * spec_alpha[1] >= 1e-7f) & _is_frontfacing & mask;
     if (eval_spec_lobe.not_all_zeros()) {
         fvec<S> spec_col[4], _alpha[2] = {max(spec_alpha[0], 1e-7f), max(spec_alpha[1], 1e-7f)};
@@ -6830,6 +6844,7 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
 
     const std::array<fvec<S>, 2> coat_alpha = calc_alpha(coat.roughness, fvec<S>{0.0f}, regularize_alpha);
     const ivec<S> eval_coat_lobe = simd_cast(lobe_weights.clearcoat > 0.0f) &
+                                   ((ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) &
                                    simd_cast(coat_alpha[0] * coat_alpha[1] >= 1e-7f) & _is_frontfacing & mask;
     if (eval_coat_lobe.not_all_zeros()) {
         fvec<S> clearcoat_col[4];
@@ -6844,6 +6859,7 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
 
     const std::array<fvec<S>, 2> refr_spec_alpha = calc_alpha(spec.roughness, fvec<S>{0.0f}, regularize_alpha);
     const ivec<S> eval_refr_spec_lobe = simd_cast(trans.fresnel != 0.0f) & simd_cast(lobe_weights.refraction > 0.0f) &
+                                        ((ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) &
                                         simd_cast(refr_spec_alpha[0] * refr_spec_alpha[1] >= 1e-7f) & _is_frontfacing &
                                         mask;
     if (eval_refr_spec_lobe.not_all_zeros()) {
@@ -6860,6 +6876,7 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
 
     const std::array<fvec<S>, 2> refr_trans_alpha = calc_alpha(trans.roughness, fvec<S>{0.0f}, regularize_alpha);
     const ivec<S> eval_refr_trans_lobe = simd_cast(trans.fresnel != 1.0f) & simd_cast(lobe_weights.refraction > 0.0f) &
+                                         ((ls.ray_flags & RAY_TYPE_REFR_BIT) != 0) &
                                          simd_cast(refr_trans_alpha[0] * refr_trans_alpha[1] >= 1e-7f) &
                                          _is_backfacing & mask;
     if (eval_refr_trans_lobe.not_all_zeros()) {
@@ -7654,7 +7671,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
             const material_t *mat = &sc.materials[first_mi];
             if (mat->type == eShadingNode::Diffuse) {
 #if USE_NEE
-                const ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(N_dot_L > 0.0f) & ray_queue[index];
+                const ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & ((ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0) &
+                                           simd_cast(N_dot_L > 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
                     assert((shadow_mask & eval_light).all_zeros());
                     shadow_mask |= Evaluate_DiffuseNode(ls, ray, eval_light, surf, base_color, roughness, mix_weight,
@@ -7675,7 +7693,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                 const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
 
 #if USE_NEE
-                const ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(N_dot_L > 0.0f) & ray_queue[index];
+                const ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & ((ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) &
+                                           simd_cast(N_dot_L > 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
                     assert((shadow_mask & eval_light).all_zeros());
                     shadow_mask |= Evaluate_GlossyNode(ls, ray, eval_light, surf, base_color, roughness,
@@ -7694,7 +7713,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                 }
             } else if (mat->type == eShadingNode::Refractive) {
 #if USE_NEE
-                const ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(N_dot_L < 0.0f) & ray_queue[index];
+                const ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & ((ls.ray_flags & RAY_TYPE_REFR_BIT) != 0) &
+                                           simd_cast(N_dot_L < 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
                     assert((shadow_mask & eval_light).all_zeros());
                     const fvec<S> eta = select(is_backfacing, mat->ior / ext_ior, ext_ior / mat->ior);

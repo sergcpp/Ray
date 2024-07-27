@@ -126,6 +126,13 @@ struct light_t {
     vec4 param3;
 };
 
+#define LIGHT_TYPE(l) (l.type_and_param0.x & 0x7)
+#define LIGHT_DOUBLE_SIDED(l) ((l.type_and_param0.x & (1 << 3)) != 0)
+#define LIGHT_CAST_SHADOW(l) ((l.type_and_param0.x & (1 << 4)) != 0)
+#define LIGHT_VISIBLE(l) ((l.type_and_param0.x & (1 << 5)) != 0)
+#define LIGHT_SKY_PORTAL(l) ((l.type_and_param0.x & (1 << 6)) != 0)
+#define LIGHT_RAY_VISIBILITY(l) ((l.type_and_param0.x >> 7u) & 0xffu)
+
 #define SPH_POS param1.xyz
 #define SPH_AREA param1.w
 #define SPH_DIR param2.xyz
