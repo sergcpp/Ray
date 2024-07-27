@@ -900,6 +900,7 @@ vec4 Sample_GGXRefraction_BSDF(const vec3 T, const vec3 B, const vec3 N, const v
 struct light_sample_t {
     vec3 col, L, lp;
     float area, dist_mul, pdf;
+    uint ray_flags;
     bool cast_shadow, from_env;
 };
 
@@ -1004,10 +1005,11 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
     const light_t l = g_lights[light_index];
 
     ls.col = uintBitsToFloat(l.type_and_param0.yzw);
-    ls.cast_shadow = (l.type_and_param0.x & (1 << 4)) != 0;
+    ls.cast_shadow = LIGHT_CAST_SHADOW(l);
     ls.from_env = false;
+    ls.ray_flags = 0;
 
-    const uint l_type = (l.type_and_param0.x & 0x7);
+    const uint l_type = LIGHT_TYPE(l);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
@@ -1030,8 +1032,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
 
         ls.L = sampled_dir;
         ls.area = l.SPH_AREA;
+        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
 
-        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
+        if (!LIGHT_VISIBLE(l)) {
             ls.area = 0.0;
         }
 
@@ -1060,8 +1063,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
             ls.pdf = 1.0 / (ls.area * cos_theta);
         }
         ls.lp = P + ls.L;
+        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
 
-        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
+        if (!LIGHT_VISIBLE(l)) {
             ls.area = 0.0;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_RECT) {
@@ -1083,16 +1087,17 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
 
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
+        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0) {
             ls.lp = offset_ray(lp, light_forward);
             ls.pdf = (pdf > 0.0) ? pdf : (ls_dist * ls_dist) / (ls.area * cos_theta);
             ls.area = l.RECT_AREA;
-            if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
+            if (!LIGHT_VISIBLE(l)) {
                 ls.area = 0.0;
             }
-            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
+            [[dont_flatten]] if (LIGHT_SKY_PORTAL(l)) {
                 vec3 env_col = g_params.env_col.xyz;
                 const uint env_map = floatBitsToUint(g_params.env_col.w);
                 if (env_map != 0xffffffff) {
@@ -1133,17 +1138,18 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.DISK_AREA;
+        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
 
         const float cos_theta = dot(-ls.L, light_forward);
         [[flatten]] if (cos_theta > 0.0) {
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
+        if (!LIGHT_VISIBLE(l)) {
             ls.area = 0.0;
         }
 
-        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
+        [[dont_flatten]] if (LIGHT_SKY_PORTAL(l)) {
             vec3 env_col = g_params.env_col.xyz;
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
@@ -1177,13 +1183,14 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         ls.L = normalize_len(lp - P, ls_dist);
 
         ls.area = l.LINE_AREA;
+        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
 
         const float cos_theta = 1.0 - abs(dot(ls.L, light_dir));
         [[flatten]] if (cos_theta != 0.0) {
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
+        if (!LIGHT_VISIBLE(l)) {
             ls.area = 0.0;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_TRI) {
@@ -1205,6 +1212,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         float light_fwd_len;
         vec3 light_forward = normalize_len(cross(e1, e2), light_fwd_len);
         ls.area = 0.5 * light_fwd_len;
+        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
 
         vec3 lp;
         vec2 luvs;
@@ -1241,7 +1249,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
 
         float cos_theta = -dot(ls.L, light_forward);
         ls.lp = offset_ray(lp, cos_theta >= 0.0 ? light_forward : -light_forward);
-        if ((l.type_and_param0.x & (1 << 3)) != 0) { // doublesided
+        if (LIGHT_DOUBLE_SIDED(l)) { // doublesided
             cos_theta = abs(cos_theta);
         }
         [[dont_flatten]] if (cos_theta > 0.0) {
@@ -1287,6 +1295,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         ls.dist_mul = MAX_DIST;
         ls.pdf = dir_and_pdf.w;
         ls.from_env = true;
+        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
     }
 
     ls.pdf /= factor;
@@ -1321,7 +1330,7 @@ float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
             const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
 
             light_t l = g_lights[light_index];
-            if ((l.type_and_param0.x & 0x7) == LIGHT_TYPE_TRI && floatBitsToUint(l.TRI_TRI_INDEX) == tri_index) {
+            if (LIGHT_TYPE(l) == LIGHT_TYPE_TRI && floatBitsToUint(l.TRI_TRI_INDEX) == tri_index) {
                 // needed triangle found
                 return 1.0 / cur_factor;
             }
@@ -1387,7 +1396,7 @@ vec3 Evaluate_LightColor(const ray_data_t ray, const hit_data_t inter, const vec
 #endif
 
     vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
-    [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
+    [[dont_flatten]] if (LIGHT_SKY_PORTAL(l)) {
         vec3 env_col = g_params.env_col.xyz;
         const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
@@ -1400,7 +1409,7 @@ vec3 Evaluate_LightColor(const ray_data_t ray, const hit_data_t inter, const vec
         lcol *= env_col;
     }
 
-    const uint l_type = (l.type_and_param0.x & 0x7);
+    const uint l_type = LIGHT_TYPE(l);
     if (l_type == LIGHT_TYPE_SPHERE) {
         const vec3 disk_normal = normalize(ro - l.SPH_POS);
         const float disk_dist = dot(ro, disk_normal) - dot(l.SPH_POS, disk_normal);
@@ -1713,7 +1722,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     vec3 lcol = vec3(0.0);
     float bsdf_pdf = 0.0;
 
-    [[dont_flatten]] if (lobe_weights.diffuse > 1e-7 && N_dot_L > 0.0) {
+    [[dont_flatten]] if (lobe_weights.diffuse > 1e-7 && (ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0 && N_dot_L > 0.0) {
         vec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, surf.N, ls.L, diff.roughness, diff.base_color,
                                                         diff.sheen_color, false);
         bsdf_pdf += lobe_weights.diffuse * diff_col[3];
@@ -1734,7 +1743,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     const vec3 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
 
     const vec2 spec_alpha = calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha);
-    [[dont_flatten]] if (lobe_weights.specular > 0.0 && spec_alpha.x * spec_alpha.y >= 1e-7 && N_dot_L > 0.0) {
+    [[dont_flatten]] if (lobe_weights.specular > 0.0 && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && spec_alpha.x * spec_alpha.y >= 1e-7 && N_dot_L > 0.0) {
         const vec4 spec_col = Evaluate_GGXSpecular_BSDF(
             view_dir_ts, sampled_normal_ts, light_dir_ts, spec_alpha, spec.ior, spec.F0, spec.tmp_col, vec3(1.0));
         bsdf_pdf += lobe_weights.specular * spec_col[3];
@@ -1742,7 +1751,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     }
 
     const vec2 coat_alpha = calc_alpha(coat.roughness, 0.0, regularize_alpha);
-    [[dont_flatten]] if (lobe_weights.clearcoat > 0.0 && coat_alpha.x * coat_alpha.y >= 1e-7 && N_dot_L > 0.0) {
+    [[dont_flatten]] if (lobe_weights.clearcoat > 0.0 && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && coat_alpha.x * coat_alpha.y >= 1e-7 && N_dot_L > 0.0) {
         const vec4 clearcoat_col = Evaluate_PrincipledClearcoat_BSDF(
             view_dir_ts, sampled_normal_ts, light_dir_ts, coat_alpha.x, coat.ior, coat.F0);
         bsdf_pdf += lobe_weights.clearcoat * clearcoat_col[3];
@@ -1751,7 +1760,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
 
     [[dont_flatten]] if (lobe_weights.refraction > 0.0) {
         const vec2 refr_spec_alpha = calc_alpha(spec.roughness, 0.0, regularize_alpha);
-        [[dont_flatten]] if (trans.fresnel != 0.0 && refr_spec_alpha.x * refr_spec_alpha.y >= 1e-7 && N_dot_L > 0.0) {
+        [[dont_flatten]] if (trans.fresnel != 0.0 && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && refr_spec_alpha.x * refr_spec_alpha.y >= 1e-7 && N_dot_L > 0.0) {
             const vec4 spec_col =
                 Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, refr_spec_alpha,
                                           1.0 /* ior */, 0.0 /* F0 */, vec3(1.0), vec3(1.0));
@@ -1760,7 +1769,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
         }
 
         const vec2 refr_trans_alpha = calc_alpha(trans.roughness, 0.0, regularize_alpha);
-        [[dont_flatten]] if (trans.fresnel != 1.0 && refr_trans_alpha.x * refr_trans_alpha.y >= 1e-7 && N_dot_L < 0.0) {
+        [[dont_flatten]] if (trans.fresnel != 1.0 && (ls.ray_flags & RAY_TYPE_REFR_BIT) != 0 && refr_trans_alpha.x * refr_trans_alpha.y >= 1e-7 && N_dot_L < 0.0) {
             const vec4 refr_col = Evaluate_GGXRefraction_BSDF(
                 view_dir_ts, sampled_normal_ts, light_dir_ts, refr_trans_alpha, trans.eta, diff.base_color);
             bsdf_pdf += lobe_weights.refraction * (1.0 - trans.fresnel) * refr_col[3];
@@ -2229,7 +2238,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
 
     [[dont_flatten]] if (mat.type == DiffuseNode) {
 #if USE_NEE
-        [[dont_flatten]] if (ls.pdf > 0.0 && N_dot_L > 0.0) {
+        [[dont_flatten]] if (ls.pdf > 0.0 && (ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0 && N_dot_L > 0.0) {
             col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight,
                                         (total_depth < g_params.max_total_depth), sh_r);
         }
@@ -2243,7 +2252,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
         const float spec_F0 = fresnel_dielectric_cos(1.0, spec_ior);
 
 #if USE_NEE
-        [[dont_flatten]] if (ls.pdf > 0.0 && N_dot_L > 0.0) {
+        [[dont_flatten]] if (ls.pdf > 0.0 && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && N_dot_L > 0.0) {
             col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, regularize_alpha, spec_ior,
                                        spec_F0, mix_weight, (total_depth < g_params.max_total_depth), sh_r);
         }
@@ -2254,7 +2263,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
         }
     } else [[dont_flatten]] if (mat.type == RefractiveNode) {
 #if USE_NEE
-        [[dont_flatten]] if (ls.pdf > 0.0 && N_dot_L < 0.0) {
+        [[dont_flatten]] if (ls.pdf > 0.0 && (ls.ray_flags & RAY_TYPE_REFR_BIT) != 0 && N_dot_L < 0.0) {
             const float eta = is_backfacing ? (mat.ior / ext_ior) : (ext_ior / mat.ior);
             col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness, regularize_alpha, eta, mix_weight,
                                            (total_depth < g_params.max_total_depth), sh_r);

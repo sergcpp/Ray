@@ -812,7 +812,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, cons
     fvec4 lcol = 0.0f;
     float bsdf_pdf = 0.0f;
 
-    if (lobe_weights.diffuse > 0.0f && N_dot_L > 0.0f) {
+    if (lobe_weights.diffuse > 0.0f && N_dot_L > 0.0f && (ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0) {
         fvec4 diff_col =
             Evaluate_PrincipledDiffuse_BSDF(-I, surf.N, ls.L, diff.roughness, diff.base_color, diff.sheen_color, false);
         bsdf_pdf += lobe_weights.diffuse * diff_col.get<3>();
@@ -833,7 +833,8 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, cons
     const fvec4 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
 
     const fvec2 spec_alpha = calc_alpha(spec.roughness, spec.anisotropy, regularize_alpha);
-    if (lobe_weights.specular > 0.0f && spec_alpha.get<0>() * spec_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
+    if (lobe_weights.specular > 0.0f && spec_alpha.get<0>() * spec_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f &&
+        (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) {
         const fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, spec_alpha,
                                                          spec.ior, spec.F0, spec.tmp_col, fvec4{1.0f});
         bsdf_pdf += lobe_weights.specular * spec_col.get<3>();
@@ -842,7 +843,8 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, cons
     }
 
     const fvec2 coat_alpha = calc_alpha(coat.roughness, 0.0f, regularize_alpha);
-    if (lobe_weights.clearcoat > 0.0f && coat_alpha.get<0>() * coat_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
+    if (lobe_weights.clearcoat > 0.0f && coat_alpha.get<0>() * coat_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f &&
+        (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) {
         const fvec4 clearcoat_col = Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
                                                                       coat_alpha.get<0>(), coat.ior, coat.F0);
         bsdf_pdf += lobe_weights.clearcoat * clearcoat_col.get<3>();
@@ -852,7 +854,8 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, cons
 
     if (lobe_weights.refraction > 0.0f) {
         const fvec2 refr_spec_alpha = calc_alpha(spec.roughness, 0.0f, regularize_alpha);
-        if (trans.fresnel != 0.0f && refr_spec_alpha.get<0>() * refr_spec_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f) {
+        if (trans.fresnel != 0.0f && refr_spec_alpha.get<0>() * refr_spec_alpha.get<1>() >= 1e-7f && N_dot_L > 0.0f &&
+            (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) {
             const fvec4 spec_col =
                 Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, refr_spec_alpha, 1.0f /* ior */,
                                           0.0f /* F0 */, fvec4{1.0f}, fvec4{1.0f});
@@ -862,7 +865,8 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, cons
         }
 
         const fvec2 refr_trans_alpha = calc_alpha(trans.roughness, 0.0f, regularize_alpha);
-        if (trans.fresnel != 1.0f && refr_trans_alpha.get<0>() * refr_trans_alpha.get<1>() >= 1e-7f && N_dot_L < 0.0f) {
+        if (trans.fresnel != 1.0f && refr_trans_alpha.get<0>() * refr_trans_alpha.get<1>() >= 1e-7f && N_dot_L < 0.0f &&
+            (ls.ray_flags & RAY_TYPE_REFR_BIT) != 0) {
             const fvec4 refr_col = Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
                                                                refr_trans_alpha, trans.eta, diff.base_color);
             bsdf_pdf += lobe_weights.refraction * (1.0f - trans.fresnel) * refr_col.get<3>();
@@ -1447,7 +1451,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
 
     // Sample materials
     if (mat->type == eShadingNode::Diffuse) {
-        if (USE_NEE && ls.pdf > 0.0f && N_dot_L > 0.0f) {
+        if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0 && N_dot_L > 0.0f) {
             col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight,
                                         (total_depth < ps.max_total_depth), sh_r);
         }
@@ -1458,7 +1462,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         const float specular = 0.5f;
         const float spec_ior = (2.0f / (1.0f - sqrtf(0.08f * specular))) - 1.0f;
         const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
-        if (USE_NEE && ls.pdf > 0.0f && N_dot_L > 0.0f) {
+        if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && N_dot_L > 0.0f) {
             col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, regularize_alpha, spec_ior, spec_F0,
                                        mix_weight, (total_depth < ps.max_total_depth), sh_r);
         }
@@ -1467,7 +1471,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
                               mix_weight, new_ray);
         }
     } else if (mat->type == eShadingNode::Refractive) {
-        if (USE_NEE && ls.pdf > 0.0f && N_dot_L < 0.0f) {
+        if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_REFR_BIT) != 0 && N_dot_L < 0.0f) {
             const float eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
             col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness, regularize_alpha, eta, mix_weight,
                                            (total_depth < ps.max_total_depth), sh_r);

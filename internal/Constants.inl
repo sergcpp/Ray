@@ -59,6 +59,12 @@ const int RAY_TYPE_SPECULAR = 2;
 const int RAY_TYPE_REFR = 3;
 const int RAY_TYPE_SHADOW = 4;
 
+const uint RAY_TYPE_CAMERA_BIT = (1u << RAY_TYPE_CAMERA);
+const uint RAY_TYPE_DIFFUSE_BIT = (1u << RAY_TYPE_DIFFUSE);
+const uint RAY_TYPE_SPECULAR_BIT = (1u << RAY_TYPE_SPECULAR);
+const uint RAY_TYPE_REFR_BIT = (1u << RAY_TYPE_REFR);
+const uint RAY_TYPE_SHADOW_BIT = (1u << RAY_TYPE_SHADOW);
+
 //
 // Material constants
 //

@@ -2739,6 +2739,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         }
         ls.L = sampled_dir;
         ls.area = l.sph.area;
+        ls.ray_flags = l.ray_visibility;
 
         if (!l.visible) {
             ls.area = 0.0f;
@@ -2769,6 +2770,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         }
         ls.lp = P + ls.L;
         ls.dist_mul = MAX_DIST;
+        ls.ray_flags = l.ray_visibility;
 
         if (!l.visible) {
             ls.area = 0.0f;
@@ -2791,6 +2793,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
 
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
+        ls.ray_flags = l.ray_visibility;
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0f) {
@@ -2835,6 +2838,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.disk.area;
+        ls.ray_flags = l.ray_visibility;
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0f) {
@@ -2874,6 +2878,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
         ls.area = l.line.area;
+        ls.ray_flags = l.ray_visibility;
 
         const float cos_theta = 1.0f - fabsf(dot(ls.L, light_dir));
         if (cos_theta != 0.0f) {
@@ -2900,6 +2905,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         float light_fwd_len;
         const fvec4 light_forward = normalize_len(cross(e1, e2), light_fwd_len);
         ls.area = 0.5f * light_fwd_len;
+        ls.ray_flags = l.ray_visibility;
 
         fvec4 lp;
         fvec2 luvs;
@@ -2984,6 +2990,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         ls.dist_mul = MAX_DIST;
         ls.pdf = dir_and_pdf.get<3>();
         ls.from_env = 1;
+        ls.ray_flags = l.ray_visibility;
     }
 
     ls.pdf /= factor;
@@ -2997,6 +3004,8 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
         const fvec4 ro = make_fvec3(ray.o);
         const fvec4 rd = make_fvec3(ray.d);
+
+        const uint32_t ray_flags = (1u << get_ray_type(ray.depth));
 
         float inv_d[3];
         safe_invert(value_ptr(rd), inv_d);
@@ -3096,7 +3105,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 ////
 
                 const light_t &l = lights[light_index];
-                if (!l.visible) {
+                if (!l.visible || (l.ray_visibility & ray_flags) == 0) {
                     continue;
                 }
                 if (l.sky_portal && inout_inter.v >= 0.0f) {
@@ -3244,6 +3253,8 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
         const fvec4 ro = make_fvec3(ray.o);
         const fvec4 rd = make_fvec3(ray.d);
 
+        const uint32_t ray_flags = (1u << get_ray_type(ray.depth));
+
         float inv_d[3];
         safe_invert(value_ptr(rd), inv_d);
 
@@ -3292,7 +3303,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 ////
 
                 const light_t &l = lights[light_index];
-                if (!l.visible) {
+                if (!l.visible || (l.ray_visibility & ray_flags) == 0) {
                     continue;
                 }
                 if (l.sky_portal && inout_inter.v >= 0.0f) {
@@ -3517,7 +3528,7 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t>
             const int light_index = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS);
             assert(nodes[cur.index].child[1] == 1);
             const light_t &l = lights[light_index];
-            if (!l.blocking) {
+            if ((l.ray_visibility & RAY_TYPE_SHADOW_BIT) == 0) {
                 continue;
             }
             if (l.sky_portal && ray.dist >= 0.0f) {

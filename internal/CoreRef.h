@@ -125,7 +125,8 @@ struct light_sample_t {
     float area = 0, dist_mul = 1, pdf = 0;
     uint32_t cast_shadow : 1;
     uint32_t from_env : 1;
-    uint32_t _pad0 : 30;
+    uint32_t ray_flags : 8;
+    uint32_t _pad0 : 22;
 };
 static_assert(sizeof(light_sample_t) == 64, "!");
 

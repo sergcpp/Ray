@@ -172,8 +172,8 @@ struct light_t {
     uint32_t cast_shadow : 1;
     uint32_t visible : 1;
     uint32_t sky_portal : 1;
-    uint32_t blocking : 1;
-    uint32_t _unused : 24;
+    uint32_t ray_visibility : 8;
+    uint32_t _unused0 : 17;
     float col[3];
     union {
         struct {
