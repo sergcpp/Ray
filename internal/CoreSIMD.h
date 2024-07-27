@@ -7714,7 +7714,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
             } else if (mat->type == eShadingNode::Emissive) {
                 fvec<S> mis_weight = 1.0f;
 #if USE_NEE
-                if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_IMP_SAMPLE)) {
 #if USE_HIERARCHICAL_NEE
                     const fvec<S> pdf_factor =
                         EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights, sc.light_wnodes);

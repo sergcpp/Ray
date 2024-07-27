@@ -26,7 +26,7 @@ void Ray::SceneCommon::GetEnvironment(environment_desc_t &env) {
     env.back_map = TextureHandle{env_.back_map};
     env.env_map_rotation = env_.env_map_rotation;
     env.back_map_rotation = env_.back_map_rotation;
-    env.multiple_importance = env_.multiple_importance;
+    env.importance_sample = env_.importance_sample;
     env.envmap_resolution = env_.envmap_resolution;
     env.atmosphere = env_.atmosphere;
 }
@@ -40,7 +40,7 @@ void Ray::SceneCommon::SetEnvironment(const environment_desc_t &env) {
     env_.back_map = env.back_map._index;
     env_.env_map_rotation = env.env_map_rotation;
     env_.back_map_rotation = env.back_map_rotation;
-    env_.multiple_importance = env.multiple_importance;
+    env_.importance_sample = env.importance_sample;
     env_.envmap_resolution = env.envmap_resolution;
     env_.atmosphere = env.atmosphere;
 

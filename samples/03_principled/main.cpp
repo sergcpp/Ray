@@ -71,7 +71,7 @@ int main() {
     Ray::shading_node_desc_t mat_desc3;
     mat_desc3.type = Ray::eShadingNode::Emissive;
     mat_desc3.strength = 100.0f;
-    mat_desc3.multiple_importance = true; // Use NEE for this lightsource
+    mat_desc3.importance_sample = true; // Use NEE for this lightsource
     const Ray::MaterialHandle mat4 = scene->AddMaterial(mat_desc3);
 
     // Setup test mesh

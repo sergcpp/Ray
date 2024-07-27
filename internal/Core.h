@@ -373,7 +373,7 @@ struct environment_t {
     float back_map_rotation;
     const float *qtree_mips[16];
     int qtree_levels;
-    bool multiple_importance;
+    bool importance_sample;
     uint32_t light_index;
     uint32_t env_map_res;  // 16-bit
     uint32_t back_map_res; // 16-bit
