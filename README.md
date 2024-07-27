@@ -160,7 +160,7 @@ int main() {
     mat_desc2.base_color[0] = 1.0f;
     mat_desc2.base_color[1] = 1.0f;
     mat_desc2.base_color[2] = 1.0f;
-    mat_desc2.multiple_importance = true; // Use NEE for this lightsource
+    mat_desc2.importance_sample = true; // Use NEE for this lightsource
     const Ray::MaterialHandle mat4 = scene->AddMaterial(mat_desc2);
 
     // Setup test mesh

@@ -2267,7 +2267,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
     } else [[dont_flatten]] if (mat.type == EmissiveNode) {
         float mis_weight = 1.0;
 #if USE_NEE && !PRIMARY
-        [[dont_flatten]] if ((mat.flags & MAT_FLAG_MULT_IMPORTANCE) != 0) {
+        [[dont_flatten]] if ((mat.flags & MAT_FLAG_IMP_SAMPLE) != 0) {
 #if USE_HIERARCHICAL_NEE
             // TODO: maybe this can be done more efficiently
             const float pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index);

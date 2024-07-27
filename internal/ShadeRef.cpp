@@ -1478,7 +1478,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         }
     } else if (mat->type == eShadingNode::Emissive) {
         float mis_weight = 1.0f;
-        if (USE_NEE && (ray.depth & 0x00ffffff) != 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
+        if (USE_NEE && (ray.depth & 0x00ffffff) != 0 && (mat->flags & MAT_FLAG_IMP_SAMPLE)) {
             float pdf_factor;
             if (USE_HIERARCHICAL_NEE) {
                 // TODO: maybe this can be done more efficiently

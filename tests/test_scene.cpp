@@ -373,7 +373,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         Ray::shading_node_desc_t square_light_mat_desc;
         square_light_mat_desc.type = Ray::eShadingNode::Emissive;
         square_light_mat_desc.strength = 20.3718f;
-        square_light_mat_desc.multiple_importance = true;
+        square_light_mat_desc.importance_sample = true;
         square_light_mat_desc.base_color[0] = 1.0f;
         square_light_mat_desc.base_color[1] = 1.0f;
         square_light_mat_desc.base_color[2] = 1.0f;
@@ -385,7 +385,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         Ray::shading_node_desc_t disc_light_mat_desc;
         disc_light_mat_desc.type = Ray::eShadingNode::Emissive;
         disc_light_mat_desc.strength = 81.4873f;
-        disc_light_mat_desc.multiple_importance = true;
+        disc_light_mat_desc.importance_sample = true;
         disc_light_mat_desc.base_color[0] = 1.0f;
         disc_light_mat_desc.base_color[1] = 1.0f;
         disc_light_mat_desc.base_color[2] = 1.0f;

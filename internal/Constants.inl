@@ -76,7 +76,7 @@ const int MIX_MAT2 = 4;
 const int MATERIAL_SOLID_BIT = 32768;  // 0b1000000000000000
 const int MATERIAL_INDEX_BITS = 16383; // 0b0011111111111111
 
-const uint MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
+const uint MAT_FLAG_IMP_SAMPLE = (1u << 0u);
 const uint MAT_FLAG_MIX_ADD = (1u << 1u);
 
 const int NUM_MIP_LEVELS = 12;

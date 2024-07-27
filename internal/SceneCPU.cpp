@@ -228,8 +228,8 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial_nolock(const shading_node_desc_
     } else if (m.type == eShadingNode::Refractive) {
     } else if (m.type == eShadingNode::Emissive) {
         mat.strength = m.strength;
-        if (m.multiple_importance) {
-            mat.flags |= MAT_FLAG_MULT_IMPORTANCE;
+        if (m.importance_sample) {
+            mat.flags |= MAT_FLAG_IMP_SAMPLE;
         }
     } else if (m.type == eShadingNode::Mix) {
         mat.strength = m.strength;
@@ -288,7 +288,7 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
         memcpy(emissive_desc.base_color, m.emission_color, 3 * sizeof(float));
         emissive_desc.base_texture = m.emission_texture;
         emissive_desc.strength = m.emission_strength;
-        emissive_desc.multiple_importance = m.multiple_importance;
+        emissive_desc.importance_sample = m.importance_sample;
 
         emissive_node = AddMaterial_nolock(emissive_desc);
     }
@@ -774,7 +774,7 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
             uint16_t front_emissive = 0xffff;
             for (int i = 0; i < int(mat_indices.size()); ++i) {
                 const material_t &mat = materials_[mat_indices[i]];
-                if (mat.type == eShadingNode::Emissive && (mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                if (mat.type == eShadingNode::Emissive && (mat.flags & MAT_FLAG_IMP_SAMPLE)) {
                     front_emissive = mat_indices[i];
                     break;
                 } else if (mat.type == eShadingNode::Mix) {
@@ -791,7 +791,7 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
             uint16_t back_emissive = 0xffff;
             for (int i = 0; i < int(mat_indices.size()); ++i) {
                 const material_t &mat = materials_[mat_indices[i]];
-                if (mat.type == eShadingNode::Emissive && (mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                if (mat.type == eShadingNode::Emissive && (mat.flags & MAT_FLAG_IMP_SAMPLE)) {
                     back_emissive = mat_indices[i];
                     break;
                 } else if (mat.type == eShadingNode::Mix) {
@@ -876,7 +876,7 @@ void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, ParallelForFun
         env_.sky_map_spread_angle = 2 * PI / float(env_.envmap_resolution);
     }
 
-    if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
+    if (env_.importance_sample && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
         if (env_.env_map != InvalidTextureHandle._index) {
             PrepareEnvMapQTree_nolock();
         }

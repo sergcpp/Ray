@@ -61,7 +61,7 @@ struct shading_node_desc_t {
     float ior = 1;                                             ///< IOR for reflective or refractive material
     float tint = 0;                                            ///< Specular tint
     TextureHandle metallic_texture = InvalidTextureHandle;     ///< Metalness texture
-    bool multiple_importance = false;                          ///< Enable explicit emissive geometry sampling
+    bool importance_sample = false;                            ///< Enable explicit emissive geometry sampling
     bool mix_add = false;                                      ///< Enable additive mixing
 };
 
@@ -92,7 +92,7 @@ struct principled_mat_desc_t {
     TextureHandle alpha_texture = InvalidTextureHandle;     ///< Transparency texture
     TextureHandle normal_map = InvalidTextureHandle;        ///< Material normalmap
     float normal_map_intensity = 1;                         ///< Normalmap intensity
-    bool multiple_importance = false;                       ///< Enable explicit emissive geometry sampling
+    bool importance_sample = false;                         ///< Enable explicit emissive geometry sampling
 };
 
 /// Defines mesh region with specific material
@@ -329,7 +329,7 @@ struct environment_desc_t {
     float env_map_rotation = 0.0f;                 ///< Environment map rotation in radians
     float back_map_rotation = 0.0f;                ///< Background map rotation in radians
     int envmap_resolution = 1024;                  ///< Resolution of the generated env texture
-    bool multiple_importance = true;               ///< Enable explicit env map sampling
+    bool importance_sample = true;                 ///< Enable explicit env map sampling
     atmosphere_params_t atmosphere;                ///< Atmosphere parameters
 };
 
