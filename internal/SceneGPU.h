@@ -1257,6 +1257,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
+    l.doublesided = _l.doublesided;
     l.visible = _l.visible;
     l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
@@ -1291,6 +1292,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
+    l.doublesided = _l.doublesided;
     l.visible = _l.visible;
     l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
@@ -2276,7 +2278,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             area = l.rect.area;
 
             axis = normalize(NS::cross(u, v));
-            omega_n = 0.0f; // single normal
+            omega_n = l.doublesided ? PI : 0.0f;
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_DISK: {
@@ -2290,7 +2292,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             area = l.disk.area;
 
             axis = normalize(NS::cross(u, v));
-            omega_n = 0.0f; // single normal
+            omega_n = l.doublesided ? PI : 0.0f;
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_TRI: {
@@ -2315,7 +2317,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             area = 0.5f * length(light_forward);
 
             axis = normalize(light_forward);
-            omega_n = PI; // normals in all directions (triangle lights are double-sided)
+            omega_n = l.doublesided ? PI : 0.0f;
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_ENV: {
