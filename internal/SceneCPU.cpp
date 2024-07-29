@@ -655,6 +655,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const fl
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
+    l.doublesided = _l.doublesided;
     l.visible = _l.visible;
     l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
@@ -689,6 +690,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const fl
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
+    l.doublesided = _l.doublesided;
     l.visible = _l.visible;
     l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
@@ -813,10 +815,10 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
 
                 new_lights.emplace_back();
                 light_t &new_light = new_lights.back();
-                new_light.visible = 0;
-                new_light.cast_shadow = 1;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.doublesided = (back_emissive != 0xffff) ? 1 : 0;
+                new_light.cast_shadow = 1;
+                new_light.visible = 0;
                 new_light.sky_portal = 0;
                 new_light.ray_visibility = mi.ray_visibility;
                 new_light.ray_visibility &= ~RAY_TYPE_CAMERA_BIT;
@@ -1258,7 +1260,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             area = l.rect.area;
 
             axis = normalize(Ray::Cpu::cross(u, v));
-            omega_n = 0.0f; // single normal
+            omega_n = l.doublesided ? PI : 0.0f;
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_DISK: {
@@ -1272,7 +1274,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             area = l.disk.area;
 
             axis = normalize(Ray::Cpu::cross(u, v));
-            omega_n = 0.0f; // single normal
+            omega_n = l.doublesided ? PI : 0.0f;
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_TRI: {
@@ -1297,7 +1299,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             area = 0.5f * length(light_forward);
 
             axis = normalize(light_forward);
-            omega_n = PI; // normals in all directions (triangle lights are double-sided)
+            omega_n = l.doublesided ? PI : 0.0f;
             omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_ENV: {
