@@ -125,9 +125,9 @@ float calc_lnode_importance(const light_wbvh_node_t n, const vec3 P, out float i
                                   n.bbox_max[2][i] - n.bbox_min[2][i]);
             const float extent = 0.5 * length(ext);
 
-            const vec3 pc = vec3(0.5 * (n.bbox_min[0][i] + n.bbox_max[0][i]),
-                                 0.5 * (n.bbox_min[1][i] + n.bbox_max[1][i]),
-                                 0.5 * (n.bbox_min[2][i] + n.bbox_max[2][i]));
+            const vec3 pc = 0.5 * vec3(n.bbox_min[0][i] + n.bbox_max[0][i],
+                                       n.bbox_min[1][i] + n.bbox_max[1][i],
+                                       n.bbox_min[2][i] + n.bbox_max[2][i]);
             vec3 wi = P - pc;
             const float dist2 = dot(wi, wi);
             const float dist = sqrt(dist2);
