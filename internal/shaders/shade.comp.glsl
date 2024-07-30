@@ -2464,6 +2464,8 @@ void main() {
 #endif
     imageStore(g_out_img, ivec2(x, y), vec4(col, 1.0));
 #if OUTPUT_BASE_COLOR && !CACHE_UPDATE
+    const float norm_factor = max(max(base_color.x, base_color.y), max(base_color.z, 1.0));
+    base_color /= norm_factor;
     imageStore(g_out_base_color_img, ivec2(x, y), vec4(base_color, 0.0));
 #endif
 #if OUTPUT_DEPTH_NORMALS || CACHE_UPDATE

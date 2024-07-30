@@ -1660,7 +1660,11 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
         if (out_base_color) {
             if (cache_mode != eSpatialCacheMode::Update) {
                 auto old_val = Ref::fvec4{out_base_color[y * img_w + x].v, Ref::vector_aligned};
-                old_val += (Ref::fvec4{base_color.v, Ref::vector_aligned} - old_val) * mix_factor;
+                auto new_val = Ref::fvec4{base_color.v, Ref::vector_aligned};
+                const float norm_factor =
+                    fmaxf(fmaxf(new_val.get<0>(), new_val.get<1>()), fmaxf(new_val.get<2>(), 1.0f));
+                new_val /= norm_factor;
+                old_val += (new_val - old_val) * mix_factor;
                 old_val.store_to(out_base_color[y * img_w + x].v, Ref::vector_aligned);
             } else {
                 out_base_color[y * img_w + x] = base_color;
