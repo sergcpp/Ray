@@ -7952,8 +7952,11 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
                 if (out_base_color) {
                     if (cache_mode != eSpatialCacheMode::Update) {
                         auto old_val = fvec4(out_base_color[y[j] * img_w + x[j]].v, vector_aligned);
-                        old_val +=
-                            (fvec4{base_color[0][j], base_color[1][j], base_color[2][j], 0.0f} - old_val) * mix_factor;
+                        auto new_val = fvec4{base_color[0][j], base_color[1][j], base_color[2][j], 0.0f};
+                        const float norm_factor =
+                            fmaxf(fmaxf(new_val.get<0>(), new_val.get<1>()), fmaxf(new_val.get<2>(), 1.0f));
+                        new_val /= norm_factor;
+                        old_val += (new_val - old_val) * mix_factor;
                         old_val.store_to(out_base_color[y[j] * img_w + x[j]].v, vector_aligned);
                     } else {
                         UNROLLED_FOR(k, 3, { out_base_color[y[j] * img_w + x[j]].v[k] = base_color[k][j]; })
