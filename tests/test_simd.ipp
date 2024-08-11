@@ -83,6 +83,8 @@ using namespace Ray::NS;
     fvec4 v666 = normalize(v1);
     float v1_len;
     fvec4 v6666 = normalize_len(v1, v1_len);
+    fvec4 v66666 = fmadd(v1, v2, v3);
+    fvec4 v666666 = fmsub(v1, v2, v3);
 
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -119,6 +121,16 @@ using namespace Ray::NS;
     require(v6666[1] == Approx(0.365148365));
     require(v6666[2] == Approx(0.547722518));
     require(v6666[3] == Approx(0.730296731));
+
+    require(v66666[0] == Approx(9.0));
+    require(v66666[1] == Approx(17.0));
+    require(v66666[2] == Approx(27.0));
+    require(v66666[3] == Approx(39.0));
+
+    require(v666666[0] == Approx(-1.0));
+    require(v666666[1] == Approx(3.0));
+    require(v666666[2] == Approx(9.0));
+    require(v666666[3] == Approx(17.0));
 
     v5 = sqrt(v5);
 
@@ -690,6 +702,8 @@ using namespace Ray::NS;
     fvec8 v666 = normalize(v1);
     float v1_len;
     fvec8 v6666 = normalize_len(v1, v1_len);
+    fvec8 v66666 = fmadd(v1, v2, v3);
+    fvec8 v666666 = fmsub(v1, v2, v3);
 
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -754,6 +768,24 @@ using namespace Ray::NS;
     require(v6666[5] == Approx(0.436435759));
     require(v6666[6] == Approx(0.327326834));
     require(v6666[7] == Approx(0.218217880));
+
+    require(v66666[0] == Approx(9.0));
+    require(v66666[1] == Approx(17.0));
+    require(v66666[2] == Approx(27.0));
+    require(v66666[3] == Approx(39.0));
+    require(v66666[4] == Approx(53.0));
+    require(v66666[5] == Approx(54.0));
+    require(v66666[6] == Approx(51.0));
+    require(v66666[7] == Approx(5.0));
+
+    require(v666666[0] == Approx(-1.0));
+    require(v666666[1] == Approx(3.0));
+    require(v666666[2] == Approx(9.0));
+    require(v666666[3] == Approx(17.0));
+    require(v666666[4] == Approx(27.0));
+    require(v666666[5] == Approx(26.0));
+    require(v666666[6] == Approx(21.0));
+    require(v666666[7] == Approx(-1.0));
 
     v5 = sqrt(v5);
 
@@ -1522,6 +1554,8 @@ using namespace Ray::NS;
     fvec16 v666 = normalize(v1);
     float v1_len;
     fvec16 v6666 = normalize_len(v1, v1_len);
+    fvec16 v66666 = fmadd(v1, v2, v3);
+    fvec16 v666666 = fmsub(v1, v2, v3);
 
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -1642,6 +1676,40 @@ using namespace Ray::NS;
     require(v6666[13] == Approx(0.308606714));
     require(v6666[14] == Approx(0.231455028));
     require(v6666[15] == Approx(0.154303357));
+
+    require(v66666[0] == Approx(9.0));
+    require(v66666[1] == Approx(17.0));
+    require(v66666[2] == Approx(27.0));
+    require(v66666[3] == Approx(39.0));
+    require(v66666[4] == Approx(53.0));
+    require(v66666[5] == Approx(54.0));
+    require(v66666[6] == Approx(51.0));
+    require(v66666[7] == Approx(5.0));
+    require(v66666[8] == Approx(9.0));
+    require(v66666[9] == Approx(17.0));
+    require(v66666[10] == Approx(27.0));
+    require(v66666[11] == Approx(39.0));
+    require(v66666[12] == Approx(53.0));
+    require(v66666[13] == Approx(54.0));
+    require(v66666[14] == Approx(51.0));
+    require(v66666[15] == Approx(5.0));
+
+    require(v666666[0] == Approx(-1.0));
+    require(v666666[1] == Approx(3.0));
+    require(v666666[2] == Approx(9.0));
+    require(v666666[3] == Approx(17.0));
+    require(v666666[4] == Approx(27.0));
+    require(v666666[5] == Approx(26.0));
+    require(v666666[6] == Approx(21.0));
+    require(v666666[7] == Approx(-1.0));
+    require(v666666[8] == Approx(-1.0));
+    require(v666666[9] == Approx(3.0));
+    require(v666666[10] == Approx(9.0));
+    require(v666666[11] == Approx(17.0));
+    require(v666666[12] == Approx(27.0));
+    require(v666666[13] == Approx(26.0));
+    require(v666666[14] == Approx(21.0));
+    require(v666666[15] == Approx(-1.0));
 
     v5 = sqrt(v5);
 

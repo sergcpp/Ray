@@ -332,6 +332,20 @@ template <> class fixed_size_simd<float, 4> {
         return v1 / (out_len = v1.length());
     }
 
+    friend force_inline fixed_size_simd<float, 4>
+        vectorcall fmadd(fixed_size_simd<float, 4> a, fixed_size_simd<float, 4> b, fixed_size_simd<float, 4> c) {
+        fixed_size_simd<float, 4> ret;
+        ret.vec_ = vfmaq_f32(c.vec_, b.vec_, a.vec_);
+        return ret;
+    }
+
+    friend force_inline fixed_size_simd<float, 4>
+        vectorcall fmsub(fixed_size_simd<float, 4> a, fixed_size_simd<float, 4> b, fixed_size_simd<float, 4> c) {
+        fixed_size_simd<float, 4> ret;
+        ret.vec_ = vfmaq_f32(vnegq_f32(c.vec_), b.vec_, a.vec_);
+        return ret;
+    }
+
     friend force_inline fixed_size_simd<float, 4> vectorcall inclusive_scan(fixed_size_simd<float, 4> v1) {
         v1.vec_ = vaddq_f32(v1.vec_, vreinterpretq_f32_s32(slli<4>(vreinterpretq_s32_f32(v1.vec_))));
         v1.vec_ = vaddq_f32(v1.vec_, vreinterpretq_f32_s32(slli<8>(vreinterpretq_s32_f32(v1.vec_))));
