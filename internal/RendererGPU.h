@@ -105,6 +105,8 @@ class Renderer : public RendererBase {
         pi_convolution_32_3_img_;
     Pipeline pi_spatial_cache_update_, pi_spatial_cache_resolve_;
 
+    bool InitShaders(ILog *log);
+
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
          use_coop_matrix_ = false, use_subgroup_ = false, use_spatial_cache_ = false;
@@ -508,8 +510,7 @@ inline void Ray::NS::Renderer::Clear(const color_rgba_t &c) {
 
 inline void Ray::NS::Renderer::UpdateFilterTable(CommandBuffer cmd_buf, const ePixelFilter filter, float filter_width) {
     float (*filter_func)(float v, float width);
-
-    switch (filter) {
+        switch (filter) {
     case ePixelFilter::Box:
         filter_func = filter_box;
         filter_width = 1.0f;

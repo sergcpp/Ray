@@ -53,17 +53,14 @@ class Shader {
 
     std::string name_;
 
-    bool InitFromCSO(const uint8_t *shader_code, int code_size, eShaderType type, ILog *log);
+    bool InitFromCSO(Span<const uint8_t> shader_code, eShaderType type, ILog *log);
 
   public:
     SmallVector<Descr, 16> attr_bindings, unif_bindings;
     SmallVector<Range, 4> pc_ranges;
 
     Shader() = default;
-    Shader(const char *name, Context *ctx, const uint8_t *shader_code, int code_size, eShaderType type, ILog *log);
-    Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log)
-        : Shader(name, ctx, shader_code.data(), int(shader_code.size()), type, log) {}
-
+    Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log);
     Shader(const Shader &rhs) = delete;
     Shader(Shader &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Shader();
@@ -77,7 +74,7 @@ class Shader {
     eShaderType type() const { return type_; }
     const std::string &name() const { return name_; }
 
-    bool Init(const uint8_t *shader_code, int code_size, eShaderType type, ILog *log);
+    bool Init(const char *name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log);
 };
 
 } // namespace Dx

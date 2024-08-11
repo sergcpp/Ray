@@ -190,243 +190,9 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) {
     log->Info("SpatialCache is %s", use_spatial_cache_ ? "enabled" : "disabled");
     log->Info("===========================================");
 
-    sh_prim_rays_gen_simple_ =
-        Shader{"Primary Raygen Simple", ctx_.get(), Inflate(internal_shaders_output_primary_ray_gen_simple_comp_cso),
-               eShaderType::Comp, log};
-    sh_prim_rays_gen_adaptive_ =
-        Shader{"Primary Raygen Adaptive", ctx_.get(),
-               Inflate(internal_shaders_output_primary_ray_gen_adaptive_comp_cso), eShaderType::Comp, log};
-    if (use_hwrt_) {
-        sh_intersect_scene_ = Shader{
-            "Intersect Scene (Primary) (HWRT)", ctx_.get(),
-            Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_bindless_comp_cso}
-                                  : Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_atlas_comp_cso}),
-            eShaderType::Comp, log};
-    } else {
-        sh_intersect_scene_ = Shader{
-            "Intersect Scene (Primary) (SWRT)", ctx_.get(),
-            Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_bindless_comp_cso}
-                                  : Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_atlas_comp_cso}),
-            eShaderType::Comp, log};
+    if (!InitShaders(log)) {
+        throw std::runtime_error("Error initializing directx shaders!");
     }
-
-    if (use_hwrt_) {
-        sh_intersect_scene_indirect_ = Shader{
-            "Intersect Scene (Secondary) (HWRT)", ctx_.get(),
-            Inflate(use_bindless_
-                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso}
-                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso}),
-            eShaderType::Comp, log};
-    } else {
-        sh_intersect_scene_indirect_ = Shader{
-            "Intersect Scene (Secondary) (SWRT)", ctx_.get(),
-            Inflate(use_bindless_
-                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_cso}
-                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_cso}),
-            eShaderType::Comp, log};
-    }
-
-    sh_intersect_area_lights_ =
-        Shader{"Intersect Area Lights", ctx_.get(), Inflate(internal_shaders_output_intersect_area_lights_comp_cso),
-               eShaderType::Comp, log};
-    sh_shade_primary_ =
-        Shader{"Shade (Primary)", ctx_.get(),
-               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_cso}
-                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_cso}),
-               eShaderType::Comp, log};
-    sh_shade_primary_sky_ =
-        Shader{"Shade (Primary) (Sky)", ctx_.get(),
-               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_sky_comp_cso}
-                                     : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_sky_comp_cso}),
-               eShaderType::Comp, log};
-    sh_shade_primary_cache_update_ =
-        Shader{"Shade (Primary) (Cache Update)", ctx_.get(),
-               Inflate(use_bindless_
-                           ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_update_comp_cso}
-                           : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_update_comp_cso}),
-               eShaderType::Comp, log};
-    sh_shade_primary_cache_query_ = Shader{
-        "Shade (Primary) (Cache Query)", ctx_.get(),
-        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_comp_cso}
-                              : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_comp_cso}),
-        eShaderType::Comp, log};
-    sh_shade_primary_cache_query_sky_ = Shader{
-        "Shade (Primary) (Cache Query) (Sky)", ctx_.get(),
-        Inflate(use_bindless_
-                    ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_cso}
-                    : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_cso}),
-        eShaderType::Comp, log};
-    sh_shade_secondary_ =
-        Shader{"Shade (Secondary)", ctx_.get(),
-               Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_cso}
-                                     : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_cso}),
-               eShaderType::Comp, log};
-    sh_shade_secondary_sky_ = Shader{
-        "Shade (Secondary) (Sky)", ctx_.get(),
-        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_sky_comp_cso}
-                              : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_sky_comp_cso}),
-        eShaderType::Comp, log};
-    sh_shade_secondary_cache_update_ =
-        Shader{"Shade (Secondary) (Cache Update)", ctx_.get(),
-               Inflate(use_bindless_
-                           ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_update_comp_cso}
-                           : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_update_comp_cso}),
-               eShaderType::Comp, log};
-    sh_shade_secondary_cache_query_ =
-        Shader{"Shade (Secondary) (Cache Query)", ctx_.get(),
-               Inflate(use_bindless_
-                           ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_comp_cso}
-                           : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_comp_cso}),
-               eShaderType::Comp, log};
-    sh_shade_secondary_cache_query_sky_ = Shader{
-        "Shade (Secondary) (Cache Query) (Sky)", ctx_.get(),
-        Inflate(use_bindless_
-                    ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_cso}
-                    : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_cso}),
-        eShaderType::Comp, log};
-
-    sh_shade_sky_ =
-        Shader{"Shade Sky", ctx_.get(), Inflate(Span<const uint8_t>{internal_shaders_output_shade_sky_comp_cso}),
-               eShaderType::Comp, log};
-
-    if (use_hwrt_) {
-        sh_intersect_scene_shadow_ = Shader{
-            "Intersect Scene (Shadow) (HWRT)", ctx_.get(),
-            Inflate(use_bindless_
-                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso}
-                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso}),
-            eShaderType::Comp, log};
-    } else {
-        sh_intersect_scene_shadow_ = Shader{
-            "Intersect Scene (Shadow) (SWRT)", ctx_.get(),
-            Inflate(use_bindless_
-                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_cso}
-                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_cso}),
-            eShaderType::Comp, log};
-    }
-    sh_prepare_indir_args_ =
-        Shader{"Prepare Indir Args", ctx_.get(), Inflate(internal_shaders_output_prepare_indir_args_comp_cso),
-               eShaderType::Comp, log};
-    sh_mix_incremental_ = Shader{"Mix Incremental", ctx_.get(),
-                                 Inflate(internal_shaders_output_mix_incremental_comp_cso), eShaderType::Comp, log};
-    sh_postprocess_ = Shader{"Postprocess", ctx_.get(), Inflate(internal_shaders_output_postprocess_comp_cso),
-                             eShaderType::Comp, log};
-    sh_filter_variance_ = Shader{"Filter Variance", ctx_.get(),
-                                 Inflate(internal_shaders_output_filter_variance_comp_cso), eShaderType::Comp, log};
-    sh_nlm_filter_ =
-        Shader{"NLM Filter", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_comp_cso), eShaderType::Comp, log};
-    if (use_hwrt_) {
-        sh_debug_rt_ =
-            Shader{"Debug RT", ctx_.get(), Inflate(internal_shaders_output_debug_rt_comp_cso), eShaderType::Comp, log};
-    }
-
-    sh_sort_hash_rays_ = Shader{"Sort Hash Rays", ctx_.get(), Inflate(internal_shaders_output_sort_hash_rays_comp_cso),
-                                eShaderType::Comp, log};
-    sh_sort_init_count_table_ =
-        Shader{"Sort Init Count Table", ctx_.get(), Inflate(internal_shaders_output_sort_init_count_table_comp_cso),
-               eShaderType::Comp, log};
-    sh_sort_reduce_ = Shader{"Sort Reduce", ctx_.get(), Inflate(internal_shaders_output_sort_reduce_comp_cso),
-                             eShaderType::Comp, log};
-    sh_sort_scan_ =
-        Shader{"Sort Scan", ctx_.get(), Inflate(internal_shaders_output_sort_scan_comp_cso), eShaderType::Comp, log};
-    sh_sort_scan_add_ = Shader{"Sort Scan Add", ctx_.get(), Inflate(internal_shaders_output_sort_scan_add_comp_cso),
-                               eShaderType::Comp, log};
-    sh_sort_scatter_ = Shader{"Sort Scatter", ctx_.get(), Inflate(internal_shaders_output_sort_scatter_comp_cso),
-                              eShaderType::Comp, log};
-    sh_sort_reorder_rays_ = Shader{"Sort Reorder Rays", ctx_.get(),
-                                   Inflate(internal_shaders_output_sort_reorder_rays_comp_cso), eShaderType::Comp, log};
-
-    /*sh_intersect_scene_rgen_ = Shader{"Intersect Scene RGEN",
-                                      ctx_.get(),
-                                      internal_shaders_output_intersect_scene_rgen_cso,
-                                      eShaderType::RayGen,
-                                      log};
-    sh_intersect_scene_indirect_rgen_ = Shader{"Intersect Scene Indirect RGEN",
-                                               ctx_.get(),
-                                               internal_shaders_output_intersect_scene_indirect_rgen_spv,
-                                               eShaderType::RayGen,
-                                               log};
-    sh_intersect_scene_rchit_ = Shader{"Intersect Scene RCHIT",
-                                       ctx_.get(),
-                                       internal_shaders_output_intersect_scene_rchit_spv,
-                                       eShaderType::ClosestHit,
-                                       log};
-    sh_intersect_scene_rmiss_ = Shader{"Intersect Scene RMISS",
-                                       ctx_.get(),
-                                       internal_shaders_output_intersect_scene_rmiss_spv,
-                                       eShaderType::AnyHit,
-                                       log};*/
-
-    if (ctx_->int64_atomics_supported()) {
-        sh_spatial_cache_update_ =
-            Shader{"Spatial Cache Update", ctx_.get(), Inflate(internal_shaders_output_spatial_cache_update_comp_cso),
-                   eShaderType::Comp, log};
-    } else {
-        sh_spatial_cache_update_ =
-            Shader{"Spatial Cache Update", ctx_.get(),
-                   Inflate(internal_shaders_output_spatial_cache_update_compat_comp_cso), eShaderType::Comp, log};
-    }
-    sh_spatial_cache_resolve_ =
-        Shader{"Spatial Cache Resolve", ctx_.get(), Inflate(internal_shaders_output_spatial_cache_resolve_comp_cso),
-               eShaderType::Comp, log};
-
-    prog_prim_rays_gen_simple_ = Program{"Primary Raygen Simple", ctx_.get(), &sh_prim_rays_gen_simple_, log};
-    prog_prim_rays_gen_adaptive_ = Program{"Primary Raygen Adaptive", ctx_.get(), &sh_prim_rays_gen_adaptive_, log};
-    prog_intersect_scene_ = Program{"Intersect Scene (Primary)", ctx_.get(), &sh_intersect_scene_, log};
-    prog_intersect_scene_indirect_ =
-        Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_intersect_scene_indirect_, log};
-    prog_intersect_area_lights_ = Program{"Intersect Area Lights", ctx_.get(), &sh_intersect_area_lights_, log};
-    prog_shade_primary_ = Program{"Shade (Primary)", ctx_.get(), &sh_shade_primary_, log};
-    prog_shade_primary_sky_ = Program{"Shade (Primary) (Sky)", ctx_.get(), &sh_shade_primary_sky_, log};
-    prog_shade_primary_cache_update_ =
-        Program{"Shade (Primary) (Cache Update)", ctx_.get(), &sh_shade_primary_cache_update_, log};
-    prog_shade_primary_cache_query_ =
-        Program{"Shade (Primary) (Cache Query)", ctx_.get(), &sh_shade_primary_cache_query_, log};
-    prog_shade_primary_cache_query_sky_ =
-        Program{"Shade (Primary) (Cache Query) (Sky)", ctx_.get(), &sh_shade_primary_cache_query_sky_, log};
-    prog_shade_secondary_ = Program{"Shade (Secondary)", ctx_.get(), &sh_shade_secondary_, log};
-    prog_shade_secondary_sky_ = Program{"Shade (Secondary) (Sky)", ctx_.get(), &sh_shade_secondary_sky_, log};
-    prog_shade_secondary_cache_update_ =
-        Program{"Shade (Secondary) (Cache Update)", ctx_.get(), &sh_shade_secondary_cache_update_, log};
-    prog_shade_secondary_cache_query_ =
-        Program{"Shade (Secondary) (Cache Query)", ctx_.get(), &sh_shade_secondary_cache_query_, log};
-    prog_shade_secondary_cache_query_sky_ =
-        Program{"Shade (Secondary) (Cache Query) (Sky)", ctx_.get(), &sh_shade_secondary_cache_query_sky_, log};
-    prog_shade_sky_ = Program{"Shade Sky", ctx_.get(), &sh_shade_sky_, log};
-    prog_intersect_scene_shadow_ = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_intersect_scene_shadow_, log};
-    prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
-    prog_mix_incremental_ = Program{"Mix Incremental", ctx_.get(), &sh_mix_incremental_, log};
-    prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
-    prog_filter_variance_ = Program{"Filter Variance", ctx_.get(), &sh_filter_variance_, log};
-    prog_nlm_filter_ = Program{"NLM Filter", ctx_.get(), &sh_nlm_filter_, log};
-    if (use_hwrt_) {
-        prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
-    }
-    prog_sort_hash_rays_ = Program{"Hash Rays", ctx_.get(), &sh_sort_hash_rays_, log};
-    prog_sort_init_count_table_ = Program{"Init Count Table", ctx_.get(), &sh_sort_init_count_table_, log};
-    prog_sort_reduce_ = Program{"Sort Reduce", ctx_.get(), &sh_sort_reduce_, log};
-    prog_sort_scan_ = Program{"Sort Scan", ctx_.get(), &sh_sort_scan_, log};
-    prog_sort_scan_add_ = Program{"Sort Scan Add", ctx_.get(), &sh_sort_scan_add_, log};
-    prog_sort_scatter_ = Program{"Sort Scatter", ctx_.get(), &sh_sort_scatter_, log};
-    prog_sort_reorder_rays_ = Program{"Reorder Rays", ctx_.get(), &sh_sort_reorder_rays_, log};
-    // prog_intersect_scene_rtpipe_ = Program{"Intersect Scene",
-    //                                        ctx_.get(),
-    //                                        &sh_intersect_scene_rgen_,
-    //                                        &sh_intersect_scene_rchit_,
-    //                                       nullptr,
-    //                                       &sh_intersect_scene_rmiss_,
-    //                                       nullptr,
-    //                                       log};
-    // prog_intersect_scene_indirect_rtpipe_ = Program{"Intersect Scene Indirect",
-    //                                                ctx_.get(),
-    //                                                &sh_intersect_scene_indirect_rgen_,
-    //                                                &sh_intersect_scene_rchit_,
-    //                                                nullptr,
-    //                                                &sh_intersect_scene_rmiss_,
-    //                                                nullptr,
-    //                                                log};
-    prog_spatial_cache_update_ = Program{"Spatial Cache Update", ctx_.get(), &sh_spatial_cache_update_, log};
-    prog_spatial_cache_resolve_ = Program{"Spatial Cache Resolve", ctx_.get(), &sh_spatial_cache_resolve_, log};
 
     if (!pi_prim_rays_gen_simple_.Init(ctx_.get(), &prog_prim_rays_gen_simple_, log) ||
         !pi_prim_rays_gen_adaptive_.Init(ctx_.get(), &prog_prim_rays_gen_adaptive_, log) ||
@@ -466,7 +232,7 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) {
         !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log) ||
         (use_spatial_cache_ && !pi_spatial_cache_update_.Init(ctx_.get(), &prog_spatial_cache_update_, log)) ||
         (use_spatial_cache_ && !pi_spatial_cache_resolve_.Init(ctx_.get(), &prog_spatial_cache_resolve_, log))) {
-        throw std::runtime_error("Error initializing pipeline!");
+        throw std::runtime_error("Error initializing directx pipelines!");
     }
 
     random_seq_buf_ = Buffer{"Random Seq", ctx_.get(), eBufType::Storage,
@@ -2356,6 +2122,230 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(
     DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+bool Ray::Dx::Renderer::InitShaders(ILog *log) {
+    bool result = true;
+    result &= sh_prim_rays_gen_simple_.Init("Primary Raygen Simple", ctx_.get(),
+                                            Inflate(internal_shaders_output_primary_ray_gen_simple_comp_cso),
+                                            eShaderType::Comp, log);
+    result &= sh_prim_rays_gen_adaptive_.Init("Primary Raygen Adaptive", ctx_.get(),
+                                              Inflate(internal_shaders_output_primary_ray_gen_adaptive_comp_cso),
+                                              eShaderType::Comp, log);
+    if (use_hwrt_) {
+        result &= sh_intersect_scene_.Init(
+            "Intersect Scene (Primary) (HWRT)", ctx_.get(),
+            Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_bindless_comp_cso}
+                                  : Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_atlas_comp_cso}),
+            eShaderType::Comp, log);
+    } else {
+        result &= sh_intersect_scene_.Init(
+            "Intersect Scene (Primary) (SWRT)", ctx_.get(),
+            Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_bindless_comp_cso}
+                                  : Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_atlas_comp_cso}),
+            eShaderType::Comp, log);
+    }
+
+    if (use_hwrt_) {
+        result &= sh_intersect_scene_indirect_.Init(
+            "Intersect Scene (Secondary) (HWRT)", ctx_.get(),
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso}),
+            eShaderType::Comp, log);
+    } else {
+        result &= sh_intersect_scene_indirect_.Init(
+            "Intersect Scene (Secondary) (SWRT)", ctx_.get(),
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_cso}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_cso}),
+            eShaderType::Comp, log);
+    }
+
+    result &= sh_intersect_area_lights_.Init("Intersect Area Lights", ctx_.get(),
+                                             Inflate(internal_shaders_output_intersect_area_lights_comp_cso),
+                                             eShaderType::Comp, log);
+    result &= sh_shade_primary_.Init(
+        "Shade (Primary)", ctx_.get(),
+        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_cso}
+                              : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_primary_sky_.Init(
+        "Shade (Primary) (Sky)", ctx_.get(),
+        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_sky_comp_cso}
+                              : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_sky_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_primary_cache_update_.Init(
+        "Shade (Primary) (Cache Update)", ctx_.get(),
+        Inflate(use_bindless_
+                    ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_update_comp_cso}
+                    : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_update_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_primary_cache_query_.Init(
+        "Shade (Primary) (Cache Query)", ctx_.get(),
+        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_comp_cso}
+                              : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_primary_cache_query_sky_.Init(
+        "Shade (Primary) (Cache Query) (Sky)", ctx_.get(),
+        Inflate(use_bindless_
+                    ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_cso}
+                    : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_secondary_.Init(
+        "Shade (Secondary)", ctx_.get(),
+        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_cso}
+                              : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_secondary_sky_.Init(
+        "Shade (Secondary) (Sky)", ctx_.get(),
+        Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_sky_comp_cso}
+                              : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_sky_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_secondary_cache_update_.Init(
+        "Shade (Secondary) (Cache Update)", ctx_.get(),
+        Inflate(use_bindless_
+                    ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_update_comp_cso}
+                    : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_update_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_secondary_cache_query_.Init(
+        "Shade (Secondary) (Cache Query)", ctx_.get(),
+        Inflate(use_bindless_
+                    ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_comp_cso}
+                    : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_secondary_cache_query_sky_.Init(
+        "Shade (Secondary) (Cache Query) (Sky)", ctx_.get(),
+        Inflate(use_bindless_
+                    ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_cso}
+                    : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_cso}),
+        eShaderType::Comp, log);
+    result &= sh_shade_sky_.Init("Shade Sky", ctx_.get(),
+                                 Inflate(Span<const uint8_t>{internal_shaders_output_shade_sky_comp_cso}),
+                                 eShaderType::Comp, log);
+
+    if (use_hwrt_) {
+        result &= sh_intersect_scene_shadow_.Init(
+            "Intersect Scene (Shadow) (HWRT)", ctx_.get(),
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso}),
+            eShaderType::Comp, log);
+    } else {
+        result &= sh_intersect_scene_shadow_.Init(
+            "Intersect Scene (Shadow) (SWRT)", ctx_.get(),
+            Inflate(use_bindless_
+                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_cso}
+                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_cso}),
+            eShaderType::Comp, log);
+    }
+    result &= sh_prepare_indir_args_.Init("Prepare Indir Args", ctx_.get(),
+                                          Inflate(internal_shaders_output_prepare_indir_args_comp_cso),
+                                          eShaderType::Comp, log);
+    result &=
+        sh_mix_incremental_.Init("Mix Incremental", ctx_.get(),
+                                 Inflate(internal_shaders_output_mix_incremental_comp_cso), eShaderType::Comp, log);
+    result &= sh_postprocess_.Init("Postprocess", ctx_.get(), Inflate(internal_shaders_output_postprocess_comp_cso),
+                                   eShaderType::Comp, log);
+    result &=
+        sh_filter_variance_.Init("Filter Variance", ctx_.get(),
+                                 Inflate(internal_shaders_output_filter_variance_comp_cso), eShaderType::Comp, log);
+    result &= sh_nlm_filter_.Init("NLM Filter", ctx_.get(), Inflate(internal_shaders_output_nlm_filter_comp_cso),
+                                  eShaderType::Comp, log);
+    if (use_hwrt_) {
+        result &= sh_debug_rt_.Init("Debug RT", ctx_.get(), Inflate(internal_shaders_output_debug_rt_comp_cso),
+                                    eShaderType::Comp, log);
+    }
+
+    result &= sh_sort_hash_rays_.Init("Sort Hash Rays", ctx_.get(),
+                                      Inflate(internal_shaders_output_sort_hash_rays_comp_cso), eShaderType::Comp, log);
+    result &= sh_sort_init_count_table_.Init("Sort Init Count Table", ctx_.get(),
+                                             Inflate(internal_shaders_output_sort_init_count_table_comp_cso),
+                                             eShaderType::Comp, log);
+    result &= sh_sort_reduce_.Init("Sort Reduce", ctx_.get(), Inflate(internal_shaders_output_sort_reduce_comp_cso),
+                                   eShaderType::Comp, log);
+    result &= sh_sort_scan_.Init("Sort Scan", ctx_.get(), Inflate(internal_shaders_output_sort_scan_comp_cso),
+                                 eShaderType::Comp, log);
+    result &= sh_sort_scan_add_.Init("Sort Scan Add", ctx_.get(),
+                                     Inflate(internal_shaders_output_sort_scan_add_comp_cso), eShaderType::Comp, log);
+    result &= sh_sort_scatter_.Init("Sort Scatter", ctx_.get(), Inflate(internal_shaders_output_sort_scatter_comp_cso),
+                                    eShaderType::Comp, log);
+    result &=
+        sh_sort_reorder_rays_.Init("Sort Reorder Rays", ctx_.get(),
+                                   Inflate(internal_shaders_output_sort_reorder_rays_comp_cso), eShaderType::Comp, log);
+
+    if (ctx_->int64_atomics_supported()) {
+        result &= sh_spatial_cache_update_.Init("Spatial Cache Update", ctx_.get(),
+                                                Inflate(internal_shaders_output_spatial_cache_update_comp_cso),
+                                                eShaderType::Comp, log);
+    } else {
+        result &= sh_spatial_cache_update_.Init("Spatial Cache Update", ctx_.get(),
+                                                Inflate(internal_shaders_output_spatial_cache_update_compat_comp_cso),
+                                                eShaderType::Comp, log);
+    }
+    result &= sh_spatial_cache_resolve_.Init("Spatial Cache Resolve", ctx_.get(),
+                                             Inflate(internal_shaders_output_spatial_cache_resolve_comp_cso),
+                                             eShaderType::Comp, log);
+
+    prog_prim_rays_gen_simple_ = Program{"Primary Raygen Simple", ctx_.get(), &sh_prim_rays_gen_simple_, log};
+    prog_prim_rays_gen_adaptive_ = Program{"Primary Raygen Adaptive", ctx_.get(), &sh_prim_rays_gen_adaptive_, log};
+    prog_intersect_scene_ = Program{"Intersect Scene (Primary)", ctx_.get(), &sh_intersect_scene_, log};
+    prog_intersect_scene_indirect_ =
+        Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_intersect_scene_indirect_, log};
+    prog_intersect_area_lights_ = Program{"Intersect Area Lights", ctx_.get(), &sh_intersect_area_lights_, log};
+    prog_shade_primary_ = Program{"Shade (Primary)", ctx_.get(), &sh_shade_primary_, log};
+    prog_shade_primary_sky_ = Program{"Shade (Primary) (Sky)", ctx_.get(), &sh_shade_primary_sky_, log};
+    prog_shade_primary_cache_update_ =
+        Program{"Shade (Primary) (Cache Update)", ctx_.get(), &sh_shade_primary_cache_update_, log};
+    prog_shade_primary_cache_query_ =
+        Program{"Shade (Primary) (Cache Query)", ctx_.get(), &sh_shade_primary_cache_query_, log};
+    prog_shade_primary_cache_query_sky_ =
+        Program{"Shade (Primary) (Cache Query) (Sky)", ctx_.get(), &sh_shade_primary_cache_query_sky_, log};
+    prog_shade_secondary_ = Program{"Shade (Secondary)", ctx_.get(), &sh_shade_secondary_, log};
+    prog_shade_secondary_sky_ = Program{"Shade (Secondary) (Sky)", ctx_.get(), &sh_shade_secondary_sky_, log};
+    prog_shade_secondary_cache_update_ =
+        Program{"Shade (Secondary) (Cache Update)", ctx_.get(), &sh_shade_secondary_cache_update_, log};
+    prog_shade_secondary_cache_query_ =
+        Program{"Shade (Secondary) (Cache Query)", ctx_.get(), &sh_shade_secondary_cache_query_, log};
+    prog_shade_secondary_cache_query_sky_ =
+        Program{"Shade (Secondary) (Cache Query) (Sky)", ctx_.get(), &sh_shade_secondary_cache_query_sky_, log};
+    prog_shade_sky_ = Program{"Shade Sky", ctx_.get(), &sh_shade_sky_, log};
+    prog_intersect_scene_shadow_ = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_intersect_scene_shadow_, log};
+    prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
+    prog_mix_incremental_ = Program{"Mix Incremental", ctx_.get(), &sh_mix_incremental_, log};
+    prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
+    prog_filter_variance_ = Program{"Filter Variance", ctx_.get(), &sh_filter_variance_, log};
+    prog_nlm_filter_ = Program{"NLM Filter", ctx_.get(), &sh_nlm_filter_, log};
+    if (use_hwrt_) {
+        prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
+    }
+    prog_sort_hash_rays_ = Program{"Hash Rays", ctx_.get(), &sh_sort_hash_rays_, log};
+    prog_sort_init_count_table_ = Program{"Init Count Table", ctx_.get(), &sh_sort_init_count_table_, log};
+    prog_sort_reduce_ = Program{"Sort Reduce", ctx_.get(), &sh_sort_reduce_, log};
+    prog_sort_scan_ = Program{"Sort Scan", ctx_.get(), &sh_sort_scan_, log};
+    prog_sort_scan_add_ = Program{"Sort Scan Add", ctx_.get(), &sh_sort_scan_add_, log};
+    prog_sort_scatter_ = Program{"Sort Scatter", ctx_.get(), &sh_sort_scatter_, log};
+    prog_sort_reorder_rays_ = Program{"Reorder Rays", ctx_.get(), &sh_sort_reorder_rays_, log};
+    // prog_intersect_scene_rtpipe_ = Program{"Intersect Scene",
+    //                                        ctx_.get(),
+    //                                        &sh_intersect_scene_rgen_,
+    //                                        &sh_intersect_scene_rchit_,
+    //                                       nullptr,
+    //                                       &sh_intersect_scene_rmiss_,
+    //                                       nullptr,
+    //                                       log};
+    // prog_intersect_scene_indirect_rtpipe_ = Program{"Intersect Scene Indirect",
+    //                                                ctx_.get(),
+    //                                                &sh_intersect_scene_indirect_rgen_,
+    //                                                &sh_intersect_scene_rchit_,
+    //                                                nullptr,
+    //                                                &sh_intersect_scene_rmiss_,
+    //                                                nullptr,
+    //                                                log};
+    prog_spatial_cache_update_ = Program{"Spatial Cache Update", ctx_.get(), &sh_spatial_cache_update_, log};
+    prog_spatial_cache_resolve_ = Program{"Spatial Cache Resolve", ctx_.get(), &sh_spatial_cache_resolve_, log};
+
+    return result;
 }
 
 Ray::RendererBase *Ray::Dx::CreateRenderer(const settings_t &s, ILog *log) { return new Dx::Renderer(s, log); }
