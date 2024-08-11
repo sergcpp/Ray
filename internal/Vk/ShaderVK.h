@@ -70,7 +70,7 @@ class Shader {
     eShaderType type() const { return type_; }
     const std::string &name() const { return name_; }
 
-    bool Init(Span<const uint8_t> shader_code, eShaderType type, ILog *log);
+    bool Init(const char *name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log);
 };
 
 } // namespace Vk

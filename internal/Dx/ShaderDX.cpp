@@ -81,11 +81,9 @@ const uint32_t _DXC_PART_REFLECTION_DATA = _DXC_FOURCC('S', 'T', 'A', 'T');
 } // namespace Dx
 } // namespace Ray
 
-Ray::Dx::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_code, const int code_size,
-                        const eShaderType type, ILog *log)
-    : name_(name) {
-    device_ = ctx->device();
-    if (!Init(shader_code, code_size, type, log)) {
+Ray::Dx::Shader::Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
+                        ILog *log) {
+    if (!Init(name, ctx, shader_code, type, log)) {
         throw std::runtime_error("Shader Init error!");
     }
 }
@@ -105,16 +103,20 @@ Ray::Dx::Shader &Ray::Dx::Shader::operator=(Shader &&rhs) noexcept {
     return (*this);
 }
 
-bool Ray::Dx::Shader::Init(const uint8_t *shader_code, const int code_size, const eShaderType type, ILog *log) {
-    if (!InitFromCSO(shader_code, code_size, type, log)) {
+bool Ray::Dx::Shader::Init(const char *name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
+                           ILog *log) {
+    name_ = name;
+    device_ = ctx->device();
+
+    if (!InitFromCSO(shader_code, type, log)) {
         return false;
     }
 
     return true;
 }
 
-bool Ray::Dx::Shader::InitFromCSO(const uint8_t *shader_code, const int code_size, const eShaderType type, ILog *log) {
-    if (!shader_code) {
+bool Ray::Dx::Shader::InitFromCSO(Span<const uint8_t> shader_code, const eShaderType type, ILog *log) {
+    if (shader_code.empty()) {
         return false;
     }
 
@@ -135,10 +137,10 @@ bool Ray::Dx::Shader::InitFromCSO(const uint8_t *shader_code, const int code_siz
     uint32_t data_off = 0;
 
     header_t header = {};
-    memcpy(&header, shader_code, sizeof(header_t));
+    memcpy(&header, shader_code.data(), sizeof(header_t));
     data_off += sizeof(header_t);
 
-    shader_code_.assign(shader_code, shader_code + header.total_size);
+    shader_code_.assign(shader_code.data(), shader_code.data() + header.total_size);
 
 #if 0 // Unfinished manual parsing
     assert(header.chunk_count < 16);
@@ -173,22 +175,22 @@ bool Ray::Dx::Shader::InitFromCSO(const uint8_t *shader_code, const int code_siz
     data_off = header.total_size;
 
     uint32_t pc_count = 0;
-    memcpy(&pc_count, shader_code + data_off, sizeof(uint32_t));
+    memcpy(&pc_count, shader_code.data() + data_off, sizeof(uint32_t));
     data_off += sizeof(uint32_t);
 
     if (pc_count) {
         pc_ranges.resize(pc_count);
-        memcpy(pc_ranges.data(), shader_code + data_off, pc_count * sizeof(Range));
+        memcpy(pc_ranges.data(), shader_code.data() + data_off, pc_count * sizeof(Range));
         data_off += pc_count * sizeof(Range);
     }
 
     uint32_t ub_count = 0;
-    memcpy(&ub_count, shader_code + data_off, sizeof(uint32_t));
+    memcpy(&ub_count, shader_code.data() + data_off, sizeof(uint32_t));
     data_off += sizeof(uint32_t);
 
     if (ub_count) {
         unif_bindings.resize(ub_count);
-        memcpy(unif_bindings.data(), shader_code + data_off, ub_count * sizeof(Descr));
+        memcpy(unif_bindings.data(), shader_code.data() + data_off, ub_count * sizeof(Descr));
         data_off += ub_count * sizeof(Descr);
     }
 

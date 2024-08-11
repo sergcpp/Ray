@@ -34,9 +34,8 @@ static_assert(int(eShaderType::AnyHit) < int(eShaderType::Intersection), "!");
 } // namespace Ray
 
 Ray::Vk::Shader::Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
-                        ILog *log)
-    : ctx_(ctx), name_(name) {
-    if (!Init(shader_code, type, log)) {
+                        ILog *log) {
+    if (!Init(name, ctx, shader_code, type, log)) {
         throw std::runtime_error("Shader Init error!");
     }
 }
@@ -64,7 +63,11 @@ Ray::Vk::Shader &Ray::Vk::Shader::operator=(Shader &&rhs) noexcept {
     return (*this);
 }
 
-bool Ray::Vk::Shader::Init(Span<const uint8_t> shader_code, const eShaderType type, ILog *log) {
+bool Ray::Vk::Shader::Init(const char *name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
+                           ILog *log) {
+    name_ = name;
+    ctx_ = ctx;
+
     if (shader_code.size() % sizeof(uint32_t) != 0) {
         return false;
     }
