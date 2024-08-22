@@ -15,7 +15,7 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
 };
 
 layout(std430, binding = WNODES_BUF_SLOT) readonly buffer WNodes {
-    light_wbvh_node_t g_wnodes[];
+    light_wbvh_node_t g_light_wnodes[];
 };
 
 layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
@@ -93,9 +93,9 @@ void main() {
         uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
         float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
 
-        light_wbvh_node_t n = g_wnodes[cur];
+        if ((cur & LEAF_NODE_BIT) == 0) {
+            light_wbvh_node_t n = g_light_wnodes[cur];
 
-        if ((n.child[0] & LEAF_NODE_BIT) == 0) {
             float importance[8];
             const float total_importance = calc_lnode_importance(n, ro, importance);
 
@@ -109,7 +109,7 @@ void main() {
                 }
             }
         } else {
-            const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
+            const int light_index = int(cur & PRIM_INDEX_BITS);
             light_t l = g_lights[light_index];
             [[dont_flatten]] if (!LIGHT_VISIBLE(l) || (LIGHT_RAY_VISIBILITY(l) & rt) == 0) {
                 // Skip invisible light

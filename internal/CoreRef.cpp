@@ -2669,7 +2669,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
     if (USE_HIERARCHICAL_NEE) {
         factor = 1.0f;
         uint32_t i = 0; // start from root
-        while (!is_leaf_node(sc.light_wnodes[i])) {
+        while ((i & LEAF_NODE_BIT) == 0) {
             alignas(16) float importance[8];
             calc_lnode_importance(sc.light_wnodes[i], P, importance);
 
@@ -2703,7 +2703,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
             i = sc.light_wnodes[i].child[next];
             factor *= factors[next];
         }
-        light_index = (sc.light_wnodes[i].child[0] & PRIM_INDEX_BITS);
+        light_index = (i & PRIM_INDEX_BITS);
         factor = 1.0f / factor;
     } else {
         light_index = std::min(uint32_t(u1 * float(sc.li_indices.size())), uint32_t(sc.li_indices.size() - 1));
@@ -3023,7 +3023,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
             }
 
         TRAVERSE:
-            if (!is_leaf_node(nodes[cur.index])) {
+            if ((cur.index & LEAF_NODE_BIT) == 0) {
                 alignas(16) float dist[8];
                 long mask = bbox_test_oct(value_ptr(ro), inv_d, inout_inter.t, nodes[cur.index], dist);
                 if (mask) {
@@ -3099,11 +3099,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                     goto TRAVERSE;
                 }
             } else {
-                const int light_index = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS);
-                assert(nodes[cur.index].child[1] == 1);
-
-                ////
-
+                const int light_index = int(cur.index & PRIM_INDEX_BITS);
                 const light_t &l = lights[light_index];
                 if (!l.visible || (l.ray_visibility & ray_flags) == 0) {
                     continue;
@@ -3465,7 +3461,7 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t>
         }
 
     TRAVERSE:
-        if (!is_leaf_node(nodes[cur.index])) {
+        if ((cur.index & LEAF_NODE_BIT) == 0) {
             alignas(16) float dist[8];
             long mask = bbox_test_oct(value_ptr(ro), inv_d, rdist, nodes[cur.index], dist);
             if (mask) {
@@ -3525,8 +3521,7 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t>
                 goto TRAVERSE;
             }
         } else {
-            const int light_index = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS);
-            assert(nodes[cur.index].child[1] == 1);
+            const int light_index = int(cur.index & PRIM_INDEX_BITS);
             const light_t &l = lights[light_index];
             if ((l.ray_visibility & RAY_TYPE_SHADOW_BIT) == 0) {
                 continue;
@@ -3649,7 +3644,7 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri
         const uint32_t cur = stack[--stack_size];
         const float cur_factor = stack_factors[stack_size];
 
-        if (!is_leaf_node(nodes[cur])) {
+        if ((cur & LEAF_NODE_BIT) == 0) {
             long mask = bbox_test_oct(value_ptr(P), nodes[cur]);
             if (mask) {
                 alignas(16) float importance[8];
@@ -3669,9 +3664,7 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri
                 } while (mask != 0);
             }
         } else {
-            const int light_index = int(nodes[cur].child[0] & PRIM_INDEX_BITS);
-            assert((nodes[cur].child[1] & PRIM_COUNT_BITS) == 1);
-
+            const int light_index = int(cur & PRIM_INDEX_BITS);
             const light_t &l = lights[light_index];
             if (l.type == LIGHT_TYPE_TRI && l.tri.tri_index == tri_index) {
                 // needed triangle found
