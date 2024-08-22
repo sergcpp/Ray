@@ -386,9 +386,9 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
     while (stack_size != 0) {
         uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
 
-        light_wbvh_node_t n = g_light_wnodes[cur];
+        if ((cur & LEAF_NODE_BIT) == 0) {
+            light_wbvh_node_t n = g_light_wnodes[cur];
 
-        if ((n.child[0] & LEAF_NODE_BIT) == 0) {
             // TODO: loop in morton order based on ray direction
             for (int j = 0; j < 8; ++j) {
                 if (_bbox_test(inv_d, neg_inv_do, rdist,
@@ -398,7 +398,7 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
                 }
             }
         } else {
-            const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
+            const int light_index = int(cur & PRIM_INDEX_BITS);
             light_t l = g_lights[light_index];
             [[dont_flatten]] if ((LIGHT_RAY_VISIBILITY(l) & RAY_TYPE_SHADOW_BIT) == 0) {
                 // Skip non-blocking light

@@ -1431,6 +1431,45 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
         assert(root_node == 0);
         (void)root_node;
         light_nodes_.clear();
+
+        // Collapse leaf level (all nodes have only 1 child)
+        std::vector<bool> should_remove(light_wnodes_.size(), false);
+        for (uint32_t i = 0; i < light_wnodes_.size(); ++i) {
+            if ((light_wnodes_[i].child[0] & LEAF_NODE_BIT) == 0) {
+                for (int j = 0; j < 8; ++j) {
+                    if (light_wnodes_[i].child[j] == 0x7fffffff) {
+                        continue;
+                    }
+                    if ((light_wnodes_[light_wnodes_[i].child[j]].child[0] & LEAF_NODE_BIT) != 0) {
+                        assert(light_wnodes_[light_wnodes_[i].child[j]].child[1] == 1);
+                        should_remove[light_wnodes_[i].child[j]] = true;
+                        light_wnodes_[i].child[j] = light_wnodes_[light_wnodes_[i].child[j]].child[0];
+                    }
+                }
+            }
+        }
+        std::vector<uint32_t> compacted_indices;
+        uint32_t cur_index = 0;
+        for (const bool b : should_remove) {
+            compacted_indices.push_back(cur_index);
+            if (!b) {
+                ++cur_index;
+            }
+        }
+        for (int i = int(light_wnodes_.size() - 1); i >= 0; --i) {
+            if (should_remove[i]) {
+                light_wnodes_.erase(begin(light_wnodes_) + i);
+            } else {
+                for (int j = 0; j < 8; ++j) {
+                    if (light_wnodes_[i].child[j] == 0x7fffffff) {
+                        continue;
+                    }
+                    if ((light_wnodes_[i].child[j] & LEAF_NODE_BIT) == 0) {
+                        light_wnodes_[i].child[j] = compacted_indices[light_wnodes_[i].child[j] & PRIM_INDEX_BITS];
+                    }
+                }
+            }
+        }
     }
 }
 

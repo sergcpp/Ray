@@ -956,8 +956,10 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
 
 #if USE_HIERARCHICAL_NEE
     float factor = 1.0;
-    light_wbvh_node_t n = g_light_wnodes[0]; // start from root
-    while ((n.child[0] & LEAF_NODE_BIT) == 0) {
+    uint cur = 0; // start from root
+    while ((cur & LEAF_NODE_BIT) == 0) {
+        light_wbvh_node_t n = g_light_wnodes[cur];
+
         float importance[8];
         const float total_importance = calc_lnode_importance(n, P, importance);
         [[dont_flatten]] if (total_importance == 0.0) {
@@ -990,10 +992,10 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         }
 
         u1 = fract((u1 - importance_cdf[next]) / importance[next]);
-        n = g_light_wnodes[n.child[next]];
+        cur = n.child[next];
         factor *= importance[next];
     }
-    const uint light_index = (n.child[0] & PRIM_INDEX_BITS);
+    const uint light_index = (cur & PRIM_INDEX_BITS);
     factor = (1.0 / factor);
 #else
     uint light_index = min(uint(u1 * g_params.li_count), uint(g_params.li_count - 1));
