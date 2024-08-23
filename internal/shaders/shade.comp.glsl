@@ -1315,9 +1315,9 @@ float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
         const uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
         const float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
 
-        light_wbvh_node_t n = g_light_wnodes[cur];
+        if ((cur & LEAF_NODE_BIT) == 0) {
+            light_wbvh_node_t n = g_light_wnodes[cur];
 
-        if ((n.child[0] & LEAF_NODE_BIT) == 0) {
             float importance[8];
             const float total_importance = calc_lnode_importance(n, ro, importance);
 
@@ -1329,7 +1329,7 @@ float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
                 }
             }
         } else {
-            const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
+            const int light_index = int(cur & PRIM_INDEX_BITS);
 
             light_t l = g_lights[light_index];
             if (LIGHT_TYPE(l) == LIGHT_TYPE_TRI && floatBitsToUint(l.TRI_TRI_INDEX) == tri_index) {

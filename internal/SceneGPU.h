@@ -2450,7 +2450,12 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     assert(root_node == 0);
     (void)root_node;
 
-    // Collapse leaf level (all nodes have only 1 child)
+    // Collapse leaf level (all leafs have only 1 light)
+    if ((temp_light_wnodes[0].child[0] & LEAF_NODE_BIT) != 0) {
+        for (int j = 1; j < 8; ++j) {
+            temp_light_wnodes[0].child[j] = 0x7fffffff;
+        }
+    }
     std::vector<bool> should_remove(temp_light_wnodes.size(), false);
     for (uint32_t i = 0; i < temp_light_wnodes.size(); ++i) {
         if ((temp_light_wnodes[i].child[0] & LEAF_NODE_BIT) == 0) {
