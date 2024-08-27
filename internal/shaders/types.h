@@ -100,6 +100,19 @@ struct light_wbvh_node_t {
     uint cos_omega_ne[8];
 };
 
+struct light_cwbvh_node_t {
+    float bbox_min[3];
+    float _unused0;
+    float bbox_max[3];
+    float _unused1;
+    uint ch_bbox_min[3][2];
+    uint ch_bbox_max[3][2];
+    uint child[8];
+    float flux[8];
+    uint axis[8];
+    uint cos_omega_ne[8];
+};
+
 struct vertex_t {
     float p[3], n[3], b[3], t[2];
 };

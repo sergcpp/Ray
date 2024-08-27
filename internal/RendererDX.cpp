@@ -42,6 +42,7 @@ static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
 static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
 static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t), "!");
 static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t), "!");
+static_assert(sizeof(Types::light_cwbvh_node_t) == sizeof(Ray::light_cwbvh_node_t), "!");
 static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t), "!");
 static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t), "!");
 static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t), "!");
@@ -451,7 +452,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                   s.dir_lights_,
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
-                                  s.light_wnodes_.buf(),
+                                  s.light_cwnodes_.buf(),
                                   s.rt_tlas_,
                                   s.env_map_qtree_.tex,
                                   int(s.env_map_qtree_.mips.size()),
@@ -1160,7 +1161,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   s.dir_lights_,
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
-                                  s.light_wnodes_.buf(),
+                                  s.light_cwnodes_.buf(),
                                   s.rt_tlas_,
                                   s.env_map_qtree_.tex,
                                   int(s.env_map_qtree_.mips.size()),

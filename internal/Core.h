@@ -122,6 +122,24 @@ struct light_wbvh_node_t : public wbvh_node_t {
 };
 static_assert(sizeof(light_wbvh_node_t) == 320, "!");
 
+struct alignas(16) cwbvh_node_t {
+    float bbox_min[3];
+    float _unused0;
+    float bbox_max[3];
+    float _unused1;
+    uint8_t ch_bbox_min[3][8];
+    uint8_t ch_bbox_max[3][8];
+    uint32_t child[8];
+};
+static_assert(sizeof(cwbvh_node_t) == 112, "!");
+
+struct light_cwbvh_node_t : public cwbvh_node_t {
+    float flux[8];
+    uint32_t axis[8];
+    uint32_t cos_omega_ne[8];
+};
+static_assert(sizeof(light_cwbvh_node_t) == 208, "!");
+
 struct atlas_texture_t {
     uint16_t width;
     uint16_t height;
@@ -301,8 +319,10 @@ uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t>
 
 uint32_t FlattenBVH_r(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
                       aligned_vector<wbvh_node_t> &out_nodes);
-uint32_t FlattenBVH_r(const light_bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
-                      aligned_vector<light_wbvh_node_t> &out_nodes);
+uint32_t FlattenLightBVH_r(const light_bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
+                           aligned_vector<light_wbvh_node_t> &out_nodes);
+uint32_t FlattenLightBVH_r(const light_bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
+                           aligned_vector<light_cwbvh_node_t> &out_nodes);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
@@ -502,7 +522,7 @@ struct scene_data_t {
     uint32_t visible_lights_count;
     uint32_t blocker_lights_count;
     Span<const light_bvh_node_t> light_nodes;
-    Span<const light_wbvh_node_t> light_wnodes;
+    Span<const light_cwbvh_node_t> light_cwnodes;
     Span<const float> sky_transmittance_lut, sky_multiscatter_lut;
     const cache_grid_params_t &spatial_cache_grid;
     Span<const uint64_t> spatial_cache_entries;

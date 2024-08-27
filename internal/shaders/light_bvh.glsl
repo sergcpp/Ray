@@ -111,7 +111,7 @@ vec3 decode_oct_dir(const uint oct) {
 
 vec2 decode_cosines(const uint val) {
     const uvec2 ab = uvec2((val >> 16) & 0x0000ffff, (val & 0x0000ffff));
-    return 2.0 * (vec2(ab) / 65535.0) - 1.0;
+    return 2.0 * (vec2(ab) / 65534.0) - 1.0;
 }
 
 float calc_lnode_importance(const light_wbvh_node_t n, const vec3 P, out float importance[8]) {
@@ -155,6 +155,168 @@ float calc_lnode_importance(const light_wbvh_node_t n, const vec3 P, out float i
         }
         importance[i] = n.flux[i] * mul / v_len2;
         total_importance += importance[i];
+    }
+    return total_importance;
+}
+
+float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, out float importance[8]) {
+    const vec3 decode_ext = vec3(n.bbox_max[0] - n.bbox_min[0],
+                                 n.bbox_max[1] - n.bbox_min[1],
+                                 n.bbox_max[2] - n.bbox_min[2]) / 255.0;
+
+    float total_importance = 0.0;
+    for (uint i = 0; i < 8; ++i) {
+        importance[i] = n.flux[i];
+        if (((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0xff ||
+            ((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0) {
+            const vec3 bbox_min = vec3(n.bbox_min[0] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[0],
+                                       n.bbox_min[1] + float((n.ch_bbox_min[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[1],
+                                       n.bbox_min[2] + float((n.ch_bbox_min[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[2]);
+            const vec3 bbox_max = vec3(n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[0],
+                                       n.bbox_min[1] + float((n.ch_bbox_max[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[1],
+                                       n.bbox_min[2] + float((n.ch_bbox_max[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[2]);
+            const float extent = 0.5 * length(bbox_max - bbox_min);
+
+            const vec3 pc = 0.5 * (bbox_min + bbox_max);
+            vec3 wi = P - pc;
+            const float dist2 = dot(wi, wi);
+            const float dist = sqrt(dist2);
+            wi /= dist;
+
+            const float v_len2 = max(dist2, extent);
+
+            const vec3 axis = decode_oct_dir(n.axis[i]);
+            const float cos_omega_w = dot(axis, wi);
+            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+
+            float cos_omega_b = -1.0;
+            if (dist2 >= extent * extent) {
+                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            }
+            const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
+
+            const vec2 cos_omega_ne = decode_cosines(n.cos_omega_ne[i]);
+            const float sin_omega_n = sqrt(1.0 - cos_omega_ne[0] * cos_omega_ne[0]);
+
+            const float cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const float sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const float cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
+
+            importance[i] *= (cos_omega > cos_omega_ne[1]) ? (cos_omega / v_len2) : 0.0;
+        }
+        total_importance += importance[i];
+    }
+    return total_importance;
+}
+
+float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, const vec3 P_test, out float importance[8]) {
+    const vec3 decode_ext = vec3(n.bbox_max[0] - n.bbox_min[0],
+                                 n.bbox_max[1] - n.bbox_min[1],
+                                 n.bbox_max[2] - n.bbox_min[2]) / 255.0;
+
+    float total_importance = 0.0;
+    for (uint i = 0; i < 8; ++i) {
+        float imp = n.flux[i];
+        importance[i] = imp;
+        if (((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0xff ||
+            ((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0) {
+            const vec3 bbox_min = vec3(n.bbox_min[0] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[0],
+                                       n.bbox_min[1] + float((n.ch_bbox_min[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[1],
+                                       n.bbox_min[2] + float((n.ch_bbox_min[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[2]);
+            const vec3 bbox_max = vec3(n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[0],
+                                       n.bbox_min[1] + float((n.ch_bbox_max[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[1],
+                                       n.bbox_min[2] + float((n.ch_bbox_max[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[2]);
+            const float extent = 0.5 * length(bbox_max - bbox_min);
+
+            const vec3 pc = 0.5 * (bbox_min + bbox_max);
+            vec3 wi = P - pc;
+            const float dist2 = dot(wi, wi);
+            const float dist = sqrt(dist2);
+            wi /= dist;
+
+            const float v_len2 = max(dist2, extent);
+
+            const vec3 axis = decode_oct_dir(n.axis[i]);
+            const float cos_omega_w = dot(axis, wi);
+            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+
+            float cos_omega_b = -1.0;
+            if (dist2 >= extent * extent) {
+                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            }
+            const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
+
+            const vec2 cos_omega_ne = decode_cosines(n.cos_omega_ne[i]);
+            const float sin_omega_n = sqrt(1.0 - cos_omega_ne[0] * cos_omega_ne[0]);
+
+            const float cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const float sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const float cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
+
+            const float mul = (cos_omega > cos_omega_ne[1]) ? (cos_omega / v_len2) : 0.0;
+            importance[i] = imp = (imp * mul);
+            if (!bbox_test(P_test, bbox_min, bbox_max)) {
+                // NOTE: total_importance must not account for this!
+                importance[i] = 0.0;
+            }
+        }
+        total_importance += imp;
+    }
+    return total_importance;
+}
+
+float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, const vec3 inv_d, const vec3 neg_inv_d_o, const float t, out float importance[8]) {
+    const vec3 decode_ext = vec3(n.bbox_max[0] - n.bbox_min[0],
+                                 n.bbox_max[1] - n.bbox_min[1],
+                                 n.bbox_max[2] - n.bbox_min[2]) / 255.0;
+
+    float total_importance = 0.0;
+    for (uint i = 0; i < 8; ++i) {
+        float imp = n.flux[i];
+        importance[i] = imp;
+        if (((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0xff ||
+            ((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0) {
+            const vec3 bbox_min = vec3(n.bbox_min[0] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[0],
+                                       n.bbox_min[1] + float((n.ch_bbox_min[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[1],
+                                       n.bbox_min[2] + float((n.ch_bbox_min[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[2]);
+            const vec3 bbox_max = vec3(n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[0],
+                                       n.bbox_min[1] + float((n.ch_bbox_max[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[1],
+                                       n.bbox_min[2] + float((n.ch_bbox_max[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * decode_ext[2]);
+            const float extent = 0.5 * length(bbox_max - bbox_min);
+
+            const vec3 pc = 0.5 * (bbox_min + bbox_max);
+            vec3 wi = P - pc;
+            const float dist2 = dot(wi, wi);
+            const float dist = sqrt(dist2);
+            wi /= dist;
+
+            const float v_len2 = max(dist2, extent);
+
+            const vec3 axis = decode_oct_dir(n.axis[i]);
+            const float cos_omega_w = dot(axis, wi);
+            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+
+            float cos_omega_b = -1.0;
+            if (dist2 >= extent * extent) {
+                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            }
+            const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
+
+            const vec2 cos_omega_ne = decode_cosines(n.cos_omega_ne[i]);
+            const float sin_omega_n = sqrt(1.0 - cos_omega_ne[0] * cos_omega_ne[0]);
+
+            const float cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const float sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
+            const float cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
+
+            const float mul = (cos_omega > cos_omega_ne[1]) ? (cos_omega / v_len2) : 0.0;
+            importance[i] = imp = (imp * mul);
+            if (!bbox_test(inv_d, neg_inv_d_o, t, bbox_min, bbox_max)) {
+                // NOTE: total_importance must not account for this!
+                importance[i] = 0.0;
+            }
+        }
+        total_importance += imp;
     }
     return total_importance;
 }

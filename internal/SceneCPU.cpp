@@ -1321,6 +1321,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
     light_nodes_.clear();
     light_wnodes_.clear();
+    light_cwnodes_.clear();
 
     if (primitives.empty()) {
         return;
@@ -1427,28 +1428,28 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     }
 
     if (use_wide_bvh_) {
-        const uint32_t root_node = FlattenBVH_r(light_nodes_.data(), 0, 0xffffffff, light_wnodes_);
+        const uint32_t root_node = FlattenLightBVH_r(light_nodes_.data(), 0, 0xffffffff, light_cwnodes_);
         assert(root_node == 0);
         unused(root_node);
         light_nodes_.clear();
 
         // Collapse leaf level (all leafs have only 1 light)
-        if ((light_wnodes_[0].child[0] & LEAF_NODE_BIT) != 0) {
+        if ((light_cwnodes_[0].child[0] & LEAF_NODE_BIT) != 0) {
             for (int j = 1; j < 8; ++j) {
-                light_wnodes_[0].child[j] = 0x7fffffff;
+                light_cwnodes_[0].child[j] = 0x7fffffff;
             }
         }
-        std::vector<bool> should_remove(light_wnodes_.size(), false);
-        for (uint32_t i = 0; i < light_wnodes_.size(); ++i) {
-            if ((light_wnodes_[i].child[0] & LEAF_NODE_BIT) == 0) {
+        std::vector<bool> should_remove(light_cwnodes_.size(), false);
+        for (uint32_t i = 0; i < light_cwnodes_.size(); ++i) {
+            if ((light_cwnodes_[i].child[0] & LEAF_NODE_BIT) == 0) {
                 for (int j = 0; j < 8; ++j) {
-                    if (light_wnodes_[i].child[j] == 0x7fffffff) {
+                    if (light_cwnodes_[i].child[j] == 0x7fffffff) {
                         continue;
                     }
-                    if ((light_wnodes_[light_wnodes_[i].child[j]].child[0] & LEAF_NODE_BIT) != 0) {
-                        assert(light_wnodes_[light_wnodes_[i].child[j]].child[1] == 1);
-                        should_remove[light_wnodes_[i].child[j]] = true;
-                        light_wnodes_[i].child[j] = light_wnodes_[light_wnodes_[i].child[j]].child[0];
+                    if ((light_cwnodes_[light_cwnodes_[i].child[j]].child[0] & LEAF_NODE_BIT) != 0) {
+                        assert(light_cwnodes_[light_cwnodes_[i].child[j]].child[1] == 1);
+                        should_remove[light_cwnodes_[i].child[j]] = true;
+                        light_cwnodes_[i].child[j] = light_cwnodes_[light_cwnodes_[i].child[j]].child[0];
                     }
                 }
             }
@@ -1461,16 +1462,16 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
                 ++cur_index;
             }
         }
-        for (int i = int(light_wnodes_.size() - 1); i >= 0; --i) {
+        for (int i = int(light_cwnodes_.size() - 1); i >= 0; --i) {
             if (should_remove[i]) {
-                light_wnodes_.erase(begin(light_wnodes_) + i);
+                light_cwnodes_.erase(begin(light_cwnodes_) + i);
             } else {
                 for (int j = 0; j < 8; ++j) {
-                    if (light_wnodes_[i].child[j] == 0x7fffffff) {
+                    if (light_cwnodes_[i].child[j] == 0x7fffffff) {
                         continue;
                     }
-                    if ((light_wnodes_[i].child[j] & LEAF_NODE_BIT) == 0) {
-                        light_wnodes_[i].child[j] = compacted_indices[light_wnodes_[i].child[j] & PRIM_INDEX_BITS];
+                    if ((light_cwnodes_[i].child[j] & LEAF_NODE_BIT) == 0) {
+                        light_cwnodes_[i].child[j] = compacted_indices[light_cwnodes_[i].child[j] & PRIM_INDEX_BITS];
                     }
                 }
             }
@@ -1508,24 +1509,12 @@ void Ray::Cpu::Scene::GetBounds(float bbox_min[3], float bbox_max[3]) const {
             }
         }
     }
-    if (!light_wnodes_.empty()) {
+    if (!light_cwnodes_.empty()) {
         if (use_wide_bvh_) {
-            const wbvh_node_t &root_node = light_wnodes_[0];
-            if (root_node.child[0] & LEAF_NODE_BIT) {
-                for (int i = 0; i < 3; ++i) {
-                    bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i][0]);
-                    bbox_max[i] = fmaxf(bbox_max[i], root_node.bbox_max[i][0]);
-                }
-            } else {
-                for (int j = 0; j < 8; j++) {
-                    if (root_node.child[j] == 0x7fffffff) {
-                        continue;
-                    }
-                    for (int i = 0; i < 3; ++i) {
-                        bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i][j]);
-                        bbox_max[i] = fmaxf(bbox_max[i], root_node.bbox_max[i][j]);
-                    }
-                }
+            const cwbvh_node_t &root_node = light_cwnodes_[0];
+            for (int i = 0; i < 3; ++i) {
+                bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i]);
+                bbox_max[i] = fmaxf(bbox_max[i], root_node.bbox_max[i]);
             }
         } else {
             const bvh_node_t &root_node = light_nodes_[0];
