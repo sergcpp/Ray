@@ -1158,7 +1158,7 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
             ++it;
         }
     }
-    (void)rebuild_required;
+    unused(rebuild_required);
 
     if (use_hwrt_) {
         { // release struct memory
@@ -2448,7 +2448,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     aligned_vector<light_wbvh_node_t> temp_light_wnodes;
     const uint32_t root_node = FlattenBVH_r(temp_lnodes.data(), 0, 0xffffffff, temp_light_wnodes);
     assert(root_node == 0);
-    (void)root_node;
+    unused(root_node);
 
     // Collapse leaf level (all leafs have only 1 light)
     if ((temp_light_wnodes[0].child[0] & LEAF_NODE_BIT) != 0) {

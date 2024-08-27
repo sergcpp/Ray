@@ -225,7 +225,7 @@ std::vector<uint8_t> LoadHDR(const char name[], int &out_w, int &out_h) {
         }
     }
 
-    (void)exposure;
+    unused(exposure);
 
     if (format != "32-bit_rle_rgbe") {
         throw std::runtime_error("Wrong format!");

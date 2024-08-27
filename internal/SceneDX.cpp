@@ -92,7 +92,7 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
     const uint32_t off = bindless_tex_data_.srv_descr_pool.Alloc(bindless_textures_.capacity()).first;
     assert(off == 0);
-    (void)off;
+    unused(off);
 
     ID3D12Device *device = ctx_->device();
     ID3D12DescriptorHeap *srv_descr_heap = bindless_tex_data_.srv_descr_pool.heap();
@@ -276,7 +276,7 @@ std::pair<uint32_t, uint32_t> Ray::Dx::Scene::Build_HWRT_BLAS_nolock(const uint3
         rt_blas_buffers_.emplace_back("RT BLAS Buffer", ctx_, eBufType::AccStructure, buf_size);
         const uint16_t pool_index = rt_blas_mem_alloc_.AddPool(buf_size);
         assert(pool_index == rt_blas_buffers_.size() - 1);
-        (void)pool_index;
+        unused(pool_index);
         // try to allocate again
         mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
         assert(mem_alloc.offset != 0xffffffff);
