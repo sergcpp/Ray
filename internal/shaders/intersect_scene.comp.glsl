@@ -103,7 +103,7 @@ void Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
 
         bvh_node_t n = g_nodes[cur];
 
-        if (!_bbox_test(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
+        if (!bbox_test(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
@@ -131,7 +131,7 @@ void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, uint ray_flags, vec3 or
 
         bvh_node_t n = g_nodes[cur];
 
-        if (!_bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
+        if (!bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
@@ -144,7 +144,7 @@ void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, uint ray_flags, vec3 or
             for (uint i = prim_index; i < prim_index + prim_count; ++i) {
                 mesh_instance_t mi = g_mesh_instances[g_mi_indices[i]];
                 if ((mi.block_ndx.w & ray_flags) == 0 ||
-                    !_bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
+                    !bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
                     continue;
                 }
 

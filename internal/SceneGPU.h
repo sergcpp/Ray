@@ -80,7 +80,7 @@ class Scene : public SceneCommon {
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;
     uint32_t visible_lights_count_ = 0, blocker_lights_count_ = 0;
-    Vector<light_wbvh_node_t> light_wnodes_;
+    Vector<light_cwbvh_node_t> light_cwnodes_;
     std::vector<uint32_t> dir_lights_; // compacted list of all directional lights
 
     Texture2D sky_transmittance_lut_tex_, sky_multiscatter_lut_tex_;
@@ -249,7 +249,7 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
           {ctx, "Atlas BC3", eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_wnodes_(ctx, "Light WNodes"),
+      lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_cwnodes_(ctx, "Light CWNodes"),
       spatial_cache_entries_(ctx, "Spatial Cache Entries"),
       spatial_cache_voxels_curr_(ctx, "Spatial Cache Voxels (1/2)"),
       spatial_cache_voxels_prev_(ctx, "Spatial Cache Voxels (2/2)") {
@@ -2339,7 +2339,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
 
     li_indices_.Append(new_li_indices.data(), new_li_indices.size());
 
-    light_wnodes_.Clear();
+    light_cwnodes_.Clear();
 
     if (primitives.empty()) {
         return;
@@ -2445,28 +2445,28 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
         n.prim_index |= li_index;
     }
 
-    aligned_vector<light_wbvh_node_t> temp_light_wnodes;
-    const uint32_t root_node = FlattenBVH_r(temp_lnodes.data(), 0, 0xffffffff, temp_light_wnodes);
+    aligned_vector<light_cwbvh_node_t> temp_light_cwnodes;
+    const uint32_t root_node = FlattenLightBVH_r(temp_lnodes.data(), 0, 0xffffffff, temp_light_cwnodes);
     assert(root_node == 0);
     unused(root_node);
 
     // Collapse leaf level (all leafs have only 1 light)
-    if ((temp_light_wnodes[0].child[0] & LEAF_NODE_BIT) != 0) {
+    if ((temp_light_cwnodes[0].child[0] & LEAF_NODE_BIT) != 0) {
         for (int j = 1; j < 8; ++j) {
-            temp_light_wnodes[0].child[j] = 0x7fffffff;
+            temp_light_cwnodes[0].child[j] = 0x7fffffff;
         }
     }
-    std::vector<bool> should_remove(temp_light_wnodes.size(), false);
-    for (uint32_t i = 0; i < temp_light_wnodes.size(); ++i) {
-        if ((temp_light_wnodes[i].child[0] & LEAF_NODE_BIT) == 0) {
+    std::vector<bool> should_remove(temp_light_cwnodes.size(), false);
+    for (uint32_t i = 0; i < temp_light_cwnodes.size(); ++i) {
+        if ((temp_light_cwnodes[i].child[0] & LEAF_NODE_BIT) == 0) {
             for (int j = 0; j < 8; ++j) {
-                if (temp_light_wnodes[i].child[j] == 0x7fffffff) {
+                if (temp_light_cwnodes[i].child[j] == 0x7fffffff) {
                     continue;
                 }
-                if ((temp_light_wnodes[temp_light_wnodes[i].child[j]].child[0] & LEAF_NODE_BIT) != 0) {
-                    assert(temp_light_wnodes[temp_light_wnodes[i].child[j]].child[1] == 1);
-                    should_remove[temp_light_wnodes[i].child[j]] = true;
-                    temp_light_wnodes[i].child[j] = temp_light_wnodes[temp_light_wnodes[i].child[j]].child[0];
+                if ((temp_light_cwnodes[temp_light_cwnodes[i].child[j]].child[0] & LEAF_NODE_BIT) != 0) {
+                    assert(temp_light_cwnodes[temp_light_cwnodes[i].child[j]].child[1] == 1);
+                    should_remove[temp_light_cwnodes[i].child[j]] = true;
+                    temp_light_cwnodes[i].child[j] = temp_light_cwnodes[temp_light_cwnodes[i].child[j]].child[0];
                 }
             }
         }
@@ -2479,22 +2479,22 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
             ++cur_index;
         }
     }
-    for (int i = int(temp_light_wnodes.size() - 1); i >= 0; --i) {
+    for (int i = int(temp_light_cwnodes.size() - 1); i >= 0; --i) {
         if (should_remove[i]) {
-            temp_light_wnodes.erase(begin(temp_light_wnodes) + i);
+            temp_light_cwnodes.erase(begin(temp_light_cwnodes) + i);
         } else {
             for (int j = 0; j < 8; ++j) {
-                if (temp_light_wnodes[i].child[j] == 0x7fffffff) {
+                if (temp_light_cwnodes[i].child[j] == 0x7fffffff) {
                     continue;
                 }
-                if ((temp_light_wnodes[i].child[j] & LEAF_NODE_BIT) == 0) {
-                    temp_light_wnodes[i].child[j] = compacted_indices[temp_light_wnodes[i].child[j] & PRIM_INDEX_BITS];
+                if ((temp_light_cwnodes[i].child[j] & LEAF_NODE_BIT) == 0) {
+                    temp_light_cwnodes[i].child[j] = compacted_indices[temp_light_cwnodes[i].child[j] & PRIM_INDEX_BITS];
                 }
             }
         }
     }
 
-    light_wnodes_.Append(temp_light_wnodes.data(), temp_light_wnodes.size());
+    light_cwnodes_.Append(temp_light_cwnodes.data(), temp_light_cwnodes.size());
 }
 
 inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {

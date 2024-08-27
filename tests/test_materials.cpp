@@ -1418,7 +1418,7 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
 
 void test_complex_mat5_caching(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 31;
-    const int PixThres = 4676;
+    const int PixThres = 4681;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};

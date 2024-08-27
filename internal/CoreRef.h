@@ -470,15 +470,20 @@ void SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fve
                        fvec2 rand_tex_uv, light_sample_t &ls);
 
 // Account for visible lights contribution
+void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
+                         Span<hit_data_t> inout_inters);
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes,
                          Span<hit_data_t> inout_inters);
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_bvh_node_t> nodes,
                          Span<hit_data_t> inout_inters);
 float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes);
+float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes);
 float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_bvh_node_t> nodes);
 float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_wbvh_node_t> nodes);
+float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
+                         Span<const light_cwbvh_node_t> nodes);
 
 float Evaluate_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, int qtree_levels, const fvec4 &L);
 fvec4 Sample_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, int qtree_levels, float rand, float rx,

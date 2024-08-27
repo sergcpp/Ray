@@ -15,7 +15,7 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
 };
 
 layout(std430, binding = WNODES_BUF_SLOT) readonly buffer WNodes {
-    light_wbvh_node_t g_light_wnodes[];
+    light_cwbvh_node_t g_light_cwnodes[];
 };
 
 layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
@@ -94,16 +94,14 @@ void main() {
         float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
 
         if ((cur & LEAF_NODE_BIT) == 0) {
-            light_wbvh_node_t n = g_light_wnodes[cur];
+            const light_cwbvh_node_t n = g_light_cwnodes[cur];
 
             float importance[8];
-            const float total_importance = calc_lnode_importance(n, ro, importance);
+            const float total_importance = calc_lnode_importance(n, ro, inv_d, neg_inv_do, inter.t, importance);
 
             // TODO: loop in morton order based on ray direction
             for (int j = 0; j < 8; ++j) {
-                if (importance[j] > 0.0 && _bbox_test(inv_d, neg_inv_do, inter.t,
-                                                      vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
-                                                      vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                if (importance[j] > 0.0) {
                     g_stack_factors[gl_LocalInvocationIndex][stack_size] = cur_factor * importance[j] / total_importance;
                     g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
                 }

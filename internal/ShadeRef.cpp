@@ -1374,7 +1374,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     }
 
     light_sample_t ls;
-    if (USE_NEE && (!sc.light_wnodes.empty() || !sc.light_nodes.empty()) && mat->type != eShadingNode::Emissive) {
+    if (USE_NEE && (!sc.light_cwnodes.empty() || !sc.light_nodes.empty()) && mat->type != eShadingNode::Emissive) {
         const float rand_pick_light =
             get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT_PICK, rand_hash, iteration - 1, rand_seq).get<0>();
         const fvec2 rand_light_uv =
@@ -1486,8 +1486,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
             float pdf_factor;
             if (USE_HIERARCHICAL_NEE) {
                 // TODO: maybe this can be done more efficiently
-                if (!sc.light_wnodes.empty()) {
-                    pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_wnodes);
+                if (!sc.light_cwnodes.empty()) {
+                    pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_cwnodes);
                 } else {
                     pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_nodes);
                 }

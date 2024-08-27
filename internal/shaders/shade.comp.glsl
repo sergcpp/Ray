@@ -61,7 +61,7 @@ layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
 };
 
 layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer WNodes {
-    light_wbvh_node_t g_light_wnodes[];
+    light_cwbvh_node_t g_light_cwnodes[];
 };
 
 layout(binding = ENV_QTREE_TEX_SLOT) uniform texture2D g_env_qtree;
@@ -958,7 +958,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
     float factor = 1.0;
     uint cur = 0; // start from root
     while ((cur & LEAF_NODE_BIT) == 0) {
-        light_wbvh_node_t n = g_light_wnodes[cur];
+        const light_cwbvh_node_t n = g_light_cwnodes[cur];
 
         float importance[8];
         const float total_importance = calc_lnode_importance(n, P, importance);
@@ -1316,14 +1316,13 @@ float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
         const float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
 
         if ((cur & LEAF_NODE_BIT) == 0) {
-            light_wbvh_node_t n = g_light_wnodes[cur];
+            const light_cwbvh_node_t n = g_light_cwnodes[cur];
 
             float importance[8];
-            const float total_importance = calc_lnode_importance(n, ro, importance);
+            const float total_importance = calc_lnode_importance(n, ro, P, importance);
 
             for (int j = 0; j < 8; ++j) {
-                if (importance[j] > 0.0 && _bbox_test(P, vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
-                                                         vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                if (importance[j] > 0.0) {
                     g_stack_factors[gl_LocalInvocationIndex][stack_size] = cur_factor * importance[j] / total_importance;
                     g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
                 }

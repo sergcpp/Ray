@@ -66,7 +66,7 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
 };
 
 layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer LightWNodes {
-    light_wbvh_node_t g_light_wnodes[];
+    light_cwbvh_node_t g_light_cwnodes[];
 };
 
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
@@ -109,7 +109,7 @@ bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
 
         bvh_node_t n = g_nodes[cur];
 
-        if (!_bbox_test(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
+        if (!bbox_test(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
@@ -151,7 +151,7 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
 
         bvh_node_t n = g_nodes[cur];
 
-        if (!_bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
+        if (!bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
@@ -169,7 +169,7 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
 
                 mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
 
-                if (!_bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
+                if (!bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
                     continue;
                 }
 
@@ -387,13 +387,32 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
         uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
 
         if ((cur & LEAF_NODE_BIT) == 0) {
-            light_wbvh_node_t n = g_light_wnodes[cur];
+            const light_cwbvh_node_t n = g_light_cwnodes[cur];
+
+            // Unpack bounds
+            const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0,
+                                  (n.bbox_max[1] - n.bbox_min[1]) / 255.0,
+                                  (n.bbox_max[2] - n.bbox_min[2]) / 255.0};
+            float bbox_min[3][8], bbox_max[3][8];
+            for (int i = 0; i < 8; ++i) {
+                bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
+                bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
+                if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
+                    bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
+                    bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
+                    bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
+
+                    bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
+                    bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
+                    bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+                }
+            }
 
             // TODO: loop in morton order based on ray direction
             for (int j = 0; j < 8; ++j) {
-                if (_bbox_test(inv_d, neg_inv_do, rdist,
-                               vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
-                               vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                if (bbox_test(inv_d, neg_inv_do, rdist,
+                               vec3(bbox_min[0][j], bbox_min[1][j], bbox_min[2][j]),
+                               vec3(bbox_max[0][j], bbox_max[1][j], bbox_max[2][j]))) {
                     g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
                 }
             }

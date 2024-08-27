@@ -82,6 +82,7 @@ class Scene : public SceneCommon {
 
     std::vector<light_bvh_node_t> light_nodes_;
     aligned_vector<light_wbvh_node_t> light_wnodes_;
+    aligned_vector<light_cwbvh_node_t> light_cwnodes_;
 
     LightHandle env_map_light_ = InvalidLightHandle;
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;

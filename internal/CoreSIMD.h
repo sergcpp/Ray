@@ -360,13 +360,13 @@ void SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fvec<S> B[3
 
 // Account for visible lights contribution
 template <int S>
-void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes,
+void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
                          hit_data_t<S> &inout_inter);
 template <int S>
-fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes);
+fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes);
 template <int S>
 fvec<S> EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &mask, const ivec<S> &tri_index,
-                           Span<const light_t> lights, Span<const light_wbvh_node_t> nodes);
+                           Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes);
 
 template <int S>
 void TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
@@ -2727,41 +2727,43 @@ template <int S> force_inline std::array<fvec<S>, 3> decode_oct_dir(const uvec<S
 
 force_inline fvec2 decode_cosines(const uint32_t val) {
     const uvec2 ab = uvec2((val >> 16) & 0x0000ffff, (val & 0x0000ffff));
-    return 2.0f * (fvec2(ab) / 65535.0f) - 1.0f;
+    return 2.0f * (fvec2(ab) / 65534.0f) - 1.0f;
 }
 
 template <int S> force_inline std::array<fvec<S>, 2> decode_cosines(const uvec<S> &val) {
     const uvec<S> a = (val >> 16) & 0x0000ffff;
     const uvec<S> b = (val & 0x0000ffff);
     std::array<fvec<S>, 2> ret;
-    ret[0] = 2.0f * (fvec<S>(a) / 65535.0f) - 1.0f;
-    ret[1] = 2.0f * (fvec<S>(b) / 65535.0f) - 1.0f;
+    ret[0] = 2.0f * (fvec<S>(a) / 65534.0f) - 1.0f;
+    ret[1] = 2.0f * (fvec<S>(b) / 65534.0f) - 1.0f;
     return ret;
 }
 
-template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const float P[3], float importance[8]) {
+template <int S>
+void calc_lnode_importance(const light_cwbvh_node_t &n, const float bbox_min[3][8], const float bbox_max[3][8],
+                           const float P[3], float importance[8]) {
     for (int i = 0; i < 8; i += S) {
-        fvec<S> mul = 1.0f, v_len2 = 1.0f;
+        fvec<S> imp = fvec<S>{&n.flux[i]};
 
-        const ivec<S> mask = simd_cast(fvec<S>{&n.bbox_min[0][i], vector_aligned} > -MAX_DIST);
+        const ivec<S> mask = simd_cast(fvec<S>{&bbox_min[0][i], vector_aligned} > -MAX_DIST);
         if (mask.not_all_zeros()) {
-            const std::array<fvec<S>, 3> axis = decode_oct_dir(uvec<S>{&n.axis[i], vector_aligned});
-            const fvec<S> ext[3] = {
-                fvec<S>{&n.bbox_max[0][i], vector_aligned} - fvec<S>{&n.bbox_min[0][i], vector_aligned},
-                fvec<S>{&n.bbox_max[1][i], vector_aligned} - fvec<S>{&n.bbox_min[1][i], vector_aligned},
-                fvec<S>{&n.bbox_max[2][i], vector_aligned} - fvec<S>{&n.bbox_min[2][i], vector_aligned}};
+            const std::array<fvec<S>, 3> axis = decode_oct_dir(uvec<S>{&n.axis[i]});
+            const fvec<S> ext[3] = {fvec<S>{&bbox_max[0][i], vector_aligned} - fvec<S>{&bbox_min[0][i], vector_aligned},
+                                    fvec<S>{&bbox_max[1][i], vector_aligned} - fvec<S>{&bbox_min[1][i], vector_aligned},
+                                    fvec<S>{&bbox_max[2][i], vector_aligned} -
+                                        fvec<S>{&bbox_min[2][i], vector_aligned}};
             const fvec<S> extent = 0.5f * length(ext);
 
             const fvec<S> pc[3] = {
-                0.5f * (fvec<S>{&n.bbox_min[0][i], vector_aligned} + fvec<S>{&n.bbox_max[0][i], vector_aligned}),
-                0.5f * (fvec<S>{&n.bbox_min[1][i], vector_aligned} + fvec<S>{&n.bbox_max[1][i], vector_aligned}),
-                0.5f * (fvec<S>{&n.bbox_min[2][i], vector_aligned} + fvec<S>{&n.bbox_max[2][i], vector_aligned})};
+                0.5f * (fvec<S>{&bbox_min[0][i], vector_aligned} + fvec<S>{&bbox_max[0][i], vector_aligned}),
+                0.5f * (fvec<S>{&bbox_min[1][i], vector_aligned} + fvec<S>{&bbox_max[1][i], vector_aligned}),
+                0.5f * (fvec<S>{&bbox_min[2][i], vector_aligned} + fvec<S>{&bbox_max[2][i], vector_aligned})};
             fvec<S> wi[3] = {P[0] - pc[0], P[1] - pc[1], P[2] - pc[2]};
             fvec<S> dist2 = dot3(wi, wi);
             fvec<S> dist = sqrt(dist2);
             UNROLLED_FOR(j, 3, { wi[j] = safe_div_pos(wi[j], dist); })
 
-            where(mask, v_len2) = max(dist2, extent);
+            const fvec<S> v_len2 = max(dist2, extent);
 
             const fvec<S> cos_omega_w = dot3(axis.data(), wi);
             const fvec<S> sin_omega_w = safe_sqrt(1.0f - cos_omega_w * cos_omega_w);
@@ -2770,41 +2772,58 @@ template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const fl
             where(dist2 < extent * extent, cos_omega_b) = -1.0f;
             const fvec<S> sin_omega_b = sqrt(1.0f - cos_omega_b * cos_omega_b);
 
-            const std::array<fvec<S>, 2> cos_omega_ne = decode_cosines(uvec<S>{&n.cos_omega_ne[i], vector_aligned});
+            const std::array<fvec<S>, 2> cos_omega_ne = decode_cosines(uvec<S>{&n.cos_omega_ne[i]});
             const fvec<S> sin_omega_n = sqrt(1.0f - cos_omega_ne[0] * cos_omega_ne[0]);
 
             const fvec<S> cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
             const fvec<S> sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
             const fvec<S> cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
-            where(mask, mul) = 0.0f;
-            where(mask & simd_cast(cos_omega > cos_omega_ne[1]), mul) = cos_omega;
+            fvec<S> mul = 0.0f;
+            where(cos_omega > cos_omega_ne[1], mul) = (cos_omega / v_len2);
+            where(mask, imp) = (imp * mul);
         }
 
-        const fvec<S> imp = fvec<S>{&n.flux[i], vector_aligned} * mul / v_len2;
         imp.store_to(&importance[i], vector_aligned);
     }
 }
 
-template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const fvec<S> P[3], fvec<S> importance[8]) {
+template <int S> void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec<S> P[3], fvec<S> importance[8]) {
+    // Unpack bounds
+    const float decode_ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f, (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
+                                 (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
+    alignas(32) float bbox_min[3][8], bbox_max[3][8];
     for (int i = 0; i < 8; ++i) {
-        fvec<S> mul = 1.0f, v_len2 = 1.0f;
+        bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
+        bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
+        if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
+            bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * decode_ext[0];
+            bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * decode_ext[1];
+            bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * decode_ext[2];
 
-        if (n.bbox_min[0][i] > -MAX_DIST) {
+            bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * decode_ext[0];
+            bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * decode_ext[1];
+            bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * decode_ext[2];
+        }
+    }
+
+    for (int i = 0; i < 8; ++i) {
+        fvec<S> imp = n.flux[i];
+
+        if (bbox_min[0][i] > -MAX_DIST) {
             const fvec4 axis = decode_oct_dir(n.axis[i]);
-            const float ext[3] = {n.bbox_max[0][i] - n.bbox_min[0][i], n.bbox_max[1][i] - n.bbox_min[1][i],
-                                  n.bbox_max[2][i] - n.bbox_min[2][i]};
+            const float ext[3] = {bbox_max[0][i] - bbox_min[0][i], bbox_max[1][i] - bbox_min[1][i],
+                                  bbox_max[2][i] - bbox_min[2][i]};
             const float extent = 0.5f * sqrtf(ext[0] * ext[0] + ext[1] * ext[1] + ext[2] * ext[2]);
 
-            const float pc[3] = {0.5f * (n.bbox_min[0][i] + n.bbox_max[0][i]),
-                                 0.5f * (n.bbox_min[1][i] + n.bbox_max[1][i]),
-                                 0.5f * (n.bbox_min[2][i] + n.bbox_max[2][i])};
+            const float pc[3] = {0.5f * (bbox_min[0][i] + bbox_max[0][i]), 0.5f * (bbox_min[1][i] + bbox_max[1][i]),
+                                 0.5f * (bbox_min[2][i] + bbox_max[2][i])};
             fvec<S> wi[3] = {P[0] - pc[0], P[1] - pc[1], P[2] - pc[2]};
             const fvec<S> dist2 = dot3(wi, wi);
             const fvec<S> dist = sqrt(dist2);
             UNROLLED_FOR(j, 3, { wi[j] = safe_div_pos(wi[j], dist); })
 
-            v_len2 = max(dist2, extent);
+            const fvec<S> v_len2 = max(dist2, extent);
 
             const fvec<S> cos_omega_w = dot3(value_ptr(axis), wi);
             const fvec<S> sin_omega_w = safe_sqrt(1.0f - cos_omega_w * cos_omega_w);
@@ -2822,10 +2841,10 @@ template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const fv
                 sin_sub_clamped(sin_omega_w, cos_omega_w, fvec<S>{sin_omega_n}, fvec<S>{cos_omega_ne.get<0>()});
             const fvec<S> cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
-            mul = select(cos_omega > cos_omega_ne.get<1>(), cos_omega, fvec<S>{0.0f});
+            imp *= select(cos_omega > cos_omega_ne.get<1>(), safe_div_pos(cos_omega, v_len2), fvec<S>{0.0f});
         }
 
-        importance[i] = safe_div_pos(n.flux[i] * mul, v_len2);
+        importance[i] = imp;
     }
 }
 
@@ -5240,7 +5259,7 @@ void Ray::NS::TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_
         IntersectScene(r, min_transp_depth, max_transp_depth, rand_seq, rand_seed, iteration, sc, root_index, textures,
                        inter);
         if (trace_lights && sc.visible_lights_count) {
-            IntersectAreaLights(r, sc.lights, sc.light_wnodes, inter);
+            IntersectAreaLights(r, sc.lights, sc.light_cwnodes, inter);
         }
     }
 }
@@ -5257,7 +5276,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
         fvec<S> rc[3];
         IntersectScene(sh_r, max_transp_depth, sc, root_index, rand_seq, rand_seed, iteration, textures, rc);
         if (sc.blocker_lights_count) {
-            const fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
+            const fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_cwnodes);
             UNROLLED_FOR(j, 3, { rc[j] *= k; })
         }
         const fvec<S> sum = rc[0] + rc[1] + rc[2];
@@ -5451,7 +5470,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             uint32_t i = queue[index].i;
             while ((i & LEAF_NODE_BIT) == 0) {
                 fvec<S> importance[8];
-                calc_lnode_importance(sc.light_wnodes[i], P, importance);
+                calc_lnode_importance(sc.light_cwnodes[i], P, importance);
 
                 fvec<S> total_importance = importance[0];
                 UNROLLED_FOR(j, 7, { total_importance += importance[j + 1]; })
@@ -5486,7 +5505,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 }
 
                 where(queue[index].mask, ri) = fract(safe_div_pos(ri - factors_cdf[first_next], factors[first_next]));
-                i = sc.light_wnodes[i].child[first_next];
+                i = sc.light_cwnodes[i].child[first_next];
                 where(queue[index].mask, factor) *= factors[first_next];
             }
 
@@ -5907,7 +5926,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
 
 template <int S>
 void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights,
-                                  Span<const light_wbvh_node_t> nodes, hit_data_t<S> &inout_inter) {
+                                  Span<const light_cwbvh_node_t> nodes, hit_data_t<S> &inout_inter) {
     const int SS = S <= 8 ? S : 8;
 
     fvec<S> inv_d[3], inv_d_o[3];
@@ -5944,17 +5963,39 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
         TRAVERSE:
             if ((cur.index & LEAF_NODE_BIT) == 0) {
+                const light_cwbvh_node_t &n = nodes[cur.index];
+
+                // Unpack bounds
+                const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f,
+                                      (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
+                                      (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
+                alignas(32) float bbox_min[3][8], bbox_max[3][8];
+                for (int i = 0; i < 8; ++i) {
+                    bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
+                    bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
+                    if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
+                        bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
+                        bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
+                        bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
+
+                        bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
+                        bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
+                        bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+                    }
+                }
+
                 alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<SS>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
-                                              nodes[cur.index].bbox_max, res_dist);
+                long mask = bbox_test_oct<SS>(_inv_d, _inv_d_o, inter_t[ri], bbox_min, bbox_max, res_dist);
                 if (mask) {
                     fvec<SS> importance[8 / SS];
-                    calc_lnode_importance<SS>(nodes[cur.index], _ro, value_ptr(importance[0]));
+                    calc_lnode_importance<SS>(n, bbox_min, bbox_max, _ro, value_ptr(importance[0]));
 
                     fvec<SS> total_importance_v = 0.0f;
                     UNROLLED_FOR_S(i, 8 / SS, { total_importance_v += importance[i]; })
                     const float total_importance = hsum(total_importance_v);
-                    assert(total_importance > 0.0f);
+                    if (total_importance == 0.0f) {
+                        continue;
+                    }
 
                     alignas(32) float factors[8];
                     UNROLLED_FOR_S(i, 8 / SS, {
@@ -5965,7 +6006,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     long i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
                     if (mask == 0) { // only one box was hit
-                        cur.index = nodes[cur.index].child[i];
+                        cur.index = n.child[i];
                         cur.factor *= factors[i];
                         goto TRAVERSE;
                     }
@@ -5974,23 +6015,23 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     mask = ClearBit(mask, i2);
                     if (mask == 0) { // two boxes were hit
                         if (res_dist[i] < res_dist[i2]) {
-                            st.push(nodes[cur.index].child[i2], res_dist[i2], cur.factor * factors[i2]);
-                            cur.index = nodes[cur.index].child[i];
+                            st.push(n.child[i2], res_dist[i2], cur.factor * factors[i2]);
+                            cur.index = n.child[i];
                             cur.factor *= factors[i];
                         } else {
-                            st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
-                            cur.index = nodes[cur.index].child[i2];
+                            st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
+                            cur.index = n.child[i2];
                             cur.factor *= factors[i2];
                         }
                         goto TRAVERSE;
                     }
 
-                    st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
-                    st.push(nodes[cur.index].child[i2], res_dist[i2], cur.factor * factors[i2]);
+                    st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
+                    st.push(n.child[i2], res_dist[i2], cur.factor * factors[i2]);
 
                     i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
+                    st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
                         cur = st.pop();
@@ -5999,7 +6040,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
                     i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
+                    st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
                         cur = st.pop();
@@ -6012,7 +6053,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     do {
                         i = GetFirstBit(mask);
                         mask = ClearBit(mask, i);
-                        st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
+                        st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
                     } while (mask != 0);
 
                     const int count = int(st.stack_size - size_before + 4);
@@ -6187,7 +6228,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
 template <int S>
 Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights,
-                                              Span<const light_wbvh_node_t> nodes) {
+                                              Span<const light_cwbvh_node_t> nodes) {
     fvec<S> inv_d[3], inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
 
@@ -6223,14 +6264,34 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
 
         TRAVERSE:
             if ((cur.index & LEAF_NODE_BIT) == 0) {
+                const light_cwbvh_node_t &n = nodes[cur.index];
+
+                // Unpack bounds
+                const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f,
+                                      (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
+                                      (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
+                alignas(32) float bbox_min[3][8], bbox_max[3][8];
+                for (int i = 0; i < 8; ++i) {
+                    bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
+                    bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
+                    if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
+                        bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
+                        bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
+                        bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
+
+                        bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
+                        bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
+                        bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+                    }
+                }
+
                 alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
-                                             nodes[cur.index].bbox_max, res_dist);
+                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], bbox_min, bbox_max, res_dist);
                 if (mask) {
                     long i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
                     if (mask == 0) { // only one box was hit
-                        cur.index = nodes[cur.index].child[i];
+                        cur.index = n.child[i];
                         goto TRAVERSE;
                     }
 
@@ -6238,21 +6299,21 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
                     mask = ClearBit(mask, i2);
                     if (mask == 0) { // two boxes were hit
                         if (res_dist[i] < res_dist[i2]) {
-                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
-                            cur.index = nodes[cur.index].child[i];
+                            st.push(n.child[i2], res_dist[i2]);
+                            cur.index = n.child[i];
                         } else {
-                            st.push(nodes[cur.index].child[i], res_dist[i]);
-                            cur.index = nodes[cur.index].child[i2];
+                            st.push(n.child[i], res_dist[i]);
+                            cur.index = n.child[i2];
                         }
                         goto TRAVERSE;
                     }
 
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
+                    st.push(n.child[i], res_dist[i]);
+                    st.push(n.child[i2], res_dist[i2]);
 
                     i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(n.child[i], res_dist[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
                         cur.index = st.pop_index();
@@ -6261,7 +6322,7 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
 
                     i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(n.child[i], res_dist[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
                         cur.index = st.pop_index();
@@ -6274,7 +6335,7 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
                     do {
                         i = GetFirstBit(mask);
                         mask = ClearBit(mask, i);
-                        st.push(nodes[cur.index].child[i], res_dist[i]);
+                        st.push(n.child[i], res_dist[i]);
                     } while (mask != 0);
 
                     const int count = int(st.stack_size - size_before + 4);
@@ -6359,7 +6420,7 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
 template <int S>
 Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &mask,
                                              const ivec<S> &tri_index, Span<const light_t> lights,
-                                             Span<const light_wbvh_node_t> nodes) {
+                                             Span<const light_cwbvh_node_t> nodes) {
     const int SS = S <= 8 ? S : 8;
 
     fvec<S> ret = 1.0f;
@@ -6384,21 +6445,44 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
             const float cur_factor = stack_factors[stack_size];
 
             if ((cur & LEAF_NODE_BIT) == 0) {
-                long mask = bbox_test_oct<S>(_p, nodes[cur].bbox_min, nodes[cur].bbox_max);
+                const light_cwbvh_node_t &n = nodes[cur];
+
+                // Unpack bounds
+                const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f,
+                                      (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
+                                      (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
+                alignas(32) float bbox_min[3][8], bbox_max[3][8];
+                for (int i = 0; i < 8; ++i) {
+                    bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
+                    bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
+                    if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
+                        bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
+                        bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
+                        bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
+
+                        bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
+                        bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
+                        bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+                    }
+                }
+
+                long mask = bbox_test_oct<S>(_p, bbox_min, bbox_max);
                 if (mask) {
                     alignas(32) float importance[8];
-                    calc_lnode_importance<SS>(nodes[cur], _ro, importance);
+                    calc_lnode_importance<SS>(n, bbox_min, bbox_max, _ro, importance);
 
                     float total_importance = 0.0f;
                     UNROLLED_FOR(j, 8, { total_importance += importance[j]; })
-                    assert(total_importance > 0.0f);
+                    if (total_importance > 0.0f) {
+                        continue;
+                    }
 
                     do {
                         const long i = GetFirstBit(mask);
                         mask = ClearBit(mask, i);
                         if (importance[i] > 0.0f) {
                             stack_factors[stack_size] = cur_factor * importance[i] / total_importance;
-                            stack[stack_size++] = nodes[cur].child[i];
+                            stack[stack_size++] = n.child[i];
                         }
                     } while (mask != 0);
                 }
@@ -7498,7 +7582,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
 
 #if USE_NEE
     light_sample_t<S> ls;
-    if (!sc.light_wnodes.empty()) {
+    if (!sc.light_cwnodes.empty()) {
         const fvec<S> rand_pick_light =
             get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT_PICK, rand_hash, iteration - 1, rand_seq)[0];
         const std::array<fvec<S>, 2> rand_light_uv =
@@ -7733,7 +7817,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                 if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_IMP_SAMPLE)) {
 #if USE_HIERARCHICAL_NEE
                     const fvec<S> pdf_factor =
-                        EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights, sc.light_wnodes);
+                        EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights, sc.light_cwnodes);
 #else  // USE_HIERARCHICAL_NEE
                     const float pdf_factor = float(sc.li_indices.size());
 #endif // USE_HIERARCHICAL_NEE
