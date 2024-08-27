@@ -559,7 +559,7 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
             ++it;
         }
     }
-    (void)rebuild_required;
+    unused(rebuild_required);
 
     tris_.Erase(tris_block);
     mtris_.Erase(tris_block);
@@ -1429,7 +1429,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     if (use_wide_bvh_) {
         const uint32_t root_node = FlattenBVH_r(light_nodes_.data(), 0, 0xffffffff, light_wnodes_);
         assert(root_node == 0);
-        (void)root_node;
+        unused(root_node);
         light_nodes_.clear();
 
         // Collapse leaf level (all leafs have only 1 light)

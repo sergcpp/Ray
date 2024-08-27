@@ -78,7 +78,6 @@ template <typename T, size_t Alignment> class aligned_allocator {
     }
 
     template <class U> void destroy(U *p) {
-        ((void)p);
         p->~T();
     }
 
