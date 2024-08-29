@@ -1105,6 +1105,12 @@ uint32_t Ray::FlattenLightBVH_r(const light_bvh_node_t *nodes, const uint32_t no
             all_box_max = max(all_box_max, Ref::fvec3{nodes[children[i]].bbox_max});
         }
     }
+    for (int i = 0; i < children_count; i++) {
+        if (nodes[children[i]].bbox_min[0] == -MAX_DIST) {
+            // Infinite lightsource
+            children_centers[i] = all_box_max;
+        }
+    }
 
     const Ref::fvec3 scale = 2.0f / (all_box_max + 0.001f - all_box_min);
 
