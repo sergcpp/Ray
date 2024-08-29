@@ -19,18 +19,22 @@
 
 Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf, const char *name)
     : cmd_buf_(_cmd_buf) {
+#ifdef ENABLE_DEBUG_MARKERS
 #ifdef ENABLE_PIX
     PIXBeginEvent(cmd_buf_, 0, name);
 #else
     std::wstring wstr(name, name + strlen(name));
     cmd_buf_->BeginEvent(0, wstr.c_str(), UINT(wstr.length() * sizeof(wchar_t)));
 #endif
+#endif
 }
 
 Ray::Dx::DebugMarker::~DebugMarker() {
+#ifdef ENABLE_DEBUG_MARKERS
 #ifdef ENABLE_PIX
     PIXEndEvent(cmd_buf_);
 #else
     cmd_buf_->EndEvent();
+#endif
 #endif
 }
