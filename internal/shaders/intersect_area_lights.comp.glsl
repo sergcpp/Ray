@@ -14,7 +14,7 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
     light_t g_lights[];
 };
 
-layout(std430, binding = WNODES_BUF_SLOT) readonly buffer WNodes {
+layout(std430, binding = CWNODES_BUF_SLOT) readonly buffer CWNodes {
     light_cwbvh_node_t g_light_cwnodes[];
 };
 

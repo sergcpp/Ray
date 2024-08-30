@@ -65,7 +65,7 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
     light_t g_lights[];
 };
 
-layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer LightWNodes {
+layout(std430, binding = LIGHT_CWNODES_BUF_SLOT) readonly buffer LightCWNodes {
     light_cwbvh_node_t g_light_cwnodes[];
 };
 
@@ -397,14 +397,15 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
             for (int i = 0; i < 8; ++i) {
                 bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
                 bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
-                if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
-                    bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
-                    bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
-                    bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
+                if (((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0xff ||
+                    ((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0) {
+                    bbox_min[0][i] = n.bbox_min[0] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[0];
+                    bbox_min[1][i] = n.bbox_min[1] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[1];
+                    bbox_min[2][i] = n.bbox_min[2] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[2];
 
-                    bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
-                    bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
-                    bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+                    bbox_max[0][i] = n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[0];
+                    bbox_max[1][i] = n.bbox_min[1] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[1];
+                    bbox_max[2][i] = n.bbox_min[2] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[2];
                 }
             }
 

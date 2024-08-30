@@ -31,7 +31,7 @@ const int VTX_INDICES_BUF_SLOT = 10;
 const int SH_RAYS_BUF_SLOT = 11;
 const int COUNTERS_BUF_SLOT = 12;
 const int LIGHTS_BUF_SLOT = 13;
-const int LIGHT_WNODES_BUF_SLOT = 14;
+const int LIGHT_CWNODES_BUF_SLOT = 14;
 const int RANDOM_SEQ_BUF_SLOT = 15;
 const int TLAS_SLOT = 16;
 

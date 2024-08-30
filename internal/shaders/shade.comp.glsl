@@ -60,7 +60,7 @@ layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
     uint g_random_seq[];
 };
 
-layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer WNodes {
+layout(std430, binding = LIGHT_CWNODES_BUF_SLOT) readonly buffer CWNodes {
     light_cwbvh_node_t g_light_cwnodes[];
 };
 
