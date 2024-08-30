@@ -16,7 +16,7 @@ const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
 const int LIGHTS_BUF_SLOT = 1;
-const int WNODES_BUF_SLOT = 2;
+const int CWNODES_BUF_SLOT = 2;
 const int RAYS_BUF_SLOT = 3;
 const int COUNTERS_BUF_SLOT = 4;
 

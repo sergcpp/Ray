@@ -1471,7 +1471,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
                         continue;
                     }
                     if ((light_cwnodes_[i].child[j] & LEAF_NODE_BIT) == 0) {
-                        light_cwnodes_[i].child[j] = compacted_indices[light_cwnodes_[i].child[j] & PRIM_INDEX_BITS];
+                        light_cwnodes_[i].child[j] = compacted_indices[light_cwnodes_[i].child[j]];
                     }
                 }
             }

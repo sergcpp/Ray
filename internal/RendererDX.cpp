@@ -1880,7 +1880,7 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                          {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
-                                         {eBindTarget::SBufRO, Shade::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
+                                         {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
                                          {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
@@ -1990,7 +1990,7 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                          {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
-                                         {eBindTarget::SBufRO, Shade::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
+                                         {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
                                          {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
@@ -2090,7 +2090,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::SH_RAYS_BUF_SLOT, sh_rays},
         {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
-        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
         {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 

@@ -26,7 +26,7 @@ struct scene_data_t {
     Span<const uint32_t> dir_lights;
     const uint32_t visible_lights_count;
     const uint32_t blocker_lights_count;
-    const Buffer &light_wnodes;
+    const Buffer &light_cwnodes;
     const AccStructure &rt_tlas;
     const Texture2D &env_qtree;
     int env_qtree_levels;
