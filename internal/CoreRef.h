@@ -306,6 +306,8 @@ fvec2 get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const int s
 
 float SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fvec4 &axis_u, const fvec4 &axis_v,
                                fvec2 Xi, fvec4 *out_p);
+float SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, const fvec4 &p3, const fvec2 Xi,
+                              fvec4 *out_dir);
 
 // Generation of rays
 void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const uint32_t rand_seq[],

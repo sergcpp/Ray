@@ -1164,67 +1164,6 @@ force_inline float angle_between(const fvec4 &v1, const fvec4 &v2) {
     }
 }
 
-// "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
-// Based on https://www.shadertoy.com/view/4tGGzd
-float SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, const fvec4 &p3, const fvec2 Xi,
-                              fvec4 *out_dir) {
-    // Setup spherical triangle
-    const fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
-
-    // calculate internal angles of spherical triangle: alpha, beta and gamma
-    const fvec4 BA = orthogonalize(A, B - A);
-    const fvec4 CA = orthogonalize(A, C - A);
-    const fvec4 AB = orthogonalize(B, A - B);
-    const fvec4 CB = orthogonalize(B, C - B);
-    const fvec4 BC = orthogonalize(C, B - C);
-    const fvec4 AC = orthogonalize(C, A - C);
-
-    const float alpha = angle_between(BA, CA);
-    const float beta = angle_between(AB, CB);
-    const float gamma = angle_between(BC, AC);
-
-    const float area = alpha + beta + gamma - PI;
-    if (area <= SPHERICAL_AREA_THRESHOLD) {
-        return 0.0f;
-    }
-
-    if (out_dir) {
-        // calculate arc lengths for edges of spherical triangle
-        // const float a = portable_acosf(clamp(dot(B, C), -1.0f, 1.0f));
-        const float b = portable_acosf(clamp(dot(C, A), -1.0f, 1.0f));
-        const float c = portable_acosf(clamp(dot(A, B), -1.0f, 1.0f));
-
-        // Use one random variable to select the new area
-        const float area_S = Xi.get<0>() * area;
-
-        // Save the sine and cosine of the angle delta
-        const float p = sinf(area_S - alpha);
-        const float q = cosf(area_S - alpha);
-
-        // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
-        const float u = q - cosf(alpha);
-        const float v = p + sinf(alpha) * cosf(c);
-
-        // Compute the s coordinate as normalized arc length from A to C_s
-        const float denom = ((v * p + u * q) * sinf(alpha));
-        const float s =
-            (1.0f / b) * portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
-
-        // Compute the third vertex of the sub - triangle
-        const fvec4 C_s = slerp(A, C, s);
-
-        // Compute the t coordinate using C_s and Xi[1]
-        const float denom2 = portable_acosf(clamp(dot(C_s, B), -1.0f, 1.0f));
-        const float t = safe_div(portable_acosf(clamp(1.0f - Xi.get<1>() * (1.0f - dot(C_s, B)), -1.0f, 1.0f)), denom2);
-
-        // Construct the corresponding point on the sphere.
-        (*out_dir) = slerp(B, C_s, t);
-    }
-
-    // return pdf
-    return (1.0f / area);
-}
-
 } // namespace Ref
 } // namespace Ray
 
@@ -1293,6 +1232,67 @@ float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos,
         (*out_p) = P + xu * x + yv * y + z0 * z;
     }
 
+    return (1.0f / area);
+}
+
+// "Stratified Sampling of Spherical Triangles" https://www.graphics.cornell.edu/pubs/1995/Arv95c.pdf
+// Based on https://www.shadertoy.com/view/4tGGzd
+float Ray::Ref::SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, const fvec4 &p3,
+                                        const fvec2 Xi, fvec4 *out_dir) {
+    // Setup spherical triangle
+    const fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
+
+    // calculate internal angles of spherical triangle: alpha, beta and gamma
+    const fvec4 BA = orthogonalize(A, B - A);
+    const fvec4 CA = orthogonalize(A, C - A);
+    const fvec4 AB = orthogonalize(B, A - B);
+    const fvec4 CB = orthogonalize(B, C - B);
+    const fvec4 BC = orthogonalize(C, B - C);
+    const fvec4 AC = orthogonalize(C, A - C);
+
+    const float alpha = angle_between(BA, CA);
+    const float beta = angle_between(AB, CB);
+    const float gamma = angle_between(BC, AC);
+
+    const float area = alpha + beta + gamma - PI;
+    if (area <= SPHERICAL_AREA_THRESHOLD) {
+        return 0.0f;
+    }
+
+    if (out_dir) {
+        // calculate arc lengths for edges of spherical triangle
+        // const float a = portable_acosf(clamp(dot(B, C), -1.0f, 1.0f));
+        const float b = portable_acosf(clamp(dot(C, A), -1.0f, 1.0f));
+        const float c = portable_acosf(clamp(dot(A, B), -1.0f, 1.0f));
+
+        // Use one random variable to select the new area
+        const float area_S = Xi.get<0>() * area;
+
+        // Save the sine and cosine of the angle delta
+        const float p = sinf(area_S - alpha);
+        const float q = cosf(area_S - alpha);
+
+        // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
+        const float u = q - cosf(alpha);
+        const float v = p + sinf(alpha) * cosf(c);
+
+        // Compute the s coordinate as normalized arc length from A to C_s
+        const float denom = ((v * p + u * q) * sinf(alpha));
+        const float s =
+            (1.0f / b) * portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
+
+        // Compute the third vertex of the sub - triangle
+        const fvec4 C_s = slerp(A, C, s);
+
+        // Compute the t coordinate using C_s and Xi[1]
+        const float denom2 = portable_acosf(clamp(dot(C_s, B), -1.0f, 1.0f));
+        const float t = safe_div(portable_acosf(clamp(1.0f - Xi.get<1>() * (1.0f - dot(C_s, B)), -1.0f, 1.0f)), denom2);
+
+        // Construct the corresponding point on the sphere.
+        (*out_dir) = slerp(B, C_s, t);
+    }
+
+    // return pdf
     return (1.0f / area);
 }
 

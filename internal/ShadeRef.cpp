@@ -1504,13 +1504,12 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
 
             const float cos_theta = fabsf(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0f) {
-                float light_pdf;
-#if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-                const fvec4 P = TransformPoint(ro, mi->inv_xform);
-                light_pdf = SampleSphericalTriangle(P, p1, p2, p3, {}, nullptr) / pdf_factor;
-                if (light_pdf == 0.0f)
-#endif
-                {
+                float light_pdf = 0.0f;
+                if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
+                    const fvec4 P = TransformPoint(ro, mi->inv_xform);
+                    light_pdf = SampleSphericalTriangle(P, p1, p2, p3, {}, nullptr) / pdf_factor;
+                }
+                if (light_pdf == 0.0f) {
                     light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
                 }
 
