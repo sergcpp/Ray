@@ -2779,9 +2779,7 @@ void calc_lnode_importance(const light_cwbvh_node_t &n, const float bbox_min[3][
             const fvec<S> sin_omega_x = sin_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
             const fvec<S> cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
-            fvec<S> mul = 0.0f;
-            where(cos_omega > cos_omega_ne[1], mul) = (cos_omega / v_len2);
-            where(mask, imp) = (imp * mul);
+            where(mask, imp) *= select(cos_omega > cos_omega_ne[1], (cos_omega / v_len2), fvec<S>{0.0f});
         }
 
         imp.store_to(&importance[i], vector_aligned);
@@ -6473,7 +6471,7 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
 
                     float total_importance = 0.0f;
                     UNROLLED_FOR(j, 8, { total_importance += importance[j]; })
-                    if (total_importance > 0.0f) {
+                    if (total_importance == 0.0f) {
                         continue;
                     }
 
