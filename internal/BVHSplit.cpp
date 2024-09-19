@@ -464,7 +464,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                         }
                     }
 
-                    printf("Spatial split: %i %i %i\n", (int)left_indices.size(), (int)right_indices.size(),
+                    printf("Spatial split: %i %i %i\n", int(left_indices.size()), int(right_indices.size()),
                            num_in_both);
                     printf("Extends: %f..%f %f..%f\n", res_left_bounds.min[div_axis], res_left_bounds.max[div_axis],
                            res_right_bounds.min[div_axis], res_right_bounds.max[div_axis]);
