@@ -70,9 +70,9 @@ int Ray::TextureSplitter::Insert_Recursive(int i, const int res[2]) {
             return i;
         }
 
-        nodes_[i].child[0] = ch0 = (int)nodes_.size();
+        nodes_[i].child[0] = ch0 = int(nodes_.size());
         nodes_.emplace_back();
-        nodes_[i].child[1] = ch1 = (int)nodes_.size();
+        nodes_[i].child[1] = ch1 = int(nodes_.size());
         nodes_.emplace_back();
 
         node_t &n = nodes_[i];
