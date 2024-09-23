@@ -354,7 +354,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     PreprocessMesh(_m.vtx_positions, _m.vtx_indices, _m.base_vertex, s, temp_nodes, temp_tris, temp_tri_indices,
                    temp_mtris);
 
-    log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", _m.name ? _m.name : "(unknown)", (Ray::GetTimeMs() - t1));
+    log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", _m.name ? _m.name : "(unknown)", (long long)(Ray::GetTimeMs() - t1));
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
@@ -415,7 +415,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         m.node_block = wnodes_index.second;
 
         log_->Info("Ray: Mesh \'%s\' BVH flattened in %lldms", _m.name ? _m.name : "(unknown)",
-                   (Ray::GetTimeMs() - t2));
+                   (long long)(Ray::GetTimeMs() - t2));
     } else {
         const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_nodes.size()));
 
@@ -1018,7 +1018,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock(
         env_.back_map = physical_sky_texture_._index;
     }
 
-    log_->Info("PrepareSkyEnvMap (%ix%i) done in %lldms", SkyEnvRes[0], SkyEnvRes[1], GetTimeMs() - t1);
+    log_->Info("PrepareSkyEnvMap (%ix%i) done in %lldms", SkyEnvRes[0], SkyEnvRes[1], (long long)(GetTimeMs() - t1));
 }
 
 void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
