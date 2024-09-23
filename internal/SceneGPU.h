@@ -1940,7 +1940,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         env_.back_map = physical_sky_texture_._index;
     }
 
-    log_->Info("PrepareSkyEnvMap (%ix%i) done in %lldms", SkyEnvRes[0], SkyEnvRes[1], GetTimeMs() - t1);
+    log_->Info("PrepareSkyEnvMap (%ix%i) done in %lldms", SkyEnvRes[0], SkyEnvRes[1], (long long)(GetTimeMs() - t1));
 }
 
 inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
