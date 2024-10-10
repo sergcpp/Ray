@@ -361,10 +361,8 @@ float GetCloudsDensity(vec3 local_position, out float out_local_height, out floa
     out_height_fraction =
         (out_local_height - g_atmosphere_params.clouds_height_beg) / (g_atmosphere_params.clouds_height_end - g_atmosphere_params.clouds_height_beg);
 
-    vec2 weather_uv = vec2(local_position.x + g_atmosphere_params.clouds_offset_x,
-                           local_position.z + g_atmosphere_params.clouds_offset_z);
-    weather_uv *= 0.00007;
-
+    const vec2 weather_uv = SKY_CLOUDS_OFFSET_SCALE * vec2(local_position.x + g_atmosphere_params.clouds_offset_x,
+                                                           local_position.z + g_atmosphere_params.clouds_offset_z);
     const vec3 weather_sample = textureLod(g_weather_tex, weather_uv, 0.0).xyz;
 
     float cloud_coverage = mix(weather_sample.z, weather_sample.y, g_atmosphere_params.clouds_variety);
@@ -379,12 +377,14 @@ float GetCloudsDensity(vec3 local_position, out float out_local_height, out floa
 
     local_position /= 1.5 * (g_atmosphere_params.clouds_height_end - g_atmosphere_params.clouds_height_beg);
 
-    // TODO: Apply animated cloud offset here
     const vec3 curl_read0 = textureLod(g_curl_tex, 8.0 * local_position.xz, 0.0).xyz;
     local_position += curl_read0 * out_height_fraction * 0.25;
 
     const vec3 curl_read1 = textureLod(g_curl_tex, 16.0 * local_position.yx, 0.0).yzx;
     local_position += curl_read1 * (1.0 - out_height_fraction) * 0.05;
+
+    // Additional micromovement
+    local_position.xz += vec2(g_atmosphere_params.clouds_flutter_x, g_atmosphere_params.clouds_flutter_z);
 
     const float noise_read = textureLod(g_noise3d_tex, local_position, 0.0).x;
     return 3.0 * mix(max(0.0, 1.0 - cloud_type * 2.0), 1.0, out_height_fraction) *
