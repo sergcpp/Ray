@@ -241,17 +241,22 @@ struct atmosphere_params_t {
     float clouds_density;
     float clouds_offset_x;
     float clouds_offset_z;
-    float cirrus_clouds_amount;
+    float clouds_flutter_x;
     //
+    float clouds_flutter_z;
+    float cirrus_clouds_amount;
     float cirrus_clouds_height;
     float ozone_height_center;
+    //
     float ozone_half_width;
     float atmosphere_density;
-    //
     float stars_brightness;
     float moon_radius;
+    //
     float moon_distance;
-    float _unused;
+    float _unused0;
+    float _unused1;
+    float _unused2;
     //
     vec4 moon_dir;
     vec4 rayleigh_scattering;

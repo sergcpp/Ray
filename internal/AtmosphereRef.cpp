@@ -324,10 +324,9 @@ float GetCloudsDensity(const atmosphere_params_t &params, fvec4 local_position, 
     out_height_fraction =
         (out_local_height - params.clouds_height_beg) / (params.clouds_height_end - params.clouds_height_beg);
 
-    fvec4 weather_uv = {local_position.get<0>() + params.clouds_offset_x,
-                        local_position.get<2>() + params.clouds_offset_z, 0.0f, 0.0f};
-    weather_uv *= 0.00007f;
-
+    const fvec4 weather_uv =
+        SKY_CLOUDS_OFFSET_SCALE * fvec4{local_position.get<0>() + params.clouds_offset_x,
+                                        local_position.get<2>() + params.clouds_offset_z, 0.0f, 0.0f};
     const fvec4 weather_sample = SampleWeatherTex(weather_uv);
 
     float cloud_coverage = Ray::mix(weather_sample.get<2>(), weather_sample.get<1>(), params.clouds_variety);
@@ -342,13 +341,15 @@ float GetCloudsDensity(const atmosphere_params_t &params, fvec4 local_position, 
 
     local_position /= 1.5f * (params.clouds_height_end - params.clouds_height_beg);
 
-    // TODO: Apply animated cloud offset here
     const fvec4 curl_read0 = SampleCurlTex(8.0f * fvec4{local_position.get<0>(), local_position.get<2>(), 0.0f, 0.0f});
     local_position += curl_read0 * out_height_fraction * 0.25f;
 
     fvec4 curl_read1 = SampleCurlTex(16.0f * fvec4{local_position.get<1>(), local_position.get<0>(), 0.0f, 0.0f});
     curl_read1 = fvec4{curl_read1.get<1>(), curl_read1.get<2>(), curl_read1.get<0>(), 0.0f};
     local_position += curl_read1 * (1.0f - out_height_fraction) * 0.05f;
+
+    // Additional micromovement
+    local_position += fvec4{params.clouds_flutter_x, 0.0f, params.clouds_flutter_z, 0.0f};
 
     const float noise_read = Sample3dNoiseTex(local_position);
     return 3.0f * Ray::mix(fmaxf(0.0f, 1.0f - cloud_type * 2.0f), 1.0f, out_height_fraction) *
