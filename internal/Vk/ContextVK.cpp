@@ -261,9 +261,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         const int PoolStep = 8;
+        const int MaxImgSamplerCount = 16;
         const int MaxImgCount = 16;
         const int MaxSamplerCount = 16;
-        const int MaxImgSamplerCount = 16;
         const int MaxStoreImgCount = 6;
         const int MaxUBufCount = 8;
         const int MaxSBufCount = 20;
@@ -272,7 +272,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
         const int InitialSetsCount = 16;
 
         default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc>(
-            this, PoolStep, MaxImgCount, MaxSamplerCount, MaxImgSamplerCount, MaxStoreImgCount, MaxUBufCount,
+            this, PoolStep, MaxImgSamplerCount, MaxImgCount, MaxSamplerCount, MaxStoreImgCount, MaxUBufCount,
             MaxSBufCount, MaxTBufCount, MaxAccCount, InitialSetsCount);
     }
 
