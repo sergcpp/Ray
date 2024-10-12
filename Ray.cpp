@@ -34,7 +34,7 @@
 #endif // ENABLE_VK_IMPL
 
 #if !(defined(ENABLE_DX_IMPL) && defined(_WIN32)) && !defined(ENABLE_VK_IMPL)
-#pragma message("Compiling without GPU support")
+#pragma message("Ray: Compiling without GPU support")
 #endif
 
 #include "internal/simd/detect.h"

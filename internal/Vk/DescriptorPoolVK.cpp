@@ -6,9 +6,9 @@
 namespace Ray {
 namespace Vk {
 const VkDescriptorType g_descr_types_vk[] = {
+    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,    // CombinedImageSampler
     VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,             // SampledImage
     VK_DESCRIPTOR_TYPE_SAMPLER,                   // Sampler
-    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,    // CombinedImageSampler
     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,             // StorageImage
     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,            // UniformBuffer
     VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,            // StorageBuffer
@@ -40,9 +40,9 @@ Ray::Vk::DescrPool &Ray::Vk::DescrPool::operator=(DescrPool &&rhs) noexcept {
 bool Ray::Vk::DescrPool::Init(const DescrSizes &sizes, const uint32_t sets_count) {
     Destroy();
 
+    descr_counts_[int(eDescrType::CombinedImageSampler)] = sizes.img_sampler_count;
     descr_counts_[int(eDescrType::SampledImage)] = sizes.img_count;
     descr_counts_[int(eDescrType::Sampler)] = sizes.sampler_count;
-    descr_counts_[int(eDescrType::CombinedImageSampler)] = sizes.img_sampler_count;
     descr_counts_[int(eDescrType::StorageImage)] = sizes.store_img_count;
     descr_counts_[int(eDescrType::UniformBuffer)] = sizes.ubuf_count;
     descr_counts_[int(eDescrType::StorageBuffer)] = sizes.sbuf_count;
@@ -138,29 +138,29 @@ bool Ray::Vk::DescrPoolAlloc::Reset() {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-Ray::Vk::DescrMultiPoolAlloc::DescrMultiPoolAlloc(Context *ctx, const uint32_t pool_step, const uint32_t max_img_count,
-                                                  const uint32_t max_sampler_count,
-                                                  const uint32_t max_img_sampler_count,
-                                                  const uint32_t max_store_img_count, const uint32_t max_ubuf_count,
-                                                  const uint32_t max_sbuf_count, const uint32_t max_tbuf_count,
-                                                  const uint32_t max_acc_count, const uint32_t initial_sets_count)
+Ray::Vk::DescrMultiPoolAlloc::DescrMultiPoolAlloc(Context *ctx, const uint32_t pool_step,
+                                                  const uint32_t max_img_sampler_count, const uint32_t max_img_count,
+                                                  const uint32_t max_sampler_count, const uint32_t max_store_img_count,
+                                                  const uint32_t max_ubuf_count, const uint32_t max_sbuf_count,
+                                                  const uint32_t max_tbuf_count, const uint32_t max_acc_count,
+                                                  const uint32_t initial_sets_count)
     : pool_step_(pool_step) {
+    img_sampler_based_count_ = (max_img_sampler_count + pool_step - 1) / pool_step;
     img_based_count_ = (max_img_count + pool_step - 1) / pool_step;
     sampler_based_count_ = (max_sampler_count + pool_step - 1) / pool_step;
-    img_sampler_based_count_ = (max_img_sampler_count + pool_step - 1) / pool_step;
     store_img_based_count_ = (max_store_img_count + pool_step - 1) / pool_step;
     ubuf_based_count_ = (max_ubuf_count + pool_step - 1) / pool_step;
     sbuf_based_count_ = (max_sbuf_count + pool_step - 1) / pool_step;
     tbuf_based_count_ = (max_tbuf_count + pool_step - 1) / pool_step;
     acc_based_count_ = (max_acc_count + pool_step - 1) / pool_step;
-    const uint32_t required_pools_count = img_based_count_ * sampler_based_count_ * img_sampler_based_count_ *
+    const uint32_t required_pools_count = img_sampler_based_count_ * img_based_count_ * sampler_based_count_ *
                                           store_img_based_count_ * ubuf_based_count_ * sbuf_based_count_ *
                                           tbuf_based_count_ * acc_based_count_;
 
     // store rounded values
-    max_sampled_img_count_ = pool_step * img_based_count_;
-    max_sampler_count_ = pool_step * sampler_based_count_;
     max_img_sampler_count_ = pool_step * img_sampler_based_count_;
+    max_img_count_ = pool_step * img_based_count_;
+    max_sampler_count_ = pool_step * sampler_based_count_;
     max_store_img_count_ = pool_step * store_img_based_count_;
     max_ubuf_count_ = pool_step * ubuf_based_count_;
     max_sbuf_count_ = pool_step * sbuf_based_count_;
@@ -195,13 +195,13 @@ Ray::Vk::DescrMultiPoolAlloc::DescrMultiPoolAlloc(Context *ctx, const uint32_t p
 
 VkDescriptorSet Ray::Vk::DescrMultiPoolAlloc::Alloc(const DescrSizes &sizes, const VkDescriptorSetLayout layout) {
     assert(sizes.acc_count <= max_acc_count_);
-    assert(sizes.img_count <= max_sampled_img_count_);
-    assert(sizes.sampler_count <= max_sampler_count_);
-    assert(sizes.img_sampler_count <= max_img_sampler_count_);
-    assert(sizes.sbuf_count <= max_sbuf_count_);
-    assert(sizes.store_img_count <= max_store_img_count_);
     assert(sizes.tbuf_count <= max_tbuf_count_);
+    assert(sizes.sbuf_count <= max_sbuf_count_);
     assert(sizes.ubuf_count <= max_ubuf_count_);
+    assert(sizes.store_img_count <= max_store_img_count_);
+    assert(sizes.sampler_count <= max_sampler_count_);
+    assert(sizes.img_count <= max_img_count_);
+    assert(sizes.img_sampler_count <= max_img_sampler_count_);
 
     const uint32_t img_sampler_based_index =
         sizes.img_sampler_count ? ((sizes.img_sampler_count + pool_step_ - 1) / pool_step_ - 1) : 0;

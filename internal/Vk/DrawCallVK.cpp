@@ -12,7 +12,6 @@
 VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayout layout, Span<const Binding> bindings,
                                               DescrMultiPoolAlloc *descr_alloc, ILog *log) {
     VkDescriptorImageInfo sampler_infos[16] = {};
-    // VkDescriptorImageInfo sampled_img_infos[16] = {};
     VkDescriptorImageInfo img_sampler_infos[16] = {};
     VkDescriptorImageInfo img_storage_infos[16] = {};
     VkDescriptorBufferInfo ubuf_infos[16] = {};
