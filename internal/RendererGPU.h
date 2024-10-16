@@ -9,8 +9,7 @@ struct BindlessTexData;
 struct scene_data_t {
     const environment_t &env;
     const Buffer &mesh_instances;
-    const Buffer &mi_indices;
-    const Buffer &meshes;
+    Span<const mesh_t> meshes;
     const Buffer &vtx_indices;
     const Buffer &vertices;
     const Buffer &nodes;
@@ -706,12 +705,6 @@ inline void Ray::NS::Renderer::TransitionSceneResources(CommandBuffer cmd_buf, c
         }
     }
 
-    if (sc_data.mi_indices && sc_data.mi_indices.resource_state != eResState::ShaderResource) {
-        res_transitions.emplace_back(&sc_data.mi_indices, eResState::ShaderResource);
-    }
-    if (sc_data.meshes && sc_data.meshes.resource_state != eResState::ShaderResource) {
-        res_transitions.emplace_back(&sc_data.meshes, eResState::ShaderResource);
-    }
     if (sc_data.vtx_indices && sc_data.vtx_indices.resource_state != eResState::ShaderResource) {
         res_transitions.emplace_back(&sc_data.vtx_indices, eResState::ShaderResource);
     }

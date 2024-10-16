@@ -80,6 +80,13 @@ struct bvh_node_t {
     vec4 bbox_max; // w is prim_count/right_child
 };
 
+struct bvh2_node_t {
+    vec4 ch_data0;  // [ ch0.min.x, ch0.max.x, ch0.min.y, ch0.max.y ]
+    vec4 ch_data1;  // [ ch1.min.x, ch1.max.x, ch1.min.y, ch1.max.y ]
+    vec4 ch_data2;  // [ ch0.min.z, ch0.max.z, ch1.min.z, ch1.max.z ]
+    uvec4 child;    // x - left child, y - right child
+};
+
 struct light_bvh_node_t {
     float bbox_min[3];
     uint left_child;
@@ -126,9 +133,7 @@ struct mesh_t {
 };
 
 struct mesh_instance_t {
-    vec4 bbox_min;      // w is tr_index
-    vec4 bbox_max;      // w is mesh_index
-    uvec4 block_ndx;    // xy - indexes of transform and mesh blocks, z - lights index, w - ray_visibility
+    uvec4 data;    // x - mesh_index, y - node_index, z - lights index, w - ray_visibility
     mat4 xform, inv_xform;
 };
 

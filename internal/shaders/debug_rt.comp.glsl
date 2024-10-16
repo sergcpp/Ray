@@ -21,16 +21,8 @@ layout(std430, binding = NODES_BUF_SLOT) readonly buffer Nodes {
     bvh_node_t g_nodes[];
 };
 
-layout(std430, binding = MESHES_BUF_SLOT) readonly buffer Meshes {
-    mesh_t g_meshes[];
-};
-
 layout(std430, binding = MESH_INSTANCES_BUF_SLOT) readonly buffer MeshInstances {
     mesh_instance_t g_mesh_instances[];
-};
-
-layout(std430, binding = MI_INDICES_BUF_SLOT) readonly buffer MiIndices {
-    uint g_mi_indices[];
 };
 
 layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
@@ -96,22 +88,15 @@ void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
             g_stack[gl_LocalInvocationIndex][stack_size++] = far_child(orig_rd, n);
             g_stack[gl_LocalInvocationIndex][stack_size++] = near_child(orig_rd, n);
         } else {
-            uint prim_index = (floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
-            uint prim_count = floatBitsToUint(n.bbox_max.w);
-            for (uint i = prim_index; i < prim_index + prim_count; ++i) {
-                mesh_instance_t mi = g_mesh_instances[g_mi_indices[i]];
-                mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
+            const uint prim_index = (floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
 
-                if (!bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, mi.bbox_min.xyz, mi.bbox_max.xyz)) {
-                    continue;
-                }
+            const mesh_instance_t mi = g_mesh_instances[prim_index];
 
-                vec3 ro = (mi.inv_xform * vec4(orig_ro, 1.0)).xyz;
-                vec3 rd = (mi.inv_xform * vec4(orig_rd, 0.0)).xyz;
-                vec3 inv_d = safe_invert(rd);
+            vec3 ro = (mi.inv_xform * vec4(orig_ro, 1.0)).xyz;
+            vec3 rd = (mi.inv_xform * vec4(orig_rd, 0.0)).xyz;
+            vec3 inv_d = safe_invert(rd);
 
-                Traverse_BLAS_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index, stack_size, inter);
-            }
+            Traverse_BLAS_WithStack(ro, rd, inv_d, int(prim_index), mi.data.y, stack_size, inter);
         }
     }
 }

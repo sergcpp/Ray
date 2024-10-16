@@ -296,7 +296,7 @@ uint32_t Ray::PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32
 
     const size_t indices_start = out_tri_indices.size();
     uint32_t num_out_nodes;
-    if (!s.use_fast_bvh_build) {
+    if (!s.use_fast_bvh_build || s.primitive_alignment != 1) {
         num_out_nodes = PreprocessPrims_SAH(primitives, positions, s, out_nodes, out_tri_indices);
     } else {
         num_out_nodes = PreprocessPrims_HLBVH(primitives, out_nodes, out_tri_indices);
@@ -315,14 +315,13 @@ uint32_t Ray::PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32
         const uint32_t j = out_tri_indices[i];
 
         out_tris[i] = triangles[j];
+        out_tri_indices[i] = uint32_t(real_indices[j]);
 
         for (int k = 0; k < 4; ++k) {
             out_tris2[i / 8].n_plane[k][i % 8] = triangles[j].n_plane[k];
             out_tris2[i / 8].u_plane[k][i % 8] = triangles[j].u_plane[k];
             out_tris2[i / 8].v_plane[k][i % 8] = triangles[j].v_plane[k];
         }
-
-        out_tri_indices[i] = uint32_t(real_indices[j]);
     }
 
     return num_out_nodes;
@@ -531,6 +530,9 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
             memcpy(&n.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
             memcpy(&n.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
             out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
+            while (out_indices.size() % s.primitive_alignment) {
+                out_indices.push_back(out_indices.back());
+            }
         } else {
             const auto index = uint32_t(num_nodes);
 
@@ -718,7 +720,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     return uint32_t(out_nodes.size() - top_nodes_start);
 }
 
-uint32_t Ray::FlattenBVH_r(const bvh_node_t *nodes, const uint32_t node_index, const uint32_t parent_index,
+uint32_t Ray::FlattenBVH_r(Span<const bvh_node_t> nodes, const uint32_t node_index,
                            aligned_vector<wbvh_node_t> &out_nodes) {
     const bvh_node_t &cur_node = nodes[node_index];
 
@@ -827,7 +829,7 @@ uint32_t Ray::FlattenBVH_r(const bvh_node_t *nodes, const uint32_t node_index, c
 
     for (int i = 0; i < 8; i++) {
         if (sorted_children[i] != 0xffffffff) {
-            new_children[i] = FlattenBVH_r(nodes, sorted_children[i], node_index, out_nodes);
+            new_children[i] = FlattenBVH_r(nodes, sorted_children[i], out_nodes);
         } else {
             new_children[i] = 0x7fffffff;
         }
@@ -855,7 +857,7 @@ uint32_t Ray::FlattenBVH_r(const bvh_node_t *nodes, const uint32_t node_index, c
     return new_node_index;
 }
 
-uint32_t Ray::FlattenLightBVH_r(const light_bvh_node_t *nodes, const uint32_t node_index, const uint32_t parent_index,
+uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32_t node_index,
                                 aligned_vector<light_wbvh_node_t> &out_nodes) {
     const light_bvh_node_t &cur_node = nodes[node_index];
 
@@ -968,7 +970,7 @@ uint32_t Ray::FlattenLightBVH_r(const light_bvh_node_t *nodes, const uint32_t no
 
     for (int i = 0; i < 8; i++) {
         if (sorted_children[i] != 0xffffffff) {
-            new_children[i] = FlattenLightBVH_r(nodes, sorted_children[i], node_index, out_nodes);
+            new_children[i] = FlattenLightBVH_r(nodes, sorted_children[i], out_nodes);
         } else {
             new_children[i] = 0x7fffffff;
         }
@@ -1005,7 +1007,7 @@ uint32_t Ray::FlattenLightBVH_r(const light_bvh_node_t *nodes, const uint32_t no
     return new_node_index;
 }
 
-uint32_t Ray::FlattenLightBVH_r(const light_bvh_node_t *nodes, const uint32_t node_index, const uint32_t parent_index,
+uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32_t node_index,
                                 aligned_vector<light_cwbvh_node_t> &out_nodes) {
     const light_bvh_node_t &cur_node = nodes[node_index];
 
@@ -1132,7 +1134,7 @@ uint32_t Ray::FlattenLightBVH_r(const light_bvh_node_t *nodes, const uint32_t no
     uint32_t new_children[8];
     for (int i = 0; i < 8; i++) {
         if (sorted_children[i] != 0xffffffff) {
-            new_children[i] = FlattenLightBVH_r(nodes, sorted_children[i], node_index, out_nodes);
+            new_children[i] = FlattenLightBVH_r(nodes, sorted_children[i], out_nodes);
         } else {
             new_children[i] = 0x7fffffff;
         }
@@ -1182,6 +1184,104 @@ uint32_t Ray::FlattenLightBVH_r(const light_bvh_node_t *nodes, const uint32_t no
     }
 
     return new_node_index;
+}
+
+uint32_t Ray::ConvertToBVH2(Span<const bvh_node_t> nodes, std::vector<bvh2_node_t> &out_nodes) {
+    const uint32_t out_index = uint32_t(out_nodes.size());
+
+    if (nodes.size() == 1) {
+        assert((nodes[0].prim_index & LEAF_NODE_BIT) != 0);
+        bvh2_node_t root_node = {};
+
+        root_node.left_child = nodes[0].prim_index & PRIM_INDEX_BITS;
+        const uint32_t prim_count = std::max(nodes[0].prim_count & PRIM_COUNT_BITS, 2u);
+        assert(prim_count <= 8);
+        root_node.left_child |= (prim_count - 1) << 29;
+        root_node.right_child = 0x1fffffff;
+
+        const bvh_node_t &ch0 = nodes[0];
+
+        root_node.ch_data0[0] = ch0.bbox_min[0];
+        root_node.ch_data0[1] = ch0.bbox_max[0];
+        root_node.ch_data0[2] = ch0.bbox_min[1];
+        root_node.ch_data0[3] = ch0.bbox_max[1];
+        root_node.ch_data2[0] = ch0.bbox_min[2];
+        root_node.ch_data2[1] = ch0.bbox_max[2];
+
+        out_nodes.push_back(root_node);
+
+        return out_index;
+    }
+
+    std::vector<uint32_t> compacted_indices;
+    compacted_indices.resize(nodes.size());
+    uint32_t compacted_count = 0;
+    for (int i = 0; i < int(nodes.size()); ++i) {
+        compacted_indices[i] = compacted_count;
+        if ((nodes[i].prim_index & LEAF_NODE_BIT) == 0) {
+            ++compacted_count;
+        }
+    }
+    out_nodes.reserve(out_nodes.size() + compacted_count);
+
+    const uint32_t offset = uint32_t(out_nodes.size());
+    for (const bvh_node_t &n : nodes) {
+        bvh2_node_t new_node = {};
+        new_node.left_child = n.left_child;
+        new_node.right_child = n.right_child & RIGHT_CHILD_BITS;
+        if ((n.prim_index & LEAF_NODE_BIT) == 0) {
+            const bvh_node_t &ch0 = nodes[new_node.left_child];
+            const bvh_node_t &ch1 = nodes[new_node.right_child];
+
+            if ((ch0.prim_index & LEAF_NODE_BIT) != 0) {
+                new_node.left_child = ch0.prim_index & PRIM_INDEX_BITS;
+
+                const uint32_t prim_count = std::max(ch0.prim_count & PRIM_COUNT_BITS, 2u);
+                assert(prim_count <= 8);
+                new_node.left_child |= (prim_count - 1) << 29;
+                assert((new_node.left_child & BVH2_PRIM_COUNT_BITS) != 0);
+            } else {
+                new_node.left_child = compacted_indices[new_node.left_child];
+                new_node.left_child += offset;
+                assert((new_node.left_child & BVH2_PRIM_COUNT_BITS) == 0);
+                assert(new_node.left_child < out_nodes.capacity());
+            }
+            if ((ch1.prim_index & LEAF_NODE_BIT) != 0) {
+                new_node.right_child = ch1.prim_index & PRIM_INDEX_BITS;
+
+                const uint32_t prim_count = std::max(ch1.prim_count & PRIM_COUNT_BITS, 2u);
+                assert(prim_count <= 8);
+                new_node.right_child |= (prim_count - 1) << 29;
+                assert((new_node.right_child & BVH2_PRIM_COUNT_BITS) != 0);
+            } else {
+                new_node.right_child = compacted_indices[new_node.right_child];
+                new_node.right_child += offset;
+                assert((new_node.right_child & BVH2_PRIM_COUNT_BITS) == 0);
+                assert(new_node.right_child < out_nodes.capacity());
+            }
+
+            new_node.ch_data0[0] = ch0.bbox_min[0];
+            new_node.ch_data0[1] = ch0.bbox_max[0];
+            new_node.ch_data0[2] = ch0.bbox_min[1];
+            new_node.ch_data0[3] = ch0.bbox_max[1];
+
+            new_node.ch_data1[0] = ch1.bbox_min[0];
+            new_node.ch_data1[1] = ch1.bbox_max[0];
+            new_node.ch_data1[2] = ch1.bbox_min[1];
+            new_node.ch_data1[3] = ch1.bbox_max[1];
+
+            new_node.ch_data2[0] = ch0.bbox_min[2];
+            new_node.ch_data2[1] = ch0.bbox_max[2];
+            new_node.ch_data2[2] = ch1.bbox_min[2];
+            new_node.ch_data2[3] = ch1.bbox_max[2];
+
+            out_nodes.push_back(new_node);
+        }
+    }
+
+    assert(out_nodes.size() == out_nodes.capacity());
+
+    return out_index;
 }
 
 bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]) {

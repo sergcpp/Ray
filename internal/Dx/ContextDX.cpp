@@ -234,7 +234,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
 
     device_name_ = str_converter.to_bytes(desc.Description);
 
-    log_->Info("===========================================");
+    log_->Info("============================================================================");
     log_->Info("Device info:");
 
     auto it = find_if(KnownGPUVendors, KnownGPUVendors + KnownGPUVendorsCount,
@@ -244,8 +244,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
     }
 
     log_->Info("\tName\t\t: %s", device_name_.c_str());
-
-    log_->Info("===========================================");
+    log_->Info("============================================================================");
 
     D3D12_FEATURE_DATA_D3D12_OPTIONS options = {};
     hr = device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options));

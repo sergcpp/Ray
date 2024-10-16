@@ -340,9 +340,11 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
 
 Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     bvh_settings_t s;
-    s.oversplit_threshold = 0.95f;
+    s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
+    s.min_primitives_in_leaf = 8;
+    s.primitive_alignment = 8;
 
     const uint64_t t1 = Ray::GetTimeMs();
 
@@ -354,45 +356,36 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     PreprocessMesh(_m.vtx_positions, _m.vtx_indices, _m.base_vertex, s, temp_nodes, temp_tris, temp_tri_indices,
                    temp_mtris);
 
-    log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", _m.name ? _m.name : "(unknown)", (long long)(Ray::GetTimeMs() - t1));
+    log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", _m.name ? _m.name : "(unknown)",
+               (long long)(Ray::GetTimeMs() - t1));
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const std::pair<uint32_t, uint32_t> tris_index = tris_.Allocate(uint32_t(temp_tris.size()));
-
     mesh_t m = {};
-    m.tris_index = tris_index.first;
-    m.tris_block = tris_index.second;
     m.tris_count = uint32_t(temp_tris.size());
-    for (uint32_t i = 0; i < uint32_t(temp_tris.size()); ++i) {
-        tris_[m.tris_index + i] = temp_tris[i];
-    }
-
-    const std::pair<uint32_t, uint32_t> mtris_index = mtris_.Allocate(uint32_t(temp_mtris.size()));
-    assert(mtris_index.first == m.tris_index / 8);
-    for (uint32_t i = 0; i < uint32_t(temp_mtris.size()); ++i) {
-        mtris_[mtris_index.first + i] = temp_mtris[i];
-    }
+    memcpy(m.bbox_min, temp_nodes[0].bbox_min, 3 * sizeof(float));
+    memcpy(m.bbox_max, temp_nodes[0].bbox_max, 3 * sizeof(float));
 
     const std::pair<uint32_t, uint32_t> trimat_index =
         tri_materials_.Allocate(uint32_t(_m.vtx_indices.size() / 3), tri_mat_data_t{0xffff, 0xffff});
     const std::pair<uint32_t, uint32_t> tri_indices_index = tri_indices_.Allocate(uint32_t(temp_tri_indices.size()));
-    assert(tri_indices_index.first == tris_index.first);
-    assert(tri_indices_index.second == tris_index.second);
     for (uint32_t i = 0; i < uint32_t(temp_tri_indices.size()); ++i) {
         tri_indices_[tri_indices_index.first + i] = trimat_index.first + temp_tri_indices[i];
     }
 
-    memcpy(m.bbox_min, temp_nodes[0].bbox_min, 3 * sizeof(float));
-    memcpy(m.bbox_max, temp_nodes[0].bbox_max, 3 * sizeof(float));
-
     if (use_wide_bvh_) {
-        const uint64_t t2 = Ray::GetTimeMs();
+        const std::pair<uint32_t, uint32_t> mtris_index = mtris_.Allocate(uint32_t(temp_mtris.size()));
+
+        m.tris_index = mtris_index.first * 8;
+        m.tris_block = mtris_index.second;
+        memcpy(&mtris_[mtris_index.first], temp_mtris.data(), temp_mtris.size() * sizeof(mtri_accel_t));
+        assert(mtris_index.first == tri_indices_index.first / 8);
+        assert(mtris_index.second == tri_indices_index.second);
 
         aligned_vector<wbvh_node_t> temp_wnodes;
         temp_wnodes.reserve(temp_nodes.size() / 8);
 
-        FlattenBVH_r(temp_nodes.data(), 0, 0xffffffff, temp_wnodes);
+        FlattenBVH_r(temp_nodes, 0, temp_wnodes);
         const std::pair<uint32_t, uint32_t> wnodes_index = wnodes_.Allocate(uint32_t(temp_wnodes.size()));
 
         for (uint32_t i = 0; i < uint32_t(temp_wnodes.size()); ++i) {
@@ -413,22 +406,33 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
 
         m.node_index = wnodes_index.first;
         m.node_block = wnodes_index.second;
-
-        log_->Info("Ray: Mesh \'%s\' BVH flattened in %lldms", _m.name ? _m.name : "(unknown)",
-                   (long long)(Ray::GetTimeMs() - t2));
     } else {
-        const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_nodes.size()));
+        const std::pair<uint32_t, uint32_t> tris_index = tris_.Allocate(uint32_t(temp_tris.size()));
 
-        for (uint32_t i = 0; i < uint32_t(temp_nodes.size()); ++i) {
-            const bvh_node_t &in_n = temp_nodes[i];
-            bvh_node_t &out_n = nodes_[nodes_index.first + i];
+        m.tris_index = tris_index.first;
+        m.tris_block = tris_index.second;
+        memcpy(&tris_[m.tris_index], temp_tris.data(), temp_tris.size() * sizeof(tri_accel_t));
 
+        std::vector<bvh2_node_t> temp_bvh2_nodes;
+        ConvertToBVH2(temp_nodes, temp_bvh2_nodes);
+
+        const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_bvh2_nodes.size()));
+
+        for (uint32_t i = 0; i < uint32_t(temp_bvh2_nodes.size()); ++i) {
+            const bvh2_node_t &in_n = temp_bvh2_nodes[i];
+            bvh2_node_t &out_n = nodes_[nodes_index.first + i];
             out_n = in_n;
-            if (out_n.prim_index & LEAF_NODE_BIT) {
-                out_n.prim_index += tri_indices_index.first;
-            } else {
+            if ((out_n.left_child & BVH2_PRIM_COUNT_BITS) == 0) {
+                assert(out_n.left_child < temp_bvh2_nodes.size());
                 out_n.left_child += nodes_index.first;
+            } else {
+                out_n.left_child += tri_indices_index.first;
+            }
+            if ((out_n.right_child & BVH2_PRIM_COUNT_BITS) == 0) {
+                assert(out_n.right_child < temp_bvh2_nodes.size());
                 out_n.right_child += nodes_index.first;
+            } else {
+                out_n.right_child += tri_indices_index.first;
             }
         }
 
@@ -561,8 +565,13 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
     }
     unused(rebuild_required);
 
-    tris_.Erase(tris_block);
-    mtris_.Erase(tris_block);
+    if (use_wide_bvh_) {
+        mtris_.Erase(tris_block);
+        assert(tris_.empty());
+    } else {
+        tris_.Erase(tris_block);
+        assert(mtris_.empty());
+    }
     tri_indices_.Erase(tris_block);
     tri_materials_.Erase(tris_block);
     vertices_.Erase(vert_data_block);
@@ -757,11 +766,13 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const fl
 Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_desc_t &mi_desc) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
+    const mesh_t &m = meshes_[mi_desc.mesh._index];
+
     const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.emplace();
 
     mesh_instance_t &mi = mesh_instances_.at(mi_index.first);
     mi.mesh_index = mi_desc.mesh._index;
-    mi.mesh_block = mi_desc.mesh._block;
+    mi.node_index = m.node_index;
     mi.lights_index = 0xffffffff;
 
     mi.ray_visibility = 0;
@@ -774,7 +785,6 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
     { // find emissive triangles and add them as light emitters
         std::vector<light_t> new_lights;
 
-        const mesh_t &m = meshes_[mi_desc.mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
@@ -855,9 +865,6 @@ void Ray::Cpu::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle m
 
     memcpy(mi.xform, xform, 16 * sizeof(float));
     InverseMatrix(mi.xform, mi.inv_xform);
-
-    const mesh_t &m = meshes_[mi.mesh_index];
-    TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 }
 
 void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
@@ -921,7 +928,6 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
         }
         tlas_root_ = tlas_block_ = 0xffffffff;
     }
-    mi_indices_.clear();
 
     if (mesh_instances_.empty()) {
         return;
@@ -931,18 +937,27 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     primitives.reserve(mesh_instances_.size());
 
     for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({0, 0, 0, Ref::fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
-                              Ref::fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
+        const mesh_t &m = meshes_[mi.mesh_index];
+
+        Ref::fvec4 mi_bbox_min = 0.0f, mi_bbox_max = 0.0f;
+        TransformBoundingBox(m.bbox_min, m.bbox_max, mi.xform, value_ptr(mi_bbox_min), value_ptr(mi_bbox_max));
+
+        primitives.push_back({0, 0, 0, mi_bbox_min, mi_bbox_max});
     }
 
+    bvh_settings_t s = {};
+    s.oversplit_threshold = -1.0f;
+    s.min_primitives_in_leaf = 1;
+
     std::vector<bvh_node_t> temp_nodes;
-    PreprocessPrims_SAH(primitives, {}, {}, temp_nodes, mi_indices_);
+    std::vector<uint32_t> mi_indices;
+    PreprocessPrims_SAH(primitives, {}, s, temp_nodes, mi_indices);
 
     if (use_wide_bvh_) {
         aligned_vector<wbvh_node_t> temp_wnodes;
         temp_wnodes.reserve(temp_nodes.size() / 8);
 
-        FlattenBVH_r(temp_nodes.data(), 0, 0xffffffff, temp_wnodes);
+        FlattenBVH_r(temp_nodes, 0, temp_wnodes);
         const std::pair<uint32_t, uint32_t> wnodes_index = wnodes_.Allocate(uint32_t(temp_wnodes.size()));
 
         for (uint32_t i = 0; i < uint32_t(temp_wnodes.size()); ++i) {
@@ -956,22 +971,35 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
                         out_n.child[j] += wnodes_index.first;
                     }
                 }
+            } else {
+                out_n.child[0] = mi_indices[out_n.child[0] & PRIM_INDEX_BITS];
+                out_n.child[0] |= LEAF_NODE_BIT;
             }
         }
 
         tlas_root_ = wnodes_index.first;
         tlas_block_ = wnodes_index.second;
     } else {
-        const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_nodes.size()));
+        std::vector<bvh2_node_t> temp_bvh2_nodes;
+        ConvertToBVH2(temp_nodes, temp_bvh2_nodes);
 
-        for (uint32_t i = 0; i < uint32_t(temp_nodes.size()); ++i) {
-            const bvh_node_t &in_n = temp_nodes[i];
-            bvh_node_t &out_n = nodes_[nodes_index.first + i];
+        const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(uint32_t(temp_bvh2_nodes.size()));
 
+        for (uint32_t i = 0; i < uint32_t(temp_bvh2_nodes.size()); ++i) {
+            const bvh2_node_t &in_n = temp_bvh2_nodes[i];
+            bvh2_node_t &out_n = nodes_[nodes_index.first + i];
             out_n = in_n;
-            if ((out_n.prim_index & LEAF_NODE_BIT) == 0) {
+            if ((out_n.left_child & BVH2_PRIM_COUNT_BITS) == 0) {
                 out_n.left_child += nodes_index.first;
+            } else {
+                out_n.left_child =
+                    (out_n.left_child & BVH2_PRIM_COUNT_BITS) | mi_indices[out_n.left_child & BVH2_PRIM_INDEX_BITS];
+            }
+            if ((out_n.right_child & BVH2_PRIM_COUNT_BITS) == 0) {
                 out_n.right_child += nodes_index.first;
+            } else {
+                out_n.right_child =
+                    (out_n.right_child & BVH2_PRIM_COUNT_BITS) | mi_indices[out_n.right_child & BVH2_PRIM_INDEX_BITS];
             }
         }
 
@@ -1427,8 +1455,8 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
         n.prim_index |= li_index;
     }
 
-    if (use_wide_bvh_) {
-        const uint32_t root_node = FlattenLightBVH_r(light_nodes_.data(), 0, 0xffffffff, light_cwnodes_);
+    if (use_wide_bvh_ || true) {
+        const uint32_t root_node = FlattenLightBVH_r(light_nodes_, 0, light_cwnodes_);
         assert(root_node == 0);
         unused(root_node);
         light_nodes_.clear();
@@ -1505,15 +1533,20 @@ void Ray::Cpu::Scene::GetBounds(float bbox_min[3], float bbox_max[3]) const {
                 }
             }
         } else {
-            const bvh_node_t &root_node = nodes_[tlas_root_];
-            for (int i = 0; i < 3; ++i) {
-                bbox_min[i] = root_node.bbox_min[i];
-                bbox_max[i] = root_node.bbox_max[i];
-            }
+            const bvh2_node_t &root_node = nodes_[tlas_root_];
+            assert((root_node.left_child & LEAF_NODE_BIT) == 0);
+
+            bbox_min[0] = fminf(root_node.ch_data0[0], root_node.ch_data1[0]);
+            bbox_min[1] = fminf(root_node.ch_data0[2], root_node.ch_data1[2]);
+            bbox_min[2] = fminf(root_node.ch_data2[0], root_node.ch_data2[2]);
+
+            bbox_max[0] = fminf(root_node.ch_data0[1], root_node.ch_data1[1]);
+            bbox_max[1] = fminf(root_node.ch_data0[3], root_node.ch_data1[3]);
+            bbox_max[2] = fminf(root_node.ch_data2[1], root_node.ch_data2[3]);
         }
     }
     if (!light_cwnodes_.empty()) {
-        if (use_wide_bvh_) {
+        if (use_wide_bvh_ || true) {
             const cwbvh_node_t &root_node = light_cwnodes_[0];
             for (int i = 0; i < 3; ++i) {
                 bbox_min[i] = fminf(bbox_min[i], root_node.bbox_min[i]);
