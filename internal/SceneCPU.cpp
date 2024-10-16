@@ -1455,27 +1455,30 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             }
         }
         std::vector<uint32_t> compacted_indices;
-        uint32_t cur_index = 0;
+        compacted_indices.reserve(should_remove.size());
+        uint32_t compacted_count = 0;
         for (const bool b : should_remove) {
-            compacted_indices.push_back(cur_index);
+            compacted_indices.push_back(compacted_count);
             if (!b) {
-                ++cur_index;
+                ++compacted_count;
             }
         }
-        for (int i = int(light_cwnodes_.size() - 1); i >= 0; --i) {
+        for (int i = 0; i < int(light_cwnodes_.size()); ++i) {
             if (should_remove[i]) {
-                light_cwnodes_.erase(begin(light_cwnodes_) + i);
-            } else {
-                for (int j = 0; j < 8; ++j) {
-                    if (light_cwnodes_[i].child[j] == 0x7fffffff) {
-                        continue;
-                    }
-                    if ((light_cwnodes_[i].child[j] & LEAF_NODE_BIT) == 0) {
-                        light_cwnodes_[i].child[j] = compacted_indices[light_cwnodes_[i].child[j]];
-                    }
+                continue;
+            }
+            light_cwbvh_node_t &n = light_cwnodes_[i];
+            for (int j = 0; j < 8; ++j) {
+                if (n.child[j] == 0x7fffffff) {
+                    continue;
+                }
+                if ((n.child[j] & LEAF_NODE_BIT) == 0) {
+                    n.child[j] = compacted_indices[n.child[j] & PRIM_INDEX_BITS];
                 }
             }
+            light_cwnodes_[compacted_indices[i]] = n;
         }
+        light_cwnodes_.resize(compacted_count);
     }
 }
 
