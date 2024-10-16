@@ -108,6 +108,16 @@ struct light_bvh_node_t : public bvh_node_t {
 };
 static_assert(sizeof(light_bvh_node_t) == 56, "!");
 
+struct bvh2_node_t {
+    float ch_data0[4];    // [ ch0.min.x, ch0.max.x, ch0.min.y, ch0.max.y ]
+    float ch_data1[4];    // [ ch1.min.x, ch1.max.x, ch1.min.y, ch1.max.y ]
+    float ch_data2[4];    // [ ch0.min.z, ch0.max.z, ch1.min.z, ch1.max.z ]
+    uint32_t left_child;  // First three bits identify primitive count in leaf nodes
+    uint32_t right_child; // First three bits identify primitive count in leaf nodes
+    uint32_t _unused0, _unused1;
+};
+static_assert(sizeof(bvh2_node_t) == 64, "!");
+
 struct alignas(32) wbvh_node_t {
     float bbox_min[3][8];
     float bbox_max[3][8];
@@ -235,6 +245,7 @@ struct bvh_settings_t {
     bool allow_spatial_splits = false;
     bool use_fast_bvh_build = false;
     int min_primitives_in_leaf = 8;
+    int primitive_alignment = 1;
 };
 
 template <typename T, size_t Alignment = alignof(T)>
@@ -317,12 +328,13 @@ uint32_t PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_t &po
 uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t> &out_nodes,
                                std::vector<uint32_t> &out_indices);
 
-uint32_t FlattenBVH_r(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
-                      aligned_vector<wbvh_node_t> &out_nodes);
-uint32_t FlattenLightBVH_r(const light_bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
+uint32_t FlattenBVH_r(Span<const bvh_node_t> nodes, uint32_t node_index, aligned_vector<wbvh_node_t> &out_nodes);
+uint32_t FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, uint32_t node_index,
                            aligned_vector<light_wbvh_node_t> &out_nodes);
-uint32_t FlattenLightBVH_r(const light_bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
+uint32_t FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, uint32_t node_index,
                            aligned_vector<light_cwbvh_node_t> &out_nodes);
+
+uint32_t ConvertToBVH2(Span<const bvh_node_t> nodes, std::vector<bvh2_node_t> &out_nodes);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
@@ -344,7 +356,7 @@ void ConstructCamera(eCamType type, ePixelFilter filter, float filter_width, eVi
                      float lens_rotation, float lens_ratio, int lens_blades, float clip_start, float clip_end,
                      camera_t *cam);
 
-// Applies 4x4 matrix matrix transform to bounding box
+// Applies 4x4 matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3],
                           float out_bbox_max[3]);
 
@@ -372,17 +384,13 @@ struct mesh_t {
 static_assert(sizeof(mesh_t) == 64, "!");
 
 struct mesh_instance_t {
-    float bbox_min[3];
-    uint32_t _unused;
-    float bbox_max[3];
     uint32_t mesh_index;
-    uint32_t _unused2;
-    uint32_t mesh_block;
+    uint32_t node_index;
     uint32_t lights_index;
     uint32_t ray_visibility; // upper 24 bits identify lights_block
     float xform[16], inv_xform[16];
 };
-static_assert(sizeof(mesh_instance_t) == 176, "!");
+static_assert(sizeof(mesh_instance_t) == 144, "!");
 
 struct environment_t {
     float env_col[3];
@@ -505,11 +513,10 @@ enum eSpatialCacheMode { None, Update, Query };
 struct scene_data_t {
     const environment_t &env;
     const mesh_instance_t *mesh_instances;
-    const uint32_t *mi_indices;
     const mesh_t *meshes;
     const uint32_t *vtx_indices;
     const vertex_t *vertices;
-    const bvh_node_t *nodes;
+    const bvh2_node_t *nodes;
     const wbvh_node_t *wnodes;
     const tri_accel_t *tris;
     const uint32_t *tri_indices;

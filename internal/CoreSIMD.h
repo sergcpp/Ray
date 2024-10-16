@@ -208,26 +208,24 @@ bool IntersectTris_AnyHit(const float o[3], const float d[3], const mtri_accel_t
 template <int S>
 bool Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3], const uvec<S> &ray_flags,
                                         const ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
-                                        const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                        const mesh_t *meshes, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                        hit_data_t<S> &inter);
+                                        const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                        const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
 bool Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3], const uvec<S> &ray_flags,
                                         const ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
-                                        const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                        const mesh_t *meshes, const mtri_accel_t *mtris, const uint32_t *tri_indices,
-                                        hit_data_t<S> &inter);
+                                        const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                        const mtri_accel_t *mtris, const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
 ivec<S> Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3], int ray_type, const ivec<S> &ray_mask,
                                        const bvh_node_t *nodes, uint32_t node_index,
-                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                       const mesh_t *meshes, const tri_accel_t *tris, const tri_mat_data_t *materials,
+                                       const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                       const tri_accel_t *tris, const tri_mat_data_t *materials,
                                        const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
 ivec<S> Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3], int ray_type, const ivec<S> &ray_mask,
                                        const wbvh_node_t *nodes, uint32_t node_index,
-                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                       const mesh_t *meshes, const mtri_accel_t *mtris, const tri_mat_data_t *materials,
+                                       const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                       const mtri_accel_t *mtris, const tri_mat_data_t *materials,
                                        const uint32_t *tri_indices, hit_data_t<S> &inter);
 // traditional bvh traversal with stack for inner nodes
 template <int S>
@@ -3505,9 +3503,9 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], const mtr
 template <int S>
 bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3], const uvec<S> &ray_flags,
                                                  const ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
-                                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                 const mesh_t *meshes, const tri_accel_t *tris,
-                                                 const uint32_t *tri_indices, hit_data_t<S> &inter) {
+                                                 const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                                 const tri_accel_t *tris, const uint32_t *tri_indices,
+                                                 hit_data_t<S> &inter) {
     bool res = false;
 
     fvec<S> inv_d[3], inv_d_o[3];
@@ -3542,24 +3540,21 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(rd, nodes[cur]);
             } else {
+                assert(nodes[cur].prim_count == 1);
                 const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
-                for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
-                    const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                    const mesh_t &m = meshes[mi.mesh_index];
 
-                    ivec<S> bbox_mask = ivec<S>((mi.ray_visibility & ray_flags) != 0u) &
-                                        bbox_test_fma(inv_d, inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) &
-                                        st.queue[st.index].mask;
-                    if (bbox_mask.all_zeros()) {
-                        continue;
-                    }
+                const mesh_instance_t &mi = mesh_instances[prim_index];
 
-                    fvec<S> _ro[3], _rd[3];
-                    TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
-
-                    res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, bbox_mask, nodes, m.node_index, tris,
-                                                              tri_indices, int(mi_indices[i]), inter);
+                const ivec<S> ray_mask = ivec<S>((mi.ray_visibility & ray_flags) != 0u) & st.queue[st.index].mask;
+                if (ray_mask.all_zeros()) {
+                    continue;
                 }
+
+                fvec<S> _ro[3], _rd[3];
+                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
+
+                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, ray_mask, nodes, mi.node_index, tris, tri_indices,
+                                                          int(prim_index), inter);
             }
         }
         st.index++;
@@ -3578,9 +3573,9 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec
 template <int S>
 bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3], const uvec<S> &ray_flags,
                                                  const ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
-                                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                 const mesh_t *meshes, const mtri_accel_t *mtris,
-                                                 const uint32_t *tri_indices, hit_data_t<S> &inter) {
+                                                 const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                                 const mtri_accel_t *mtris, const uint32_t *tri_indices,
+                                                 hit_data_t<S> &inter) {
     bool res = false;
 
     fvec<S> inv_d[3], inv_d_o[3];
@@ -3688,27 +3683,24 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec
                     goto TRAVERSE;
                 }
             } else {
+                assert(nodes[cur.index].child[1] == 1);
                 const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
-                for (uint32_t j = prim_index; j < prim_index + nodes[cur.index].child[1]; j++) {
-                    const mesh_instance_t &mi = mesh_instances[mi_indices[j]];
-                    if ((mi.ray_visibility & _ray_flags[ri]) == 0 ||
-                        !bbox_test(_inv_d, _inv_d_o, inter_t[ri], mi.bbox_min, mi.bbox_max)) {
-                        continue;
-                    }
 
-                    const mesh_t &m = meshes[mi.mesh_index];
-
-                    float tr_ro[3], tr_rd[3];
-                    TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
-
-                    const bool lres = Traverse_BLAS_WithStack_ClosestHit<S>(tr_ro, tr_rd, nodes, m.node_index, mtris,
-                                                                            tri_indices, inter_prim_index[ri],
-                                                                            inter_t[ri], inter_u[ri], inter_v[ri]);
-                    if (lres) {
-                        inter_obj_index[ri] = int(mi_indices[j]);
-                    }
-                    res |= lres;
+                const mesh_instance_t &mi = mesh_instances[prim_index];
+                if ((mi.ray_visibility & _ray_flags[ri]) == 0) {
+                    continue;
                 }
+
+                float tr_ro[3], tr_rd[3];
+                TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
+
+                const bool lres =
+                    Traverse_BLAS_WithStack_ClosestHit<S>(tr_ro, tr_rd, nodes, mi.node_index, mtris, tri_indices,
+                                                          inter_prim_index[ri], inter_t[ri], inter_u[ri], inter_v[ri]);
+                if (lres) {
+                    inter_obj_index[ri] = int(prim_index);
+                }
+                res |= lres;
             }
         }
     }
@@ -3735,9 +3727,9 @@ template <int S>
 Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3], int ray_type,
                                                          const ivec<S> &ray_mask, const bvh_node_t *nodes,
                                                          uint32_t node_index, const mesh_instance_t *mesh_instances,
-                                                         const uint32_t *mi_indices, const mesh_t *meshes,
-                                                         const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                                         const uint32_t *tri_indices, hit_data_t<S> &inter) {
+                                                         const mesh_t *meshes, const tri_accel_t *tris,
+                                                         const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                                         hit_data_t<S> &inter) {
     const int ray_vismask = (1u << ray_type);
 
     ivec<S> solid_hit_mask = {0};
@@ -3774,27 +3766,21 @@ Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], co
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(rd, nodes[cur]);
             } else {
+                assert(nodes[cur].prim_count == 1);
                 const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
-                for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
-                    const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                    if ((mi.ray_visibility & ray_vismask) == 0) {
-                        continue;
-                    }
 
-                    const mesh_t &m = meshes[mi.mesh_index];
-
-                    const ivec<S> bbox_mask =
-                        bbox_test_fma(inv_d, inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
-                    if (bbox_mask.all_zeros()) {
-                        continue;
-                    }
-
-                    fvec<S> _ro[3], _rd[3];
-                    TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
-
-                    solid_hit_mask |= Traverse_BLAS_WithStack_AnyHit(_ro, _rd, bbox_mask, nodes, m.node_index, tris,
-                                                                     materials, tri_indices, int(mi_indices[i]), inter);
+                const mesh_instance_t &mi = mesh_instances[prim_index];
+                if ((mi.ray_visibility & ray_vismask) == 0) {
+                    continue;
                 }
+
+                const ivec<S> ray_mask = st.queue[st.index].mask;
+
+                fvec<S> _ro[3], _rd[3];
+                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
+
+                solid_hit_mask |= Traverse_BLAS_WithStack_AnyHit(_ro, _rd, ray_mask, nodes, mi.node_index, tris,
+                                                                 materials, tri_indices, int(prim_index), inter);
             }
         }
         st.index++;
@@ -3816,9 +3802,9 @@ template <int S>
 Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3], int ray_type,
                                                          const ivec<S> &ray_mask, const wbvh_node_t *nodes,
                                                          uint32_t node_index, const mesh_instance_t *mesh_instances,
-                                                         const uint32_t *mi_indices, const mesh_t *meshes,
-                                                         const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-                                                         const uint32_t *tri_indices, hit_data_t<S> &inter) {
+                                                         const mesh_t *meshes, const mtri_accel_t *mtris,
+                                                         const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                                         hit_data_t<S> &inter) {
     const int ray_vismask = (1u << ray_type);
 
     ivec<S> solid_hit_mask = {0};
@@ -3916,32 +3902,26 @@ Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], co
                     goto TRAVERSE;
                 }
             } else {
+                assert(nodes[cur.index].child[1] == 1);
                 const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
-                for (uint32_t j = prim_index; j < prim_index + nodes[cur.index].child[1]; j++) {
-                    const mesh_instance_t &mi = mesh_instances[mi_indices[j]];
-                    if ((mi.ray_visibility & ray_vismask) == 0) {
-                        continue;
-                    }
 
-                    const mesh_t &m = meshes[mi.mesh_index];
+                const mesh_instance_t &mi = mesh_instances[prim_index];
+                if ((mi.ray_visibility & ray_vismask) == 0) {
+                    continue;
+                }
 
-                    if (!bbox_test(_inv_d, _inv_d_o, inter_t[ri], mi.bbox_min, mi.bbox_max)) {
-                        continue;
-                    }
+                float tr_ro[3], tr_rd[3];
+                TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
 
-                    float tr_ro[3], tr_rd[3];
-                    TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
-
-                    const int hit_type = Traverse_BLAS_WithStack_AnyHit<S>(tr_ro, tr_rd, nodes, m.node_index, mtris,
-                                                                           materials, tri_indices, inter_prim_index[ri],
-                                                                           inter_t[ri], inter_u[ri], inter_v[ri]);
-                    if (hit_type) {
-                        inter.obj_index.set(ri, int(mi_indices[j]));
-                    }
-                    if (hit_type == 2) {
-                        solid_hit_mask.set(ri, -1);
-                        break;
-                    }
+                const int hit_type =
+                    Traverse_BLAS_WithStack_AnyHit<S>(tr_ro, tr_rd, nodes, mi.node_index, mtris, materials, tri_indices,
+                                                      inter_prim_index[ri], inter_t[ri], inter_u[ri], inter_v[ri]);
+                if (hit_type) {
+                    inter.obj_index.set(ri, int(prim_index));
+                }
+                if (hit_type == 2) {
+                    solid_hit_mask.set(ri, -1);
+                    break;
                 }
             }
 
@@ -4100,8 +4080,10 @@ bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float 
         } else {
             const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
                       tri_end = int(tri_start + nodes[cur.index].child[1]);
-            res |= IntersectTris_ClosestHit<S>(ro, rd, mtris, tri_start, tri_end, inter_prim_index, inter_t, inter_u,
-                                               inter_v);
+            assert((tri_start % 8) == 0);
+            assert((tri_end - tri_start) <= 8);
+            res |=
+                IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
         }
     }
 
@@ -4255,8 +4237,10 @@ int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3]
         } else {
             const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
                       tri_end = int(tri_start + nodes[cur.index].child[1]);
-            const bool hit_found = IntersectTris_AnyHit<S>(ro, rd, mtris, materials, tri_indices, tri_start, tri_end,
-                                                           inter_prim_index, inter_t, inter_u, inter_v);
+            assert((tri_start % 8) == 0);
+            assert((tri_end - tri_start) <= 8);
+            const bool hit_found =
+                IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
             if (hit_found) {
                 const bool is_backfacing = inter_prim_index < 0;
                 const uint32_t prim_index = is_backfacing ? -inter_prim_index - 1 : inter_prim_index;
@@ -5067,12 +5051,11 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
 
         if (sc.wnodes) {
             NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.wnodes, root_index,
-                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.mtris,
-                                                   sc.tri_indices, inter);
+                                                   sc.mesh_instances, sc.meshes, sc.mtris, sc.tri_indices, inter);
         } else {
-            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.nodes, root_index,
-                                                   sc.mesh_instances, sc.mi_indices, sc.meshes, sc.tris, sc.tri_indices,
-                                                   inter);
+            // NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.nodes, root_index,
+            //                                        sc.mesh_instances, sc.meshes, sc.tris,
+            //                                        sc.tri_indices, inter);
         }
 
         keep_going &= simd_cast(inter.v >= 0.0f);
@@ -5315,12 +5298,12 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
         ivec<S> solid_hit;
         if (sc.wnodes) {
             solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.wnodes, node_index,
-                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.mtris,
-                                                       sc.tri_materials, sc.tri_indices, inter);
+                                                       sc.mesh_instances, sc.meshes, sc.mtris, sc.tri_materials,
+                                                       sc.tri_indices, inter);
         } else {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.nodes, node_index,
-                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.tris,
-                                                       sc.tri_materials, sc.tri_indices, inter);
+            // solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.nodes, node_index,
+            //                                            sc.mesh_instances, sc.meshes, sc.tris,
+            //                                            sc.tri_materials, sc.tri_indices, inter);
         }
 
         const ivec<S> terminate_mask = solid_hit | (depth > max_transp_depth);

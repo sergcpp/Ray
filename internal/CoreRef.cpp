@@ -166,7 +166,7 @@ force_inline bool is_leaf_node(const bvh_node_t &node) { return (node.prim_index
 force_inline bool is_leaf_node(const wbvh_node_t &node) { return (node.child[0] & LEAF_NODE_BIT) != 0; }
 
 force_inline bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3],
-                            const float bbox_max[3]) {
+                            const float bbox_max[3], float &out_dist) {
     float lo_x = inv_d[0] * (bbox_min[0] - o[0]);
     float hi_x = inv_d[0] * (bbox_max[0] - o[0]);
     if (lo_x > hi_x) {
@@ -201,7 +201,15 @@ force_inline bool bbox_test(const float o[3], const float inv_d[3], const float 
     }
     tmax *= 1.00000024f;
 
+    out_dist = tmin;
+
     return tmin <= tmax && tmin <= t && tmax > 0;
+}
+
+force_inline bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3],
+                            const float bbox_max[3]) {
+    float _unused;
+    return bbox_test(o, inv_d, t, bbox_min, bbox_max, _unused);
 }
 
 force_inline bool bbox_test(const float p[3], const float bbox_min[3], const float bbox_max[3]) {
@@ -1769,8 +1777,7 @@ bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const 
 
 bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
                                                   const bvh_node_t *nodes, uint32_t root_index,
-                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                  const mesh_t *meshes, const tri_accel_t *tris,
+                                                  const mesh_instance_t *mesh_instances, const tri_accel_t *tris,
                                                   const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
@@ -1793,22 +1800,104 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
             stack[stack_size++] = far_child(rd, nodes[cur]);
             stack[stack_size++] = near_child(rd, nodes[cur]);
         } else {
+            assert(nodes[cur].prim_count == 1);
             const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
-            for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; ++i) {
-                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                if ((mi.ray_visibility & ray_flags) == 0 || !bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
-                    continue;
+
+            const mesh_instance_t &mi = mesh_instances[prim_index];
+            if ((mi.ray_visibility & ray_flags) == 0) {
+                continue;
+            }
+
+            float _ro[3], _rd[3];
+            TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
+
+            float _inv_d[3];
+            safe_invert(_rd, _inv_d);
+            res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, mi.node_index, tris, int(prim_index),
+                                                      inter);
+        }
+    }
+
+    // resolve primitive index indirection
+    if (inter.prim_index < 0) {
+        inter.prim_index = -int(tri_indices[-inter.prim_index - 1]) - 1;
+    } else {
+        inter.prim_index = int(tri_indices[inter.prim_index]);
+    }
+
+    return res;
+}
+
+bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
+                                                  const bvh2_node_t *nodes, uint32_t root_index,
+                                                  const mesh_instance_t *mesh_instances, const tri_accel_t *tris,
+                                                  const uint32_t *tri_indices, hit_data_t &inter) {
+    bool res = false;
+
+    float inv_d[3];
+    safe_invert(rd, inv_d);
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = 0x1fffffffu;
+
+    uint32_t cur = root_index;
+    while (stack_size) {
+        uint32_t leaf_node = 0;
+        while (stack_size && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
+            const bvh2_node_t &n = nodes[cur];
+
+            uint32_t children[2] = {n.left_child, n.right_child};
+
+            const float ch0_min[3] = {n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]};
+            const float ch0_max[3] = {n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]};
+
+            const float ch1_min[3] = {n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]};
+            const float ch1_max[3] = {n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]};
+
+            float ch0_dist, ch1_dist;
+            const bool ch0_res = bbox_test(ro, inv_d, inter.t, ch0_min, ch0_max, ch0_dist);
+            const bool ch1_res = bbox_test(ro, inv_d, inter.t, ch1_min, ch1_max, ch1_dist);
+
+            if (!ch0_res && !ch1_res) {
+                cur = stack[--stack_size];
+            } else {
+                cur = ch0_res ? children[0] : children[1];
+                if (ch0_res && ch1_res) {
+                    if (ch1_dist < ch0_dist) {
+                        const uint32_t temp = cur;
+                        cur = children[1];
+                        children[1] = temp;
+                    }
+                    stack[stack_size++] = children[1];
                 }
+            }
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
+                leaf_node = cur;
+                cur = stack[--stack_size];
+            }
+            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+                break;
+            }
+        }
 
-                const mesh_t &m = meshes[mi.mesh_index];
-
+        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+            assert(((leaf_node & BVH2_PRIM_COUNT_BITS) >> 29) == 1);
+            const uint32_t mi_index = (leaf_node & BVH2_PRIM_INDEX_BITS);
+            const mesh_instance_t &mi = mesh_instances[mi_index];
+            if ((mi.ray_visibility & ray_flags) != 0) {
                 float _ro[3], _rd[3];
                 TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
-                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, m.node_index, tris,
-                                                          int(mi_indices[i]), inter);
+                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, mi.node_index, tris, int(mi_index),
+                                                          inter);
+            }
+            leaf_node = cur;
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
+                cur = stack[--stack_size];
             }
         }
     }
@@ -1825,8 +1914,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
 
 bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const uint32_t ray_flags,
                                                   const wbvh_node_t *nodes, uint32_t root_index,
-                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                  const mesh_t *meshes, const mtri_accel_t *mtris,
+                                                  const mesh_instance_t *mesh_instances, const mtri_accel_t *mtris,
                                                   const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
@@ -1904,23 +1992,21 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
                 goto TRAVERSE;
             }
         } else {
+            assert(nodes[cur.index].child[1] == 1);
             const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
-            for (uint32_t i = prim_index; i < prim_index + nodes[cur.index].child[1]; ++i) {
-                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                if ((mi.ray_visibility & ray_flags) == 0 || !bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
-                    continue;
-                }
 
-                const mesh_t &m = meshes[mi.mesh_index];
-
-                float _ro[3], _rd[3];
-                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
-
-                float _inv_d[3];
-                safe_invert(_rd, _inv_d);
-                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, m.node_index, mtris,
-                                                          int(mi_indices[i]), inter);
+            const mesh_instance_t &mi = mesh_instances[prim_index];
+            if ((mi.ray_visibility & ray_flags) == 0) {
+                continue;
             }
+
+            float _ro[3], _rd[3];
+            TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
+
+            float _inv_d[3];
+            safe_invert(_rd, _inv_d);
+            res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, mi.node_index, mtris, int(prim_index),
+                                                      inter);
         }
     }
 
@@ -1936,8 +2022,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
 
 bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const int ray_type,
                                               const bvh_node_t *nodes, const uint32_t root_index,
-                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                              const mesh_t *meshes, const mtri_accel_t *mtris,
+                                              const mesh_instance_t *mesh_instances, const tri_accel_t *tris,
                                               const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                               hit_data_t &inter) {
     const uint32_t ray_vismask = (1u << ray_type);
@@ -1961,19 +2046,98 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
             stack[stack_size++] = far_child(rd, nodes[cur]);
             stack[stack_size++] = near_child(rd, nodes[cur]);
         } else {
+            assert(nodes[cur].prim_count == 1);
             const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
-            for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; ++i) {
-                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                if ((mi.ray_visibility & ray_vismask) == 0) {
-                    continue;
+
+            const mesh_instance_t &mi = mesh_instances[prim_index];
+            if ((mi.ray_visibility & ray_vismask) == 0) {
+                continue;
+            }
+
+            float _ro[3], _rd[3];
+            TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
+
+            float _inv_d[3];
+            safe_invert(_rd, _inv_d);
+
+            const bool solid_hit_found = Traverse_BLAS_WithStack_AnyHit(_ro, _rd, _inv_d, nodes, mi.node_index, tris,
+                                                                        materials, tri_indices, int(prim_index), inter);
+            if (solid_hit_found) {
+                return true;
+            }
+        }
+    }
+
+    // resolve primitive index indirection
+    if (inter.prim_index < 0) {
+        inter.prim_index = -int(tri_indices[-inter.prim_index - 1]) - 1;
+    } else {
+        inter.prim_index = int(tri_indices[inter.prim_index]);
+    }
+
+    return false;
+}
+
+bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const int ray_type,
+                                              const bvh2_node_t *nodes, const uint32_t root_index,
+                                              const mesh_instance_t *mesh_instances, const tri_accel_t *tris,
+                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                              hit_data_t &inter) {
+    const uint32_t ray_vismask = (1u << ray_type);
+
+    float inv_d[3];
+    safe_invert(rd, inv_d);
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = 0x1fffffffu;
+
+    uint32_t cur = root_index;
+    while (stack_size) {
+        uint32_t leaf_node = 0;
+        while (stack_size && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
+            const bvh2_node_t &n = nodes[cur];
+
+            uint32_t children[2] = {n.left_child, n.right_child};
+
+            const float ch0_min[3] = {n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]};
+            const float ch0_max[3] = {n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]};
+
+            const float ch1_min[3] = {n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]};
+            const float ch1_max[3] = {n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]};
+
+            float ch0_dist, ch1_dist;
+            const bool ch0_res = bbox_test(ro, inv_d, inter.t, ch0_min, ch0_max, ch0_dist);
+            const bool ch1_res = bbox_test(ro, inv_d, inter.t, ch1_min, ch1_max, ch1_dist);
+
+            if (!ch0_res && !ch1_res) {
+                cur = stack[--stack_size];
+            } else {
+                cur = ch0_res ? children[0] : children[1];
+                if (ch0_res && ch1_res) {
+                    if (ch1_dist < ch0_dist) {
+                        const uint32_t temp = cur;
+                        cur = children[1];
+                        children[1] = temp;
+                    }
+                    stack[stack_size++] = children[1];
                 }
+            }
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
+                leaf_node = cur;
+                cur = stack[--stack_size];
+            }
+            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+                break;
+            }
+        }
 
-                const mesh_t &m = meshes[mi.mesh_index];
-
-                if (!bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
-                    continue;
-                }
-
+        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+            assert(((leaf_node & BVH2_PRIM_COUNT_BITS) >> 29) == 1);
+            const uint32_t mi_index = (leaf_node & BVH2_PRIM_INDEX_BITS);
+            const mesh_instance_t &mi = mesh_instances[mi_index];
+            if ((mi.ray_visibility & ray_vismask) != 0) {
                 float _ro[3], _rd[3];
                 TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
@@ -1981,10 +2145,14 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
                 safe_invert(_rd, _inv_d);
 
                 const bool solid_hit_found = Traverse_BLAS_WithStack_AnyHit(
-                    _ro, _rd, _inv_d, nodes, m.node_index, mtris, materials, tri_indices, int(mi_indices[i]), inter);
+                    _ro, _rd, _inv_d, nodes, mi.node_index, tris, materials, tri_indices, int(mi_index), inter);
                 if (solid_hit_found) {
                     return true;
                 }
+            }
+            leaf_node = cur;
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
+                cur = stack[--stack_size];
             }
         }
     }
@@ -2001,8 +2169,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
 
 bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const int ray_type,
                                               const wbvh_node_t *nodes, const uint32_t root_index,
-                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                              const mesh_t *meshes, const tri_accel_t *tris,
+                                              const mesh_instance_t *mesh_instances, const mtri_accel_t *mtris,
                                               const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                               hit_data_t &inter) {
     const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
@@ -2085,29 +2252,23 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
                 goto TRAVERSE;
             }
         } else {
+            assert(nodes[cur.index].child[1] == 1);
             const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
-            for (uint32_t i = prim_index; i < prim_index + nodes[cur.index].child[1]; ++i) {
-                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
-                if ((mi.ray_visibility & ray_vismask) == 0) {
-                    continue;
-                }
 
-                const mesh_t &m = meshes[mi.mesh_index];
+            const mesh_instance_t &mi = mesh_instances[prim_index];
+            if ((mi.ray_visibility & ray_vismask) == 0) {
+                continue;
+            }
 
-                if (!bbox_test(ro, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) {
-                    continue;
-                }
+            float _ro[3], _rd[3];
+            TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
-                float _ro[3], _rd[3];
-                TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
-
-                float _inv_d[3];
-                safe_invert(_rd, _inv_d);
-                const bool solid_hit_found = Traverse_BLAS_WithStack_AnyHit(
-                    _ro, _rd, _inv_d, nodes, m.node_index, tris, materials, tri_indices, int(mi_indices[i]), inter);
-                if (solid_hit_found) {
-                    return true;
-                }
+            float _inv_d[3];
+            safe_invert(_rd, _inv_d);
+            const bool solid_hit_found = Traverse_BLAS_WithStack_AnyHit(_ro, _rd, _inv_d, nodes, mi.node_index, mtris,
+                                                                        materials, tri_indices, int(prim_index), inter);
+            if (solid_hit_found) {
+                return true;
             }
         }
     }
@@ -2146,6 +2307,73 @@ bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float
             const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS),
                       tri_end = int(tri_start + nodes[cur].prim_count);
             res |= IntersectTris_ClosestHit(ro, rd, tris, tri_start, tri_end, obj_index, inter);
+        }
+    }
+
+    return res;
+}
+
+bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                                  const bvh2_node_t *nodes, const uint32_t root_index,
+                                                  const tri_accel_t *tris, const int obj_index, hit_data_t &inter) {
+    bool res = false;
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = 0x1fffffffu;
+
+    uint32_t cur = root_index;
+    while (stack_size) {
+        uint32_t leaf_node = 0;
+        while (stack_size && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
+            const bvh2_node_t &n = nodes[cur];
+
+            uint32_t children[2] = {n.left_child, n.right_child};
+
+            const float ch0_min[3] = {n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]};
+            const float ch0_max[3] = {n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]};
+
+            const float ch1_min[3] = {n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]};
+            const float ch1_max[3] = {n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]};
+
+            float ch0_dist, ch1_dist;
+            const bool ch0_res = bbox_test(ro, inv_d, inter.t, ch0_min, ch0_max, ch0_dist);
+            const bool ch1_res = bbox_test(ro, inv_d, inter.t, ch1_min, ch1_max, ch1_dist);
+
+            if (!ch0_res && !ch1_res) {
+                cur = stack[--stack_size];
+            } else {
+                cur = ch0_res ? children[0] : children[1];
+                if (ch0_res && ch1_res) {
+                    if (ch1_dist < ch0_dist) {
+                        const uint32_t temp = cur;
+                        cur = children[1];
+                        children[1] = temp;
+                    }
+                    stack[stack_size++] = children[1];
+                }
+            }
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
+                leaf_node = cur;
+                cur = stack[--stack_size];
+            }
+            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+                break;
+            }
+        }
+
+        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+            const int tri_start = int(leaf_node & BVH2_PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + ((leaf_node & BVH2_PRIM_COUNT_BITS) >> 29) + 1);
+            assert((tri_start % 8) == 0);
+            assert((tri_end - tri_start) <= 8);
+            res |= IntersectTris_ClosestHit(ro, rd, tris, tri_start, tri_end, obj_index, inter);
+
+            leaf_node = cur;
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
+                cur = stack[--stack_size];
+            }
         }
     }
 
@@ -2238,7 +2466,7 @@ bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float
 }
 
 bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                              const bvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
+                                              const bvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
                                               const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                               int obj_index, hit_data_t &inter) {
     uint32_t stack[MAX_STACK_SIZE];
@@ -2260,7 +2488,7 @@ bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[
             const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS),
                       tri_end = int(tri_start + nodes[cur].prim_count);
             const bool hit_found =
-                IntersectTris_AnyHit(ro, rd, mtris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
+                IntersectTris_AnyHit(ro, rd, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
                 const bool is_backfacing = inter.prim_index < 0;
                 const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
@@ -2277,8 +2505,84 @@ bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[
 }
 
 bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                              const bvh2_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
+                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                              int obj_index, hit_data_t &inter) {
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = 0x1fffffffu;
+
+    uint32_t cur = root_index;
+    while (stack_size) {
+        uint32_t leaf_node = 0;
+        while (stack_size && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
+            const bvh2_node_t &n = nodes[cur];
+
+            uint32_t children[2] = {n.left_child, n.right_child};
+
+            const float ch0_min[3] = {n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]};
+            const float ch0_max[3] = {n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]};
+
+            const float ch1_min[3] = {n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]};
+            const float ch1_max[3] = {n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]};
+
+            float ch0_dist, ch1_dist;
+            const bool ch0_res = bbox_test(ro, inv_d, inter.t, ch0_min, ch0_max, ch0_dist);
+            const bool ch1_res = bbox_test(ro, inv_d, inter.t, ch1_min, ch1_max, ch1_dist);
+
+            if (!ch0_res && !ch1_res) {
+                cur = stack[--stack_size];
+            } else {
+                cur = ch0_res ? children[0] : children[1];
+                if (ch0_res && ch1_res) {
+                    if (ch1_dist < ch0_dist) {
+                        const uint32_t temp = cur;
+                        cur = children[1];
+                        children[1] = temp;
+                    }
+                    stack[stack_size++] = children[1];
+                }
+            }
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
+                leaf_node = cur;
+                cur = stack[--stack_size];
+            }
+            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+                break;
+            }
+        }
+
+        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
+            const int tri_start = int(leaf_node & BVH2_PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + ((leaf_node & BVH2_PRIM_COUNT_BITS) >> 29) + 1);
+            assert((tri_start % 8) == 0);
+            assert((tri_end - tri_start) <= 8);
+            const bool hit_found =
+                IntersectTris_AnyHit(ro, rd, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
+            if (hit_found) {
+                const bool is_backfacing = inter.prim_index < 0;
+                const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
+
+                if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
+                    (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
+                    return true;
+                }
+            }
+
+            leaf_node = cur;
+            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
+                cur = stack[--stack_size];
+            }
+        }
+    }
+
+    return false;
+}
+
+bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
                                               const wbvh_node_t *nodes, const uint32_t root_index,
-                                              const tri_accel_t *tris, const tri_mat_data_t *materials,
+                                              const mtri_accel_t *mtris, const tri_mat_data_t *materials,
                                               const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     TraversalStack<MAX_STACK_SIZE> st;
     st.push(root_index, 0.0f);
@@ -2354,7 +2658,7 @@ bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[
             const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
                       tri_end = int(tri_start + nodes[cur.index].child[1]);
             const bool hit_found =
-                IntersectTris_AnyHit(ro, rd, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
+                IntersectTris_AnyHit(ro, rd, mtris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
                 const bool is_backfacing = inter.prim_index < 0;
                 const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
@@ -2644,13 +2948,13 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 
             bool hit_found = false;
             if (sc.wnodes) {
-                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.wnodes,
-                                                               root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                               sc.mtris, sc.tri_indices, inter);
+                hit_found =
+                    Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.wnodes, root_index,
+                                                       sc.mesh_instances, sc.mtris, sc.tri_indices, inter);
             } else {
-                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.nodes,
-                                                               root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                               sc.tris, sc.tri_indices, inter);
+                hit_found =
+                    Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), ray_flags, sc.nodes, root_index,
+                                                       sc.mesh_instances, sc.tris, sc.tri_indices, inter);
             }
 
             if (!hit_found) {
@@ -2761,13 +3065,13 @@ Ray::Ref::fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int max_tr
 
         bool solid_hit = false;
         if (sc.wnodes) {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.wnodes,
-                                                       root_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.tris,
-                                                       sc.tri_materials, sc.tri_indices, inter);
+            solid_hit =
+                Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.wnodes, root_index,
+                                               sc.mesh_instances, sc.mtris, sc.tri_materials, sc.tri_indices, inter);
         } else {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.nodes,
-                                                       root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                       sc.mtris, sc.tri_materials, sc.tri_indices, inter);
+            solid_hit =
+                Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.nodes, root_index,
+                                               sc.mesh_instances, sc.tris, sc.tri_materials, sc.tri_indices, inter);
         }
 
         if (solid_hit || depth > max_transp_depth) {

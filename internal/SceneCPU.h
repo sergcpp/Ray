@@ -49,7 +49,7 @@ class Scene : public SceneCommon {
 
     bool use_wide_bvh_, use_tex_compression_;
 
-    SparseStorage<bvh_node_t> nodes_;
+    SparseStorage<bvh2_node_t> nodes_;
     SparseStorage<wbvh_node_t> wnodes_;
     SparseStorage<tri_accel_t> tris_;
     SparseStorage<uint32_t> tri_indices_;
@@ -57,7 +57,6 @@ class Scene : public SceneCommon {
     SparseStorage<tri_mat_data_t> tri_materials_;
     SparseStorage<mesh_t> meshes_;
     SparseStorage<mesh_instance_t> mesh_instances_;
-    std::vector<uint32_t> mi_indices_;
     SparseStorage<vertex_t> vertices_;
     SparseStorage<uint32_t> vtx_indices_;
 

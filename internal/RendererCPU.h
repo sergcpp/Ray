@@ -351,16 +351,17 @@ template <typename SIMDPolicy> PassData<SIMDPolicy> &get_per_thread_pass_data() 
 template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
     : log_(log), use_tex_compression_(s.use_tex_compression), use_spatial_cache_(s.use_spatial_cache) {
-    log->Info("===========================================");
+    log->Info("============================================================================");
     log->Info("Compression  is %s", use_tex_compression_ ? "enabled" : "disabled");
     log->Info("SpatialCache is %s", use_spatial_cache_ ? "enabled" : "disabled");
-    log->Info("===========================================");
+    log->Info("============================================================================");
 
     Resize(s.w, s.h);
 }
 
 template <typename SIMDPolicy> Ray::SceneBase *Ray::Cpu::Renderer<SIMDPolicy>::CreateScene() {
-    return new Cpu::Scene(log_, true /* use_wide_bvh */, use_tex_compression_, use_spatial_cache_);
+    return new Cpu::Scene(log_, type() != eRendererType::Reference /* use_wide_bvh */, use_tex_compression_,
+                          use_spatial_cache_);
 }
 
 template <typename SIMDPolicy>
@@ -381,7 +382,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
     const scene_data_t sc_data = {s.env_,
                                   s.mesh_instances_.empty() ? nullptr : &s.mesh_instances_[0],
-                                  s.mi_indices_.empty() ? nullptr : &s.mi_indices_[0],
                                   s.meshes_.empty() ? nullptr : &s.meshes_[0],
                                   s.vtx_indices_.empty() ? nullptr : &s.vtx_indices_[0],
                                   s.vertices_.empty() ? nullptr : &s.vertices_[0],
@@ -409,7 +409,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
     float root_min[3], root_max[3], cell_size[3];
     s.GetBounds(root_min, root_max);
-    UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+    for (int i = 0; i < 3; ++i) {
+        cell_size[i] = (root_max[i] - root_min[i]) / 255;
+    }
 
     const rect_t &rect = region.rect();
 
@@ -1020,7 +1022,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
 
     const scene_data_t sc_data = {s.env_,
                                   s.mesh_instances_.empty() ? nullptr : &s.mesh_instances_[0],
-                                  s.mi_indices_.empty() ? nullptr : &s.mi_indices_[0],
                                   s.meshes_.empty() ? nullptr : &s.meshes_[0],
                                   s.vtx_indices_.empty() ? nullptr : &s.vtx_indices_[0],
                                   s.vertices_.empty() ? nullptr : &s.vertices_[0],

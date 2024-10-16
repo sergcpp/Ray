@@ -1345,7 +1345,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         tangent = rotate_around_axis(tangent, surf.N, mat->tangent_rotation);
     }
 
-    surf.B = normalize(cross(tangent, surf.N));
+    surf.B = safe_normalize(cross(tangent, surf.N));
     surf.T = cross(surf.N, surf.B);
 #endif
 

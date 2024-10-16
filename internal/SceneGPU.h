@@ -59,13 +59,12 @@ class Scene : public SceneCommon {
     Context *ctx_;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
 
-    SparseStorage<bvh_node_t, false /* Replicate */> nodes_;
+    SparseStorage<bvh2_node_t, false /* Replicate */> nodes_;
     SparseStorage<tri_accel_t, false /* Replicate */> tris_;
     SparseStorage<uint32_t, false /* Replicate */> tri_indices_;
     SparseStorage<tri_mat_data_t> tri_materials_;
-    SparseStorage<mesh_t> meshes_;
+    Cpu::SparseStorage<mesh_t> meshes_;
     SparseStorage<mesh_instance_t> mesh_instances_;
-    Vector<uint32_t> mi_indices_;
     SparseStorage<vertex_t> vertices_;
     SparseStorage<uint32_t> vtx_indices_;
 
@@ -237,9 +236,8 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
                              const bool use_spatial_cache)
     : ctx_(ctx), use_hwrt_(use_hwrt), use_bindless_(use_bindless), use_tex_compression_(use_tex_compression),
       nodes_(ctx, "Nodes"), tris_(ctx, "Tris"), tri_indices_(ctx, "Tri Indices"), tri_materials_(ctx, "Tri Materials"),
-      meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx, "MI Indices"),
-      vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"), materials_(ctx, "Materials"),
-      atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
+      mesh_instances_(ctx, "Mesh Instances"), vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"),
+      materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
       tex_atlases_{
           {ctx, "Atlas RGBA", eTexFormat::RawRGBA8888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas RGB", eTexFormat::RawRGB888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
@@ -961,8 +959,11 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<uint32_t> new_vtx_indices;
 
     bvh_settings_t s;
+    s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
+    s.min_primitives_in_leaf = 8;
+    s.primitive_alignment = 2;
 
     fvec4 bbox_min{FLT_MAX}, bbox_max{-FLT_MAX};
 
@@ -1105,18 +1106,27 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
         assert(tri_indices_index.second == tris_index.second);
         assert(trimat_index.second == tris_index.second);
 
-        nodes_index = nodes_.Allocate(nullptr, uint32_t(new_nodes.size()));
+        std::vector<bvh2_node_t> new_bvh2_nodes;
+        ConvertToBVH2(new_nodes, new_bvh2_nodes);
+
+        nodes_index = nodes_.Allocate(nullptr, uint32_t(new_bvh2_nodes.size()));
 
         // offset nodes and primitives
-        for (bvh_node_t &n : new_nodes) {
-            if (n.prim_index & LEAF_NODE_BIT) {
-                n.prim_index += tri_indices_index.first;
-            } else {
+        for (bvh2_node_t &n : new_bvh2_nodes) {
+            if ((n.left_child & BVH2_PRIM_COUNT_BITS) == 0) {
+                assert(n.left_child < new_bvh2_nodes.size());
                 n.left_child += nodes_index.first;
+            } else {
+                n.left_child += tri_indices_index.first;
+            }
+            if ((n.right_child & BVH2_PRIM_COUNT_BITS) == 0) {
+                assert(n.right_child < new_bvh2_nodes.size());
                 n.right_child += nodes_index.first;
+            } else {
+                n.right_child += tri_indices_index.first;
             }
         }
-        nodes_.Set(nodes_index.first, uint32_t(new_nodes.size()), new_nodes.data());
+        nodes_.Set(nodes_index.first, uint32_t(new_bvh2_nodes.size()), new_bvh2_nodes.data());
     }
 
     // add mesh
@@ -1359,8 +1369,11 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, co
 inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instance_desc_t &mi_desc) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
+    const mesh_t &m = meshes_[mi_desc.mesh._index];
+
     mesh_instance_t mi = {};
     mi.mesh_index = mi_desc.mesh._index;
+    mi.node_index = m.node_index;
     mi.lights_index = 0xffffffff;
 
     mi.ray_visibility = 0;
@@ -1375,7 +1388,6 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
     { // find emissive triangles and add them as light emitters
         std::vector<light_t> new_lights;
 
-        const mesh_t &m = meshes_[mi_desc.mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
@@ -1456,9 +1468,6 @@ inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHa
 
     memcpy(mi.xform, xform, 16 * sizeof(float));
     InverseMatrix(mi.xform, mi.inv_xform);
-
-    const mesh_t &m = meshes_[mi.mesh_index];
-    TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 
     mesh_instances_.Set(mi_handle._index, mi);
 }
@@ -1576,7 +1585,6 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
         nodes_.Erase(tlas_block_);
         tlas_root_ = tlas_block_ = 0xffffffff;
     }
-    mi_indices_.Clear();
 
     const size_t mi_count = mesh_instances_.size();
     if (!mi_count) {
@@ -1587,26 +1595,40 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
     primitives.reserve(mi_count);
 
     for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
-        primitives.push_back({0, 0, 0, Ref::fvec4{it->bbox_min[0], it->bbox_min[1], it->bbox_min[2], 0.0f},
-                              Ref::fvec4{it->bbox_max[0], it->bbox_max[1], it->bbox_max[2], 0.0f}});
+        const mesh_t &m = meshes_[it->mesh_index];
+
+        Ref::fvec4 mi_bbox_min = 0.0f, mi_bbox_max = 0.0f;
+        TransformBoundingBox(m.bbox_min, m.bbox_max, it->xform, value_ptr(mi_bbox_min), value_ptr(mi_bbox_max));
+
+        primitives.push_back({0, 0, 0, mi_bbox_min, mi_bbox_max});
     }
+
+    bvh_settings_t s = {};
+    s.oversplit_threshold = -1.0f;
+    s.min_primitives_in_leaf = 1;
 
     std::vector<bvh_node_t> bvh_nodes;
     std::vector<uint32_t> mi_indices;
+    PreprocessPrims_SAH(primitives, {}, s, bvh_nodes, mi_indices);
 
-    PreprocessPrims_SAH(primitives, {}, {}, bvh_nodes, mi_indices);
+    std::vector<bvh2_node_t> bvh2_nodes;
+    ConvertToBVH2(bvh_nodes, bvh2_nodes);
 
-    const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, uint32_t(bvh_nodes.size()));
+    const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, uint32_t(bvh2_nodes.size()));
     // offset nodes
-    for (bvh_node_t &n : bvh_nodes) {
-        if ((n.prim_index & LEAF_NODE_BIT) == 0) {
+    for (bvh2_node_t &n : bvh2_nodes) {
+        if ((n.left_child & BVH2_PRIM_COUNT_BITS) == 0) {
             n.left_child += nodes_index.first;
+        } else {
+            n.left_child = (n.left_child & BVH2_PRIM_COUNT_BITS) | mi_indices[n.left_child & BVH2_PRIM_INDEX_BITS];
+        }
+        if ((n.right_child & BVH2_PRIM_COUNT_BITS) == 0) {
             n.right_child += nodes_index.first;
+        } else {
+            n.right_child = (n.right_child & BVH2_PRIM_COUNT_BITS) | mi_indices[n.right_child & BVH2_PRIM_INDEX_BITS];
         }
     }
-    nodes_.Set(nodes_index.first, uint32_t(bvh_nodes.size()), bvh_nodes.data());
-
-    mi_indices_.Append(&mi_indices[0], mi_indices.size());
+    nodes_.Set(nodes_index.first, uint32_t(bvh2_nodes.size()), bvh2_nodes.data());
 
     tlas_root_ = nodes_index.first;
     tlas_block_ = nodes_index.second;
@@ -2446,7 +2468,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     }
 
     aligned_vector<light_cwbvh_node_t> temp_light_cwnodes;
-    const uint32_t root_node = FlattenLightBVH_r(temp_lnodes.data(), 0, 0xffffffff, temp_light_cwnodes);
+    const uint32_t root_node = FlattenLightBVH_r(temp_lnodes, 0, temp_light_cwnodes);
     assert(root_node == 0);
     unused(root_node);
 

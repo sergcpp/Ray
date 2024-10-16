@@ -18,28 +18,26 @@ template int SortRays_GPU<RPSize>(Span<ray_data_t<RPSize>> rays, const float roo
                                   ivec<RPSize> *hash_values, int *head_flags, uint32_t *scan_values,
                                   ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
-template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(
-    const fvec<RPSize> ro[3], const fvec<RPSize> rd[3], const uvec<RPSize> &ray_flags, const ivec<RPSize> &ray_mask,
-    const bvh_node_t *nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-    const mesh_t *meshes, const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
-template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(
-    const fvec<RPSize> ro[3], const fvec<RPSize> rd[3], const uvec<RPSize> &ray_flags, const ivec<RPSize> &ray_mask,
-    const wbvh_node_t *nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-    const mesh_t *meshes, const mtri_accel_t *mtris, const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
-template ivec<RPSize> Traverse_TLAS_WithStack_AnyHit<RPSize>(const fvec<RPSize> ro[3], const fvec<RPSize> rd[3],
-                                                             int ray_type, const ivec<RPSize> &ray_mask,
-                                                             const bvh_node_t *nodes, uint32_t node_index,
-                                                             const mesh_instance_t *mesh_instances,
-                                                             const uint32_t *mi_indices, const mesh_t *meshes,
-                                                             const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                                             const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
-template ivec<RPSize> Traverse_TLAS_WithStack_AnyHit<RPSize>(const fvec<RPSize> ro[3], const fvec<RPSize> rd[3],
-                                                             int ray_type, const ivec<RPSize> &ray_mask,
-                                                             const wbvh_node_t *oct_nodes, uint32_t node_index,
-                                                             const mesh_instance_t *mesh_instances,
-                                                             const uint32_t *mi_indices, const mesh_t *meshes,
-                                                             const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-                                                             const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
+template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(const fvec<RPSize> ro[3], const fvec<RPSize> rd[3],
+                                                         const uvec<RPSize> &ray_flags, const ivec<RPSize> &ray_mask,
+                                                         const bvh_node_t *nodes, uint32_t node_index,
+                                                         const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                                         const tri_accel_t *tris, const uint32_t *tri_indices,
+                                                         hit_data_t<RPSize> &inter);
+template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(const fvec<RPSize> ro[3], const fvec<RPSize> rd[3],
+                                                         const uvec<RPSize> &ray_flags, const ivec<RPSize> &ray_mask,
+                                                         const wbvh_node_t *nodes, uint32_t node_index,
+                                                         const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                                         const mtri_accel_t *mtris, const uint32_t *tri_indices,
+                                                         hit_data_t<RPSize> &inter);
+template ivec<RPSize> Traverse_TLAS_WithStack_AnyHit<RPSize>(
+    const fvec<RPSize> ro[3], const fvec<RPSize> rd[3], int ray_type, const ivec<RPSize> &ray_mask,
+    const bvh_node_t *nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+    const tri_accel_t *tris, const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
+template ivec<RPSize> Traverse_TLAS_WithStack_AnyHit<RPSize>(
+    const fvec<RPSize> ro[3], const fvec<RPSize> rd[3], int ray_type, const ivec<RPSize> &ray_mask,
+    const wbvh_node_t *oct_nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+    const mtri_accel_t *mtris, const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
 template bool Traverse_BLAS_WithStack_ClosestHit<RPSize>(const fvec<RPSize> ro[3], const fvec<RPSize> rd[3],
                                                          const ivec<RPSize> &ray_mask, const bvh_node_t *nodes,
                                                          uint32_t node_index, const tri_accel_t *tris,

@@ -158,17 +158,25 @@ def main():
 
     # Scene intersection (main, inline RT)
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_atlas.comp.spv",
-                         defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0")
+                         defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0 -DSUBGROUP=0")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_bindless.comp.spv",
-                         defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=1")
+                         defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=1 -DSUBGROUP=0")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_atlas_subgroup.comp.spv",
+                         defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0 -DSUBGROUP=1")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_bindless_subgroup.comp.spv",
+                         defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=1 -DSUBGROUP=1")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_atlas.comp.spv",
                          glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=0", hlsl_profile="cs_6_5")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_bindless.comp.spv",
                          glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=1", hlsl_profile="cs_6_5")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_atlas.comp.spv",
-                         defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=0")
+                         defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=0 -DSUBGROUP=0")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_bindless.comp.spv",
-                         defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=1")
+                         defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=1 -DSUBGROUP=0")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_atlas_subgroup.comp.spv",
+                         defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=0 -DSUBGROUP=1")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_bindless_subgroup.comp.spv",
+                         defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=1 -DSUBGROUP=1")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_atlas.comp.spv",
                          glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=0", hlsl_profile="cs_6_5")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_bindless.comp.spv",
@@ -234,9 +242,13 @@ def main():
 
     # Scene intersection (shadow)
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_atlas.comp.spv",
-                         defines="-DHWRT=0 -DBINDLESS=0")
+                         defines="-DHWRT=0 -DBINDLESS=0 -DSUBGROUP=0")
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_bindless.comp.spv",
-                         defines="-DHWRT=0 -DBINDLESS=1")
+                         defines="-DHWRT=0 -DBINDLESS=1 -DSUBGROUP=0")
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_atlas_subgroup.comp.spv",
+                         defines="-DHWRT=0 -DBINDLESS=0 -DSUBGROUP=1")
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_bindless_subgroup.comp.spv",
+                         defines="-DHWRT=0 -DBINDLESS=1 -DSUBGROUP=1")
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_atlas.comp.spv",
                          glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=0", hlsl_profile="cs_6_5")
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_bindless.comp.spv",

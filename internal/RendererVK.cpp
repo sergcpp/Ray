@@ -30,6 +30,7 @@
 
 static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
 static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
+static_assert(sizeof(Types::bvh2_node_t) == sizeof(Ray::bvh2_node_t), "!");
 static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t), "!");
 static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t), "!");
 static_assert(sizeof(Types::light_cwbvh_node_t) == sizeof(Ray::light_cwbvh_node_t), "!");
@@ -121,13 +122,19 @@ namespace Vk {
 #include "shaders/output/intersect_scene_indirect_hwrt_atlas.comp.spv.inl"
 #include "shaders/output/intersect_scene_indirect_hwrt_bindless.comp.spv.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_atlas.comp.spv.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_atlas_subgroup.comp.spv.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_bindless.comp.spv.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_bindless_subgroup.comp.spv.inl"
 #include "shaders/output/intersect_scene_shadow_hwrt_atlas.comp.spv.inl"
 #include "shaders/output/intersect_scene_shadow_hwrt_bindless.comp.spv.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_atlas.comp.spv.inl"
+#include "shaders/output/intersect_scene_shadow_swrt_atlas_subgroup.comp.spv.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_bindless.comp.spv.inl"
+#include "shaders/output/intersect_scene_shadow_swrt_bindless_subgroup.comp.spv.inl"
 #include "shaders/output/intersect_scene_swrt_atlas.comp.spv.inl"
+#include "shaders/output/intersect_scene_swrt_atlas_subgroup.comp.spv.inl"
 #include "shaders/output/intersect_scene_swrt_bindless.comp.spv.inl"
+#include "shaders/output/intersect_scene_swrt_bindless_subgroup.comp.spv.inl"
 #include "shaders/output/mix_incremental.comp.spv.inl"
 #include "shaders/output/nlm_filter.comp.spv.inl"
 #include "shaders/output/postprocess.comp.spv.inl"
@@ -236,7 +243,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) {
     log->Info("Subgroup     is %s", use_subgroup_ ? "enabled" : "disabled");
     log->Info("CoopMatrix   is %s", use_coop_matrix_ ? "enabled" : "disabled");
     log->Info("SpatialCache is %s", use_spatial_cache_ ? "enabled" : "disabled");
-    log->Info("===========================================");
+    log->Info("============================================================================");
 
     if (!InitShaders(log)) {
         throw std::runtime_error("Error initializing vulkan shaders!");
@@ -459,8 +466,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
     const scene_data_t sc_data = {s.env_,
                                   s.mesh_instances_.gpu_buf(),
-                                  s.mi_indices_.buf(),
-                                  s.meshes_.gpu_buf(),
+                                  {s.meshes_.data(), s.meshes_.capacity()},
                                   s.vtx_indices_.gpu_buf(),
                                   s.vertices_.gpu_buf(),
                                   s.nodes_.gpu_buf(),
@@ -1198,8 +1204,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
 
     const scene_data_t sc_data = {s.env_,
                                   s.mesh_instances_.gpu_buf(),
-                                  s.mi_indices_.buf(),
-                                  s.meshes_.gpu_buf(),
+                                  {s.meshes_.data(), s.meshes_.capacity()},
                                   s.vtx_indices_.gpu_buf(),
                                   s.vertices_.gpu_buf(),
                                   s.nodes_.gpu_buf(),
@@ -1879,9 +1884,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESHES_BUF_SLOT, sc_data.meshes);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MI_INDICES_BUF_SLOT, sc_data.mi_indices);
     }
 
     IntersectScene::Params uniform_params = {};
@@ -1996,9 +1999,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESHES_BUF_SLOT, sc_data.meshes);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MI_INDICES_BUF_SLOT, sc_data.mi_indices);
     }
 
     IntersectScene::Params uniform_params = {};
@@ -2300,9 +2301,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBufRO, IntersectSceneShadow::MATERIALS_BUF_SLOT, sc_data.materials},
         {eBindTarget::SBufRO, IntersectSceneShadow::NODES_BUF_SLOT, sc_data.nodes},
-        {eBindTarget::SBufRO, IntersectSceneShadow::MESHES_BUF_SLOT, sc_data.meshes},
         {eBindTarget::SBufRO, IntersectSceneShadow::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-        {eBindTarget::SBufRO, IntersectSceneShadow::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
         {eBindTarget::SBufRO, IntersectSceneShadow::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBufRO, IntersectSceneShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, IntersectSceneShadow::SH_RAYS_BUF_SLOT, sh_rays},
@@ -2352,9 +2351,7 @@ void Ray::Vk::Renderer::kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t
     const Binding bindings[] = {{eBindTarget::SBufRO, DebugRT::TRIS_BUF_SLOT, sc_data.tris},
                                 {eBindTarget::SBufRO, DebugRT::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
                                 {eBindTarget::SBufRO, DebugRT::NODES_BUF_SLOT, sc_data.nodes},
-                                {eBindTarget::SBufRO, DebugRT::MESHES_BUF_SLOT, sc_data.meshes},
                                 {eBindTarget::SBufRO, DebugRT::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-                                {eBindTarget::SBufRO, DebugRT::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
                                 {eBindTarget::AccStruct, DebugRT::TLAS_SLOT, sc_data.rt_tlas},
                                 {eBindTarget::SBufRO, DebugRT::RAYS_BUF_SLOT, rays},
                                 {eBindTarget::Image, DebugRT::OUT_IMG_SLOT, out_pixels}};
@@ -2372,6 +2369,13 @@ void Ray::Vk::Renderer::kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t
 }
 
 bool Ray::Vk::Renderer::InitShaders(ILog *log) {
+    auto select_unpack_shader = [this](Span<const uint8_t> bindless_shader,
+                                       Span<const uint8_t> bindless_subgroup_shader, Span<const uint8_t> atlas_shader,
+                                       Span<const uint8_t> atlas_subgroup_shader) {
+        return Inflate(use_bindless_ ? (use_subgroup_ ? bindless_subgroup_shader : bindless_shader)
+                                     : (use_subgroup_ ? atlas_subgroup_shader : atlas_shader));
+    };
+
     bool result = true;
     result &= sh_prim_rays_gen_simple_.Init("Primary Raygen Simple", ctx_.get(),
                                             Inflate(internal_shaders_output_primary_ray_gen_simple_comp_spv),
@@ -2388,8 +2392,10 @@ bool Ray::Vk::Renderer::InitShaders(ILog *log) {
     } else {
         result &= sh_intersect_scene_.Init(
             "Intersect Scene (Primary) (SWRT)", ctx_.get(),
-            Inflate(use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_bindless_comp_spv}
-                                  : Span<const uint8_t>{internal_shaders_output_intersect_scene_swrt_atlas_comp_spv}),
+            Inflate(select_unpack_shader(internal_shaders_output_intersect_scene_swrt_bindless_comp_spv,
+                                         internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_spv,
+                                         internal_shaders_output_intersect_scene_swrt_atlas_comp_spv,
+                                         internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_spv)),
             eShaderType::Comp, log);
     }
     if (use_hwrt_) {
@@ -2402,9 +2408,11 @@ bool Ray::Vk::Renderer::InitShaders(ILog *log) {
     } else {
         result &= sh_intersect_scene_indirect_.Init(
             "Intersect Scene (Secondary) (SWRT)", ctx_.get(),
-            Inflate(use_bindless_
-                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv}
-                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv}),
+            Inflate(
+                select_unpack_shader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv,
+                                     internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_spv,
+                                     internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv,
+                                     internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_spv)),
             eShaderType::Comp, log);
     }
 
@@ -2480,9 +2488,10 @@ bool Ray::Vk::Renderer::InitShaders(ILog *log) {
     } else {
         result &= sh_intersect_scene_shadow_.Init(
             "Intersect Scene (Shadow) (SWRT)", ctx_.get(),
-            Inflate(use_bindless_
-                        ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv}
-                        : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv}),
+            Inflate(select_unpack_shader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv,
+                                         internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_spv,
+                                         internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv,
+                                         internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_spv)),
             eShaderType::Comp, log);
     }
     result &= sh_prepare_indir_args_.Init("Prepare Indir Args", ctx_.get(),

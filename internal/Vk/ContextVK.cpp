@@ -188,7 +188,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
         return false;
     }
 
-    log_->Info("===========================================");
+    log_->Info("============================================================================");
     log_->Info("Device info:");
 
     log_->Info("\tVulkan version\t: %i.%i", VK_API_VERSION_MAJOR(device_properties_.apiVersion),
@@ -209,7 +209,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
                    is_device_local ? "(device local)" : "");
     }
 
-    log_->Info("===========================================");
+    log_->Info("============================================================================");
 
     VkPhysicalDeviceProperties device_properties = {};
     api_.vkGetPhysicalDeviceProperties(physical_device_, &device_properties);

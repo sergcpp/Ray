@@ -21,6 +21,9 @@ const uint SEP_AXIS_BITS = (3u << 30); // 0b11u
 const uint PRIM_COUNT_BITS = ~SEP_AXIS_BITS;
 const uint RIGHT_CHILD_BITS = ~SEP_AXIS_BITS;
 
+const uint BVH2_PRIM_COUNT_BITS = (7u << 29); // 0b111u
+const uint BVH2_PRIM_INDEX_BITS = ~BVH2_PRIM_COUNT_BITS;
+
 const float PI = 3.141592653589793238463f;
 
 //
