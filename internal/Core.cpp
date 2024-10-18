@@ -1197,7 +1197,7 @@ uint32_t Ray::ConvertToBVH2(Span<const bvh_node_t> nodes, std::vector<bvh2_node_
         const uint32_t prim_count = std::max(nodes[0].prim_count & PRIM_COUNT_BITS, 2u);
         assert(prim_count <= 8);
         root_node.left_child |= (prim_count - 1) << 29;
-        root_node.right_child = 0x1fffffff;
+        root_node.right_child = root_node.left_child;
 
         const bvh_node_t &ch0 = nodes[0];
 
