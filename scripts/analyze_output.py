@@ -48,7 +48,17 @@ def main():
             except:
                 print("Failed to process ", sys.argv[i])
 
+    # Print failed tests first
+    condition = lambda key, value: value['psnr_tested'] < value['psnr_threshold'] or (value['psnr_tested'] - value['psnr_threshold']) > 0.5 or value['fireflies_tested'] > value['fireflies_threshold'] or (value['fireflies_tested'] - value['fireflies_threshold']) > 100
+    failed_tests = {key: value for key, value in all_tests.items() if condition(key, value)}
+
+    print("-- Failed tests --")
+    print(json.dumps(failed_tests, indent=4))
+
+    print("-- All tests --")
     print(json.dumps(all_tests, indent=4))
+
+    sys.exit(-1 if len(failed_tests) > 0 else 0)
 
 if __name__ == "__main__":
     main()

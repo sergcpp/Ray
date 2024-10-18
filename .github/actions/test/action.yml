@@ -5,6 +5,8 @@ inputs:
     default: "test_Ray"
   bin-dir:
     required: true
+  out-dir:
+    required: true
   test-args:
     required: true
 runs:
@@ -18,6 +20,7 @@ runs:
         export ASAN_OPTIONS="windows_hook_legacy_allocators=false"
         chmod +x ./${{ inputs.bin-dir }}/${{ inputs.bin-name }}
         WORK_DIR=`pwd`
+        mkdir $WORK_DIR/${{ inputs.out-dir }}
         cd ../../builds/Ray/tests
-        $WORK_DIR/${{ inputs.bin-dir }}/${{ inputs.bin-name }} ${{ inputs.test-args }}
+        $WORK_DIR/${{ inputs.bin-dir }}/${{ inputs.bin-name }} ${{ inputs.test-args }} | tee $WORK_DIR/${{ inputs.out-dir }}/test_Ray_output.txt
       shell: bash
