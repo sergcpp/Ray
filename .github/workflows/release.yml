@@ -1,8 +1,9 @@
-name: Schedule
+name: Release
 
 on:
-  schedule:
-    - cron: '0 2 * * *'  # Run every day at 1 o'clock
+  pull_request:
+    branches:
+      - 'releases/**'
 
 jobs:
   build-windows-x86_64-rel:
@@ -294,7 +295,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-cpu-output"
           test-args: "--nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-cpu-output
+          path: windows-x86_64-cpu-output/
   test-windows-x86_64-gpu-nv:
     runs-on: [ windows, x86_64, nv ]
     needs:
@@ -310,7 +318,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-gpu-nv-output"
           test-args: "--device NV --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-gpu-nv-output
+          path: windows-x86_64-gpu-nv-output/
   test-windows-x86_64-gpu-amd:
     runs-on: [ windows, x86_64, amd ]
     needs:
@@ -326,7 +341,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-gpu-amd-output"
           test-args: "--device AMD --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-gpu-amd-output
+          path: windows-x86_64-gpu-amd-output/
   test-windows-x86_64-gpu-arc:
     runs-on: [ windows, x86_64, arc ]
     needs:
@@ -342,7 +364,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-gpu-arc-output"
           test-args: "--device Arc --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-gpu-arc-output
+          path: windows-x86_64-gpu-arc-output/
   test-windows-x86_64-gpu-xe:
     runs-on: [ windows, x86_64, xe ]
     needs:
@@ -358,7 +387,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-gpu-xe-output"
           test-args: "--device Xe --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-gpu-xe-output
+          path: windows-x86_64-gpu-xe-output/
   test-windows-arm64-cpu:
     runs-on: [ windows, arm64 ]
     needs:
@@ -374,7 +410,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
+          out-dir: "windows-arm64-cpu-output"
           test-args: "--nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-arm64-cpu-output
+          path: windows-arm64-cpu-output/
   test-windows-arm64-gpu-adreno:
     runs-on: [ windows, arm64, adreno ]
     needs:
@@ -390,7 +433,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
+          out-dir: "windows-arm64-gpu-adreno-output"
           test-args: "--device Adreno --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-arm64-gpu-adreno-output
+          path: windows-arm64-gpu-adreno-output/
   test-linux-x86_64-cpu:
     runs-on: [ linux, x86_64 ]
     needs:
@@ -406,7 +456,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
+          out-dir: "linux-x86_64-cpu-output"
           test-args: "--nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: linux-x86_64-cpu-output
+          path: linux-x86_64-cpu-output/
   test-linux-x86_64-gpu-amd:
     runs-on: [ linux, x86_64, amd ]
     needs:
@@ -422,7 +479,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
+          out-dir: "linux-x86_64-gpu-amd-output"
           test-args: "--device AMD --nocpu --nohwrt"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: linux-x86_64-gpu-amd-output
+          path: linux-x86_64-gpu-amd-output/
   test-linux-x86_64-gpu-nv:
     runs-on: [ linux, x86_64, nv ]
     needs:
@@ -438,7 +502,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "linux-x86_64"
+          out-dir: "linux-x86_64-gpu-nv-output"
           test-args: "--device NV --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: linux-x86_64-gpu-nv-output
+          path: linux-x86_64-gpu-nv-output/
   test-macos-arm64-cpu:
     runs-on: [ macos, arm64 ]
     needs:
@@ -454,7 +525,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
+          out-dir: "macos-arm64-cpu-output"
           test-args: "--nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: macos-arm64-cpu-output
+          path: macos-arm64-cpu-output/
   test-macos-arm64-gpu-m1:
     runs-on: [ macos, arm64, m1 ]
     needs:
@@ -470,7 +548,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
+          out-dir: "macos-arm64-gpu-m1-output"
           test-args: "--device M1 --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: macos-arm64-gpu-m1-output
+          path: macos-arm64-gpu-m1-output/
   test-macos-x86_64-cpu:
     runs-on: [ macos, x86_64 ]
     needs:
@@ -486,7 +571,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "macos-universal"
+          out-dir: "macos-x86_64-cpu-output"
           test-args: "--nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: macos-x86_64-cpu-output
+          path: macos-x86_64-cpu-output/
   test-windows-x86_64-cpu-sse2:
     runs-on: [ windows, x86_64, win10 ]
     needs:
@@ -502,8 +594,15 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-cpu-sse2-output"
           test-args: "--arch SSE2 --nogpu -j4"
           sde-args: "-p4p"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-cpu-sse2-output
+          path: windows-x86_64-cpu-sse2-output/
   test-windows-x86_64-cpu-sse41:
     runs-on: [ windows, x86_64, win10 ]
     needs:
@@ -519,8 +618,15 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-cpu-sse41-output"
           test-args: "--arch SSE41 --nogpu -j4"
           sde-args: "-pnr"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-cpu-sse41-output
+          path: windows-x86_64-cpu-sse41-output/
   test-windows-x86_64-cpu-avx:
     runs-on: [ windows, x86_64 ]
     needs:
@@ -536,8 +642,15 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-cpu-avx-output"
           test-args: "--arch AVX --nogpu -j4"
           sde-args: "-snb"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-cpu-avx-output
+          path: windows-x86_64-cpu-avx-output/
   test-windows-x86_64-cpu-avx2:
     runs-on: [ windows, x86_64 ]
     needs:
@@ -553,8 +666,15 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-cpu-avx2-output"
           test-args: "--arch AVX2 --nogpu -j4"
           sde-args: "-hsw"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-cpu-avx2-output
+          path: windows-x86_64-cpu-avx2-output/
   test-windows-x86_64-cpu-avx512:
     runs-on: [ windows, x86_64 ]
     needs:
@@ -570,8 +690,15 @@ jobs:
         uses: ./.github/actions/test-sde
         with:
           bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-cpu-avx512-output"
           test-args: "--arch AVX512 --nogpu -j4"
           sde-args: "-future"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-cpu-avx512-output
+          path: windows-x86_64-cpu-avx512-output/
   test-linux-x86_64-cpu-tsan:
     runs-on: [ linux, x86_64 ]
     needs:
@@ -588,7 +715,14 @@ jobs:
         with:
           bin-name: "test_Ray-tsan"
           bin-dir: "linux-x86_64-tsan"
+          out-dir: "linux-x86_64-cpu-tsan-output"
           test-args: "--nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: linux-x86_64-cpu-tsan-output
+          path: linux-x86_64-cpu-tsan-output/
   test-windows-x86_64-cpu-asan:
     runs-on: [ windows, x86_64 ]
     needs:
@@ -605,7 +739,14 @@ jobs:
         with:
           bin-name: "test_Ray-asan"
           bin-dir: "windows-x86_64-asan"
+          out-dir: "windows-x86_64-cpu-asan-output"
           test-args: "--nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-cpu-asan-output
+          path: windows-x86_64-cpu-asan-output/
   test-windows-x86_64-gpu-nv-asan:
     runs-on: [ windows, x86_64, nv ]
     needs:
@@ -622,7 +763,14 @@ jobs:
         with:
           bin-name: "test_Ray-asan"
           bin-dir: "windows-x86_64-asan"
+          out-dir: "windows-x86_64-gpu-nv-asan-output"
           test-args: "--device NV --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-x86_64-gpu-nv-asan-output
+          path: windows-x86_64-gpu-nv-asan-output/
   test-windows-arm64-cpu-perf:
     runs-on: [ windows, arm64, perf ]
     needs:
@@ -638,7 +786,14 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
+          out-dir: "windows-arm64-cpu-perf-output"
           test-args: "--nogpu -j4 --time_limit 2.95"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-arm64-cpu-perf-output
+          path: windows-arm64-cpu-perf-output/
   test-windows-arm64-gpu-perf:
     runs-on: [ windows, arm64, perf, adreno ]
     needs:
@@ -654,4 +809,116 @@ jobs:
         uses: ./.github/actions/test
         with:
           bin-dir: "windows-arm64"
-          test-args: "--nocpu -j4 --time_limit 5.4"
+          out-dir: "windows-arm64-gpu-perf-output"
+          test-args: "--nocpu -j4 -vl 0 --time_limit 5.4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: windows-arm64-gpu-perf-output
+          path: windows-arm64-gpu-perf-output/
+  analyze-output:
+    runs-on: [ linux ]
+    needs: [ test-windows-x86_64-cpu, test-windows-x86_64-gpu-nv, test-windows-x86_64-gpu-amd, test-windows-x86_64-gpu-arc, test-windows-x86_64-gpu-xe, test-windows-arm64-cpu, test-windows-arm64-gpu-adreno, test-linux-x86_64-cpu, test-linux-x86_64-gpu-amd, test-linux-x86_64-gpu-nv, test-macos-arm64-cpu, test-macos-arm64-gpu-m1, test-macos-x86_64-cpu, test-windows-x86_64-cpu-sse2, test-windows-x86_64-cpu-sse41, test-windows-x86_64-cpu-avx, test-windows-x86_64-cpu-avx2, test-windows-x86_64-cpu-avx512, test-linux-x86_64-cpu-tsan, test-windows-x86_64-cpu-asan, test-windows-x86_64-gpu-nv-asan, test-windows-arm64-cpu-perf, test-windows-arm64-gpu-perf ]
+    if: always()
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/analyze_output.py
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-cpu-output
+          path: windows-x86_64-cpu-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-gpu-nv-output
+          path: windows-x86_64-gpu-nv-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-gpu-amd-output
+          path: windows-x86_64-gpu-amd-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-gpu-arc-output
+          path: windows-x86_64-gpu-arc-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-gpu-xe-output
+          path: windows-x86_64-gpu-xe-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-arm64-cpu-output
+          path: windows-arm64-cpu-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-arm64-gpu-adreno-output
+          path: windows-arm64-gpu-adreno-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: linux-x86_64-cpu-output
+          path: linux-x86_64-cpu-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: linux-x86_64-gpu-amd-output
+          path: linux-x86_64-gpu-amd-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: linux-x86_64-gpu-nv-output
+          path: linux-x86_64-gpu-nv-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: macos-arm64-cpu-output
+          path: macos-arm64-cpu-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: macos-arm64-gpu-m1-output
+          path: macos-arm64-gpu-m1-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: macos-x86_64-cpu-output
+          path: macos-x86_64-cpu-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-cpu-sse2-output
+          path: windows-x86_64-cpu-sse2-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-cpu-sse41-output
+          path: windows-x86_64-cpu-sse41-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-cpu-avx-output
+          path: windows-x86_64-cpu-avx-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-cpu-avx2-output
+          path: windows-x86_64-cpu-avx2-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-cpu-avx512-output
+          path: windows-x86_64-cpu-avx512-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: linux-x86_64-cpu-tsan-output
+          path: linux-x86_64-cpu-tsan-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-cpu-asan-output
+          path: windows-x86_64-cpu-asan-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-x86_64-gpu-nv-asan-output
+          path: windows-x86_64-gpu-nv-asan-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-arm64-cpu-perf-output
+          path: windows-arm64-cpu-perf-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: windows-arm64-gpu-perf-output
+          path: windows-arm64-gpu-perf-output/
+      - name: Analyze Output
+        run: |
+          python scripts/analyze_output.py windows-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-gpu-nv-output/test_Ray_output.txt windows-x86_64-gpu-amd-output/test_Ray_output.txt windows-x86_64-gpu-arc-output/test_Ray_output.txt windows-x86_64-gpu-xe-output/test_Ray_output.txt windows-arm64-cpu-output/test_Ray_output.txt windows-arm64-gpu-adreno-output/test_Ray_output.txt linux-x86_64-cpu-output/test_Ray_output.txt linux-x86_64-gpu-amd-output/test_Ray_output.txt linux-x86_64-gpu-nv-output/test_Ray_output.txt macos-arm64-cpu-output/test_Ray_output.txt macos-arm64-gpu-m1-output/test_Ray_output.txt macos-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-cpu-sse2-output/test_Ray_output.txt windows-x86_64-cpu-sse41-output/test_Ray_output.txt windows-x86_64-cpu-avx-output/test_Ray_output.txt windows-x86_64-cpu-avx2-output/test_Ray_output.txt windows-x86_64-cpu-avx512-output/test_Ray_output.txt linux-x86_64-cpu-tsan-output/test_Ray_output.txt windows-x86_64-cpu-asan-output/test_Ray_output.txt windows-x86_64-gpu-nv-asan-output/test_Ray_output.txt windows-arm64-cpu-perf-output/test_Ray_output.txt windows-arm64-gpu-perf-output/test_Ray_output.txt
+        shell: bash

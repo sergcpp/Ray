@@ -210,9 +210,11 @@ int main(int argc, char *argv[]) {
     puts(" ---------------");
 
 #ifdef _WIN32
-    // Stupid workaround that should not exist.
-    // Make sure vulkan will be able to use discrete Intel GPU when dual Xe/Arc GPUs are available.
-    InitAndDestroyFakeGLContext();
+    if (!nogpu) {
+        // Stupid workaround that should not exist.
+        // Make sure vulkan will be able to use discrete Intel GPU when dual Xe/Arc GPUs are available.
+        InitAndDestroyFakeGLContext();
+    }
 #endif
 
     static const char *ArchListFull[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", "DX", nullptr};

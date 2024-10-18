@@ -24,3 +24,9 @@ runs:
         cd ../../builds/Ray/tests
         $WORK_DIR/${{ inputs.bin-dir }}/${{ inputs.bin-name }} ${{ inputs.test-args }} | tee $WORK_DIR/${{ inputs.out-dir }}/test_Ray_output.txt
       shell: bash
+    - run: |
+        WORK_DIR=`pwd`
+        cd ../../builds/Ray/tests
+        cp test_data/errors.txt $WORK_DIR/${{ inputs.out-dir }} || true
+      if: always()
+      shell: bash

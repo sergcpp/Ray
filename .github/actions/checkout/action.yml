@@ -12,8 +12,11 @@ runs:
           cd Ray
           git remote set-url origin $REPO_URL
           git fetch --all
-          git checkout -f $GITHUB_REF_NAME
-          git reset --hard origin/$GITHUB_REF_NAME
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+            GITHUB_SHA=${{ github.event.pull_request.head.sha }}
+          fi
+          git checkout -f $GITHUB_SHA
+          #git reset --hard origin/$GITHUB_REF_NAME
           git clean -fdx
           git fetch --tags
         else
