@@ -5,31 +5,35 @@ Embeddable cross-platform semi-realtime physically based renderer.
 
 Features:
 
-- Unidirectional pathtracing with NEE and skyportals
-- Principled BSDF, filmic tonemapping, physical sky
+- Unidirectional pathtracing with light tree NEE and skyportals
+- Diffuse, Glossy, Refractive and multi-layer Principled BSDFs
+- Filmic/AgX tonemapping
+- Built-in procedural sky model
 - Automatic texture compression
 - CPU backend accelerated using SSE/AVX/NEON extensions
 - GPU backends (Vulkan, DirectX 12) with optional HW raytracing
-- DNN denoising (manual port of OpenImageDenoise), accelerated using VK_KHR_cooperative_matrix
+- DNN denoising (native port of OpenImageDenoise), accelerated using VK_KHR_cooperative_matrix
+- Optional SHARC-like spatial radiance caching
 - Compatible with Windows (including ARM), Linux, and macOS
 
 <details>
   <summary>Images</summary>
 
-  - Rendered with time limit of 15 seconds using: <https://github.com/sergcpp/RayDemo>
+  - Rendered with time limit of 15 seconds on RTX 3080.
   - Links to the original scenes:  \
-    https://benedikt-bitterli.me/resources/  \
-    https://www.blender.org/download/demo-files/  \
-    https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html  \
-    https://developer.nvidia.com/orca/amazon-lumberyard-bistro \
-    https://wirewheelsclub.com/models/1965-ford-mustang-fastback \
-    https://evermotion.org/shop/show_product/scene-1-ai43-archinteriors-for-blender/14564 \
-    https://www.blendermarket.com/products/blender-eevee-modern-villa \
-    https://www.beeple-crap.com/resources
+    Staircase, Coffee maker - https://benedikt-bitterli.me/resources/  \
+    Italian flat - https://www.blender.org/download/demo-files/  \
+    Sponza - https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html  \
+    Bistro - https://developer.nvidia.com/orca/amazon-lumberyard-bistro \
+    Ford mustang - https://wirewheelsclub.com/models/1965-ford-mustang-fastback \
+    Interrior - https://evermotion.org/shop/show_product/scene-6-ai43-archinteriors-for-blender/14569 \
+    Kitchen - https://evermotion.org/shop/show_product/scene-1-ai43-archinteriors-for-blender/14564 \
+    Villa - https://www.blendermarket.com/products/blender-eevee-modern-villa \
+    Transparent machines - https://www.beeple-crap.com/resources
 
   <div>
     <div float="left" >
-      <img src="images/scene18.jpg" width="53.5%" />
+      <img src="images/scene18.jpg" width="53.6%" />
       <img src="images/scene19.jpg" width="35.8%" />
     </div>
     <div float="left" >
