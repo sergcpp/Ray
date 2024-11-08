@@ -22,6 +22,7 @@ using CommandBuffer = VkCommandBuffer;
 class Context {
     ILog *log_ = nullptr;
     Api api_;
+    bool external_ = false;
     VkInstance instance_ = {};
     VkDebugReportCallbackEXT debug_callback_ = {};
     VkPhysicalDevice physical_device_ = {};
@@ -35,8 +36,6 @@ class Context {
     bool raytracing_supported_ = false, ray_query_supported_ = false;
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props_ = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
-
-    bool dynamic_rendering_supported_ = false;
 
     bool rgb8_unorm_is_supported_ = false;
 
@@ -55,9 +54,8 @@ class Context {
     VkQueue graphics_queue_ = {};
 
     VkCommandPool command_pool_ = {}, temp_command_pool_ = {};
-    VkCommandBuffer setup_cmd_buf_, draw_cmd_bufs_[MaxFramesInFlight];
+    VkCommandBuffer draw_cmd_bufs_[MaxFramesInFlight];
 
-    VkSemaphore image_avail_semaphores_[MaxFramesInFlight] = {};
     VkSemaphore render_finished_semaphores_[MaxFramesInFlight] = {};
     VkFence in_flight_fences_[MaxFramesInFlight] = {};
 
@@ -73,7 +71,8 @@ class Context {
   public:
     ~Context();
 
-    bool Init(ILog *log, const char *preferred_device, int validation_level);
+    bool Init(ILog *log, const VulkanDevice &vk_device, const VulkanFunctions &vk_functions,
+              const char *preferred_device, int validation_level);
     void Destroy();
 
     VkDevice device() const { return device_; }
@@ -135,7 +134,6 @@ class Context {
     SmallVector<VkBufferView, 128> buf_views_to_destroy[MaxFramesInFlight];
     SmallVector<VkDeviceMemory, 128> mem_to_free[MaxFramesInFlight];
     SmallVector<VkRenderPass, 128> render_passes_to_destroy[MaxFramesInFlight];
-    SmallVector<VkFramebuffer, 128> framebuffers_to_destroy[MaxFramesInFlight];
     SmallVector<VkDescriptorPool, 16> descriptor_pools_to_destroy[MaxFramesInFlight];
     SmallVector<VkPipelineLayout, 128> pipeline_layouts_to_destroy[MaxFramesInFlight];
     SmallVector<VkPipeline, 128> pipelines_to_destroy[MaxFramesInFlight];
@@ -146,22 +144,21 @@ class Context {
   private:
     static bool InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
                                int enabled_layers_count, int validation_level, ILog *log);
-    static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device,
-                                       VkPhysicalDeviceProperties &device_properties,
-                                       VkPhysicalDeviceMemoryProperties &mem_properties,
-                                       uint32_t &graphics_family_index, bool &out_raytracing_supported,
-                                       bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
-                                       bool &out_shader_fp16_supported, bool &out_shader_int64_supported,
-                                       bool &out_int64_atomics_supported, bool &out_coop_matrix_supported,
-                                       const char *preferred_device, VkInstance instance, ILog *log);
+    static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device, const char *preferred_device,
+                                       VkInstance instance, ILog *log);
+    static void CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalDevice &physical_device,
+                                              VkPhysicalDeviceProperties &device_properties,
+                                              VkPhysicalDeviceMemoryProperties &mem_properties,
+                                              uint32_t &graphics_family_index, bool &out_raytracing_supported,
+                                              bool &out_ray_query_supported, bool &out_shader_fp16_supported,
+                                              bool &out_shader_int64_supported, bool &out_int64_atomics_supported,
+                                              bool &out_coop_matrix_supported);
     static bool InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                              uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
-                             bool enable_dynamic_rendering, bool enable_fp16, bool enable_int64,
-                             bool enable_int64_atomics, bool enable_coop_matrix, const char *enabled_layers[],
-                             int enabled_layers_count, ILog *log);
+                             bool enable_fp16, bool enable_int64, bool enable_int64_atomics, bool enable_coop_matrix,
+                             const char *enabled_layers[], int enabled_layers_count, ILog *log);
     static bool InitCommandBuffers(const Api &api, VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
-                                   VkCommandBuffer &setup_cmd_buf, VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
-                                   VkSemaphore image_avail_semaphores[MaxFramesInFlight],
+                                   VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
                                    VkSemaphore render_finished_semaphores[MaxFramesInFlight],
                                    VkFence in_flight_fences[MaxFramesInFlight],
                                    VkQueryPool query_pools[MaxFramesInFlight], VkQueue &graphics_queue, VkDevice device,

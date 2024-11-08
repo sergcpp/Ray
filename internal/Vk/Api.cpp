@@ -23,7 +23,7 @@ bool Ray::Vk::Api::Load(ILog *log) {
     }
 
 #define LOAD_VK_FUN(x)                                                                                                 \
-    x = (PFN_##x)GetProcAddress(vulkan_module, #x);                                                                    \
+    x = (decltype(x))GetProcAddress(vulkan_module, #x);                                                                \
     if (!(x)) {                                                                                                        \
         log->Error("Failed to load %s", #x);                                                                           \
         return false;                                                                                                  \
@@ -36,7 +36,7 @@ bool Ray::Vk::Api::Load(ILog *log) {
     }
 
 #define LOAD_VK_FUN(x)                                                                                                 \
-    x = (PFN_##x)dlsym(vulkan_module, #x);                                                                             \
+    x = (decltype(x))dlsym(vulkan_module, #x);                                                                             \
     if (!(x)) {                                                                                                        \
         log->Error("Failed to load %s", #x);                                                                           \
         return false;                                                                                                  \
@@ -58,7 +58,7 @@ bool Ray::Vk::Api::Load(ILog *log) {
 #endif
 
 #define LOAD_VK_FUN(x)                                                                                                 \
-    x = (PFN_##x)dlsym(vulkan_module, #x);                                                                             \
+    x = (decltype(x))dlsym(vulkan_module, #x);                                                                             \
     if (!(x)) {                                                                                                        \
         log->Error("Failed to load %s", #x);                                                                           \
         return false;                                                                                                  \
@@ -121,9 +121,6 @@ bool Ray::Vk::Api::Load(ILog *log) {
 
     LOAD_VK_FUN(vkCreateRenderPass)
     LOAD_VK_FUN(vkDestroyRenderPass)
-
-    LOAD_VK_FUN(vkCreateFramebuffer)
-    LOAD_VK_FUN(vkDestroyFramebuffer)
 
     LOAD_VK_FUN(vkCreateBuffer)
     LOAD_VK_FUN(vkGetBufferMemoryRequirements)
@@ -189,13 +186,12 @@ bool Ray::Vk::Api::Load(ILog *log) {
 
 bool Ray::Vk::Api::LoadExtensions(VkInstance instance, ILog *log) {
 #define LOAD_INSTANCE_FUN(x)                                                                                           \
-    x = (PFN_##x)vkGetInstanceProcAddr(instance, #x);                                                                  \
+    x = (PFN_##x)vkGetInstanceProcAddr(instance, #x);                                                                 \
     if (!(x)) {                                                                                                        \
         log->Error("Failed to load %s", #x);                                                                           \
         return false;                                                                                                  \
     }
-#define LOAD_OPTIONAL_INSTANCE_FUN(x)                                                                                  \
-    x = (PFN_##x)vkGetInstanceProcAddr(instance, #x);                                                                  \
+#define LOAD_OPTIONAL_INSTANCE_FUN(x) x = (PFN_##x)vkGetInstanceProcAddr(instance, #x);
 
     LOAD_INSTANCE_FUN(vkCreateDebugReportCallbackEXT)
     LOAD_INSTANCE_FUN(vkDestroyDebugReportCallbackEXT)
