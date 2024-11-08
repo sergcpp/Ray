@@ -83,11 +83,6 @@ bool Ray::Vk::Api::Load(ILog *log) {
 
     LOAD_VK_FUN(vkEnumerateDeviceExtensionProperties)
 
-    LOAD_VK_FUN(vkGetPhysicalDeviceSurfaceSupportKHR)
-    LOAD_VK_FUN(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)
-    LOAD_VK_FUN(vkGetPhysicalDeviceSurfaceFormatsKHR)
-    LOAD_VK_FUN(vkGetPhysicalDeviceSurfacePresentModesKHR)
-
     LOAD_VK_FUN(vkGetDeviceQueue)
     LOAD_VK_FUN(vkCreateCommandPool)
     LOAD_VK_FUN(vkDestroyCommandPool)
@@ -140,8 +135,7 @@ bool Ray::Vk::Api::Load(ILog *log) {
 
     LOAD_VK_FUN(vkMapMemory)
     LOAD_VK_FUN(vkUnmapMemory)
-    LOAD_VK_FUN(vkFlushMappedMemoryRanges)
-    LOAD_VK_FUN(vkInvalidateMappedMemoryRanges)
+
     LOAD_VK_FUN(vkCreateShaderModule)
     LOAD_VK_FUN(vkDestroyShaderModule)
     LOAD_VK_FUN(vkCreateDescriptorSetLayout)
@@ -170,16 +164,10 @@ bool Ray::Vk::Api::Load(ILog *log) {
     LOAD_VK_FUN(vkDestroyQueryPool)
     LOAD_VK_FUN(vkGetQueryPoolResults)
 
-    LOAD_VK_FUN(vkCmdBeginRenderPass)
     LOAD_VK_FUN(vkCmdBindPipeline)
-    LOAD_VK_FUN(vkCmdSetViewport)
-    LOAD_VK_FUN(vkCmdSetScissor)
     LOAD_VK_FUN(vkCmdBindDescriptorSets)
     LOAD_VK_FUN(vkCmdBindVertexBuffers)
     LOAD_VK_FUN(vkCmdBindIndexBuffer)
-    LOAD_VK_FUN(vkCmdDraw)
-    LOAD_VK_FUN(vkCmdDrawIndexed)
-    LOAD_VK_FUN(vkCmdEndRenderPass)
     LOAD_VK_FUN(vkCmdCopyBufferToImage)
     LOAD_VK_FUN(vkCmdCopyImageToBuffer)
     LOAD_VK_FUN(vkCmdCopyBuffer)
@@ -188,7 +176,6 @@ bool Ray::Vk::Api::Load(ILog *log) {
     LOAD_VK_FUN(vkCmdPushConstants)
     LOAD_VK_FUN(vkCmdBlitImage)
     LOAD_VK_FUN(vkCmdClearColorImage)
-    LOAD_VK_FUN(vkCmdClearAttachments)
     LOAD_VK_FUN(vkCmdCopyImage)
     LOAD_VK_FUN(vkCmdDispatch)
     LOAD_VK_FUN(vkCmdDispatchIndirect)
@@ -221,8 +208,6 @@ bool Ray::Vk::Api::LoadExtensions(VkInstance instance, ILog *log) {
     LOAD_INSTANCE_FUN(vkCmdEndDebugUtilsLabelEXT)
     LOAD_INSTANCE_FUN(vkSetDebugUtilsObjectNameEXT)
 
-    LOAD_INSTANCE_FUN(vkCmdSetDepthBias)
-
     LOAD_INSTANCE_FUN(vkCmdBuildAccelerationStructuresKHR)
     LOAD_INSTANCE_FUN(vkCmdWriteAccelerationStructuresPropertiesKHR)
     LOAD_INSTANCE_FUN(vkCmdCopyAccelerationStructureKHR)
@@ -241,9 +226,6 @@ bool Ray::Vk::Api::LoadExtensions(VkInstance instance, ILog *log) {
     // allowed to fail
     LOAD_OPTIONAL_INSTANCE_FUN(vkCreateRayTracingPipelinesKHR)
     LOAD_OPTIONAL_INSTANCE_FUN(vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR)
-
-    LOAD_OPTIONAL_INSTANCE_FUN(vkCmdBeginRenderingKHR)
-    LOAD_OPTIONAL_INSTANCE_FUN(vkCmdEndRenderingKHR)
 
 #undef LOAD_INSTANCE_FUN
 #undef LOAD_OPTIONAL_INSTANCE_FUN
