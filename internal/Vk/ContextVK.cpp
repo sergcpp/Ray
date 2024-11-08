@@ -56,39 +56,132 @@ void Ray::Vk::Context::Destroy() {
 
             api_.vkDestroyFence(device_, in_flight_fences_[i], nullptr);
             api_.vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
-            api_.vkDestroySemaphore(device_, image_avail_semaphores_[i], nullptr);
 
             api_.vkDestroyQueryPool(device_, query_pools_[i], nullptr);
         }
 
         default_memory_allocs_ = {};
 
-        api_.vkFreeCommandBuffers(device_, command_pool_, 1, &setup_cmd_buf_);
         api_.vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);
 
         api_.vkDestroyCommandPool(device_, command_pool_, nullptr);
         api_.vkDestroyCommandPool(device_, temp_command_pool_, nullptr);
 
-        api_.vkDestroyDevice(device_, nullptr);
+        if (!external_) {
+            api_.vkDestroyDevice(device_, nullptr);
+        }
 
         if (debug_callback_) {
             api_.vkDestroyDebugReportCallbackEXT(instance_, debug_callback_, nullptr);
         }
 
-        api_.vkDestroyInstance(instance_, nullptr);
+        if (!external_) {
+            api_.vkDestroyInstance(instance_, nullptr);
+        }
     }
 }
 
-bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int validation_level) {
+bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const VulkanFunctions &vk_functions,
+                            const char *preferred_device, const int validation_level) {
     log_ = log;
+    instance_ = vk_device.instance;
+    physical_device_ = vk_device.physical_device;
+    device_ = vk_device.device;
+    static_cast<VulkanFunctions &>(api_) = vk_functions;
 
-    if (!api_.Load(log)) {
+    external_ = (instance_ != VK_NULL_HANDLE);
+    external_ &= (physical_device_ != VK_NULL_HANDLE);
+    external_ &= (device_ != VK_NULL_HANDLE);
+    external_ &= (api_.vkGetInstanceProcAddr != nullptr);
+    external_ &= (api_.vkGetDeviceProcAddr != nullptr);
+    external_ &= (api_.vkGetPhysicalDeviceProperties != nullptr);
+    external_ &= (api_.vkGetPhysicalDeviceMemoryProperties != nullptr);
+    external_ &= (api_.vkGetPhysicalDeviceFormatProperties != nullptr);
+    external_ &= (api_.vkGetPhysicalDeviceImageFormatProperties != nullptr);
+    external_ &= (api_.vkGetPhysicalDeviceFeatures != nullptr);
+    external_ &= (api_.vkGetPhysicalDeviceQueueFamilyProperties != nullptr);
+    external_ &= (api_.vkEnumerateDeviceExtensionProperties != nullptr);
+    external_ &= (api_.vkGetDeviceQueue != nullptr);
+    external_ &= (api_.vkCreateCommandPool != nullptr);
+    external_ &= (api_.vkDestroyCommandPool != nullptr);
+    external_ &= (api_.vkAllocateCommandBuffers != nullptr);
+    external_ &= (api_.vkFreeCommandBuffers != nullptr);
+    external_ &= (api_.vkCreateFence != nullptr);
+    external_ &= (api_.vkResetFences != nullptr);
+    external_ &= (api_.vkDestroyFence != nullptr);
+    external_ &= (api_.vkGetFenceStatus != nullptr);
+    external_ &= (api_.vkWaitForFences != nullptr);
+    external_ &= (api_.vkCreateSemaphore != nullptr);
+    external_ &= (api_.vkDestroySemaphore != nullptr);
+    external_ &= (api_.vkCreateQueryPool != nullptr);
+    external_ &= (api_.vkDestroyQueryPool != nullptr);
+    external_ &= (api_.vkGetQueryPoolResults != nullptr);
+    external_ &= (api_.vkCreateShaderModule != nullptr);
+    external_ &= (api_.vkDestroyShaderModule != nullptr);
+    external_ &= (api_.vkCreateDescriptorSetLayout != nullptr);
+    external_ &= (api_.vkDestroyDescriptorSetLayout != nullptr);
+    external_ &= (api_.vkCreatePipelineLayout != nullptr);
+    external_ &= (api_.vkDestroyPipelineLayout != nullptr);
+    external_ &= (api_.vkCreateGraphicsPipelines != nullptr);
+    external_ &= (api_.vkCreateComputePipelines != nullptr);
+    external_ &= (api_.vkDestroyPipeline != nullptr);
+    external_ &= (api_.vkAllocateMemory != nullptr);
+    external_ &= (api_.vkFreeMemory != nullptr);
+    external_ &= (api_.vkCreateBuffer != nullptr);
+    external_ &= (api_.vkDestroyBuffer != nullptr);
+    external_ &= (api_.vkBindBufferMemory != nullptr);
+    external_ &= (api_.vkGetBufferMemoryRequirements != nullptr);
+    external_ &= (api_.vkCreateBufferView != nullptr);
+    external_ &= (api_.vkDestroyBufferView != nullptr);
+    external_ &= (api_.vkMapMemory != nullptr);
+    external_ &= (api_.vkUnmapMemory != nullptr);
+    external_ &= (api_.vkBeginCommandBuffer != nullptr);
+    external_ &= (api_.vkEndCommandBuffer != nullptr);
+    external_ &= (api_.vkResetCommandBuffer != nullptr);
+    external_ &= (api_.vkQueueSubmit != nullptr);
+    external_ &= (api_.vkQueueWaitIdle != nullptr);
+    external_ &= (api_.vkCreateImage != nullptr);
+    external_ &= (api_.vkDestroyImage != nullptr);
+    external_ &= (api_.vkGetImageMemoryRequirements != nullptr);
+    external_ &= (api_.vkBindImageMemory != nullptr);
+    external_ &= (api_.vkCreateImageView != nullptr);
+    external_ &= (api_.vkDestroyImageView != nullptr);
+    external_ &= (api_.vkCreateSampler != nullptr);
+    external_ &= (api_.vkDestroySampler != nullptr);
+    external_ &= (api_.vkCreateDescriptorPool != nullptr);
+    external_ &= (api_.vkDestroyDescriptorPool != nullptr);
+    external_ &= (api_.vkResetDescriptorPool != nullptr);
+    external_ &= (api_.vkAllocateDescriptorSets != nullptr);
+    external_ &= (api_.vkFreeDescriptorSets != nullptr);
+    external_ &= (api_.vkUpdateDescriptorSets != nullptr);
+
+    external_ &= (api_.vkCmdPipelineBarrier != nullptr);
+    external_ &= (api_.vkCmdBindPipeline != nullptr);
+    external_ &= (api_.vkCmdBindDescriptorSets != nullptr);
+    external_ &= (api_.vkCmdBindVertexBuffers != nullptr);
+    external_ &= (api_.vkCmdBindIndexBuffer != nullptr);
+    external_ &= (api_.vkCmdCopyBufferToImage != nullptr);
+    external_ &= (api_.vkCmdCopyImageToBuffer != nullptr);
+    external_ &= (api_.vkCmdCopyBuffer != nullptr);
+    external_ &= (api_.vkCmdFillBuffer != nullptr);
+    external_ &= (api_.vkCmdUpdateBuffer != nullptr);
+    external_ &= (api_.vkCmdPushConstants != nullptr);
+    external_ &= (api_.vkCmdBlitImage != nullptr);
+    external_ &= (api_.vkCmdClearColorImage != nullptr);
+    external_ &= (api_.vkCmdCopyImage != nullptr);
+    external_ &= (api_.vkCmdDispatch != nullptr);
+    external_ &= (api_.vkCmdDispatchIndirect != nullptr);
+    external_ &= (api_.vkCmdResetQueryPool != nullptr);
+    external_ &= (api_.vkCmdWriteTimestamp != nullptr);
+
+    if (!external_ && !api_.Load(log)) {
         return false;
     }
 
     std::lock_guard<std::mutex> _(g_device_mtx);
 
-    if (!InitVkInstance(api_, instance_, g_enabled_layers, g_enabled_layers_count, validation_level, log)) {
+    if (!external_ &&
+        !InitVkInstance(api_, instance_, g_enabled_layers, g_enabled_layers_count, validation_level, log)) {
         return false;
     }
 
@@ -96,7 +189,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
         return false;
     }
 
-    if (validation_level) { // Sebug debug report callback
+    if (!external_ && validation_level) { // Sebug debug report callback
         VkDebugReportCallbackCreateInfoEXT callback_create_info = {VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT};
         callback_create_info.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT |
                                      VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
@@ -111,20 +204,18 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
         }
     }
 
-    if (!ChooseVkPhysicalDevice(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
-                                raytracing_supported_, ray_query_supported_, dynamic_rendering_supported_,
-                                fp16_supported_, int64_supported_, int64_atomics_supported_, coop_matrix_supported_,
-                                preferred_device, instance_, log)) {
+    if (!external_ && !ChooseVkPhysicalDevice(api_, physical_device_, preferred_device, instance_, log)) {
         return false;
     }
+
+    CheckVkPhysicalDeviceFeatures(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
+                                  raytracing_supported_, ray_query_supported_, fp16_supported_, int64_supported_,
+                                  int64_atomics_supported_, coop_matrix_supported_);
 
     if (!raytracing_supported_) {
         // mask out unsupported stage
         supported_stages_mask_ &= ~VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
     }
-
-    // Disable as it is not needed for now
-    dynamic_rendering_supported_ = false;
 
     if (fp16_supported_) {
         VkPhysicalDeviceShaderFloat16Int8Features fp16_features = {
@@ -168,10 +259,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
         coop_matrix_supported_ &= found;
     }
 
-    if (!InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
-                      ray_query_supported_, dynamic_rendering_supported_, fp16_supported_, int64_supported_,
-                      int64_atomics_supported_, coop_matrix_supported_, g_enabled_layers, g_enabled_layers_count,
-                      log)) {
+    if (!external_ && !InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
+                                    ray_query_supported_, fp16_supported_, int64_supported_, int64_atomics_supported_,
+                                    coop_matrix_supported_, g_enabled_layers, g_enabled_layers_count, log)) {
         return false;
     }
 
@@ -182,9 +272,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device, const int v
         raytracing_supported_ = ray_query_supported_ = false;
     }
 
-    if (!InitCommandBuffers(api_, command_pool_, temp_command_pool_, setup_cmd_buf_, draw_cmd_bufs_,
-                            image_avail_semaphores_, render_finished_semaphores_, in_flight_fences_, query_pools_,
-                            graphics_queue_, device_, graphics_family_index_, log)) {
+    if (!InitCommandBuffers(api_, command_pool_, temp_command_pool_, draw_cmd_bufs_, render_finished_semaphores_,
+                            in_flight_fences_, query_pools_, graphics_queue_, device_, graphics_family_index_, log)) {
         return false;
     }
 
@@ -390,12 +479,6 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
 }
 
 bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &out_physical_device,
-                                              VkPhysicalDeviceProperties &out_device_properties,
-                                              VkPhysicalDeviceMemoryProperties &out_mem_properties,
-                                              uint32_t &out_graphics_family_index, bool &out_raytracing_supported,
-                                              bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
-                                              bool &out_fp16_supported, bool &out_int64_supported,
-                                              bool &out_int64_atomics_supported, bool &out_coop_matrix_supported,
                                               const char *preferred_device, VkInstance instance, ILog *log) {
     uint32_t physical_device_count = 0;
     api.vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
@@ -413,9 +496,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
             continue;
         }
 
-        bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
-             dynamic_rendering_supported = false, shader_fp16_supported = false, shader_int64_supported = false,
-             storage_fp16_supported = false, coop_matrix_supported = false, shader_buf_int64_atomics_supported = false;
+        bool acc_struct_supported = false, raytracing_supported = false, coop_matrix_supported = false;
 
         { // check for features support
             uint32_t extension_count;
@@ -432,32 +513,10 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                     acc_struct_supported = true;
                 } else if (strcmp(ext.extensionName, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0) {
                     raytracing_supported = true;
-                } else if (strcmp(ext.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0) {
-                    ray_query_supported = true;
-                } else if (strcmp(ext.extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0) {
-                    dynamic_rendering_supported = true;
-                } else if (strcmp(ext.extensionName, VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) == 0) {
-                    shader_fp16_supported = true;
-                } else if (strcmp(ext.extensionName, VK_KHR_16BIT_STORAGE_EXTENSION_NAME) == 0) {
-                    storage_fp16_supported = true;
                 } else if (strcmp(ext.extensionName, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME) == 0) {
                     coop_matrix_supported = true;
-                } else if (strcmp(ext.extensionName, VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME) == 0) {
-                    shader_buf_int64_atomics_supported = true;
                 }
             }
-
-            VkPhysicalDeviceFeatures2KHR device_features2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR};
-
-            VkPhysicalDeviceShaderAtomicInt64Features atomic_int64_features = {
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR};
-            if (shader_buf_int64_atomics_supported) {
-                device_features2.pNext = &atomic_int64_features;
-            }
-            api.vkGetPhysicalDeviceFeatures2KHR(physical_devices[i], &device_features2);
-
-            shader_int64_supported = (device_features2.features.shaderInt64 == VK_TRUE);
-            shader_buf_int64_atomics_supported &= (atomic_int64_features.shaderBufferInt64Atomics == VK_TRUE);
         }
 
         uint32_t queue_family_count;
@@ -468,7 +527,6 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                                                      &queue_family_properties[0]);
 
         uint32_t graphics_family_index = 0xffffffff;
-
         for (uint32_t j = 0; j < queue_family_count; j++) {
             if (queue_family_properties[j].queueCount > 0 &&
                 queue_family_properties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
@@ -494,7 +552,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                 score += 500;
             }
 
-            if (dynamic_rendering_supported) {
+            if (coop_matrix_supported) {
                 score += 100;
             }
 
@@ -507,36 +565,102 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
 
             if (score > best_score) {
                 best_score = score;
-
                 out_physical_device = physical_devices[i];
-                out_device_properties = device_properties;
-                out_graphics_family_index = graphics_family_index;
-                out_raytracing_supported = (acc_struct_supported && raytracing_supported);
-                out_ray_query_supported = ray_query_supported;
-                out_dynamic_rendering_supported = dynamic_rendering_supported;
-                out_fp16_supported = (shader_fp16_supported && storage_fp16_supported);
-                out_int64_supported = shader_int64_supported;
-                out_int64_atomics_supported = shader_buf_int64_atomics_supported;
-                out_coop_matrix_supported = coop_matrix_supported;
             }
         }
     }
 
     if (!out_physical_device) {
-        log->Error("No physical device detected that can render and present!");
+        log->Error("No appropriate physical device detected!");
         return false;
     }
-
-    api.vkGetPhysicalDeviceMemoryProperties(out_physical_device, &out_mem_properties);
-
     return true;
+}
+
+void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
+    const Api &api, VkPhysicalDevice &physical_device, VkPhysicalDeviceProperties &out_device_properties,
+    VkPhysicalDeviceMemoryProperties &out_mem_properties, uint32_t &out_graphics_family_index,
+    bool &out_raytracing_supported, bool &out_ray_query_supported, bool &out_shader_fp16_supported,
+    bool &out_shader_int64_supported, bool &out_int64_atomics_supported, bool &out_coop_matrix_supported) {
+    api.vkGetPhysicalDeviceProperties(physical_device, &out_device_properties);
+    api.vkGetPhysicalDeviceMemoryProperties(physical_device, &out_mem_properties);
+
+    uint32_t queue_family_count;
+    api.vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
+
+    SmallVector<VkQueueFamilyProperties, 8> queue_family_properties(queue_family_count);
+    api.vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, &queue_family_properties[0]);
+
+    out_graphics_family_index = 0xffffffff;
+    for (uint32_t j = 0; j < queue_family_count; j++) {
+        if (queue_family_properties[j].queueCount > 0 &&
+            queue_family_properties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            out_graphics_family_index = j;
+            break;
+        } else if (queue_family_properties[j].queueCount > 0 &&
+                   (queue_family_properties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+                   out_graphics_family_index == 0xffffffff) {
+            out_graphics_family_index = j;
+        }
+    }
+
+    bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
+         shader_fp16_supported = false, shader_int64_supported = false, storage_fp16_supported = false,
+         coop_matrix_supported = false, shader_buf_int64_atomics_supported = false;
+
+    { // check for features support
+        uint32_t extension_count;
+        api.vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, nullptr);
+
+        SmallVector<VkExtensionProperties, 16> available_extensions(extension_count);
+        api.vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, &available_extensions[0]);
+
+        for (uint32_t j = 0; j < extension_count; j++) {
+            const VkExtensionProperties &ext = available_extensions[j];
+
+            if (strcmp(ext.extensionName, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0) {
+                acc_struct_supported = true;
+            } else if (strcmp(ext.extensionName, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0) {
+                raytracing_supported = true;
+            } else if (strcmp(ext.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0) {
+                ray_query_supported = true;
+            } else if (strcmp(ext.extensionName, VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) == 0) {
+                shader_fp16_supported = true;
+            } else if (strcmp(ext.extensionName, VK_KHR_16BIT_STORAGE_EXTENSION_NAME) == 0) {
+                storage_fp16_supported = true;
+            } else if (strcmp(ext.extensionName, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME) == 0) {
+                coop_matrix_supported = true;
+            } else if (strcmp(ext.extensionName, VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME) == 0) {
+                shader_buf_int64_atomics_supported = true;
+            }
+        }
+
+        VkPhysicalDeviceFeatures2KHR device_features2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR};
+
+        VkPhysicalDeviceShaderAtomicInt64Features atomic_int64_features = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR};
+        if (shader_buf_int64_atomics_supported) {
+            device_features2.pNext = &atomic_int64_features;
+        }
+        api.vkGetPhysicalDeviceFeatures2KHR(physical_device, &device_features2);
+
+        shader_int64_supported = (device_features2.features.shaderInt64 == VK_TRUE);
+        shader_buf_int64_atomics_supported &= (atomic_int64_features.shaderBufferInt64Atomics == VK_TRUE);
+    }
+
+    out_raytracing_supported = (acc_struct_supported && raytracing_supported);
+    out_ray_query_supported = ray_query_supported;
+    out_shader_fp16_supported = (shader_fp16_supported && storage_fp16_supported);
+    out_shader_int64_supported = shader_int64_supported;
+    out_int64_atomics_supported = shader_buf_int64_atomics_supported;
+    out_coop_matrix_supported = coop_matrix_supported;
 }
 
 bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                                     uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
-                                    bool enable_dynamic_rendering, bool enable_fp16, bool enable_int64,
-                                    bool enable_int64_atomics, bool enable_coop_matrix, const char *enabled_layers[],
-                                    int enabled_layers_count, ILog *log) {
+                                    bool enable_fp16, bool enable_int64, bool enable_int64_atomics,
+                                    bool enable_coop_matrix, const char *enabled_layers[], int enabled_layers_count,
+                                    ILog *log) {
     VkDeviceQueueCreateInfo queue_create_infos[2] = {{}, {}};
     const float queue_priorities[] = {1.0f};
 
@@ -575,12 +699,6 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
         if (enable_ray_query) {
             device_extensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
         }
-    }
-
-    if (enable_dynamic_rendering) {
-        device_extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-        device_extensions.push_back(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME); // required for dynamic rendering
-        device_extensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);   // required for depth stencil resolve
     }
 
     if (enable_fp16) {
@@ -649,15 +767,6 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
         }
     }
 
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_features = {
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
-    dynamic_rendering_features.dynamicRendering = VK_TRUE;
-
-    if (enable_dynamic_rendering) {
-        (*pp_next) = &dynamic_rendering_features;
-        pp_next = &dynamic_rendering_features.pNext;
-    }
-
     VkPhysicalDeviceShaderFloat16Int8FeaturesKHR shader_fp16_features = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR};
     shader_fp16_features.shaderFloat16 = VK_TRUE;
@@ -719,9 +828,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
 }
 
 bool Ray::Vk::Context::InitCommandBuffers(const Api &api, VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
-                                          VkCommandBuffer &setup_cmd_buf,
                                           VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
-                                          VkSemaphore image_avail_semaphores[MaxFramesInFlight],
                                           VkSemaphore render_finished_semaphores[MaxFramesInFlight],
                                           VkFence in_flight_fences[MaxFramesInFlight],
                                           VkQueryPool query_pools[MaxFramesInFlight], VkQueue &graphics_queue,
@@ -753,14 +860,6 @@ bool Ray::Vk::Context::InitCommandBuffers(const Api &api, VkCommandPool &command
     VkCommandBufferAllocateInfo cmd_buf_alloc_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
     cmd_buf_alloc_info.commandPool = command_pool;
     cmd_buf_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_buf_alloc_info.commandBufferCount = 1;
-
-    res = api.vkAllocateCommandBuffers(device, &cmd_buf_alloc_info, &setup_cmd_buf);
-    if (res != VK_SUCCESS) {
-        log->Error("Failed to create command buffer!");
-        return false;
-    }
-
     cmd_buf_alloc_info.commandBufferCount = MaxFramesInFlight;
     res = api.vkAllocateCommandBuffers(device, &cmd_buf_alloc_info, draw_cmd_bufs);
     if (res != VK_SUCCESS) {
@@ -775,11 +874,6 @@ bool Ray::Vk::Context::InitCommandBuffers(const Api &api, VkCommandPool &command
         fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
         for (int i = 0; i < MaxFramesInFlight; i++) {
-            res = api.vkCreateSemaphore(device, &sem_info, nullptr, &image_avail_semaphores[i]);
-            if (res != VK_SUCCESS) {
-                log->Error("Failed to create semaphore!");
-                return false;
-            }
             res = api.vkCreateSemaphore(device, &sem_info, nullptr, &render_finished_semaphores[i]);
             if (res != VK_SUCCESS) {
                 log->Error("Failed to create semaphore!");
@@ -913,11 +1007,6 @@ void Ray::Vk::Context::DestroyDeferredResources(const int i) {
         api_.vkDestroyRenderPass(device_, rp, nullptr);
     }
     render_passes_to_destroy[i].clear();
-
-    for (VkFramebuffer fb : framebuffers_to_destroy[i]) {
-        api_.vkDestroyFramebuffer(device_, fb, nullptr);
-    }
-    framebuffers_to_destroy[i].clear();
 
     for (VkDescriptorPool pool : descriptor_pools_to_destroy[i]) {
         api_.vkDestroyDescriptorPool(device_, pool, nullptr);

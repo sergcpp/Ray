@@ -208,7 +208,8 @@ set(SOURCE_FILES Bitmask.h
                  RendererBase.cpp
                  SceneBase.h
                  Span.h
-                 Types.h)
+                 Types.h
+                 VulkanFunctions.h)
 
 set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h

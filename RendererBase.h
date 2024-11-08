@@ -5,6 +5,7 @@
 #include "Config.h"
 #include "SceneBase.h"
 #include "Types.h"
+#include "VulkanFunctions.h"
 
 /**
   @file RendererBase.h
@@ -51,6 +52,9 @@ struct settings_t {
     bool use_bindless = true;
     bool use_spatial_cache = false;
     int validation_level = 0;
+
+    VulkanDevice vk_device = {};
+    VulkanFunctions vk_functions = {};
 };
 
 /** Render region context,

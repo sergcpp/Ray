@@ -14,10 +14,12 @@
 #undef None
 #undef Success
 
+#include "../../VulkanFunctions.h"
+
 namespace Ray {
 class ILog;
 namespace Vk {
-struct Api {
+struct Api : public VulkanFunctions {
 #if defined(_WIN32)
     HMODULE vulkan_module = {};
 #else
@@ -30,120 +32,14 @@ struct Api {
     PFN_vkDestroyInstance vkDestroyInstance;
     PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
     PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
-    PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
 
     PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
-    PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
-    PFN_vkGetPhysicalDeviceFeatures vkGetPhysicalDeviceFeatures;
-    PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
 
     PFN_vkCreateDevice vkCreateDevice;
     PFN_vkDestroyDevice vkDestroyDevice;
 
-    PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
-
-    PFN_vkGetDeviceQueue vkGetDeviceQueue;
-    PFN_vkCreateCommandPool vkCreateCommandPool;
-    PFN_vkDestroyCommandPool vkDestroyCommandPool;
-
-    PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
-    PFN_vkFreeCommandBuffers vkFreeCommandBuffers;
-
-    PFN_vkCreateFence vkCreateFence;
-    PFN_vkWaitForFences vkWaitForFences;
-    PFN_vkResetFences vkResetFences;
-    PFN_vkDestroyFence vkDestroyFence;
-    PFN_vkGetFenceStatus vkGetFenceStatus;
-
-    PFN_vkBeginCommandBuffer vkBeginCommandBuffer;
-    PFN_vkEndCommandBuffer vkEndCommandBuffer;
-    PFN_vkResetCommandBuffer vkResetCommandBuffer;
-    PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier;
-
-    PFN_vkQueueSubmit vkQueueSubmit;
-    PFN_vkQueueWaitIdle vkQueueWaitIdle;
-
-    PFN_vkCreateImageView vkCreateImageView;
-    PFN_vkDestroyImageView vkDestroyImageView;
-
-    PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
-    PFN_vkGetPhysicalDeviceFormatProperties vkGetPhysicalDeviceFormatProperties;
-    PFN_vkGetPhysicalDeviceImageFormatProperties vkGetPhysicalDeviceImageFormatProperties;
-
-    PFN_vkCreateImage vkCreateImage;
-    PFN_vkDestroyImage vkDestroyImage;
-
-    PFN_vkGetImageMemoryRequirements vkGetImageMemoryRequirements;
-    PFN_vkAllocateMemory vkAllocateMemory;
-    PFN_vkFreeMemory vkFreeMemory;
-    PFN_vkBindImageMemory vkBindImageMemory;
-
     PFN_vkCreateRenderPass vkCreateRenderPass;
     PFN_vkDestroyRenderPass vkDestroyRenderPass;
-
-    PFN_vkCreateFramebuffer vkCreateFramebuffer;
-    PFN_vkDestroyFramebuffer vkDestroyFramebuffer;
-
-    PFN_vkCreateBuffer vkCreateBuffer;
-    PFN_vkBindBufferMemory vkBindBufferMemory;
-    PFN_vkDestroyBuffer vkDestroyBuffer;
-    PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
-
-    PFN_vkCreateBufferView vkCreateBufferView;
-    PFN_vkDestroyBufferView vkDestroyBufferView;
-
-    PFN_vkMapMemory vkMapMemory;
-    PFN_vkUnmapMemory vkUnmapMemory;
-
-    PFN_vkCreateShaderModule vkCreateShaderModule;
-    PFN_vkDestroyShaderModule vkDestroyShaderModule;
-
-    PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout;
-    PFN_vkDestroyDescriptorSetLayout vkDestroyDescriptorSetLayout;
-
-    PFN_vkCreatePipelineLayout vkCreatePipelineLayout;
-    PFN_vkDestroyPipelineLayout vkDestroyPipelineLayout;
-
-    PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines;
-    PFN_vkCreateComputePipelines vkCreateComputePipelines;
-    PFN_vkDestroyPipeline vkDestroyPipeline;
-
-    PFN_vkCreateSemaphore vkCreateSemaphore;
-    PFN_vkDestroySemaphore vkDestroySemaphore;
-
-    PFN_vkCreateSampler vkCreateSampler;
-    PFN_vkDestroySampler vkDestroySampler;
-
-    PFN_vkCreateDescriptorPool vkCreateDescriptorPool;
-    PFN_vkDestroyDescriptorPool vkDestroyDescriptorPool;
-    PFN_vkResetDescriptorPool vkResetDescriptorPool;
-
-    PFN_vkAllocateDescriptorSets vkAllocateDescriptorSets;
-    PFN_vkFreeDescriptorSets vkFreeDescriptorSets;
-    PFN_vkUpdateDescriptorSets vkUpdateDescriptorSets;
-
-    PFN_vkCreateQueryPool vkCreateQueryPool;
-    PFN_vkDestroyQueryPool vkDestroyQueryPool;
-    PFN_vkGetQueryPoolResults vkGetQueryPoolResults;
-
-    PFN_vkCmdBindPipeline vkCmdBindPipeline;
-    PFN_vkCmdBindDescriptorSets vkCmdBindDescriptorSets;
-    PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
-    PFN_vkCmdBindIndexBuffer vkCmdBindIndexBuffer;
-    PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
-    PFN_vkCmdCopyImageToBuffer vkCmdCopyImageToBuffer;
-    PFN_vkCmdCopyBuffer vkCmdCopyBuffer;
-    PFN_vkCmdFillBuffer vkCmdFillBuffer;
-    PFN_vkCmdUpdateBuffer vkCmdUpdateBuffer;
-    PFN_vkCmdPushConstants vkCmdPushConstants;
-    PFN_vkCmdBlitImage vkCmdBlitImage;
-    PFN_vkCmdClearColorImage vkCmdClearColorImage;
-    PFN_vkCmdCopyImage vkCmdCopyImage;
-    PFN_vkCmdDispatch vkCmdDispatch;
-    PFN_vkCmdDispatchIndirect vkCmdDispatchIndirect;
-    PFN_vkCmdResetQueryPool vkCmdResetQueryPool;
-    PFN_vkCmdWriteTimestamp vkCmdWriteTimestamp;
 
     //
 
