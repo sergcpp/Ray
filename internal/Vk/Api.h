@@ -1,12 +1,16 @@
 #pragma once
 
 #define VK_NO_PROTOTYPES
-#define VK_ENABLE_BETA_EXTENSIONS
+#define VK_ENABLE_BETA_EXTENSIONS // needed for VK_KHR_portability_subset on mac
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include "../../third-party/vulkan/vulkan.h"
 #undef far
 #undef near
-#undef max
-#undef min
 #undef None
 #undef Success
 
@@ -38,11 +42,6 @@ struct Api {
     PFN_vkDestroyDevice vkDestroyDevice;
 
     PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
-
-    PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupportKHR;
-    PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR;
-    PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR;
-    PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR;
 
     PFN_vkGetDeviceQueue vkGetDeviceQueue;
     PFN_vkCreateCommandPool vkCreateCommandPool;
@@ -96,8 +95,6 @@ struct Api {
 
     PFN_vkMapMemory vkMapMemory;
     PFN_vkUnmapMemory vkUnmapMemory;
-    PFN_vkFlushMappedMemoryRanges vkFlushMappedMemoryRanges;
-    PFN_vkInvalidateMappedMemoryRanges vkInvalidateMappedMemoryRanges;
 
     PFN_vkCreateShaderModule vkCreateShaderModule;
     PFN_vkDestroyShaderModule vkDestroyShaderModule;
@@ -130,16 +127,10 @@ struct Api {
     PFN_vkDestroyQueryPool vkDestroyQueryPool;
     PFN_vkGetQueryPoolResults vkGetQueryPoolResults;
 
-    PFN_vkCmdBeginRenderPass vkCmdBeginRenderPass;
     PFN_vkCmdBindPipeline vkCmdBindPipeline;
-    PFN_vkCmdSetViewport vkCmdSetViewport;
-    PFN_vkCmdSetScissor vkCmdSetScissor;
     PFN_vkCmdBindDescriptorSets vkCmdBindDescriptorSets;
     PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
     PFN_vkCmdBindIndexBuffer vkCmdBindIndexBuffer;
-    PFN_vkCmdDraw vkCmdDraw;
-    PFN_vkCmdDrawIndexed vkCmdDrawIndexed;
-    PFN_vkCmdEndRenderPass vkCmdEndRenderPass;
     PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
     PFN_vkCmdCopyImageToBuffer vkCmdCopyImageToBuffer;
     PFN_vkCmdCopyBuffer vkCmdCopyBuffer;
@@ -148,7 +139,6 @@ struct Api {
     PFN_vkCmdPushConstants vkCmdPushConstants;
     PFN_vkCmdBlitImage vkCmdBlitImage;
     PFN_vkCmdClearColorImage vkCmdClearColorImage;
-    PFN_vkCmdClearAttachments vkCmdClearAttachments;
     PFN_vkCmdCopyImage vkCmdCopyImage;
     PFN_vkCmdDispatch vkCmdDispatch;
     PFN_vkCmdDispatchIndirect vkCmdDispatchIndirect;
@@ -168,8 +158,6 @@ struct Api {
     PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
 
-    PFN_vkCmdSetDepthBias vkCmdSetDepthBias;
-
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
     PFN_vkCmdWriteAccelerationStructuresPropertiesKHR vkCmdWriteAccelerationStructuresPropertiesKHR;
     PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHR;
@@ -188,9 +176,6 @@ struct Api {
     PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR;
 
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR;
-
-    PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
-    PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;
 
     bool Load(ILog *log);
     bool LoadExtensions(VkInstance instance, ILog *log);
