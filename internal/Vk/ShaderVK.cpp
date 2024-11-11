@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "../../Config.h"
 #include "../../Log.h"
 #include "../ScopeExit.h"
 #include "../TextureParams.h"
@@ -77,7 +78,7 @@ bool Ray::Vk::Shader::Init(const char *name, Context *ctx, Span<const uint8_t> s
         return false;
     }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
     VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
     name_info.objectHandle = uint64_t(module_);

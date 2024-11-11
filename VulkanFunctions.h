@@ -28,6 +28,7 @@ DEFINE_VK_HANDLE(VkImage);
 DEFINE_VK_HANDLE(VkImageView);
 DEFINE_VK_HANDLE(VkSampler);
 DEFINE_VK_HANDLE(VkDescriptorPool);
+DEFINE_VK_HANDLE(VkCommandBuffer);
 
 struct VkPhysicalDeviceFeatures;
 struct VkPhysicalDeviceProperties;

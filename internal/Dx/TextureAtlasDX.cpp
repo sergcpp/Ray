@@ -10,6 +10,7 @@
 #endif
 #include <d3d12.h>
 
+#include "../../Config.h"
 #include "../../Log.h"
 #include "../TextureUtils.h"
 #include "ContextDX.h"
@@ -272,7 +273,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
             throw std::runtime_error("Failed to create resource");
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         std::wstring temp_str(name_.begin(), name_.end());
         new_img->SetName(temp_str.c_str());
 #endif

@@ -10,6 +10,7 @@
 #endif
 #include <d3d12.h>
 
+#include "../../Config.h"
 #include "../../Log.h"
 #include "../TextureUtils.h"
 #include "ContextDX.h"
@@ -309,7 +310,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
             return false;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(new_image);
@@ -377,7 +378,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
             return false;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(new_image_view);
@@ -568,7 +569,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         std::wstring temp_str(name_.begin(), name_.end());
         handle_.img->SetName(temp_str.c_str());
 #endif
@@ -631,7 +632,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
             handle_.views.push_back(depth_only_view);
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         for (VkImageView view : handle_.views) {
             VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
             name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
@@ -778,7 +779,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], ID3D12Gr
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
@@ -847,7 +848,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], ID3D12Gr
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(handle_.views[0]);
@@ -1301,7 +1302,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         std::wstring temp_str(name_.begin(), name_.end());
         handle_.img->SetName(temp_str.c_str());
 #endif

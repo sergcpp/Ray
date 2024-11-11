@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 
+#include "../../Config.h"
 #include "../../Log.h"
 #include "ContextVK.h"
 
@@ -167,7 +168,7 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     VkResult res = ctx_->api().vkCreateBuffer(ctx_->device(), &buf_create_info, nullptr, &new_buf);
     assert(res == VK_SUCCESS && "Failed to create vertex buffer!");
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
     VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType = VK_OBJECT_TYPE_BUFFER;
     name_info.objectHandle = uint64_t(new_buf);

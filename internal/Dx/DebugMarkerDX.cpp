@@ -19,7 +19,7 @@
 
 Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf, const char *name)
     : cmd_buf_(_cmd_buf) {
-#ifdef ENABLE_DEBUG_MARKERS
+#ifdef ENABLE_GPU_DEBUG
 #ifdef ENABLE_PIX
     PIXBeginEvent(cmd_buf_, 0, name);
 #else
@@ -30,7 +30,7 @@ Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf
 }
 
 Ray::Dx::DebugMarker::~DebugMarker() {
-#ifdef ENABLE_DEBUG_MARKERS
+#ifdef ENABLE_GPU_DEBUG
 #ifdef ENABLE_PIX
     PIXEndEvent(cmd_buf_);
 #else
