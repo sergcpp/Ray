@@ -1,11 +1,15 @@
 #pragma once
 
+#include <cstring>
 #include <memory>
 
 #include "Config.h"
 #include "SceneBase.h"
 #include "Types.h"
 #include "VulkanFunctions.h"
+
+struct ID3D12Resource;
+struct ID3D12DescriptorHeap;
 
 /**
   @file RendererBase.h
@@ -57,6 +61,16 @@ struct settings_t {
     VulkanFunctions vk_functions = {};
 };
 
+enum class eGPUResState {
+    RenderTarget = 4,
+    UnorderedAccess = 5,
+    DepthRead = 6,
+    DepthWrite = 7,
+    ShaderResource = 9,
+    CopyDst = 11,
+    CopySrc = 12
+};
+
 /** Render region context,
     holds information for specific rectangle on image
 */
@@ -77,6 +91,28 @@ class RegionContext {
 };
 
 class ILog;
+
+struct GpuImage {
+    union {
+        VkImage vk_image;
+        ID3D12Resource *dx_image;
+    };
+    union {
+        VkImageView vk_image_view;
+        struct {
+            ID3D12DescriptorHeap *heap;
+            uint32_t offset;
+        } dx_image_view;
+    };
+    eGPUResState state;
+
+    GpuImage() { memset(this, 0, sizeof(GpuImage)); }
+    GpuImage(VkImage _vk_image, VkImageView _vk_image_view, eGPUResState _state)
+        : vk_image(_vk_image), vk_image_view(_vk_image_view), state(_state) {}
+    GpuImage(ID3D12Resource *_dx_image, ID3D12DescriptorHeap *dx_view_heap, uint32_t dx_view_offset,
+             eGPUResState _state)
+        : dx_image(_dx_image), dx_image_view{dx_view_heap, dx_view_offset}, state(_state) {}
+};
 
 /** Base class for all renderer backends
  */
@@ -113,6 +149,12 @@ class RendererBase {
 
     /// Returns pointer to SH data
     virtual const shl1_data_t *get_sh_data_ref() const = 0;
+
+    /// Returns native GPU image that holds rendered pixels
+    virtual GpuImage get_native_raw_pixels() const { return {}; }
+
+    /// Allows to set native GPU image state
+    virtual void set_native_raw_pixels_state(const eGPUResState state) {}
 
     /** @brief Resize framebuffer
         @param w new image width
