@@ -217,48 +217,6 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
         supported_stages_mask_ &= ~VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
     }
 
-    if (fp16_supported_) {
-        VkPhysicalDeviceShaderFloat16Int8Features fp16_features = {
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES};
-
-        VkPhysicalDeviceFeatures2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-        prop2.pNext = &fp16_features;
-
-        api_.vkGetPhysicalDeviceFeatures2KHR(physical_device_, &prop2);
-
-        fp16_supported_ &= (fp16_features.shaderFloat16 != 0);
-    }
-
-    if (coop_matrix_supported_) {
-        VkPhysicalDeviceCooperativeMatrixFeaturesKHR coop_matrix_features = {
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR};
-
-        VkPhysicalDeviceFeatures2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-        prop2.pNext = &coop_matrix_features;
-
-        api_.vkGetPhysicalDeviceFeatures2KHR(physical_device_, &prop2);
-
-        uint32_t props_count = 0;
-        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device_, &props_count, nullptr);
-
-        SmallVector<VkCooperativeMatrixPropertiesKHR, 16> coop_matrix_props(
-            props_count, {VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR});
-
-        api_.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device_, &props_count,
-                                                               coop_matrix_props.data());
-
-        bool found = false;
-        for (const VkCooperativeMatrixPropertiesKHR &p : coop_matrix_props) {
-            if (p.AType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.BType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
-                p.CType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.ResultType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
-                p.MSize == 16 && p.NSize == 8 && p.KSize == 8 && p.scope == VK_SCOPE_SUBGROUP_KHR) {
-                found = true;
-                break;
-            }
-        }
-        coop_matrix_supported_ &= found;
-    }
-
     if (!external_ && !InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
                                     ray_query_supported_, fp16_supported_, int64_supported_, int64_atomics_supported_,
                                     coop_matrix_supported_, g_enabled_layers, g_enabled_layers_count, log)) {
@@ -646,6 +604,48 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
 
         shader_int64_supported = (device_features2.features.shaderInt64 == VK_TRUE);
         shader_buf_int64_atomics_supported &= (atomic_int64_features.shaderBufferInt64Atomics == VK_TRUE);
+
+        if (shader_fp16_supported) {
+            VkPhysicalDeviceShaderFloat16Int8Features fp16_features = {
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES};
+
+            VkPhysicalDeviceFeatures2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            prop2.pNext = &fp16_features;
+
+            api.vkGetPhysicalDeviceFeatures2KHR(physical_device, &prop2);
+
+            shader_fp16_supported &= (fp16_features.shaderFloat16 != 0);
+        }
+
+        if (coop_matrix_supported) {
+            VkPhysicalDeviceCooperativeMatrixFeaturesKHR coop_matrix_features = {
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR};
+
+            VkPhysicalDeviceFeatures2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            prop2.pNext = &coop_matrix_features;
+
+            api.vkGetPhysicalDeviceFeatures2KHR(physical_device, &prop2);
+
+            uint32_t props_count = 0;
+            api.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device, &props_count, nullptr);
+
+            SmallVector<VkCooperativeMatrixPropertiesKHR, 16> coop_matrix_props(
+                props_count, {VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR});
+
+            api.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device, &props_count,
+                                                                  coop_matrix_props.data());
+
+            bool found = false;
+            for (const VkCooperativeMatrixPropertiesKHR &p : coop_matrix_props) {
+                if (p.AType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.BType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
+                    p.CType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.ResultType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
+                    p.MSize == 16 && p.NSize == 8 && p.KSize == 8 && p.scope == VK_SCOPE_SUBGROUP_KHR) {
+                    found = true;
+                    break;
+                }
+            }
+            coop_matrix_supported &= found;
+        }
     }
 
     out_raytracing_supported = (acc_struct_supported && raytracing_supported);

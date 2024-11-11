@@ -55,6 +55,14 @@ static_assert(Types::FILTER_GAUSSIAN == int(Ray::ePixelFilter::Gaussian), "!");
 static_assert(Types::FILTER_BLACKMAN_HARRIS == int(Ray::ePixelFilter::BlackmanHarris), "!");
 static_assert(Types::FILTER_TABLE_SIZE == Ray::FILTER_TABLE_SIZE, "!");
 
+static_assert(int(Ray::eGPUResState::RenderTarget) == int(Ray::Vk::eResState::RenderTarget), "!");
+static_assert(int(Ray::eGPUResState::UnorderedAccess) == int(Ray::Vk::eResState::UnorderedAccess), "!");
+static_assert(int(Ray::eGPUResState::DepthRead) == int(Ray::Vk::eResState::DepthRead), "!");
+static_assert(int(Ray::eGPUResState::DepthWrite) == int(Ray::Vk::eResState::DepthWrite), "!");
+static_assert(int(Ray::eGPUResState::ShaderResource) == int(Ray::Vk::eResState::ShaderResource), "!");
+static_assert(int(Ray::eGPUResState::CopyDst) == int(Ray::Vk::eResState::CopyDst), "!");
+static_assert(int(Ray::eGPUResState::CopySrc) == int(Ray::Vk::eResState::CopySrc), "!");
+
 namespace Ray {
 extern const int LUT_DIMS;
 extern const uint32_t *transform_luts[];
@@ -1698,6 +1706,11 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
     }
 
     return {((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_), w_};
+}
+
+Ray::GpuImage Ray::Vk::Renderer::get_native_raw_pixels() const {
+    return GpuImage{raw_filtered_buf_.handle().img, raw_filtered_buf_.handle().views[0],
+                    eGPUResState(raw_filtered_buf_.resource_state)};
 }
 
 bool Ray::Vk::Renderer::InitUNetFilterPipelines() {
