@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "../../Config.h"
 #include "../../Log.h"
 #include "../TextureUtils.h"
 #include "ContextVK.h"
@@ -183,15 +184,15 @@ Ray::Vk::Texture2D::Texture2D(const char *name, Context *ctx, const Tex2DParams 
 }
 
 Ray::Vk::Texture2D::Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size,
-                              const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
-                              eTexLoadStatus *load_status, ILog *log)
+                              const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf,
+                              MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
 
 Ray::Vk::Texture2D::Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6],
-                              const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
-                              eTexLoadStatus *load_status, ILog *log)
+                              const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf,
+                              MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
@@ -223,8 +224,9 @@ void Ray::Vk::Texture2D::Init(const Tex2DParams &p, MemoryAllocators *mem_allocs
     ready_ = true;
 }
 
-void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf, VkCommandBuffer cmd_buf,
-                              MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
+void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf,
+                              VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status,
+                              ILog *log) {
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
@@ -253,7 +255,8 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
 }
 
 void Ray::Vk::Texture2D::Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &sbuf,
-                              VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
+                              VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status,
+                              ILog *log) {
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
@@ -350,7 +353,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
             return false;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(new_image);
@@ -410,7 +413,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
             return false;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(new_image_view);
@@ -556,8 +559,8 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     return true;
 }
 
-void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
-                                         const Tex2DParams &p, ILog *log) {
+void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer cmd_buf,
+                                         MemoryAllocators *mem_allocs, const Tex2DParams &p, ILog *log) {
     Free();
 
     handle_.generation = TextureHandleCounter++;
@@ -596,7 +599,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
@@ -674,7 +677,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
             handle_.views.push_back(depth_only_view);
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         for (VkImageView view : handle_.views) {
             VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
             name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
@@ -786,8 +789,8 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
     }
 }
 
-void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
-                                         const Tex2DParams &p, ILog *log) {
+void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], VkCommandBuffer cmd_buf,
+                                         MemoryAllocators *mem_allocs, const Tex2DParams &p, ILog *log) {
     assert(p.w > 0 && p.h > 0);
     Free();
 
@@ -823,7 +826,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], VkComman
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
@@ -883,7 +886,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], VkComman
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(handle_.views[0]);
@@ -970,8 +973,8 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], VkComman
 }
 
 void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const int offsety, const int sizex,
-                                     const int sizey, const eTexFormat format, const Buffer &sbuf, VkCommandBuffer cmd_buf,
-                                     const int data_off, const int data_len) {
+                                     const int sizey, const eTexFormat format, const Buffer &sbuf,
+                                     VkCommandBuffer cmd_buf, const int data_off, const int data_len) {
     assert(format == params.format);
     assert(params.samples == 1);
     assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
@@ -1083,9 +1086,10 @@ void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Vk::CopyImageToImage(VkCommandBuffer cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
-                               const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level, const uint32_t dst_x,
-                               const uint32_t dst_y, const uint32_t width, const uint32_t height) {
+void Ray::Vk::CopyImageToImage(VkCommandBuffer cmd_buf, Texture2D &src_tex, const uint32_t src_level,
+                               const uint32_t src_x, const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level,
+                               const uint32_t dst_x, const uint32_t dst_y, const uint32_t width,
+                               const uint32_t height) {
     assert(src_tex.resource_state == eResState::CopySrc);
     assert(dst_tex.resource_state == eResState::CopyDst);
 
@@ -1330,7 +1334,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
@@ -1388,7 +1392,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
             return;
         }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
         for (VkImageView view : handle_.views) {
             VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
             name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;

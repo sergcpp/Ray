@@ -10,7 +10,7 @@ else(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
     OPTION(ENABLE_VK_IMPL "Enable Vulkan GPU implementation" OFF)
     OPTION(ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" OFF)
 endif(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
-OPTION(ENABLE_DEBUG_MARKERS "Enable GPU debug markers" OFF)
+OPTION(ENABLE_GPU_DEBUG "Enable GPU debugging" OFF)
 OPTION(ENABLE_PIX "Enable PIX debug/capture API" OFF)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;Asan;Tsan" CACHE STRING "" FORCE)
@@ -151,7 +151,6 @@ if (ENABLE_SIMD_IMPL)
 endif(ENABLE_SIMD_IMPL)
 
 if (ENABLE_VK_IMPL)
-    add_definitions(-DENABLE_OBJ_LABELS)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                               internal/CoreVK.h
                               internal/RendererVK.h

@@ -293,21 +293,13 @@ const char *Ray::Dx::Renderer::device_name() const { return ctx_->device_name().
 void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &region) {
     const auto &s = dynamic_cast<const Dx::Scene &>(scene);
 
-    const uint32_t tlas_root = s.tlas_root_;
-
     float root_min[3], cell_size[3];
-    if (tlas_root != 0xffffffff) {
-        float root_max[3];
-
+    if (s.tlas_root_ != 0xffffffff) {
         const bvh_node_t &root_node = s.tlas_root_node_;
-        // s.nodes_.Get(macro_tree_root, root_node);
-
-        UNROLLED_FOR(i, 3, {
+        for (int i = 0; i < 3; ++i) {
             root_min[i] = root_node.bbox_min[i];
-            root_max[i] = root_node.bbox_max[i];
-        })
-
-        UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
+        }
     }
 
     ++region.iteration;
@@ -504,7 +496,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     const uint32_t rand_seed = Ref::hash((region.iteration - 1) / RAND_SAMPLES_COUNT);
 
     { // generate primary rays
-        DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::GeneratePrimaryRays");
         timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_GeneratePrimaryRays(cmd_buf, cam, rand_seed, rect, w_, h_, random_seq_buf_, filter_table_,
                                    region.iteration, true, required_samples_buf_, counters_buf_, prim_rays_buf_);
@@ -512,21 +504,21 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     }
 
     { // prepare indirect args
-        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::PrepareIndirArgs");
         kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
     }
 
 #if DEBUG_HWRT
     { // debug
-        DebugMarker _(cmd_buf, "Debug HWRT");
+        DebugMarker _(cmd_buf, "Ray::Debug HWRT");
         kernel_DebugRT(cmd_buf, sc_data, macro_tree_root, prim_rays_buf_, temp_buf_);
     }
 #else
     { // trace primary rays
-        DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectScenePrimary");
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
-                              random_seq_buf_, rand_seed, region.iteration, tlas_root, cam.fwd,
+                              random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, cam.fwd,
                               cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
                               prim_hits_buf_);
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -537,7 +529,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
 
     { // shade primary hits
-        DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::ShadePrimaryHits");
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, cache_mode, s.env_, indir_args_buf_[0], 0, prim_hits_buf_,
                                 prim_rays_buf_, sc_data, random_seq_buf_, rand_seed, region.iteration, rect,
                                 s.tex_atlases_, s.bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_,
@@ -545,12 +537,12 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     }
 
     { // prepare indirect args
-        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::PrepareIndirArgs");
         kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
     }
 
     if (sc_data.env.sky_map_spread_angle > 0.0f) {
-        DebugMarker _(ctx_.get(), cmd_buf, "ShadeSkyPrimary");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::ShadeSkyPrimary");
         kernel_ShadeSkyPrimary(cmd_buf, cam.pass_settings, s.env_, indir_args_buf_[0], 4, prim_hits_buf_,
                                prim_rays_buf_, ray_hashes_bufs_[0], counters_buf_, sc_data, region.iteration,
                                temp_buf0_);
@@ -559,10 +551,10 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
 
     { // trace shadow rays
-        DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::TraceShadow");
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
-                                    random_seq_buf_, rand_seed, region.iteration, tlas_root,
+                                    random_seq_buf_, rand_seed, region.iteration, s.tlas_root_,
                                     cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
                                     shadow_rays_buf_, temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -578,7 +570,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, true));
 
         if (!use_hwrt_ && use_subgroup_) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Sort Rays");
 
             kernel_SortHashRays(cmd_buf, indir_args_buf_[0], secondary_rays_buf_, counters_buf_, root_min, cell_size,
                                 ray_hashes_bufs_[0]);
@@ -595,14 +587,14 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, true));
         { // trace secondary rays
-            DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectSceneSecondary");
             kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
-                                  random_seq_buf_, rand_seed, region.iteration, tlas_root, nullptr, -1.0f,
+                                  random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, nullptr, -1.0f,
                                   s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
         }
 
         if (sc_data.visible_lights_count) {
-            DebugMarker _(ctx_.get(), cmd_buf, "IntersectAreaLights");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectAreaLights");
             kernel_IntersectAreaLights(cmd_buf, sc_data, indir_args_buf_[0], counters_buf_, secondary_rays_buf_,
                                        prim_hits_buf_);
         }
@@ -613,7 +605,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
         const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
         { // shade secondary hits
-            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::ShadeSecondaryHits");
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, cache_mode, clamp_val, s.env_, indir_args_buf_[0], 0,
                                       prim_hits_buf_, secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed,
                                       region.iteration, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
@@ -622,12 +614,12 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         }
 
         { // prepare indirect args
-            DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::PrepareIndirArgs");
             kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
         }
 
         if (sc_data.env.sky_map_spread_angle > 0.0f) {
-            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSkySecondary");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::ShadeSkySecondary");
             kernel_ShadeSkySecondary(cmd_buf, cam.pass_settings, clamp_val, s.env_, indir_args_buf_[0], 4,
                                      prim_hits_buf_, secondary_rays_buf_, ray_hashes_bufs_[0], counters_buf_, sc_data,
                                      region.iteration, temp_buf0_);
@@ -636,10 +628,10 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
 
         { // trace shadow rays
-            DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::TraceShadow");
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
-                                        random_seq_buf_, rand_seed, region.iteration, tlas_root,
+                                        random_seq_buf_, rand_seed, region.iteration, s.tlas_root_,
                                         cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
                                         shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
@@ -650,7 +642,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 #endif
 
     { // prepare result
-        DebugMarker _(ctx_.get(), cmd_buf, "Prepare Result");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Prepare Result");
 
         const float exposure = std::pow(2.0f, cam.exposure);
 
@@ -664,7 +656,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     }
 
     { // output final buffer, prepare variance
-        DebugMarker _(ctx_.get(), cmd_buf, "Postprocess frame");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Postprocess frame");
 
         tonemap_params_.view_transform = cam.view_transform;
         tonemap_params_.inv_gamma = (1.0f / cam.gamma);
@@ -764,13 +756,13 @@ void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
     const auto &filtered_variance = temp_buf1_;
 
     { // Filter variance
-        DebugMarker _(ctx_.get(), cmd_buf, "Filter Variance");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Filter Variance");
         kernel_FilterVariance(cmd_buf, raw_variance, rect, variance_threshold_, region.iteration, filtered_variance,
                               required_samples_buf_);
     }
 
     { // Apply NLM Filter
-        DebugMarker _(ctx_.get(), cmd_buf, "NLM Filter");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::NLM Filter");
         kernel_NLMFilter(cmd_buf, full_buf_, filtered_variance, 1.0f, 0.45f, base_color_buf_, 64.0f, depth_normals_buf_,
                          32.0f, raw_filtered_buf_, tonemap_params_.view_transform, tonemap_params_.inv_gamma, rect,
                          final_buf_);
@@ -874,20 +866,20 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
     switch (pass) {
     case 0: {
         const int output_stride = round_up(w_rounded + 1, 16) + 1;
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 9 32");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 9 32");
         kernel_Convolution(cmd_buf, 9, 32, full_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
                            w_rounded, h_rounded, *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias,
                            unet_tensors_heap_, unet_tensors_.enc_conv0_offset, output_stride);
     } break;
     case 1: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 32 Downscale");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 32 32 Downscale");
         const int input_stride = round_up(w_rounded + 1, 16) + 1, output_stride = round_up(w_rounded / 2 + 1, 16) + 1;
         kernel_Convolution(cmd_buf, 32, 32, unet_tensors_heap_, unet_tensors_.enc_conv0_offset, input_stride, r,
                            w_rounded, h_rounded, *weights, offsets->enc_conv1_weight, offsets->enc_conv1_bias,
                            unet_tensors_heap_, unet_tensors_.pool1_offset, output_stride, true);
     } break;
     case 2: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 48 Downscale");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 32 48 Downscale");
         r.x = r.x / 2;
         r.y = r.y / 2;
         r.w = (r.w + 1) / 2;
@@ -900,7 +892,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                            unet_tensors_heap_, unet_tensors_.pool2_offset, output_stride, true);
     } break;
     case 3: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 48 64 Downscale");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 48 64 Downscale");
         r.x = r.x / 4;
         r.y = r.y / 4;
         r.w = (r.w + 3) / 4;
@@ -913,7 +905,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                            unet_tensors_heap_, unet_tensors_.pool3_offset, output_stride, true);
     } break;
     case 4: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 80 Downscale");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 64 80 Downscale");
         r.x = r.x / 8;
         r.y = r.y / 8;
         r.w = (r.w + 7) / 8;
@@ -926,7 +918,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                            unet_tensors_heap_, unet_tensors_.pool4_offset, output_stride, true);
     } break;
     case 5: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 80 96");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 80 96");
         r.x = r.x / 16;
         r.y = r.y / 16;
         r.w = (r.w + 15) / 16;
@@ -940,7 +932,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                            false);
     } break;
     case 6: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 96 96");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 96 96");
         r.x = r.x / 16;
         r.y = r.y / 16;
         r.w = (r.w + 15) / 16;
@@ -954,7 +946,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                            false);
     } break;
     case 7: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 96 64 112");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution Concat 96 64 112");
         r.x = r.x / 8;
         r.y = r.y / 8;
         r.w = (r.w + 7) / 8;
@@ -970,7 +962,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                                  output_stride);
     } break;
     case 8: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 112 112");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 112 112");
         r.x = r.x / 8;
         r.y = r.y / 8;
         r.w = (r.w + 7) / 8;
@@ -983,7 +975,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                            unet_tensors_heap_, unet_tensors_.upsample3_offset, output_stride, false);
     } break;
     case 9: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 112 48 96");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution Concat 112 48 96");
         r.x = r.x / 4;
         r.y = r.y / 4;
         r.w = (r.w + 3) / 4;
@@ -999,7 +991,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                                  output_stride);
     } break;
     case 10: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 96 96");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 96 96");
         r.x = r.x / 4;
         r.y = r.y / 4;
         r.w = (r.w + 3) / 4;
@@ -1012,7 +1004,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                            unet_tensors_heap_, unet_tensors_.upsample2_offset, output_stride, false);
     } break;
     case 11: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 96 32 64");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution Concat 96 32 64");
         r.x = r.x / 2;
         r.y = r.y / 2;
         r.w = (r.w + 1) / 2;
@@ -1027,7 +1019,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
                                  unet_tensors_heap_, unet_tensors_.dec_conv2a_offset, output_stride);
     } break;
     case 12: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 64");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 64 64");
         r.x = r.x / 2;
         r.y = r.y / 2;
         r.w = (r.w + 1) / 2;
@@ -1041,21 +1033,21 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
     } break;
     case 13: {
         const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 9 64");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution Concat 64 9 64");
         kernel_ConvolutionConcat(cmd_buf, 64, 9, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset, input_stride,
                                  true, full_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
                                  w_rounded, h_rounded, *weights, offsets->dec_conv1a_weight, offsets->dec_conv1a_bias,
                                  unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, output_stride);
     } break;
     case 14: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 32");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 64 32");
         const int input_stride = round_up(w_rounded + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
         kernel_Convolution(cmd_buf, 64, 32, unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, input_stride, r,
                            w_rounded, h_rounded, *weights, offsets->dec_conv1b_weight, offsets->dec_conv1b_bias,
                            unet_tensors_heap_, unet_tensors_.dec_conv1b_offset, output_stride, false);
     } break;
     case 15: {
-        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 3 Img ");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Convolution 32 3 Img ");
         const int input_stride = round_up(w_rounded + 1, 16) + 1;
         kernel_Convolution(cmd_buf, 32, 3, unet_tensors_heap_, unet_tensors_.dec_conv1b_offset, input_stride,
                            tonemap_params_.inv_gamma, r, w_, h_, *weights, offsets->dec_conv0_weight,
@@ -1104,21 +1096,13 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
 
     ++region.cache_iteration;
 
-    const uint32_t tlas_root = s.tlas_root_;
-
     float root_min[3], cell_size[3];
-    if (tlas_root != 0xffffffff) {
-        float root_max[3];
-
+    if (s.tlas_root_ != 0xffffffff) {
         const bvh_node_t &root_node = s.tlas_root_node_;
-        // s.nodes_.Get(macro_tree_root, root_node);
-
-        UNROLLED_FOR(i, 3, {
+        for (int i = 0; i < 3; ++i) {
             root_min[i] = root_node.bbox_min[i];
-            root_max[i] = root_node.bbox_max[i];
-        })
-
-        UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
+        }
     }
 
     rect_t rect = region.rect();
@@ -1257,27 +1241,27 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     timestamps_[ctx_->backend_frame].cache_update[0] = ctx_->WriteTimestamp(cmd_buf, true);
 
     { // generate primary rays
-        DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::GeneratePrimaryRays");
         kernel_GeneratePrimaryRays(cmd_buf, cam, rand_seed, rect, (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR),
                                    (h_ / RAD_CACHE_DOWNSAMPLING_FACTOR), random_seq_buf_, filter_table_,
                                    region.cache_iteration, false, required_samples_buf_, counters_buf_, prim_rays_buf_);
     }
 
     { // prepare indirect args
-        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::PrepareIndirArgs");
         kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
     }
 
     { // trace primary rays
-        DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectScenePrimary");
         kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
-                              random_seq_buf_, rand_seed, region.cache_iteration, tlas_root, cam.fwd,
+                              random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, cam.fwd,
                               cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
                               prim_hits_buf_);
     }
 
     { // shade primary hits
-        DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::ShadePrimaryHits");
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, s.env_, indir_args_buf_[0], 0,
                                 prim_hits_buf_, prim_rays_buf_, sc_data, random_seq_buf_, rand_seed,
                                 region.cache_iteration, rect, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
@@ -1286,20 +1270,20 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     }
 
     { // prepare indirect args
-        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::PrepareIndirArgs");
         kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[1]);
     }
 
     { // trace shadow rays
-        DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::TraceShadow");
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[1], 2, counters_buf_, sc_data,
-                                    random_seq_buf_, rand_seed, region.cache_iteration, tlas_root,
+                                    random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_,
                                     cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
                                     shadow_rays_buf_, temp_buf0_);
     }
 
     { // update spatial cache
-        DebugMarker _(ctx_.get(), cmd_buf, "UpdateSpatialCache");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::UpdateSpatialCache");
         temp_cache_data_buf_.Fill(0, temp_cache_data_buf_.size(), 0, cmd_buf);
         if (!ctx_->int64_atomics_supported()) {
             temp_lock_buf_.Fill(0, temp_lock_buf_.size(), 0, cmd_buf);
@@ -1312,7 +1296,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
 #if !DISABLE_SORTING
         if (!use_hwrt_ && use_subgroup_) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Sort Rays");
 
             kernel_SortHashRays(cmd_buf, indir_args_buf_[1], secondary_rays_buf_, counters_buf_, root_min, cell_size,
                                 ray_hashes_bufs_[0]);
@@ -1326,20 +1310,20 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
 #endif // !DISABLE_SORTING
 
         { // trace secondary rays
-            DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectSceneSecondary");
             kernel_IntersectScene(cmd_buf, indir_args_buf_[1], 0, counters_buf_, cam.pass_settings, sc_data,
-                                  random_seq_buf_, rand_seed, region.cache_iteration, tlas_root, nullptr, -1.0f,
+                                  random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, nullptr, -1.0f,
                                   s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
         }
 
         if (sc_data.visible_lights_count) {
-            DebugMarker _(ctx_.get(), cmd_buf, "IntersectAreaLights");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectAreaLights");
             kernel_IntersectAreaLights(cmd_buf, sc_data, indir_args_buf_[1], counters_buf_, secondary_rays_buf_,
                                        prim_hits_buf_);
         }
 
         { // shade secondary hits
-            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::ShadeSecondaryHits");
             const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, clamp_val, s.env_,
                                       indir_args_buf_[1], 0, prim_hits_buf_, secondary_rays_buf_, sc_data,
@@ -1349,20 +1333,20 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         }
 
         { // prepare indirect args
-            DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::PrepareIndirArgs");
             kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
         }
 
         { // trace shadow rays
-            DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::TraceShadow");
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
-                                        random_seq_buf_, rand_seed, region.cache_iteration, tlas_root,
+                                        random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_,
                                         cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
                                         shadow_rays_buf_, temp_buf0_);
         }
 
         { // update spatial cache
-            DebugMarker _(ctx_.get(), cmd_buf, "UpdateSpatialCache");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::UpdateSpatialCache");
             kernel_SpatialCacheUpdate(cmd_buf, cache_grid_params, indir_args_buf_[1], 0, counters_buf_, 0,
                                       prim_hits_buf_, secondary_rays_buf_, temp_cache_data_buf_, temp_buf0_,
                                       temp_depth_normals_buf_, sc_data.spatial_cache_entries,
@@ -1397,7 +1381,7 @@ void Ray::Dx::Renderer::ResolveSpatialCache(const SceneBase &scene,
     timestamps_[ctx_->backend_frame].cache_resolve[0] = ctx_->WriteTimestamp(cmd_buf, true);
 
     { // Resolve spatial cache
-        DebugMarker _(ctx_.get(), cmd_buf, "ResolveSpatialCache");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::ResolveSpatialCache");
 
         const camera_t &cam = s.cams_[s.current_cam()._index];
 
@@ -1491,7 +1475,7 @@ void Ray::Dx::Renderer::ResetSpatialCache(const SceneBase &scene,
 #endif
 
     { // Reset spatial cache
-        DebugMarker _(ctx_.get(), cmd_buf, "ResetSpatialCache");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::ResetSpatialCache");
         s.spatial_cache_voxels_prev_.buf().Fill(0, s.spatial_cache_voxels_prev_.buf().size(), 0, cmd_buf);
     }
 
@@ -1528,7 +1512,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) con
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
-            DebugMarker _(ctx_.get(), cmd_buf, "Download Result");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Download Result");
 
             // TODO: fix this!
             const auto &buffer_to_use = tonemap ? final_buf_ : raw_filtered_buf_;
@@ -1566,7 +1550,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
-            DebugMarker _(ctx_.get(), cmd_buf, "Download Result");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Download Result");
 
             const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
                                                       {&stage_buffer_to_use, eResState::CopyDst}};

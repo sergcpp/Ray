@@ -7,7 +7,7 @@
 #ifdef ENABLE_REF_IMPL
 #include "internal/RendererRef.h"
 #else // ENABLE_REF_IMPL
-#pragma message("Compiling without reference backend")
+#pragma message("Ray: Compiling without reference backend")
 #endif // ENABLE_REF_IMPL
 
 #ifdef ENABLE_SIMD_IMPL
@@ -23,7 +23,7 @@
 #include "internal/RendererSSE2.h"
 #endif
 #else // ENABLE_SIMD_IMPL
-#pragma message("Compiling without SIMD support")
+#pragma message("Ray: Compiling without SIMD support")
 #endif // #ifdef ENABLE_SIMD_IMPL
 
 #if defined(ENABLE_DX_IMPL) && defined(_WIN32)

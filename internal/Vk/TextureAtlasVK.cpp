@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "../../Config.h"
 #include "../../Log.h"
 #include "../TextureUtils.h"
 #include "ContextVK.h"
@@ -298,7 +299,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         }
     }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
     VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType = VK_OBJECT_TYPE_IMAGE;
     name_info.objectHandle = uint64_t(new_img);

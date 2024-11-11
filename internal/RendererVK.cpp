@@ -338,21 +338,13 @@ const char *Ray::Vk::Renderer::device_name() const { return ctx_->device_propert
 void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &region) {
     const auto &s = dynamic_cast<const Vk::Scene &>(scene);
 
-    const uint32_t tlas_root = s.tlas_root_;
-
     float root_min[3], cell_size[3];
-    if (tlas_root != 0xffffffff) {
-        float root_max[3];
-
+    if (s.tlas_root_ != 0xffffffff) {
         const bvh_node_t &root_node = s.tlas_root_node_;
-        // s.nodes_.Get(macro_tree_root, root_node);
-
-        UNROLLED_FOR(i, 3, {
+        for (int i = 0; i < 3; ++i) {
             root_min[i] = root_node.bbox_min[i];
-            root_max[i] = root_node.bbox_max[i];
-        })
-
-        UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
+        }
     }
 
     ++region.iteration;
@@ -460,6 +452,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
+    DebugMarker render_scene_marker(ctx_.get(), cmd_buf, "Ray::RenderScene");
+
     ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
     //////////////////////////////////////////////////////////////////////////////////
@@ -530,7 +524,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
 #if DEBUG_HWRT
     { // debug
-        DebugMarker _(cmd_buf, "Debug HWRT");
+        DebugMarker _(cmd_buf, "Ray::Debug HWRT");
         kernel_DebugRT(cmd_buf, sc_data, macro_tree_root, prim_rays_buf_, temp_buf_);
     }
 #else
@@ -539,11 +533,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
         if (use_rt_pipeline) {
             kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_[0], 1, cam.pass_settings, sc_data, random_seq_buf_,
-                                         rand_seed, region.iteration, tlas_root, cam.fwd, cam.clip_end - cam.clip_start,
-                                         s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_, prim_hits_buf_);
+                                         rand_seed, region.iteration, s.tlas_root_, cam.fwd,
+                                         cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_,
+                                         prim_rays_buf_, prim_hits_buf_);
         } else {
             kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
-                                  random_seq_buf_, rand_seed, region.iteration, tlas_root, cam.fwd,
+                                  random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, cam.fwd,
                                   cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
                                   prim_hits_buf_);
         }
@@ -580,7 +575,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
-                                    random_seq_buf_, rand_seed, region.iteration, tlas_root,
+                                    random_seq_buf_, rand_seed, region.iteration, s.tlas_root_,
                                     cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
                                     shadow_rays_buf_, temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -616,11 +611,11 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
             DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
             if (use_rt_pipeline) {
                 kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_[0], 1, cam.pass_settings, sc_data,
-                                             random_seq_buf_, rand_seed, region.iteration, tlas_root, nullptr, -1.0f,
+                                             random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, nullptr, -1.0f,
                                              s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
             } else {
                 kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
-                                      random_seq_buf_, rand_seed, region.iteration, tlas_root, nullptr, -1.0f,
+                                      random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, nullptr, -1.0f,
                                       s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
             }
         }
@@ -663,7 +658,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
             DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
-                                        random_seq_buf_, rand_seed, region.iteration, tlas_root,
+                                        random_seq_buf_, rand_seed, region.iteration, s.tlas_root_,
                                         cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
                                         shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
@@ -705,6 +700,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
         CopyImageToImage(cmd_buf, full_buf_, 0, rect.x, rect.y, raw_filtered_buf_, 0, rect.x, rect.y, rect.w, rect.h);
     }
+
+    render_scene_marker.End();
 
 #if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
@@ -767,6 +764,8 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
+    DebugMarker denoise_marker(ctx_.get(), cmd_buf, "Ray::DenoiseImage");
+
     ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
     //////////////////////////////////////////////////////////////////////////////////
@@ -794,6 +793,8 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);
 
     //////////////////////////////////////////////////////////////////////////////////
+
+    denoise_marker.End();
 
 #if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
@@ -859,6 +860,13 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
 #endif
 
         ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
+
+#ifdef ENABLE_GPU_DEBUG
+        VkDebugUtilsLabelEXT label = {VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT};
+        label.pLabelName = "Ray::DenoiseImage";
+        label.color[0] = label.color[1] = label.color[2] = label.color[3] = 1.0f;
+        ctx_->api().vkCmdBeginDebugUtilsLabelEXT(cmd_buf, &label);
+#endif
 
         timestamps_[ctx_->backend_frame].denoise[0] = ctx_->WriteTimestamp(cmd_buf, true);
     } else {
@@ -1082,6 +1090,10 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
     if (pass == 15) {
         timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);
 
+#ifdef ENABLE_GPU_DEBUG
+        ctx_->api().vkCmdEndDebugUtilsLabelEXT(cmd_buf);
+#endif
+
 #if RUN_IN_LOCKSTEP
         Buffer debug_buf("Tensors Debug Buf", ctx_.get(), eBufType::Readback, unet_tensors_heap_.size());
 
@@ -1158,21 +1170,13 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
 
     ++region.cache_iteration;
 
-    const uint32_t tlas_root = s.tlas_root_;
-
     float root_min[3], cell_size[3];
-    if (tlas_root != 0xffffffff) {
-        float root_max[3];
-
+    if (s.tlas_root_ != 0xffffffff) {
         const bvh_node_t &root_node = s.tlas_root_node_;
-        // s.nodes_.Get(macro_tree_root, root_node);
-
-        UNROLLED_FOR(i, 3, {
+        for (int i = 0; i < 3; ++i) {
             root_min[i] = root_node.bbox_min[i];
-            root_max[i] = root_node.bbox_max[i];
-        })
-
-        UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
+        }
     }
 
     rect_t rect = region.rect();
@@ -1260,6 +1264,8 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
+    DebugMarker update_cache_marker(ctx_.get(), cmd_buf, "Ray::UpdateSpatialCache");
+
     ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
     //////////////////////////////////////////////////////////////////////////////////
@@ -1299,12 +1305,12 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
         if (use_rt_pipeline) {
             kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_[0], 1, cam.pass_settings, sc_data, random_seq_buf_,
-                                         rand_seed, region.cache_iteration, tlas_root, cam.fwd,
+                                         rand_seed, region.cache_iteration, s.tlas_root_, cam.fwd,
                                          cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_,
                                          prim_rays_buf_, prim_hits_buf_);
         } else {
             kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
-                                  random_seq_buf_, rand_seed, region.cache_iteration, tlas_root, cam.fwd,
+                                  random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, cam.fwd,
                                   cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
                                   prim_hits_buf_);
         }
@@ -1325,9 +1331,9 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     }
 
     { // trace shadow rays
-        DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::TraceShadow");
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[1], 2, counters_buf_, sc_data,
-                                    random_seq_buf_, rand_seed, region.cache_iteration, tlas_root,
+                                    random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_,
                                     cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
                                     shadow_rays_buf_, temp_buf0_);
     }
@@ -1363,12 +1369,12 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
             DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
             if (use_rt_pipeline) {
                 kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_[1], 1, cam.pass_settings, sc_data,
-                                             random_seq_buf_, rand_seed, region.cache_iteration, tlas_root, nullptr,
+                                             random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, nullptr,
                                              -1.0f, s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_,
                                              prim_hits_buf_);
             } else {
                 kernel_IntersectScene(cmd_buf, indir_args_buf_[1], 0, counters_buf_, cam.pass_settings, sc_data,
-                                      random_seq_buf_, rand_seed, region.cache_iteration, tlas_root, nullptr, -1.0f,
+                                      random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, nullptr, -1.0f,
                                       s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
             }
         }
@@ -1397,7 +1403,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         { // trace shadow rays
             DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
-                                        random_seq_buf_, rand_seed, region.cache_iteration, tlas_root,
+                                        random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_,
                                         cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
                                         shadow_rays_buf_, temp_buf0_);
         }
@@ -1415,6 +1421,8 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     }
 
     timestamps_[ctx_->backend_frame].cache_update[1] = ctx_->WriteTimestamp(cmd_buf, false);
+
+    update_cache_marker.End();
 
 #if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
@@ -1434,6 +1442,8 @@ void Ray::Vk::Renderer::ResolveSpatialCache(const SceneBase &scene,
 #else
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
+
+    DebugMarker resolve_cache_marker(ctx_.get(), cmd_buf, "Ray::ResolveSpatialCache");
 
     timestamps_[ctx_->backend_frame].cache_resolve[0] = ctx_->WriteTimestamp(cmd_buf, true);
 
@@ -1457,6 +1467,8 @@ void Ray::Vk::Renderer::ResolveSpatialCache(const SceneBase &scene,
     }
 
     timestamps_[ctx_->backend_frame].cache_resolve[1] = ctx_->WriteTimestamp(cmd_buf, false);
+
+    resolve_cache_marker.End();
 
 #if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
@@ -1523,7 +1535,7 @@ void Ray::Vk::Renderer::ResetSpatialCache(const SceneBase &scene,
 #endif
 
     { // Reset spatial cache
-        DebugMarker _(ctx_.get(), cmd_buf, "ResetSpatialCache");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::ResetSpatialCache");
         s.spatial_cache_voxels_prev_.buf().Fill(0, s.spatial_cache_voxels_prev_.buf().size(), 0, cmd_buf);
     }
 
@@ -1569,7 +1581,7 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) con
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
-            DebugMarker _(ctx_.get(), cmd_buf, "Download Result");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Download Result");
 
             // TODO: fix this!
             const auto &buffer_to_use = tonemap ? final_buf_ : raw_filtered_buf_;
@@ -1636,7 +1648,7 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
-            DebugMarker _(ctx_.get(), cmd_buf, "Download Result");
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Download Result");
 
             const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
                                                       {&readback_buffer_to_use, eResState::CopyDst}};

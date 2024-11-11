@@ -768,12 +768,12 @@ inline void Ray::NS::Renderer::TransitionSceneResources(CommandBuffer cmd_buf, c
 
 inline void Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
                                          Buffer &count_table, const Buffer &counters, const Buffer &reduce_table) {
-    DebugMarker _(ctx_.get(), cmd_buf, "Radix Sort");
+    DebugMarker _(ctx_.get(), cmd_buf, "Ray::Radix Sort");
 
-    static const char *MarkerStrings[] = {"Radix Sort Iter #0 [Bits   0-4]", "Radix Sort Iter #1 [Bits   4-8]",
-                                          "Radix Sort Iter #2 [Bits  8-12]", "Radix Sort Iter #3 [Bits 12-16]",
-                                          "Radix Sort Iter #4 [Bits 16-20]", "Radix Sort Iter #5 [Bits 20-24]",
-                                          "Radix Sort Iter #6 [Bits 24-28]", "Radix Sort Iter #7 [Bits 28-32]"};
+    static const char *MarkerStrings[] = {"Ray::Radix Sort Iter #0 [Bits   0-4]", "Radix Sort Iter #1 [Bits   4-8]",
+                                          "Ray::Radix Sort Iter #2 [Bits  8-12]", "Radix Sort Iter #3 [Bits 12-16]",
+                                          "Ray::Radix Sort Iter #4 [Bits 16-20]", "Radix Sort Iter #5 [Bits 20-24]",
+                                          "Ray::Radix Sort Iter #6 [Bits 24-28]", "Radix Sort Iter #7 [Bits 28-32]"};
 
     Buffer *hashes[] = {&_hashes[0], &_hashes[1]};
     for (int shift = 0; shift < 32; shift += 4) {

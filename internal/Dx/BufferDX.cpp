@@ -11,6 +11,7 @@
 #endif
 #include <d3d12.h>
 
+#include "../../Config.h"
 #include "../../Log.h"
 #include "ContextDX.h"
 
@@ -159,7 +160,7 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
         return;
     }
 
-#ifdef ENABLE_OBJ_LABELS
+#ifdef ENABLE_GPU_DEBUG
     std::wstring temp_str(name_.begin(), name_.end());
     new_buf->SetName(temp_str.c_str());
 #endif
