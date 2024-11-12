@@ -456,8 +456,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    ctx_->api().vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+    ctx_->api().vkBeginCommandBuffer(cmd_buf, &begin_info);
 #endif
 
     DebugMarker render_scene_marker(ctx_.get(), cmd_buf, "Ray::RenderScene");
@@ -863,8 +863,8 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
         VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        ctx_->api().vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
         cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+        ctx_->api().vkBeginCommandBuffer(cmd_buf, &begin_info);
 #endif
 
         ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
@@ -1268,8 +1268,8 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    ctx_->api().vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+    ctx_->api().vkBeginCommandBuffer(cmd_buf, &begin_info);
 #endif
 
     DebugMarker update_cache_marker(ctx_.get(), cmd_buf, "Ray::UpdateSpatialCache");
@@ -1538,8 +1538,8 @@ void Ray::Vk::Renderer::ResetSpatialCache(const SceneBase &scene,
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    ctx_->api().vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+    ctx_->api().vkBeginCommandBuffer(cmd_buf, &begin_info);
 #endif
 
     { // Reset spatial cache
