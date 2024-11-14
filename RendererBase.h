@@ -10,6 +10,7 @@
 
 struct ID3D12Resource;
 struct ID3D12DescriptorHeap;
+struct ID3D12GraphicsCommandList;
 
 /**
   @file RendererBase.h
@@ -107,11 +108,24 @@ struct GpuImage {
     eGPUResState state;
 
     GpuImage() { memset(this, 0, sizeof(GpuImage)); }
-    GpuImage(VkImage _vk_image, VkImageView _vk_image_view, eGPUResState _state)
+    GpuImage(const VkImage _vk_image, const VkImageView _vk_image_view, const eGPUResState _state)
         : vk_image(_vk_image), vk_image_view(_vk_image_view), state(_state) {}
-    GpuImage(ID3D12Resource *_dx_image, ID3D12DescriptorHeap *dx_view_heap, uint32_t dx_view_offset,
-             eGPUResState _state)
+    GpuImage(ID3D12Resource *const _dx_image, ID3D12DescriptorHeap *const dx_view_heap, const uint32_t dx_view_offset,
+             const eGPUResState _state)
         : dx_image(_dx_image), dx_image_view{dx_view_heap, dx_view_offset}, state(_state) {}
+};
+
+struct GpuCommandBuffer {
+    union {
+        VkCommandBuffer vk_cmd_buf;
+        ID3D12GraphicsCommandList *dx_cmd_buf;
+    };
+    int index;
+
+    GpuCommandBuffer() { memset(this, 0, sizeof(GpuCommandBuffer)); }
+    GpuCommandBuffer(const VkCommandBuffer _vk_cmd_buf, const int _index) : vk_cmd_buf(_vk_cmd_buf), index(_index) {}
+    GpuCommandBuffer(ID3D12GraphicsCommandList *const _dx_cmd_buf, const int _index)
+        : dx_cmd_buf(_dx_cmd_buf), index(_index) {}
 };
 
 /** Base class for all renderer backends
@@ -154,7 +168,10 @@ class RendererBase {
     virtual GpuImage get_native_raw_pixels() const { return {}; }
 
     /// Allows to set native GPU image state
-    virtual void set_native_raw_pixels_state(const eGPUResState state) {}
+    virtual void set_native_raw_pixels_state(const eGPUResState) {}
+
+    /// Allows to set native GPU command buffer to use
+    virtual void set_command_buffer(const GpuCommandBuffer) {}
 
     /** @brief Resize framebuffer
         @param w new image width

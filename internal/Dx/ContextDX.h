@@ -147,6 +147,8 @@ class Context {
     bool render_finished_semaphore_is_set[MaxFramesInFlight] = {};
     uint64_t fence_values[MaxFramesInFlight] = {};
 
+    bool frame_cpu_synced[MaxFramesInFlight] = {};
+
     Buffer uniform_data_bufs[MaxFramesInFlight];
     uint32_t uniform_data_buf_offs[MaxFramesInFlight];
 

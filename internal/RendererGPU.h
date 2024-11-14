@@ -45,6 +45,7 @@ struct scene_data_t {
 class Renderer : public RendererBase {
   protected:
     std::unique_ptr<Context> ctx_;
+    GpuCommandBuffer external_cmd_buf_;
 
     Shader sh_prim_rays_gen_simple_, sh_prim_rays_gen_adaptive_;
     Shader sh_intersect_scene_, sh_intersect_scene_indirect_, sh_intersect_area_lights_;
@@ -340,6 +341,11 @@ class Renderer : public RendererBase {
         raw_filtered_buf_.resource_state = eResState(state);
     }
 
+    void set_command_buffer(const GpuCommandBuffer cmd_buf) {
+        external_cmd_buf_ = cmd_buf;
+        ctx_->frame_cpu_synced[cmd_buf.index] = false;
+    }
+
     void Resize(int w, int h) override;
     void Clear(const color_rgba_t &c) override;
 
@@ -482,35 +488,6 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     }
 
     Clear(color_rgba_t{});
-}
-
-inline void Ray::NS::Renderer::Clear(const color_rgba_t &c) {
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-
-    const TransitionInfo img_transitions[] = {{&full_buf_, ResStateForClear},
-                                              {&half_buf_, ResStateForClear},
-                                              {&final_buf_, ResStateForClear},
-                                              {&raw_filtered_buf_, ResStateForClear},
-                                              {&base_color_buf_, ResStateForClear},
-                                              {&depth_normals_buf_, ResStateForClear},
-                                              {&required_samples_buf_, ResStateForClear}};
-    TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-
-    ClearColorImage(full_buf_, c.v, cmd_buf);
-    ClearColorImage(half_buf_, c.v, cmd_buf);
-    ClearColorImage(final_buf_, c.v, cmd_buf);
-    ClearColorImage(raw_filtered_buf_, c.v, cmd_buf);
-
-    static const float rgba_zero[] = {0.0f, 0.0f, 0.0f, 0.0f};
-    ClearColorImage(base_color_buf_, rgba_zero, cmd_buf);
-    ClearColorImage(depth_normals_buf_, rgba_zero, cmd_buf);
-
-    { // Clear integer texture
-        static const uint32_t rgba[4] = {0xffff, 0xffff, 0xffff, 0xffff};
-        ClearColorImage(required_samples_buf_, rgba, cmd_buf);
-    }
-
-    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
 inline void Ray::NS::Renderer::UpdateFilterTable(CommandBuffer cmd_buf, const ePixelFilter filter, float filter_width) {
