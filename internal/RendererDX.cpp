@@ -298,6 +298,35 @@ Ray::eRendererType Ray::Dx::Renderer::type() const { return eRendererType::Direc
 
 const char *Ray::Dx::Renderer::device_name() const { return ctx_->device_name().c_str(); }
 
+inline void Ray::Dx::Renderer::Clear(const color_rgba_t &c) {
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+
+    const TransitionInfo img_transitions[] = {{&full_buf_, ResStateForClear},
+                                              {&half_buf_, ResStateForClear},
+                                              {&final_buf_, ResStateForClear},
+                                              {&raw_filtered_buf_, ResStateForClear},
+                                              {&base_color_buf_, ResStateForClear},
+                                              {&depth_normals_buf_, ResStateForClear},
+                                              {&required_samples_buf_, ResStateForClear}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+
+    ClearColorImage(full_buf_, c.v, cmd_buf);
+    ClearColorImage(half_buf_, c.v, cmd_buf);
+    ClearColorImage(final_buf_, c.v, cmd_buf);
+    ClearColorImage(raw_filtered_buf_, c.v, cmd_buf);
+
+    static const float rgba_zero[] = {0.0f, 0.0f, 0.0f, 0.0f};
+    ClearColorImage(base_color_buf_, rgba_zero, cmd_buf);
+    ClearColorImage(depth_normals_buf_, rgba_zero, cmd_buf);
+
+    { // Clear integer texture
+        static const uint32_t rgba[4] = {0xffff, 0xffff, 0xffff, 0xffff};
+        ClearColorImage(required_samples_buf_, rgba, cmd_buf);
+    }
+
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+}
+
 void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &region) {
     const auto &s = dynamic_cast<const Dx::Scene &>(scene);
 
