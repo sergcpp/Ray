@@ -1638,9 +1638,18 @@ void Ray::Vk::Renderer::ResetSpatialCache(const SceneBase &scene,
 
     const auto &s = dynamic_cast<const Vk::Scene &>(scene);
 
+    CommandBuffer cmd_buf = {};
+    if (external_cmd_buf_.vk_cmd_buf) {
+        ctx_->backend_frame = external_cmd_buf_.index;
+        cmd_buf = external_cmd_buf_.vk_cmd_buf;
+    }
+
 #if !RUN_IN_LOCKSTEP
-    ctx_->api().vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
-    ctx_->api().vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+    if (!external_cmd_buf_.vk_cmd_buf) {
+        ctx_->api().vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE,
+                                    UINT64_MAX);
+        ctx_->api().vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+    }
 #endif
 
     ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
@@ -1648,13 +1657,15 @@ void Ray::Vk::Renderer::ResetSpatialCache(const SceneBase &scene,
     ctx_->default_descr_alloc()->Reset();
 
 #if RUN_IN_LOCKSTEP
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+    cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 #else
-    VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    if (!cmd_buf) {
+        VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
-    ctx_->api().vkBeginCommandBuffer(cmd_buf, &begin_info);
+        cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+        ctx_->api().vkBeginCommandBuffer(cmd_buf, &begin_info);
+    }
 #endif
 
     { // Reset spatial cache
@@ -1665,37 +1676,39 @@ void Ray::Vk::Renderer::ResetSpatialCache(const SceneBase &scene,
 #if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
-    ctx_->api().vkEndCommandBuffer(cmd_buf);
+    if (!external_cmd_buf_.vk_cmd_buf) {
+        ctx_->api().vkEndCommandBuffer(cmd_buf);
 
-    const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
+        const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
 
-    VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
 
-    const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
-    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
+        const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
+        const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
 
-    if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
-        submit_info.waitSemaphoreCount = 1;
-        submit_info.pWaitSemaphores = wait_semaphores;
-        submit_info.pWaitDstStageMask = wait_stages;
+        if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = wait_semaphores;
+            submit_info.pWaitDstStageMask = wait_stages;
+        }
+
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &ctx_->draw_cmd_buf(ctx_->backend_frame);
+
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
+
+        const VkResult res = ctx_->api().vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info,
+                                                       ctx_->in_flight_fence(ctx_->backend_frame));
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to submit into a queue!");
+        }
+
+        ctx_->render_finished_semaphore_is_set[ctx_->backend_frame] = true;
+        ctx_->render_finished_semaphore_is_set[prev_frame] = false;
+
+        ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
     }
-
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &ctx_->draw_cmd_buf(ctx_->backend_frame);
-
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
-
-    const VkResult res =
-        ctx_->api().vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
-    if (res != VK_SUCCESS) {
-        ctx_->log()->Error("Failed to submit into a queue!");
-    }
-
-    ctx_->render_finished_semaphore_is_set[ctx_->backend_frame] = true;
-    ctx_->render_finished_semaphore_is_set[prev_frame] = false;
-
-    ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
 #endif
 }
 
