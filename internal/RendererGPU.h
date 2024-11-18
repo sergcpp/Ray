@@ -341,7 +341,7 @@ class Renderer : public RendererBase {
         raw_filtered_buf_.resource_state = eResState(state);
     }
 
-    void set_command_buffer(const GpuCommandBuffer cmd_buf) {
+    void set_command_buffer(const GpuCommandBuffer cmd_buf) override {
         external_cmd_buf_ = cmd_buf;
         ctx_->frame_cpu_synced[cmd_buf.index] = false;
     }

@@ -4082,6 +4082,7 @@ bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float 
                       tri_end = int(tri_start + nodes[cur.index].child[1]);
             assert((tri_start % 8) == 0);
             assert((tri_end - tri_start) <= 8);
+            unused(tri_end);
             res |=
                 IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
         }
@@ -4239,6 +4240,7 @@ int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3]
                       tri_end = int(tri_start + nodes[cur.index].child[1]);
             assert((tri_start % 8) == 0);
             assert((tri_end - tri_start) <= 8);
+            unused(tri_end);
             const bool hit_found =
                 IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
             if (hit_found) {
