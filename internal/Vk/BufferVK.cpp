@@ -25,7 +25,7 @@ VkBufferUsageFlags GetVkBufferUsageFlags(const Context *ctx, const eBufType type
     } else if (type == eBufType::Upload) {
     } else if (type == eBufType::Readback) {
     } else if (type == eBufType::AccStructure) {
-        flags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+        flags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     } else if (type == eBufType::ShaderBinding) {
         flags |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     } else if (type == eBufType::Indirect) {
