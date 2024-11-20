@@ -29,8 +29,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(const VkDebugReportFlagsEXT f
     auto *ctx = reinterpret_cast<const Context *>(pUserData);
 
     bool ignore = g_ignore_optick_errors && (location == 0x45e90123 || location == 0xffffffff9cacd67a);
-    ignore |= (location == 0x0000000079de34d4); // dynamic rendering support is incomplete
     ignore |= (location == 0x000000004dae5635); // layout warning when blitting within the same image
+    ignore |= (location == 0x00000000a5625282); // cooperative matrix type must be A Type
     if (!ignore) {
         ctx->log()->Error("%s: %s\n", pLayerPrefix, pMessage);
     }
