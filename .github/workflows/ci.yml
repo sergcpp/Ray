@@ -123,7 +123,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-nv-output"
-          test-args: "--device NV --nocpu -vl 0"
+          test-args: "--device NV --nocpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()

@@ -128,18 +128,18 @@ class Context {
     bool frame_cpu_synced[MaxFramesInFlight] = {};
 
     // resources scheduled for deferred destruction
-    SmallVector<VkImage, 128> images_to_destroy[MaxFramesInFlight];
-    SmallVector<VkImageView, 128> image_views_to_destroy[MaxFramesInFlight];
-    SmallVector<VkSampler, 128> samplers_to_destroy[MaxFramesInFlight];
-    SmallVector<MemAllocation, 128> allocs_to_free[MaxFramesInFlight];
-    SmallVector<VkBuffer, 128> bufs_to_destroy[MaxFramesInFlight];
-    SmallVector<VkBufferView, 128> buf_views_to_destroy[MaxFramesInFlight];
-    SmallVector<VkDeviceMemory, 128> mem_to_free[MaxFramesInFlight];
-    SmallVector<VkRenderPass, 128> render_passes_to_destroy[MaxFramesInFlight];
-    SmallVector<VkDescriptorPool, 16> descriptor_pools_to_destroy[MaxFramesInFlight];
-    SmallVector<VkPipelineLayout, 128> pipeline_layouts_to_destroy[MaxFramesInFlight];
-    SmallVector<VkPipeline, 128> pipelines_to_destroy[MaxFramesInFlight];
-    SmallVector<VkAccelerationStructureKHR, 128> acc_structs_to_destroy[MaxFramesInFlight];
+    std::vector<VkImage> images_to_destroy[MaxFramesInFlight];
+    std::vector<VkImageView> image_views_to_destroy[MaxFramesInFlight];
+    std::vector<VkSampler> samplers_to_destroy[MaxFramesInFlight];
+    std::vector<MemAllocation> allocs_to_free[MaxFramesInFlight];
+    std::vector<VkBuffer> bufs_to_destroy[MaxFramesInFlight];
+    std::vector<VkBufferView> buf_views_to_destroy[MaxFramesInFlight];
+    std::vector<VkDeviceMemory> mem_to_free[MaxFramesInFlight];
+    std::vector<VkRenderPass> render_passes_to_destroy[MaxFramesInFlight];
+    std::vector<VkDescriptorPool> descriptor_pools_to_destroy[MaxFramesInFlight];
+    std::vector<VkPipelineLayout> pipeline_layouts_to_destroy[MaxFramesInFlight];
+    std::vector<VkPipeline> pipelines_to_destroy[MaxFramesInFlight];
+    std::vector<VkAccelerationStructureKHR> acc_structs_to_destroy[MaxFramesInFlight];
 
     static int QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], int capacity);
 
