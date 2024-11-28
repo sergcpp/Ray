@@ -142,5 +142,6 @@ bool Ray::MatchDeviceNames(const char *name, const char *pattern) {
 
 const char *Ray::Version() { return "v0.3.0-unknown-commit"; }
 
-// Workaround for a strange clang behavior
+// Workaround for identical template instantiations merging causing illegal instruction error with Windows Clang
 template class std::vector<float, Ray::aligned_allocator<float, 64>>;
+template class std::vector<uint16_t>;
