@@ -13,34 +13,34 @@
 #include "simd/aligned_allocator.h"
 
 namespace Ray {
-template <typename T, int AlignmentOfT = alignof(T)> class SmallVectorImpl {
-    T *begin_, *end_;
-    size_t capacity_;
+template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> class SmallVectorImpl : Allocator {
+    T *begin_;
+    uint32_t size_, capacity_;
 
     // occupy one last bit of capacity to identify that we own the buffer
-    static const size_t OwnerBit = (1ull << (8u * sizeof(size_t) - 1u));
-    static const size_t CapacityMask = ~OwnerBit;
+    static const uint32_t OwnerBit = (1u << (8u * sizeof(uint32_t) - 1u));
+    static const uint32_t CapacityMask = ~OwnerBit;
 
   protected:
-    SmallVectorImpl(T *begin, T *end, const size_t capacity) : begin_(begin), end_(end), capacity_(capacity) {}
+    SmallVectorImpl(T *begin, T *end, const uint32_t capacity, const Allocator &alloc)
+        : Allocator(alloc), begin_(begin), size_(uint32_t(end - begin)), capacity_(capacity) {}
 
     ~SmallVectorImpl() {
-        while (end_ != begin_) {
-            (--end_)->~T();
+        while (size_) {
+            (begin_ + --size_)->~T();
         }
-
         if (capacity_ & OwnerBit) {
-            aligned_free(begin_);
+            this->deallocate(begin_, (capacity_ & CapacityMask));
         }
     }
 
-    void ensure_reserved(const size_t req_capacity) {
-        const size_t cur_capacity = (capacity_ & CapacityMask);
+    void ensure_reserved(const uint32_t req_capacity) {
+        const uint32_t cur_capacity = (capacity_ & CapacityMask);
         if (req_capacity <= cur_capacity) {
             return;
         }
 
-        size_t new_capacity = cur_capacity;
+        uint32_t new_capacity = cur_capacity;
         while (new_capacity < req_capacity) {
             new_capacity *= 2;
         }
@@ -59,22 +59,22 @@ template <typename T, int AlignmentOfT = alignof(T)> class SmallVectorImpl {
             return (*this);
         }
 
-        while (end_ != begin_) {
-            (--end_)->~T();
+        while (size_) {
+            (begin_ + --size_)->~T();
         }
 
         if (capacity_ & OwnerBit) {
-            aligned_free(begin_);
+            this->deallocate(begin_, (capacity_ & CapacityMask));
             capacity_ = 0;
         }
 
         reserve(rhs.capacity_ & CapacityMask);
 
-        end_ = begin_ + (rhs.end_ - rhs.begin_);
+        size_ = rhs.size_;
 
-        if (rhs.end_ != rhs.begin_) {
-            T *src = rhs.end_ - 1;
-            T *dst = end_ - 1;
+        if (rhs.size_) {
+            T *src = rhs.begin_ + rhs.size_ - 1;
+            T *dst = begin_ + size_ - 1;
             do {
                 new (dst--) T(*src--);
             } while (src >= rhs.begin_);
@@ -88,109 +88,111 @@ template <typename T, int AlignmentOfT = alignof(T)> class SmallVectorImpl {
             return (*this);
         }
 
-        while (end_ != begin_) {
-            (--end_)->~T();
+        while (size_) {
+            (begin_ + --size_)->~T();
         }
 
         if (capacity_ & OwnerBit) {
-            aligned_free(begin_);
+            this->deallocate(begin_, (capacity_ & CapacityMask));
             capacity_ = 0;
         }
 
         if (rhs.capacity_ & OwnerBit) {
             begin_ = std::exchange(rhs.begin_, (T *)nullptr);
-            end_ = std::exchange(rhs.end_, (T *)nullptr);
+            size_ = std::exchange(rhs.size_, 0);
             capacity_ = std::exchange(rhs.capacity_, 0);
         } else {
             reserve(rhs.capacity_ & CapacityMask);
 
-            end_ = begin_ + (rhs.end_ - rhs.begin_);
+            size_ = rhs.size_;
 
-            T *dst = end_ - 1;
-            while (rhs.end_ != rhs.begin_) {
-                new (dst--) T(std::move(*--rhs.end_));
-                rhs.end_->~T();
+            T *dst = begin_ + size_ - 1;
+            while (rhs.size_) {
+                new (dst--) T(std::move(*(rhs.begin_ + --rhs.size_)));
+                (rhs.begin_ + rhs.size_)->~T();
             }
         }
 
         return (*this);
     }
 
+    operator Span<const T>() const { return Span<const T>(data(), size()); }
+
     const T *cdata() const noexcept { return begin_; }
     const T *data() const noexcept { return begin_; }
     const T *begin() const noexcept { return begin_; }
-    const T *end() const noexcept { return end_; }
+    const T *end() const noexcept { return begin_ + size_; }
 
     T *data() noexcept { return begin_; }
     iterator begin() noexcept { return begin_; }
-    iterator end() noexcept { return end_; }
+    iterator end() noexcept { return begin_ + size_; }
+
+    const Allocator &alloc() const { return (*this); }
 
     const T &front() const {
-        assert(begin_ != end_);
+        assert(size_ != 0);
         return *begin_;
     }
     const T &back() const {
-        assert(begin_ != end_);
-        return *(end_ - 1);
+        assert(size_ != 0);
+        return *(begin_ + size_ - 1);
     }
 
     T &front() {
-        assert(begin_ != end_);
+        assert(size_ != 0);
         return *begin_;
     }
     T &back() {
-        assert(begin_ != end_);
-        return *(end_ - 1);
+        assert(size_ != 0);
+        return *(begin_ + size_ - 1);
     }
 
-    bool empty() const noexcept { return end_ == begin_; }
-    size_t size() const noexcept { return end_ - begin_; }
-    size_t capacity() const noexcept { return (capacity_ & CapacityMask); }
-
-    operator Span<const T>() const { return Span<const T>(data(), size()); }
+    bool empty() const noexcept { return size_ == 0; }
+    uint32_t size() const noexcept { return size_; }
+    uint32_t capacity() const noexcept { return (capacity_ & CapacityMask); }
 
     template <typename IntType> const T &operator[](const IntType i) const {
-        assert(i >= 0 && begin_ + i < end_);
+        assert(i >= 0 && i < IntType(size_));
         return begin_[i];
     }
 
     template <typename IntType> T &operator[](const IntType i) {
-        assert(i >= 0 && begin_ + i < end_);
+        assert(i >= 0 && i < IntType(size_));
         return begin_[i];
     }
 
     void push_back(const T &el) {
-        ensure_reserved(size_t(end_ - begin_) + 1);
-        new (end_++) T(el);
+        ensure_reserved(size_ + 1);
+        new (begin_ + size_++) T(el);
     }
 
     void push_back(T &&el) {
-        ensure_reserved(size_t(end_ - begin_) + 1);
-        new (end_++) T(std::move(el));
+        ensure_reserved(size_ + 1);
+        new (begin_ + size_++) T(std::move(el));
     }
 
     template <class... Args> T &emplace_back(Args &&...args) {
-        ensure_reserved(size_t(end_ - begin_) + 1);
-        new (end_++) T(std::forward<Args>(args)...);
-        return *(end_ - 1);
+        ensure_reserved(size_ + 1);
+        new (begin_ + size_++) T(std::forward<Args>(args)...);
+        return *(begin_ + size_ - 1);
     }
 
     void pop_back() {
-        assert(begin_ != end_);
-        (--end_)->~T();
+        assert(size_ != 0);
+        (begin_ + --size_)->~T();
     }
 
-    void reserve(const size_t req_capacity) {
-        const size_t cur_capacity = (capacity_ & CapacityMask);
+    void reserve(const uint32_t req_capacity) {
+        const uint32_t cur_capacity = (capacity_ & CapacityMask);
         if (req_capacity <= cur_capacity) {
             return;
         }
 
-        T *new_begin = (T *)aligned_malloc(req_capacity * sizeof(T), AlignmentOfT);
-        T *new_end = new_begin + (end_ - begin_);
+        T *new_begin = this->allocate(req_capacity);
+        T *new_end = new_begin + size_;
 
-        if (end_ != begin_) {
-            T *src = end_ - 1;
+        if (size_) {
+            T *src = begin_ + size_ - 1;
             T *dst = new_end - 1;
             do {
                 new (dst--) T(std::move(*src));
@@ -199,62 +201,98 @@ template <typename T, int AlignmentOfT = alignof(T)> class SmallVectorImpl {
         }
 
         if (capacity_ & OwnerBit) {
-            aligned_free(begin_);
+            this->deallocate(begin_, (capacity_ & CapacityMask));
         }
 
         begin_ = new_begin;
-        end_ = new_end;
         capacity_ = (req_capacity | OwnerBit);
     }
 
-    void resize(const size_t req_size) {
+    void resize(const uint32_t req_size) {
         reserve(req_size);
 
-        while (end_ > begin_ + req_size) {
-            (--end_)->~T();
+        while (size_ > req_size) {
+            (begin_ + --size_)->~T();
         }
 
-        while (end_ < begin_ + req_size) {
-            new (end_++) T();
+        while (size_ < req_size) {
+            new (begin_ + size_++) T();
         }
     }
 
-    void resize(const size_t req_size, const T &val) {
+    void resize(const uint32_t req_size, const T &val) {
         if (req_size == size()) {
             return;
         }
         reserve(req_size);
 
-        while (end_ > begin_ + req_size) {
-            (--end_)->~T();
+        while (size_ > req_size) {
+            (begin_ + --size_)->~T();
         }
 
-        while (end_ < begin_ + req_size) {
-            new (end_++) T(val);
+        while (size_ < req_size) {
+            new (begin_ + size_++) T(val);
         }
     }
 
     void clear() {
-        for (T *el = end_; el > begin_;) {
+        for (T *el = begin_ + size_; el > begin_;) {
             (--el)->~T();
         }
-        end_ = begin_;
+        size_ = 0;
+    }
+
+    iterator insert(iterator pos, const T &value) {
+        assert(pos >= begin_ && pos <= begin_ + size_);
+
+        const uint32_t off = uint32_t(pos - begin_);
+        ensure_reserved(size_ + 1);
+        pos = begin_ + off;
+
+        iterator move_dst = begin_ + size_, move_src = begin_ + size_ - 1;
+        while (move_dst != pos) {
+            (*move_dst) = std::move(*move_src);
+
+            --move_dst;
+            --move_src;
+        }
+
+        ++size_;
+        new (move_dst) T(value);
+
+        return move_dst;
     }
 
     iterator erase(iterator pos) {
-        assert(pos >= begin_ && pos < end_);
+        assert(pos >= begin_ && pos < begin_ + size_);
 
-        iterator move_dst = pos;
-        iterator move_src = pos + 1;
-        while (move_src != end_) {
+        iterator move_dst = pos, move_src = pos + 1;
+        while (move_src != begin_ + size_) {
             (*move_dst) = std::move(*move_src);
 
             ++move_dst;
             ++move_src;
         }
-        (--end_)->~T();
+        (begin_ + --size_)->~T();
 
         return pos;
+    }
+
+    iterator erase(iterator first, iterator last) {
+        assert(first >= begin_ && first <= begin_ + size_);
+
+        iterator move_dst = first, move_src = last;
+        while (move_src != begin_ + size_) {
+            (*move_dst) = std::move(*move_src);
+
+            ++move_dst;
+            ++move_src;
+        }
+        while (begin_ + size_ != move_dst) {
+            (begin_ + --size_)->~T();
+        }
+
+        return move_dst;
     }
 
     template <class InputIt> void assign(const InputIt first, const InputIt last) {
@@ -265,8 +303,8 @@ template <typename T, int AlignmentOfT = alignof(T)> class SmallVectorImpl {
     }
 };
 
-template <typename T, int AlignmentOfT = alignof(T)>
-bool operator==(const SmallVectorImpl<T, AlignmentOfT> &lhs, const SmallVectorImpl<T, AlignmentOfT> &rhs) {
+template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>>
+bool operator==(const SmallVectorImpl<T, Allocator> &lhs, const SmallVectorImpl<T, Allocator> &rhs) {
     if (lhs.size() != rhs.size()) {
         return false;
     }
@@ -278,54 +316,55 @@ bool operator==(const SmallVectorImpl<T, AlignmentOfT> &lhs, const SmallVectorIm
     return true;
 }
 
-template <typename T, int AlignmentOfT = alignof(T)>
-bool operator!=(const SmallVectorImpl<T, AlignmentOfT> &lhs, const SmallVectorImpl<T, AlignmentOfT> &rhs) {
+template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>>
+bool operator!=(const SmallVectorImpl<T, Allocator> &lhs, const SmallVectorImpl<T, Allocator> &rhs) {
     return operator==(lhs, rhs);
 }
 
-template <typename T, int N, int AlignmentOfT = alignof(T)>
-class SmallVector : public SmallVectorImpl<T, AlignmentOfT> {
+template <typename T, int N, int AlignmentOfT = alignof(T), typename Allocator = aligned_allocator<T, AlignmentOfT>>
+class SmallVector : public SmallVectorImpl<T, Allocator> {
     alignas(AlignmentOfT) char buffer_[sizeof(T) * N];
 
   public:
-    SmallVector() // NOLINT
-        : SmallVectorImpl<T, AlignmentOfT>((T *)buffer_, (T *)buffer_, N) {}
-    SmallVector(size_t initial_size, const T &val = T()) // NOLINT
-        : SmallVectorImpl<T, AlignmentOfT>((T *)buffer_, (T *)buffer_, N) {
-        SmallVectorImpl<T, AlignmentOfT>::resize(initial_size, val);
+    SmallVector(const Allocator &alloc = Allocator()) // NOLINT
+        : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, alloc) {}
+    SmallVector(uint32_t initial_size, const T &val = T(), const Allocator &alloc = Allocator()) // NOLINT
+        : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, alloc) {
+        SmallVectorImpl<T, Allocator>::resize(initial_size, val);
     }
-    SmallVector(const SmallVector<T, N, AlignmentOfT> &rhs) // NOLINT
-        : SmallVectorImpl<T, AlignmentOfT>((T *)buffer_, (T *)buffer_, N) {
-        SmallVectorImpl<T, AlignmentOfT>::operator=(rhs);
+    SmallVector(const SmallVector<T, N, AlignmentOfT, Allocator> &rhs) // NOLINT
+        : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
+        SmallVectorImpl<T, Allocator>::operator=(rhs);
     }
-    SmallVector(const SmallVectorImpl<T, AlignmentOfT> &rhs) // NOLINT
-        : SmallVectorImpl<T, AlignmentOfT>((T *)buffer_, (T *)buffer_, N) {
-        SmallVectorImpl<T, AlignmentOfT>::operator=(rhs);
+    SmallVector(const SmallVectorImpl<T, Allocator> &rhs) // NOLINT
+        : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
+        SmallVectorImpl<T, Allocator>::operator=(rhs);
     }
     SmallVector(SmallVector<T, N, AlignmentOfT> &&rhs) noexcept // NOLINT
-        : SmallVectorImpl<T>((T *)buffer_, (T *)buffer_, N) {
-        SmallVectorImpl<T, AlignmentOfT>::operator=(std::move(rhs));
+        : SmallVectorImpl<T>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
+        SmallVectorImpl<T, Allocator>::operator=(std::move(rhs));
     }
-    SmallVector(SmallVectorImpl<T, AlignmentOfT> &&rhs) noexcept // NOLINT
-        : SmallVectorImpl<T>((T *)buffer_, (T *)buffer_, N) {
-        SmallVectorImpl<T, AlignmentOfT>::operator=(std::move(rhs));
-    }
-
-    SmallVector(std::initializer_list<T> l) : SmallVectorImpl<T, AlignmentOfT>((T *)buffer_, (T *)buffer_, N) {
-        SmallVectorImpl<T, AlignmentOfT>::reserve(l.size());
-        SmallVectorImpl<T, AlignmentOfT>::assign(l.begin(), l.end());
+    SmallVector(SmallVectorImpl<T, Allocator> &&rhs) noexcept // NOLINT
+        : SmallVectorImpl<T>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
+        SmallVectorImpl<T, Allocator>::operator=(std::move(rhs));
     }
 
-    SmallVector &operator=(const SmallVectorImpl<T, AlignmentOfT> &rhs) {
-        SmallVectorImpl<T, AlignmentOfT>::operator=(rhs);
+    SmallVector(std::initializer_list<T> l, const Allocator &alloc = Allocator())
+        : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, alloc) {
+        SmallVectorImpl<T, Allocator>::reserve(uint32_t(l.size()));
+        SmallVectorImpl<T, Allocator>::assign(l.begin(), l.end());
+    }
+
+    SmallVector &operator=(const SmallVectorImpl<T, Allocator> &rhs) {
+        SmallVectorImpl<T, Allocator>::operator=(rhs);
         return (*this);
     }
-    SmallVector &operator=(const SmallVector<T, N, AlignmentOfT> &rhs) {
-        SmallVectorImpl<T, AlignmentOfT>::operator=(rhs);
+    SmallVector &operator=(const SmallVector<T, N, AlignmentOfT, Allocator> &rhs) {
+        SmallVectorImpl<T, Allocator>::operator=(rhs);
         return (*this);
     }
     SmallVector &operator=(SmallVector &&rhs) noexcept {
-        SmallVectorImpl<T, AlignmentOfT>::operator=(std::move(rhs));
+        SmallVectorImpl<T, Allocator>::operator=(std::move(rhs));
         return (*this);
     }
 

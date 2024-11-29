@@ -156,7 +156,7 @@ bool Ray::Dx::Program::InitRootSignature(ILog *log) {
         for (const Descr &u : sh.unif_bindings) {
             const int rp_index = (u.input_type == D3D_SIT_SAMPLER) ? 1 : (u.space != 0) ? 2 : 0;
 
-            if (u.loc >= descr_indices_[rp_index].size()) {
+            if (u.loc >= int(descr_indices_[rp_index].size())) {
                 descr_indices_[rp_index].resize(std::max(u.loc + 1, int(descr_indices_[rp_index].size())), -1);
             }
             descr_indices_[rp_index][u.loc] = descriptor_count[rp_index];
