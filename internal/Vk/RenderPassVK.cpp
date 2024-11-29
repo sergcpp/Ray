@@ -70,7 +70,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
     }
     VkAttachmentReference depth_attachment_ref = {VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED};
 
-    color_rts.resize(_color_rts.size());
+    color_rts.resize(uint32_t(_color_rts.size()));
     depth_rt = {};
 
     if (_depth_rt) {
