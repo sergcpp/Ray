@@ -381,25 +381,6 @@ def main():
                          defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=32 -DOUT_CHANNELS=64 -DUSE_FP16=1 " \
                                  "-DUSE_COOP_MATRIX=1",
                          hlsl_profile=None)
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_3_64_fp32.comp.spv",
-                         defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIN_CHANNELS2=3 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_3_64_fp16.comp.spv",
-                         defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIN_CHANNELS2=3 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 " \
-                                 "-DUSE_FP16=1", hlsl_profile="cs_6_2")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_3_64_coop.comp.spv",
-                         defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIN_CHANNELS2=3 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 " \
-                                 "-DUSE_FP16=1 -DUSE_COOP_MATRIX=1",
-                         hlsl_profile=None)
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_6_64_fp32.comp.spv",
-                         defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS2=6 -DOUT_CHANNELS=64 " \
-                                 "-DHDR_TRANSFER2=1")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_6_64_fp16.comp.spv",
-                         defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS2=6 -DOUT_CHANNELS=64 " \
-                                 "-DHDR_TRANSFER2=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
-    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_6_64_coop.comp.spv",
-                         defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS2=6 -DOUT_CHANNELS=64 " \
-                                 "-DHDR_TRANSFER2=1 -DUSE_FP16=1 -DUSE_COOP_MATRIX=1",
-                         hlsl_profile=None)
     compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_9_64_fp32.comp.spv",
                          defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIMG_INPUT4=1 -DIN_CHANNELS2=9 " \
                                  "-DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DPOS_NORMALIZE4=1")

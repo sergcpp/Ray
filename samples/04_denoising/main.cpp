@@ -224,9 +224,7 @@ int main() {
 
         if (EnableHighQualityDenoising) {
             // Initialize neural denoiser
-            Ray::unet_filter_properties_t unet_props;
-            renderer->InitUNetFilter(true, unet_props);
-
+            const Ray::unet_filter_properties_t unet_props = renderer->InitUNetFilter(true);
             for (int pass = 0; pass < unet_props.pass_count; ++pass) {
 #pragma omp parallel for
                 for (int i = 0; i < 4; i++) {
@@ -240,7 +238,6 @@ int main() {
                 renderer->DenoiseImage(regions[i]);
             }
         }
-
     } else {
         // Create region contex for frame, setup to use whole frame
         auto region = Ray::RegionContext{{0, 0, IMG_W, IMG_H}};
@@ -254,9 +251,7 @@ int main() {
 
         if (EnableHighQualityDenoising) {
             // Initialize neural denoiser
-            Ray::unet_filter_properties_t unet_props;
-            renderer->InitUNetFilter(true, unet_props);
-
+            const Ray::unet_filter_properties_t unet_props = renderer->InitUNetFilter(true);
             for (int pass = 0; pass < unet_props.pass_count; ++pass) {
                 renderer->DenoiseImage(pass, region);
             }
@@ -292,7 +287,7 @@ void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h
 
     header[12] = w & 0xFF;
     header[13] = (w >> 8) & 0xFF;
-    header[14] = (h)&0xFF;
+    header[14] = (h) & 0xFF;
     header[15] = (h >> 8) & 0xFF;
     header[16] = bpp * 8;
     header[17] |= (1 << 5); // set origin to upper left corner

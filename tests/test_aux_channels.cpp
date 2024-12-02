@@ -80,7 +80,11 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
             const auto start_time = high_resolution_clock::now();
 
-            auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
+            using namespace std::placeholders;
+            auto parallel_for =
+                std::bind(&ThreadPool::ParallelFor<Ray::ParallelForFunction>, std::ref(threads), _1, _2, _3);
+
+            auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, parallel_for, rt));
             if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
                 // skip unsupported (we fell back to some other renderer)
                 continue;

@@ -22,8 +22,10 @@ const Bitmask<eRendererType> DefaultEnabledRenderTypes =
 /** @brief Creates renderer
     @return pointer to created renderer
 */
-RendererBase *CreateRenderer(const settings_t &s, ILog *log = &g_null_log,
-                             Bitmask<eRendererType> enabled_types = DefaultEnabledRenderTypes);
+RendererBase *
+CreateRenderer(const settings_t &s, ILog *log = &g_null_log,
+               const std::function<void(int, int, ParallelForFunction &&)> &parallel_for = parallel_for_serial,
+               Bitmask<eRendererType> enabled_types = DefaultEnabledRenderTypes);
 
 /** @brief Queries available GPU devices
     @param log output log
