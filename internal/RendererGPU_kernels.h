@@ -74,7 +74,7 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
 
     const bool adaptive =
         _adaptive && (iteration > cam.pass_settings.min_samples) && cam.pass_settings.min_samples != -1;
-    DispatchCompute(cmd_buf, adaptive ? pi_prim_rays_gen_adaptive_ : pi_prim_rays_gen_simple_, grp_count, bindings,
+    DispatchCompute(cmd_buf, adaptive ? pi_.prim_rays_gen_adaptive : pi_.prim_rays_gen_simple, grp_count, bindings,
                     &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -98,7 +98,7 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = 0; // tree root
 
-    DispatchComputeIndirect(cmd_buf, pi_intersect_area_lights_, indir_args, 0, bindings, &uniform_params,
+    DispatchComputeIndirect(cmd_buf, pi_.intersect_area_lights, indir_args, 0, bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -146,7 +146,7 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
     uniform_params.accumulate_half_img = is_class_a ? 1.0f : 0.0f;
     uniform_params.exposure = exposure;
 
-    DispatchCompute(cmd_buf, pi_mix_incremental_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_.mix_incremental, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -181,7 +181,7 @@ void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture2
     uniform_params.variance_threshold = variance_threshold;
     uniform_params.iteration = iteration;
 
-    DispatchCompute(cmd_buf, pi_postprocess_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_.postprocess, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -211,7 +211,7 @@ void Ray::NS::Renderer::kernel_FilterVariance(CommandBuffer cmd_buf, const Textu
     uniform_params.variance_threshold = variance_threshold;
     uniform_params.iteration = iteration;
 
-    DispatchCompute(cmd_buf, pi_filter_variance_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_.filter_variance, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -257,7 +257,7 @@ void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
     uniform_params.base_color_weight = base_color_weight;
     uniform_params.depth_normal_weight = depth_normals_weight;
 
-    DispatchCompute(cmd_buf, pi_nlm_filter_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_.nlm_filter, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -316,7 +316,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
     Pipeline *pi = nullptr;
     if (in_channels == 9 && out_channels == 32) {
         assert(img_buf2.ready() && img_buf3.ready());
-        pi = &pi_convolution_Img_9_32_;
+        pi = &pi_.convolution_Img_9_32;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -371,23 +371,23 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
 
     Pipeline *pi = nullptr;
     if (in_channels == 32 && out_channels == 32 && downsample) {
-        pi = &pi_convolution_32_32_Downsample_;
+        pi = &pi_.convolution_32_32_Downsample;
     } else if (in_channels == 32 && out_channels == 48 && downsample) {
-        pi = &pi_convolution_32_48_Downsample_;
+        pi = &pi_.convolution_32_48_Downsample;
     } else if (in_channels == 48 && out_channels == 64 && downsample) {
-        pi = &pi_convolution_48_64_Downsample_;
+        pi = &pi_.convolution_48_64_Downsample;
     } else if (in_channels == 64 && out_channels == 80 && downsample) {
-        pi = &pi_convolution_64_80_Downsample_;
+        pi = &pi_.convolution_64_80_Downsample;
     } else if (in_channels == 64 && out_channels == 64) {
-        pi = &pi_convolution_64_64_;
+        pi = &pi_.convolution_64_64;
     } else if (in_channels == 64 && out_channels == 32) {
-        pi = &pi_convolution_64_32_;
+        pi = &pi_.convolution_64_32;
     } else if (in_channels == 80 && out_channels == 96) {
-        pi = &pi_convolution_80_96_;
+        pi = &pi_.convolution_80_96;
     } else if (in_channels == 96 && out_channels == 96) {
-        pi = &pi_convolution_96_96_;
+        pi = &pi_.convolution_96_96;
     } else if (in_channels == 112 && out_channels == 112) {
-        pi = &pi_convolution_112_112_;
+        pi = &pi_.convolution_112_112;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -435,7 +435,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
 
     Pipeline *pi = nullptr;
     if (in_channels == 32 && out_channels == 3) {
-        pi = &pi_convolution_32_3_img_;
+        pi = &pi_.convolution_32_3_img;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -488,11 +488,11 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
 
     Pipeline *pi = nullptr;
     if (in_channels1 == 96 && in_channels2 == 64 && out_channels == 112 && upscale1) {
-        pi = &pi_convolution_concat_96_64_112_;
+        pi = &pi_.convolution_concat_96_64_112;
     } else if (in_channels1 == 112 && in_channels2 == 48 && out_channels == 96 && upscale1) {
-        pi = &pi_convolution_concat_112_48_96_;
+        pi = &pi_.convolution_concat_112_48_96;
     } else if (in_channels1 == 96 && in_channels2 == 32 && out_channels == 64 && upscale1) {
-        pi = &pi_convolution_concat_96_32_64_;
+        pi = &pi_.convolution_concat_96_32_64;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -555,14 +555,11 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
     uniform_params.out_dims[1] = h;
 
     Pipeline *pi = nullptr;
-    if (in_channels1 == 64 && in_channels2 == 3 && out_channels == 64 && upscale1) {
-        pi = &pi_convolution_concat_64_3_64_;
-    } else if (in_channels1 == 64 && in_channels2 == 6 && out_channels == 64 && upscale1) {
-        assert(img_buf2.ready());
-        pi = &pi_convolution_concat_64_6_64_;
-    } else if (in_channels1 == 64 && in_channels2 == 9 && out_channels == 64 && upscale1) {
+    if (in_channels1 == 64 && in_channels2 == 9 && out_channels == 64 && upscale1) {
         assert(img_buf2.ready() && img_buf3.ready());
-        pi = &pi_convolution_concat_64_9_64_;
+        pi = &pi_.convolution_concat_64_9_64;
+    } else {
+        assert(false);
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -579,7 +576,7 @@ void Ray::NS::Renderer::kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buf
                                 {eBindTarget::SBufRW, PrepareIndirArgs::OUT_INDIR_ARGS_SLOT, out_indir_args}};
 
     const uint32_t grp_count[3] = {1u, 1u, 1u};
-    DispatchCompute(cmd_buf, pi_prepare_indir_args_, grp_count, bindings, nullptr, 0, ctx_->default_descr_alloc(),
+    DispatchCompute(cmd_buf, pi_.prepare_indir_args, grp_count, bindings, nullptr, 0, ctx_->default_descr_alloc(),
                     ctx_->log());
 }
 
@@ -600,7 +597,7 @@ void Ray::NS::Renderer::kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer 
     memcpy(&uniform_params.root_min[0], root_min, 3 * sizeof(float));
     memcpy(&uniform_params.cell_size[0], cell_size, 3 * sizeof(float));
 
-    DispatchComputeIndirect(cmd_buf, pi_sort_hash_rays_, indir_args, 0, bindings, &uniform_params,
+    DispatchComputeIndirect(cmd_buf, pi_.sort_hash_rays, indir_args, 0, bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -623,7 +620,7 @@ void Ray::NS::Renderer::kernel_SortReorderRays(CommandBuffer cmd_buf, const Buff
     SortReorderRays::Params uniform_params = {};
     uniform_params.counter = counter_index;
 
-    DispatchComputeIndirect(cmd_buf, pi_sort_reorder_rays_, indir_args,
+    DispatchComputeIndirect(cmd_buf, pi_.sort_reorder_rays, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
@@ -646,7 +643,7 @@ void Ray::NS::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const i
     uniform_params.counter = counter_index;
     uniform_params.shift = shift;
 
-    DispatchComputeIndirect(cmd_buf, pi_sort_init_count_table_, indir_args,
+    DispatchComputeIndirect(cmd_buf, pi_.sort_init_count_table, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
@@ -667,7 +664,7 @@ void Ray::NS::Renderer::kernel_SortReduce(CommandBuffer cmd_buf, const Buffer &i
     SortReduce::Params uniform_params = {};
     uniform_params.counter = counter_index;
 
-    DispatchComputeIndirect(cmd_buf, pi_sort_reduce_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
+    DispatchComputeIndirect(cmd_buf, pi_.sort_reduce, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
                             bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                             ctx_->log());
 }
@@ -689,7 +686,7 @@ void Ray::NS::Renderer::kernel_SortScan(CommandBuffer cmd_buf, const Buffer &inp
     uniform_params.counter = counter_index;
 
     const uint32_t grp_count[3] = {1, 1, 1};
-    DispatchCompute(cmd_buf, pi_sort_scan_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_.sort_scan, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -711,7 +708,7 @@ void Ray::NS::Renderer::kernel_SortScanAdd(CommandBuffer cmd_buf, const Buffer &
     SortScan::Params uniform_params = {};
     uniform_params.counter = counter_index;
 
-    DispatchComputeIndirect(cmd_buf, pi_sort_scan_add_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
+    DispatchComputeIndirect(cmd_buf, pi_.sort_scan_add, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
                             bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                             ctx_->log());
 }
@@ -735,7 +732,7 @@ void Ray::NS::Renderer::kernel_SortScatter(CommandBuffer cmd_buf, int shift, con
     uniform_params.counter = counter_index;
     uniform_params.shift = shift;
 
-    DispatchComputeIndirect(cmd_buf, pi_sort_scatter_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
+    DispatchComputeIndirect(cmd_buf, pi_.sort_scatter, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
                             bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                             ctx_->log());
 }
@@ -780,7 +777,7 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
     uniform_params.entries_count = inout_entries.size() / sizeof(uint64_t);
     uniform_params.exposure = params.exposure;
 
-    DispatchComputeIndirect(cmd_buf, pi_spatial_cache_update_, indir_args,
+    DispatchComputeIndirect(cmd_buf, pi_.spatial_cache_update, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
@@ -809,7 +806,7 @@ void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const 
 
     assert((uniform_params.entries_count % CacheResolve::LOCAL_GROUP_SIZE_X) == 0);
     const uint32_t grp_count[3] = {uniform_params.entries_count / CacheResolve::LOCAL_GROUP_SIZE_X, 1, 1};
-    DispatchCompute(cmd_buf, pi_spatial_cache_resolve_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_.spatial_cache_resolve, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -872,7 +869,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
                 uniform_params.light_col_point[2] *= (PI * radius * radius);
             }
 
-            DispatchComputeIndirect(cmd_buf, pi_shade_sky_, indir_args,
+            DispatchComputeIndirect(cmd_buf, pi_.shade_sky, indir_args,
                                     indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                                     sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
         }
@@ -887,7 +884,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
         memcpy(uniform_params.light_col_point, value_ptr(light_col), 3 * sizeof(float));
         uniform_params.light_col[3] = 0.0f;
 
-        DispatchComputeIndirect(cmd_buf, pi_shade_sky_, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
+        DispatchComputeIndirect(cmd_buf, pi_.shade_sky, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
                                 bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                                 ctx_->log());
     }

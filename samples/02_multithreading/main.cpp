@@ -21,7 +21,8 @@ int main() {
     s.h = IMG_H;
 
     // Force usage of CPU renderer
-    Ray::RendererBase *renderer = Ray::CreateRenderer(s, &Ray::g_stdout_log, Ray::RendererCPU);
+    Ray::RendererBase *renderer =
+        Ray::CreateRenderer(s, &Ray::g_stdout_log, Ray::parallel_for_serial, Ray::RendererCPU);
 
     // Each renderer has its own storage implementation (RAM, GPU-RAM),
     // so renderer itself should create scene object
@@ -252,7 +253,7 @@ void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h
 
     header[12] = w & 0xFF;
     header[13] = (w >> 8) & 0xFF;
-    header[14] = (h)&0xFF;
+    header[14] = (h) & 0xFF;
     header[15] = (h >> 8) & 0xFF;
     header[16] = bpp * 8;
     header[17] |= (1 << 5); // set origin to upper left corner

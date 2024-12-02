@@ -51,12 +51,14 @@ extern const std::pair<uint32_t, const char *> KnownGPUVendors[] = {
 extern const int KnownGPUVendorsCount = 4;
 } // namespace Ray
 
-Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bitmask<eRendererType> enabled_types) {
+Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
+                                       const std::function<void(int, int, ParallelForFunction &&)> &parallel_for,
+                                       const Bitmask<eRendererType> enabled_types) {
 #if defined(ENABLE_VK_IMPL)
     if (enabled_types & eRendererType::Vulkan) {
         log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
         try {
-            return Vk::CreateRenderer(s, log);
+            return Vk::CreateRenderer(s, log, parallel_for);
         } catch (std::exception &e) {
             log->Info("Ray: Failed to create Vulkan renderer, %s", e.what());
         }
@@ -66,7 +68,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
     if (enabled_types & eRendererType::DirectX12) {
         log->Info("Ray: Creating DirectX12 renderer %ix%i", s.w, s.h);
         try {
-            return Dx::CreateRenderer(s, log);
+            return Dx::CreateRenderer(s, log, parallel_for);
         } catch (std::exception &e) {
             log->Info("Ray: Failed to create DirectX12 renderer, %s", e.what());
         }

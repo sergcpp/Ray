@@ -311,7 +311,9 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
 
-    void InitUNetFilter(bool alias_memory, unet_filter_properties_t &out_props) override;
+    unet_filter_properties_t
+    InitUNetFilter(bool alias_memory,
+                   const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
 };
 } // namespace Cpu
 namespace Ref {
@@ -1250,7 +1252,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateFilterTable(ePixelFilter filter, floa
 }
 
 template <typename SIMDPolicy>
-void Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(const bool alias_memory, unet_filter_properties_t &out_props) {
+Ray::unet_filter_properties_t Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(
+    const bool alias_memory, const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     const int total_count = SetupUNetWeights<float>(true, 1, nullptr, nullptr);
     unet_weights_.resize(total_count);
     SetupUNetWeights(true, 1, &unet_offsets_, unet_weights_.data());
@@ -1258,6 +1261,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(const bool alias_memory, une
     unet_alias_memory_ = alias_memory;
     UpdateUNetFilterMemory();
 
+    unet_filter_properties_t out_props;
     out_props.pass_count = UNetFilterPasses;
     for (int i = 0; i < UNetFilterPasses; ++i) {
         std::fill(&out_props.alias_dependencies[i][0], &out_props.alias_dependencies[i][0] + 4, -1);
@@ -1265,6 +1269,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(const bool alias_memory, une
             out_props.alias_dependencies[i][j] = unet_alias_dependencies_[i][j];
         }
     }
+    return out_props;
 }
 
 template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::UpdateUNetFilterMemory() {

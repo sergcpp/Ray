@@ -1109,9 +1109,11 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
                     }
                     job_res.clear();
                 } else if (denoise == eDenoiseMethod::UNet) {
-                    Ray::unet_filter_properties_t props;
-                    renderer.InitUNetFilter(true, props);
+                    using namespace std::placeholders;
+                    auto parallel_for =
+                        std::bind(&ThreadPool::ParallelFor<Ray::ParallelForFunction>, std::ref(threads), _1, _2, _3);
 
+                    const Ray::unet_filter_properties_t props = renderer.InitUNetFilter(true, parallel_for);
                     for (int pass = 0; pass < props.pass_count; ++pass) {
                         for (int j = 0; j < int(region_contexts.size()); ++j) {
                             job_res.push_back(threads.Enqueue(denoise_job_unet, pass, j));
@@ -1173,9 +1175,11 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
                 renderer.DenoiseImage(region);
             }
         } else if (denoise == eDenoiseMethod::UNet) {
-            Ray::unet_filter_properties_t props;
-            renderer.InitUNetFilter(true, props);
+            using namespace std::placeholders;
+            auto parallel_for =
+                std::bind(&ThreadPool::ParallelFor<Ray::ParallelForFunction>, std::ref(threads), _1, _2, _3);
 
+            const Ray::unet_filter_properties_t props = renderer.InitUNetFilter(true, parallel_for);
             for (int pass = 0; pass < props.pass_count; ++pass) {
                 for (auto &region : region_contexts) {
                     renderer.DenoiseImage(pass, region);

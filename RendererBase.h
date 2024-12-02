@@ -247,6 +247,8 @@ class RendererBase {
         @param alias_memory enable tensom memory aliasing (to lower memory usage)
         @param out_props output filter properties
     */
-    virtual void InitUNetFilter(bool alias_memory, unet_filter_properties_t &out_props) = 0;
+    virtual unet_filter_properties_t
+    InitUNetFilter(bool alias_memory,
+                   const std::function<void(int, int, ParallelForFunction &&)> &parallel_for = parallel_for_serial) = 0;
 };
 } // namespace Ray
