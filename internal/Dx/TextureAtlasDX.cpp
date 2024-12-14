@@ -22,10 +22,10 @@ int round_up(int v, int align);
 namespace Dx {
 template <typename T, int N> eTexFormat tex_format();
 
-template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RawRGBA8888; }
-template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RawRGB888; }
-template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RawRG88; }
-template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::RawR8; }
+template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RGBA8; }
+template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RGB8; }
+template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RG8; }
+template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::R8; }
 
 extern const DXGI_FORMAT g_dx_formats[];
 
@@ -245,10 +245,10 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-        if (format_ == eTexFormat::RawRGB888 && !ctx_->rgb8_unorm_is_supported()) {
+        if (format_ == eTexFormat::RGB8 && !ctx_->rgb8_unorm_is_supported()) {
             // Fallback to 4-component texture
             image_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            real_format_ = eTexFormat::RawRGBA8888;
+            real_format_ = eTexFormat::RGBA8;
         }
 
         D3D12_HEAP_PROPERTIES heap_properties = {};
@@ -423,7 +423,7 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
         }
     }
     const uint32_t data_size = round_up(pitch, TextureDataPitchAlignment) * lines;
-    const bool rgb_as_rgba = (format_ == eTexFormat::RawRGB888 && real_format_ == eTexFormat::RawRGBA8888);
+    const bool rgb_as_rgba = (format_ == eTexFormat::RGB8 && real_format_ == eTexFormat::RGBA8);
 
     Buffer temp_sbuf("Temp Stage", ctx_, eBufType::Upload, data_size);
 

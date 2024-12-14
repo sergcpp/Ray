@@ -34,32 +34,32 @@ extern const float AnisotropyLevel;
 
 extern const DXGI_FORMAT g_dx_formats[] = {
     DXGI_FORMAT_UNKNOWN,              // Undefined
-    DXGI_FORMAT_UNKNOWN,              // RawRGB888
-    DXGI_FORMAT_R8G8B8A8_UNORM,       // RawRGBA8888
+    DXGI_FORMAT_UNKNOWN,              // RGB8
+    DXGI_FORMAT_R8G8B8A8_UNORM,       // RGBA8
     DXGI_FORMAT_R8G8B8A8_SNORM,       // RawRGBA8888Signed
-    DXGI_FORMAT_B8G8R8A8_UNORM,       // RawBGRA8888
-    DXGI_FORMAT_R32_FLOAT,            // RawR32F
-    DXGI_FORMAT_R16_FLOAT,            // RawR16F
-    DXGI_FORMAT_R8_UNORM,             // RawR8
+    DXGI_FORMAT_B8G8R8A8_UNORM,       // BGRA8
+    DXGI_FORMAT_R32_FLOAT,            // R32F
+    DXGI_FORMAT_R16_FLOAT,            // R16F
+    DXGI_FORMAT_R8_UNORM,             // R8
     DXGI_FORMAT_R16_UINT,             // RawR16UI
-    DXGI_FORMAT_R32_UINT,             // RawR32UI
-    DXGI_FORMAT_R8G8_UNORM,           // RawRG88
-    DXGI_FORMAT_R32G32B32_FLOAT,      // RawRGB32F
-    DXGI_FORMAT_R32G32B32A32_FLOAT,   // RawRGBA32F
-    DXGI_FORMAT_UNKNOWN,              // RawRGBE8888
-    DXGI_FORMAT_UNKNOWN,              // RawRGB16F
-    DXGI_FORMAT_R16G16B16A16_FLOAT,   // RawRGBA16F
-    DXGI_FORMAT_R16G16_SNORM,         // RawRG16Snorm
-    DXGI_FORMAT_R16G16_UNORM,         // RawRG16
-    DXGI_FORMAT_R16G16_FLOAT,         // RawRG16F
-    DXGI_FORMAT_R32G32_FLOAT,         // RawRG32F
+    DXGI_FORMAT_R32_UINT,             // R32UI
+    DXGI_FORMAT_R8G8_UNORM,           // RG8
+    DXGI_FORMAT_R32G32B32_FLOAT,      // RGB32F
+    DXGI_FORMAT_R32G32B32A32_FLOAT,   // RGBA32F
+    DXGI_FORMAT_UNKNOWN,              // RGBE8
+    DXGI_FORMAT_UNKNOWN,              // RGB16F
+    DXGI_FORMAT_R16G16B16A16_FLOAT,   // RGBA16F
+    DXGI_FORMAT_R16G16_SNORM,         // RG16_snorm
+    DXGI_FORMAT_R16G16_UNORM,         // RG16
+    DXGI_FORMAT_R16G16_FLOAT,         // RG16F
+    DXGI_FORMAT_R32G32_FLOAT,         // RG32F
     DXGI_FORMAT_R32G32_UINT,          // RawRG32U
-    DXGI_FORMAT_R10G10B10A2_UNORM,    // RawRGB10_A2
-    DXGI_FORMAT_R11G11B10_FLOAT,      // RawRG11F_B10F
-    DXGI_FORMAT_D16_UNORM,            // Depth16
-    DXGI_FORMAT_D24_UNORM_S8_UINT,    // Depth24Stencil8
-    DXGI_FORMAT_D32_FLOAT_S8X24_UINT, // Depth32Stencil8
-    DXGI_FORMAT_D32_FLOAT,            // Depth32
+    DXGI_FORMAT_R10G10B10A2_UNORM,    // RGB10_A2
+    DXGI_FORMAT_R11G11B10_FLOAT,      // RG11F_B10F
+    DXGI_FORMAT_D16_UNORM,            // D16
+    DXGI_FORMAT_D24_UNORM_S8_UINT,    // D24_S8
+    DXGI_FORMAT_D32_FLOAT_S8X24_UINT, // D32_S8
+    DXGI_FORMAT_D32_FLOAT,            // D32
     DXGI_FORMAT_BC1_UNORM,            // BC1
     DXGI_FORMAT_BC2_UNORM,            // BC2
     DXGI_FORMAT_BC3_UNORM,            // BC3
@@ -198,7 +198,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         Tex2DParams _p = p;
         _p.w = _p.h = 1;
         _p.mip_count = 1;
-        _p.format = eTexFormat::RawRGBA8888;
+        _p.format = eTexFormat::RGBA8;
         _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
 
         InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, _p, log);
@@ -230,7 +230,7 @@ void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2
 
         Tex2DParams _p = p;
         _p.w = _p.h = 1;
-        _p.format = eTexFormat::RawRGBA8888;
+        _p.format = eTexFormat::RGBA8;
         _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
 
         InitFromRAWData(sbuf, data_off, cmd_buf, mem_allocs, _p, log);

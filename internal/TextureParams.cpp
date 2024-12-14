@@ -7,32 +7,32 @@
 namespace Ray {
 const int g_per_pixel_data_len[] = {
     -1, // Undefined
-    3,  // RawRGB888
-    4,  // RawRGBA8888
-    4,  // RawRGBA8888Snorm
-    4,  // RawBGRA8888
-    4,  // RawR32F
-    2,  // RawR16F
-    1,  // RawR8
+    3,  // RGB8
+    4,  // RGBA8
+    4,  // RGBA8_snorm
+    4,  // BGRA8
+    4,  // R32F
+    2,  // R16F
+    1,  // R8
     2,  // RawR16UI
-    4,  // RawR32UI
-    2,  // RawRG88
-    12, // RawRGB32F
-    16, // RawRGBA32F
-    4,  // RawRGBE8888
-    6,  // RawRGB16F
-    8,  // RawRGBA16F
-    4,  // RawRG16Snorm
-    4,  // RawRG16
-    4,  // RawRG16F
-    8,  // RawRG32F
-    8,  // RawRG32UI
-    4,  // RawRGB10_A2
-    4,  // RawRG11F_B10F
-    2,  // Depth16
-    4,  // Depth24Stencil8
-    5,  // Depth32Stencil8
-    4, // Depth32
+    4,  // R32UI
+    2,  // RG8
+    12, // RGB32F
+    16, // RGBA32F
+    4,  // RGBE8
+    6,  // RGB16F
+    8,  // RGBA16F
+    4,  // RG16_snorm
+    4,  // RG16
+    4,  // RG16F
+    8,  // RG32F
+    8,  // RG32UI
+    4,  // RGB10_A2
+    4,  // RG11F_B10F
+    2,  // D16
+    4,  // D24_S8
+    5,  // D32_S8
+    4,  // D32
     -1, // BC1
     -1, // BC2
     -1, // BC3
@@ -65,43 +65,41 @@ static_assert(sizeof(g_block_res) / sizeof(g_block_res[0]) == int(eTexBlock::_No
 int Ray::GetColorChannelCount(const eTexFormat format) {
     static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
     switch (format) {
-    case eTexFormat::RawRGBA8888:
-    case eTexFormat::RawRGBA8888Snorm:
-    case eTexFormat::RawBGRA8888:
-    case eTexFormat::RawRGBA32F:
-    case eTexFormat::RawRGBE8888:
-    case eTexFormat::RawRGBA16F:
-    case eTexFormat::RawRGB10_A2:
+    case eTexFormat::RGBA8:
+    case eTexFormat::RGBA8_snorm:
+    case eTexFormat::BGRA8:
+    case eTexFormat::RGBA32F:
+    case eTexFormat::RGBE8:
+    case eTexFormat::RGBA16F:
+    case eTexFormat::RGB10_A2:
     case eTexFormat::BC2:
     case eTexFormat::BC3:
         return 4;
-    case eTexFormat::RawRGB888:
-    case eTexFormat::RawRGB32F:
-    case eTexFormat::RawRGB16F:
-    case eTexFormat::RawRG11F_B10F:
+    case eTexFormat::RGB8:
+    case eTexFormat::RGB32F:
+    case eTexFormat::RGB16F:
+    case eTexFormat::RG11F_B10F:
     case eTexFormat::BC1:
         return 3;
-    case eTexFormat::RawRG88:
-    case eTexFormat::RawRG16:
-    case eTexFormat::RawRG16Snorm:
-    case eTexFormat::RawRG16F:
-    case eTexFormat::RawRG32F:
-    case eTexFormat::RawRG32UI:
+    case eTexFormat::RG8:
+    case eTexFormat::RG16:
+    case eTexFormat::RG16_snorm:
+    case eTexFormat::RG16F:
+    case eTexFormat::RG32F:
+    case eTexFormat::RG32UI:
     case eTexFormat::BC5:
         return 2;
-    case eTexFormat::RawR32F:
-    case eTexFormat::RawR16F:
-    case eTexFormat::RawR8:
+    case eTexFormat::R32F:
+    case eTexFormat::R16F:
+    case eTexFormat::R8:
     case eTexFormat::RawR16UI:
-    case eTexFormat::RawR32UI:
+    case eTexFormat::R32UI:
     case eTexFormat::BC4:
         return 1;
-    case eTexFormat::Depth16:
-    case eTexFormat::Depth24Stencil8:
-    case eTexFormat::Depth32Stencil8:
-#ifndef __ANDROID__
-    case eTexFormat::Depth32:
-#endif
+    case eTexFormat::D16:
+    case eTexFormat::D24_S8:
+    case eTexFormat::D32_S8:
+    case eTexFormat::D32:
     case eTexFormat::Undefined:
     default:
         return 0;
