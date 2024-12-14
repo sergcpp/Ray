@@ -7,32 +7,32 @@
 namespace Ray {
 enum class eTexFormat : uint8_t {
     Undefined,
-    RawRGB888,
-    RawRGBA8888,
-    RawRGBA8888Snorm,
-    RawBGRA8888,
-    RawR32F,
-    RawR16F,
-    RawR8,
+    RGB8,
+    RGBA8,
+    RGBA8_snorm,
+    BGRA8,
+    R32F,
+    R16F,
+    R8,
     RawR16UI,
-    RawR32UI,
-    RawRG88,
-    RawRGB32F,
-    RawRGBA32F,
-    RawRGBE8888,
-    RawRGB16F,
-    RawRGBA16F,
-    RawRG16Snorm,
-    RawRG16,
-    RawRG16F,
-    RawRG32F,
-    RawRG32UI,
-    RawRGB10_A2,
-    RawRG11F_B10F,
-    Depth16,
-    Depth24Stencil8,
-    Depth32Stencil8,
-    Depth32,
+    R32UI,
+    RG8,
+    RGB32F,
+    RGBA32F,
+    RGBE8,
+    RGB16F,
+    RGBA16F,
+    RG16_snorm,
+    RG16,
+    RG16F,
+    RG32F,
+    RG32UI,
+    RGB10_A2,
+    RG11F_B10F,
+    D16,
+    D24_S8,
+    D32_S8,
+    D32,
     BC1,
     BC2,
     BC3,
@@ -45,13 +45,13 @@ enum class eTexFormat : uint8_t {
 
 inline bool IsDepthFormat(const eTexFormat format) {
     static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
-    return format == eTexFormat::Depth16 || format == eTexFormat::Depth24Stencil8 ||
-           format == eTexFormat::Depth32Stencil8 || format == eTexFormat::Depth32;
+    return format == eTexFormat::D16 || format == eTexFormat::D24_S8 ||
+           format == eTexFormat::D32_S8 || format == eTexFormat::D32;
 }
 
 inline bool IsDepthStencilFormat(const eTexFormat format) {
     static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
-    return format == eTexFormat::Depth24Stencil8 || format == eTexFormat::Depth32Stencil8;
+    return format == eTexFormat::D24_S8 || format == eTexFormat::D32_S8;
 }
 
 inline bool IsCompressedFormat(const eTexFormat format) {
@@ -72,7 +72,7 @@ inline bool IsCompressedFormat(const eTexFormat format) {
 
 inline bool IsUintFormat(const eTexFormat format) {
     static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
-    if (format == eTexFormat::RawR16UI || format == eTexFormat::RawR32UI || format == eTexFormat::RawRG32UI) {
+    if (format == eTexFormat::RawR16UI || format == eTexFormat::R32UI || format == eTexFormat::RG32UI) {
         return true;
     }
     return false;

@@ -240,7 +240,7 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log,
         Tex3DParams params = {};
         params.w = params.h = params.d = LUT_DIMS;
         params.usage = eTexUsage::Sampled | eTexUsage::Transfer;
-        params.format = eTexFormat::RawRGB10_A2;
+        params.format = eTexFormat::RGB10_A2;
         params.sampling.filter = eTexFilter::BilinearNoMipmap;
         params.sampling.wrap = eTexWrap::ClampToEdge;
 
@@ -334,7 +334,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                                       {&tonemap_lut_, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            tonemap_lut_.SetSubImage(0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RawRGB10_A2, temp_upload_buf,
+            tonemap_lut_.SetSubImage(0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RGB10_A2, temp_upload_buf,
                                      cmd_buf, 0, data_len);
 
             EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,

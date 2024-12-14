@@ -392,7 +392,7 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     Tex2DParams params;
     params.w = w;
     params.h = h;
-    params.format = eTexFormat::RawRGBA32F;
+    params.format = eTexFormat::RGBA32F;
     params.usage = eTexUsageBits::Sampled | eTexUsageBits::Storage | eTexUsageBits::Transfer;
     params.sampling.wrap = eTexWrap::ClampToEdge;
 

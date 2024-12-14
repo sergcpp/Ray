@@ -12,10 +12,10 @@ namespace Ray {
 namespace Vk {
 template <typename T, int N> eTexFormat tex_format();
 
-template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RawRGBA8888; }
-template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RawRGB888; }
-template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RawRG88; }
-template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::RawR8; }
+template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RGBA8; }
+template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RGB8; }
+template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RG8; }
+template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::R8; }
 
 uint32_t FindMemoryType(uint32_t start_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
@@ -243,10 +243,10 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         img_info.samples = VK_SAMPLE_COUNT_1_BIT;
         img_info.flags = 0;
 
-        if (format_ == eTexFormat::RawRGB888 && !ctx_->rgb8_unorm_is_supported()) {
+        if (format_ == eTexFormat::RGB8 && !ctx_->rgb8_unorm_is_supported()) {
             // Fallback to 4-component texture
             img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
-            real_format_ = eTexFormat::RawRGBA8888;
+            real_format_ = eTexFormat::RGBA8;
         }
 
         VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &new_img);
@@ -318,7 +318,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = std::max(pages_count, 1);
 
-        if (real_format_ == eTexFormat::RawR8 || real_format_ == eTexFormat::BC4) {
+        if (real_format_ == eTexFormat::R8 || real_format_ == eTexFormat::BC4) {
             view_info.components.r = VK_COMPONENT_SWIZZLE_R;
             view_info.components.g = VK_COMPONENT_SWIZZLE_R;
             view_info.components.b = VK_COMPONENT_SWIZZLE_R;
@@ -768,7 +768,7 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
         }
     }
 
-    const bool rgb_as_rgba = (format_ == eTexFormat::RawRGB888 && real_format_ == eTexFormat::RawRGBA8888);
+    const bool rgb_as_rgba = (format_ == eTexFormat::RGB8 && real_format_ == eTexFormat::RGBA8);
     const uint32_t buf_size = rgb_as_rgba ? sizex * sizey * sizeof(color_t<uint8_t, 4>) : data_size;
 
     Buffer temp_sbuf("Temp Stage", ctx_, eBufType::Upload, buf_size);

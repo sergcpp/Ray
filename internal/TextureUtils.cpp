@@ -2003,9 +2003,9 @@ bool Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTex
     const uint32_t bpp = img_header[4];
     const uint32_t bytes_per_pixel = bpp / 8;
     if (bpp == 32) {
-        format = eTexFormat::RawRGBA8888;
+        format = eTexFormat::RGBA8;
     } else if (bpp == 24) {
-        format = eTexFormat::RawRGB888;
+        format = eTexFormat::RGB8;
     }
 
     if (out_data && out_size < w * h * bytes_per_pixel) {

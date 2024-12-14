@@ -139,7 +139,7 @@ std::vector<uint8_t> LoadTGA(const char file_name[], bool flip_y, int &w, int &h
     std::vector<uint8_t> tex_data(img_size);
     Ray::ReadTGAFile(&in_file_data[0], int(in_file_size), w, h, format, tex_data.data(), img_size);
 
-    if (format == Ray::eTexFormat::RawRGB888) {
+    if (format == Ray::eTexFormat::RGB8) {
         std::vector<uint8_t> tex_data2(w * h * 4);
         for (int i = 0; i < w * h; ++i) {
             tex_data2[4 * i + 0] = tex_data[3 * i + 0];
