@@ -876,7 +876,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
     } else if (sc_data.env.atmosphere.stars_brightness > 0.0f) {
         // Use fake lightsource (to light up the moon)
         const fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
-                    light_col = {144809.866891f, 129443.618266f, 127098.894121f, 0.0f};
+                    light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
 
         memcpy(uniform_params.light_dir, value_ptr(light_dir), 3 * sizeof(float));
         uniform_params.light_dir[3] = 0.0f;

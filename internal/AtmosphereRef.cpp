@@ -971,7 +971,7 @@ void Ray::Ref::ShadeSky(const pass_settings_t &ps, const float limit, Span<const
         } else if (sc.env.atmosphere.stars_brightness > 0.0f) {
             // Use fake lightsource (to light up the moon)
             const fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
-                        light_col = {144809.866891f, 129443.618266f, 127098.894121f, 0.0f};
+                        light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
 
             color += IntegrateScattering(sc.env.atmosphere, fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f},
                                          I, MAX_DIST, light_dir, 0.0f, light_col, sc.sky_transmittance_lut,

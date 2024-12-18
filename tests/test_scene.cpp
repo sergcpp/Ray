@@ -951,9 +951,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         sun_desc.direction[1] = -0.454519480f;
         sun_desc.direction[2] = -0.766044438f;
 
-        sun_desc.color[0] = 144809.866891f;
-        sun_desc.color[1] = 129443.618266f;
-        sun_desc.color[2] = 127098.894121f;
+        sun_desc.color[0] = 144809.859f;
+        sun_desc.color[1] = 129443.617f;
+        sun_desc.color[2] = 127098.890f;
 
         sun_desc.angle = 4.0f;
 
