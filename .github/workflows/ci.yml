@@ -372,8 +372,9 @@ jobs:
       - name: Re-initialize repository
         uses: ./.github/actions/checkout
       - name: Run Tests
-        uses: ./.github/actions/test
+        uses: ./.github/actions/test-macos
         with:
+          arch: "-x86_64"
           bin-dir: "macos-universal"
           out-dir: "macos-x86_64-cpu-output"
           test-args: "--nogpu -j4"

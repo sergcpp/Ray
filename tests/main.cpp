@@ -220,7 +220,12 @@ int main(int argc, char *argv[]) {
     static const char *ArchListFull[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", "DX", nullptr};
     static const char *ArchListFullNoGPU[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", nullptr};
     static const char *ArchListDefault[] = {"AVX2", "NEON", "VK", "DX", nullptr};
+#ifndef __APPLE__
     static const char *ArchListDefaultNoGPU[] = {"AVX2", "NEON", nullptr};
+#else
+    // NOTE: Rosetta doesn't support AVX, so we test SSE4.1 here
+    static const char *ArchListDefaultNoGPU[] = {"SSE41", "NEON", nullptr};
+#endif
     static const char *ArchListGPUOnly[] = {"DX", "VK", nullptr};
 
     bool detailed_material_tests_needed = full_tests;

@@ -1,0 +1,34 @@
+name: 'Test'
+inputs:
+  bin-name:
+    required: false
+    default: "test_Ray"
+  arch:
+    required: true
+  bin-dir:
+    required: true
+  out-dir:
+    required: true
+  test-args:
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/download-artifact@v3
+      with:
+        name: ${{ inputs.bin-dir }}
+        path: ${{ inputs.bin-dir }}/
+    - run: |
+        export ASAN_OPTIONS="windows_hook_legacy_allocators=false"
+        chmod +x ./${{ inputs.bin-dir }}/${{ inputs.bin-name }}
+        WORK_DIR=`pwd`
+        mkdir $WORK_DIR/${{ inputs.out-dir }}
+        cd ../../builds/Ray/tests
+        arch ${{ inputs.arch }} $WORK_DIR/${{ inputs.bin-dir }}/${{ inputs.bin-name }} ${{ inputs.test-args }} | tee $WORK_DIR/${{ inputs.out-dir }}/test_Ray_output.txt
+      shell: bash
+    - run: |
+        WORK_DIR=`pwd`
+        cd ../../builds/Ray/tests
+        cp test_data/errors.txt $WORK_DIR/${{ inputs.out-dir }} || true
+      if: always()
+      shell: bash
