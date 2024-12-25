@@ -788,7 +788,7 @@ jobs:
         with:
           bin-dir: "windows-arm64"
           out-dir: "windows-arm64-cpu-perf-output"
-          test-args: "--nogpu -j4 --time_limit 2.95"
+          test-args: "--nogpu -j4 --time_limit 1.65"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -811,7 +811,7 @@ jobs:
         with:
           bin-dir: "windows-arm64"
           out-dir: "windows-arm64-gpu-perf-output"
-          test-args: "--nocpu -j4 -vl 0 --time_limit 5.4"
+          test-args: "--nocpu -j4 -vl 0 --time_limit 1.35"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
