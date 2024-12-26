@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <cstring>
-
 #undef Always
 
 namespace Ray {

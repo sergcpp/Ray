@@ -69,9 +69,7 @@ class Texture2D {
 
     void Free();
 
-    void InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, const Tex2DParams &p,
-                         ILog *log);
-    void InitFromRAWData(Buffer &sbuf, int data_off[6], VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
+    void InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs,
                          const Tex2DParams &p, ILog *log);
 
   public:
@@ -87,8 +85,6 @@ class Texture2D {
         : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, ready_(true), name_(name), params(_params) {}
     Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
               VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
-    Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6], const Tex2DParams &p,
-              Buffer &stage_buf, VkCommandBuffer cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const Texture2D &rhs) = delete;
     Texture2D(Texture2D &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Texture2D();

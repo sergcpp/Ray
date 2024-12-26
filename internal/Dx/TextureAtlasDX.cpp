@@ -284,7 +284,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
 
     { // create default SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        if (GetColorChannelCount(real_format_) == 1) {
+        if (GetChannelCount(real_format_) == 1) {
             srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
         } else {
             srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;

@@ -32,43 +32,12 @@ extern const D3D12_COMPARISON_FUNC g_dx_compare_func[];
 
 extern const float AnisotropyLevel;
 
+#define DECORATE(X, Y, Z, W, XX) XX,
 extern const DXGI_FORMAT g_dx_formats[] = {
-    DXGI_FORMAT_UNKNOWN,              // Undefined
-    DXGI_FORMAT_UNKNOWN,              // RGB8
-    DXGI_FORMAT_R8G8B8A8_UNORM,       // RGBA8
-    DXGI_FORMAT_R8G8B8A8_SNORM,       // RawRGBA8888Signed
-    DXGI_FORMAT_B8G8R8A8_UNORM,       // BGRA8
-    DXGI_FORMAT_R32_FLOAT,            // R32F
-    DXGI_FORMAT_R16_FLOAT,            // R16F
-    DXGI_FORMAT_R8_UNORM,             // R8
-    DXGI_FORMAT_R16_UINT,             // RawR16UI
-    DXGI_FORMAT_R32_UINT,             // R32UI
-    DXGI_FORMAT_R8G8_UNORM,           // RG8
-    DXGI_FORMAT_R32G32B32_FLOAT,      // RGB32F
-    DXGI_FORMAT_R32G32B32A32_FLOAT,   // RGBA32F
-    DXGI_FORMAT_UNKNOWN,              // RGBE8
-    DXGI_FORMAT_UNKNOWN,              // RGB16F
-    DXGI_FORMAT_R16G16B16A16_FLOAT,   // RGBA16F
-    DXGI_FORMAT_R16G16_SNORM,         // RG16_snorm
-    DXGI_FORMAT_R16G16_UNORM,         // RG16
-    DXGI_FORMAT_R16G16_FLOAT,         // RG16F
-    DXGI_FORMAT_R32G32_FLOAT,         // RG32F
-    DXGI_FORMAT_R32G32_UINT,          // RawRG32U
-    DXGI_FORMAT_R10G10B10A2_UNORM,    // RGB10_A2
-    DXGI_FORMAT_R11G11B10_FLOAT,      // RG11F_B10F
-    DXGI_FORMAT_D16_UNORM,            // D16
-    DXGI_FORMAT_D24_UNORM_S8_UINT,    // D24_S8
-    DXGI_FORMAT_D32_FLOAT_S8X24_UINT, // D32_S8
-    DXGI_FORMAT_D32_FLOAT,            // D32
-    DXGI_FORMAT_BC1_UNORM,            // BC1
-    DXGI_FORMAT_BC2_UNORM,            // BC2
-    DXGI_FORMAT_BC3_UNORM,            // BC3
-    DXGI_FORMAT_BC4_UNORM,            // BC4
-    DXGI_FORMAT_BC5_UNORM,            // BC5
-    DXGI_FORMAT_UNKNOWN,              // ASTC
-    DXGI_FORMAT_UNKNOWN,              // None
+#include "../TextureFormat.inl"
 };
 static_assert(sizeof(g_dx_formats) / sizeof(g_dx_formats[0]) == size_t(eTexFormat::_Count), "!");
+#undef DECORATE
 
 uint32_t TextureHandleCounter = 0;
 
@@ -147,15 +116,8 @@ Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const Tex2DParams 
 }
 
 Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size,
-                              const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
-                              eTexLoadStatus *load_status, ILog *log)
-    : ctx_(ctx), name_(name) {
-    Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
-}
-
-Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6],
-                              const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
-                              eTexLoadStatus *load_status, ILog *log)
+                              const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf,
+                              MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
@@ -187,8 +149,9 @@ void Ray::Dx::Texture2D::Init(const Tex2DParams &p, MemoryAllocators *mem_allocs
     ready_ = true;
 }
 
-void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf,
-                              MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
+void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf,
+                              ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
+                              eTexLoadStatus *load_status, ILog *log) {
     if (!data) {
         uint8_t *stage_data = sbuf.Map();
         memcpy(stage_data, p.fallback_color, 4);
@@ -218,53 +181,6 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
     }
 }
 
-void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &sbuf,
-                              ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log) {
-    if (!data) {
-        uint8_t *stage_data = sbuf.Map();
-        memcpy(stage_data, p.fallback_color, 4);
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
-        sbuf.Unmap();
-
-        int data_off[6] = {};
-
-        Tex2DParams _p = p;
-        _p.w = _p.h = 1;
-        _p.format = eTexFormat::RGBA8;
-        _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
-
-        InitFromRAWData(sbuf, data_off, cmd_buf, mem_allocs, _p, log);
-        // mark it as not ready
-        ready_ = false;
-        cubemap_ready_ = 0;
-        (*load_status) = eTexLoadStatus::CreatedDefault;
-    } else {
-        uint8_t *stage_data = sbuf.Map();
-        uint32_t stage_off = 0;
-
-        int data_off[6];
-        for (int i = 0; i < 6; i++) {
-            if (data[i]) {
-                memcpy(&stage_data[stage_off], data[i], size[i]);
-                data_off[i] = int(stage_off);
-                stage_off += size[i];
-            } else {
-                data_off[i] = -1;
-            }
-        }
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
-        sbuf.Unmap();
-
-        InitFromRAWData(sbuf, data_off, cmd_buf, mem_allocs, p, log);
-
-        ready_ = (cubemap_ready_ & (1u << 0u)) == 1;
-        for (unsigned i = 1; i < 6; i++) {
-            ready_ = ready_ && ((cubemap_ready_ & (1u << i)) == 1);
-        }
-        (*load_status) = eTexLoadStatus::CreatedFromData;
-    }
-}
-
 void Ray::Dx::Texture2D::Free() {
     if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
         ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
@@ -284,8 +200,6 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     // VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
     eResState new_resource_state = eResState::Undefined;
-
-    mip_count = std::min(mip_count, CalcMipCount(w, h, 1, eTexFilter::Trilinear));
 
     { // create new image
         D3D12_RESOURCE_DESC image_desc = {};
@@ -524,18 +438,13 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     return true;
 }
 
-void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
-                                         const Tex2DParams &p, ILog *log) {
+void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf,
+                                         MemoryAllocators *mem_allocs, const Tex2DParams &p, ILog *log) {
     Free();
 
     handle_.generation = TextureHandleCounter++;
     params = p;
     initialized_mips_ = 0;
-
-    int mip_count = params.mip_count;
-    if (!mip_count) {
-        mip_count = CalcMipCount(p.w, p.h, 4, p.sampling.filter);
-    }
 
     { // create image
         D3D12_RESOURCE_DESC image_desc = {};
@@ -543,7 +452,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
         image_desc.Width = p.w;
         image_desc.Height = p.h;
         image_desc.DepthOrArraySize = 1;
-        image_desc.MipLevels = mip_count;
+        image_desc.MipLevels = params.mip_count;
         image_desc.Format = g_dx_formats[int(p.format)];
         if (bool(p.flags & eTexFlagBits::SRGB)) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
@@ -596,7 +505,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
         srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
 
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        if (GetColorChannelCount(p.format) == 1 && int(p.usage & eTexUsageBits::Storage) == 0) {
+        if (GetChannelCount(p.format) == 1 && int(p.usage & eTexUsageBits::Storage) == 0) {
             srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
         }
 
@@ -741,199 +650,9 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
     }
 }
 
-void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], ID3D12GraphicsCommandList *cmd_buf, MemoryAllocators *mem_allocs,
-                                         const Tex2DParams &p, ILog *log) {
-    assert(p.w > 0 && p.h > 0);
-    Free();
-
-    handle_.generation = TextureHandleCounter++;
-    params = p;
-    initialized_mips_ = 0;
-
-    const int mip_count = CalcMipCount(p.w, p.h, 1, p.sampling.filter);
-    (void)mip_count;
-#if 0
-    { // create image
-        VkImageCreateInfo img_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-        img_info.imageType = VK_IMAGE_TYPE_2D;
-        img_info.extent.width = uint32_t(p.w);
-        img_info.extent.height = uint32_t(p.h);
-        img_info.extent.depth = 1;
-        img_info.mipLevels = mip_count;
-        img_info.arrayLayers = 1;
-        img_info.format = g_vk_formats[size_t(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
-            img_info.format = ToSRGBFormat(img_info.format);
-        }
-        img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-        img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        assert(uint8_t(p.usage) != 0);
-        img_info.usage = to_vk_image_usage(p.usage, p.format);
-        img_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        img_info.samples = VkSampleCountFlagBits(p.samples);
-        img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
-        if (res != VK_SUCCESS) {
-            log->Error("Failed to create image!");
-            return;
-        }
-
-#ifdef ENABLE_GPU_DEBUG
-        VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
-        name_info.objectType = VK_OBJECT_TYPE_IMAGE;
-        name_info.objectHandle = uint64_t(handle_.img);
-        name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
-#endif
-
-        VkMemoryRequirements tex_mem_req;
-        vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
-
-        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
-                                      name_.c_str());
-        if (!alloc_) {
-            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
-            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
-                                          name_.c_str());
-            if (!alloc_) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-
-                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
-                                              name_.c_str());
-            }
-        }
-
-        res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
-        if (res != VK_SUCCESS) {
-            log->Error("Failed to bind memory!");
-            return;
-        }
-    }
-
-    { // create default image view
-        VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        view_info.image = handle_.img;
-        view_info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-        view_info.format = g_vk_formats[size_t(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
-            view_info.format = ToSRGBFormat(view_info.format);
-        }
-        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        view_info.subresourceRange.baseMipLevel = 0;
-        view_info.subresourceRange.levelCount = mip_count;
-        view_info.subresourceRange.baseArrayLayer = 0;
-        view_info.subresourceRange.layerCount = 1;
-
-        if (GetColorChannelCount(p.format) == 1) {
-            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
-        }
-
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
-        if (res != VK_SUCCESS) {
-            log->Error("Failed to create image view!");
-            return;
-        }
-
-#ifdef ENABLE_GPU_DEBUG
-        VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
-        name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
-        name_info.objectHandle = uint64_t(handle_.views[0]);
-        name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
-#endif
-    }
-
-    assert(p.samples == 1);
-    assert(sbuf.type() == eBufType::Stage);
-    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
-    VkPipelineStageFlags src_stages = 0, dst_stages = 0;
-    SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
-    SmallVector<VkImageMemoryBarrier, 1> img_barriers;
-
-    if (sbuf.resource_state != eResState::Undefined && sbuf.resource_state != eResState::CopySrc) {
-        auto &new_barrier = buf_barriers.emplace_back();
-        new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-        new_barrier.srcAccessMask = VKAccessFlagsForState(sbuf.resource_state);
-        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopySrc);
-        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.buffer = sbuf.vk_handle();
-        new_barrier.offset = VkDeviceSize(0);
-        new_barrier.size = VkDeviceSize(sbuf.size());
-
-        src_stages |= VKPipelineStagesForState(sbuf.resource_state);
-        dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
-    }
-
-    if (this->resource_state != eResState::CopyDst) {
-        auto &new_barrier = img_barriers.emplace_back();
-        new_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        new_barrier.srcAccessMask = VKAccessFlagsForState(this->resource_state);
-        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopyDst);
-        new_barrier.oldLayout = VKImageLayoutForState(this->resource_state);
-        new_barrier.newLayout = VKImageLayoutForState(eResState::CopyDst);
-        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.image = handle_.img;
-        new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        new_barrier.subresourceRange.baseMipLevel = 0;
-        new_barrier.subresourceRange.levelCount = mip_count; // transit whole image
-        new_barrier.subresourceRange.baseArrayLayer = 0;
-        new_barrier.subresourceRange.layerCount = 1;
-
-        src_stages |= VKPipelineStagesForState(this->resource_state);
-        dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
-    }
-
-    if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
-    }
-
-    sbuf.resource_state = eResState::CopySrc;
-    this->resource_state = eResState::CopyDst;
-
-    VkBufferImageCopy regions[6] = {};
-    for (int i = 0; i < 6; i++) {
-        regions[i].bufferOffset = VkDeviceSize(data_off[i]);
-        regions[i].bufferRowLength = 0;
-        regions[i].bufferImageHeight = 0;
-
-        regions[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        regions[i].imageSubresource.mipLevel = 0;
-        regions[i].imageSubresource.baseArrayLayer = i;
-        regions[i].imageSubresource.layerCount = 1;
-
-        regions[i].imageOffset = {0, 0, 0};
-        regions[i].imageExtent = {uint32_t(p.w), uint32_t(p.h), 1};
-    }
-
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 6, regions);
-#endif
-    initialized_mips_ |= (1u << 0);
-
-    ApplySampling(p.sampling, log);
-}
-
 void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const int offsety, const int sizex,
-                                     const int sizey, const eTexFormat format, const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf,
-                                     const int data_off, const int data_len) {
+                                     const int sizey, const eTexFormat format, const Buffer &sbuf,
+                                     ID3D12GraphicsCommandList *cmd_buf, const int data_off, const int data_len) {
     assert(format == params.format);
     assert(params.samples == 1);
     assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
@@ -1031,9 +750,10 @@ void Ray::Dx::Texture2D::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
-                               const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level, const uint32_t dst_x,
-                               const uint32_t dst_y, const uint32_t width, const uint32_t height) {
+void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture2D &src_tex, const uint32_t src_level,
+                               const uint32_t src_x, const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level,
+                               const uint32_t dst_x, const uint32_t dst_y, const uint32_t width,
+                               const uint32_t height) {
     assert(src_tex.resource_state == eResState::CopySrc);
     assert(dst_tex.resource_state == eResState::CopyDst);
 
@@ -1059,7 +779,8 @@ void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture2D &sr
 }
 
 void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const int x, const int y, const int w,
-                                const int h, const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf, const int data_off) {
+                                const int h, const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf,
+                                const int data_off) {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
     if (src_tex.resource_state != eResState::CopySrc) {
@@ -1327,7 +1048,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
         srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
 
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        if (GetColorChannelCount(p.format) == 1) {
+        if (GetChannelCount(p.format) == 1) {
             srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
         }
 
@@ -1369,8 +1090,8 @@ void Ray::Dx::Texture3D::Free() {
 }
 
 void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez,
-                                     eTexFormat format, const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf, int data_off,
-                                     int data_len) {
+                                     eTexFormat format, const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf,
+                                     int data_off, int data_len) {
     assert(format == params.format);
     assert(offsetx >= 0 && offsetx + sizex <= params.w);
     assert(offsety >= 0 && offsety + sizey <= params.h);

@@ -7,11 +7,23 @@
 namespace Ray {
 using Fixed8 = Fixed<int8_t, 3>;
 
-enum class eTexFilter : uint8_t { Nearest, Bilinear, Trilinear, BilinearNoMipmap, NearestMipmap, _Count };
-enum class eTexWrap : uint8_t { Repeat, ClampToEdge, ClampToBorder, _Count };
+#define DECORATE(X, Y, Z, W) X,
+enum class eTexFilter : uint8_t {
+#include "TextureFilter.inl"
+};
+#undef DECORATE
 
-#undef Always
-enum class eTexCompare : uint8_t { None, LEqual, GEqual, Less, Greater, Equal, NotEqual, Always, Never, _Count };
+#define DECORATE(X, Y, Z) X,
+enum class eTexWrap : uint8_t {
+#include "TextureWrap.inl"
+};
+#undef DECORATE
+
+#define DECORATE(X, Y, Z) X,
+enum class eTexCompare : uint8_t {
+#include "TextureCompare.inl"
+};
+#undef DECORATE
 
 struct SamplingParams {
     eTexFilter filter = eTexFilter::Nearest;
@@ -32,7 +44,5 @@ inline bool operator==(const SamplingParams lhs, const SamplingParams rhs) {
            lhs.lod_bias == rhs.lod_bias && lhs.min_lod == rhs.min_lod && lhs.max_lod == rhs.max_lod;
 }
 
-enum class eSamplerLoadStatus { Found, Created };
-
-int CalcMipCount(int w, int h, int min_res, eTexFilter filter);
+int CalcMipCount(int w, int h, int min_res);
 } // namespace Ray

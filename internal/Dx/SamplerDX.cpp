@@ -13,34 +13,23 @@
 
 namespace Ray {
 namespace Dx {
+#define DECORATE(X, Y, Z, W) W,
 extern const D3D12_FILTER g_dx_filter[] = {
-    D3D12_FILTER_MIN_MAG_MIP_POINT,        // Nearest
-    D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, // Bilinear
-    D3D12_FILTER_MIN_MAG_MIP_LINEAR,       // Trilinear
-    D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, // BilinearNoMipmap
-    D3D12_FILTER_MIN_MAG_MIP_POINT,        // NearestMipmap
+#include "../TextureFilter.inl"
 };
-static_assert(COUNT_OF(g_dx_filter) == size_t(eTexFilter::_Count), "!");
+#undef DECORATE
 
+#define DECORATE(X, Y, Z) Z,
 extern const D3D12_TEXTURE_ADDRESS_MODE g_dx_wrap_mode[] = {
-    D3D12_TEXTURE_ADDRESS_MODE_WRAP,   // Repeat
-    D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // ClampToEdge
-    D3D12_TEXTURE_ADDRESS_MODE_BORDER, // ClampToBorder
+#include "../TextureWrap.inl"
 };
-static_assert(COUNT_OF(g_dx_wrap_mode) == size_t(eTexWrap::_Count), "!");
+#undef DECORATE
 
+#define DECORATE(X, Y, Z) Z,
 extern const D3D12_COMPARISON_FUNC g_dx_compare_func[] = {
-    D3D12_COMPARISON_FUNC_NEVER,         // None
-    D3D12_COMPARISON_FUNC_LESS_EQUAL,    // LEqual
-    D3D12_COMPARISON_FUNC_GREATER_EQUAL, // GEqual
-    D3D12_COMPARISON_FUNC_LESS,          // Less
-    D3D12_COMPARISON_FUNC_GREATER,       // Greater
-    D3D12_COMPARISON_FUNC_EQUAL,         // Equal
-    D3D12_COMPARISON_FUNC_NOT_EQUAL,     // NotEqual
-    D3D12_COMPARISON_FUNC_ALWAYS,        // Always
-    D3D12_COMPARISON_FUNC_NEVER          // Never
+#include "../TextureCompare.inl"
 };
-static_assert(COUNT_OF(g_dx_compare_func) == size_t(eTexCompare::_Count), "!");
+#undef DECORATE
 
 extern const float AnisotropyLevel = 4.0f;
 } // namespace Dx

@@ -13,6 +13,7 @@
 #undef near
 #undef None
 #undef Success
+#undef Always
 
 #include "../../VulkanFunctions.h"
 

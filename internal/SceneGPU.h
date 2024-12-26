@@ -470,7 +470,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
     eTexBlock block = eTexBlock::_None;
 
-    const int expected_mip_count = CalcMipCount(_t.w, _t.h, 4, eTexFilter::Bilinear);
+    const int expected_mip_count = CalcMipCount(_t.w, _t.h, 4);
     const int mip_count = (_t.generate_mipmaps && !Ray::IsCompressedFormat(_t.format))
                               ? expected_mip_count
                               : std::min(_t.mips_count, expected_mip_count);
@@ -715,7 +715,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     p.usage = eTexUsageBits::Transfer | eTexUsageBits::Sampled;
     p.format = fmt;
     p.block = block;
-    p.sampling.filter = eTexFilter::NearestMipmap;
+    p.sampling.filter = eTexFilter::Nearest;
 
     std::pair<uint32_t, uint32_t> ret =
         bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p, ctx_->default_memory_allocs(), log_);
@@ -1797,7 +1797,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.format = eTexFormat::RGBA8;
         params.flags = eTexFlags::SRGB;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
-        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::ClampToEdge;
 
         sky_moon_tex_ = Texture2D{"Moon Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
@@ -1825,7 +1825,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.w = params.h = WEATHER_TEX_RES;
         params.format = eTexFormat::RGBA8;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
-        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
         sky_weather_tex_ = Texture2D{"Weather Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
@@ -1854,7 +1854,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.format = eTexFormat::RG8;
         // params.flags = eTexFlags::SRGB;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
-        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
         sky_cirrus_tex_ = Texture2D{"Cirrus Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
@@ -1878,7 +1878,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.format = eTexFormat::RGBA8;
         params.flags = eTexFlags::SRGB;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
-        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
         sky_curl_tex_ = Texture2D{"Curl Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
@@ -1906,7 +1906,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.w = params.h = params.d = NOISE_3D_RES;
         params.format = eTexFormat::R8;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
-        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
         sky_noise3d_tex_ = Texture3D{"Noise 3d Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
@@ -2530,7 +2530,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
         params.h = SKY_TRANSMITTANCE_LUT_H;
         params.format = eTexFormat::RGBA32F;
         params.sampling.wrap = eTexWrap::ClampToEdge;
-        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.filter = eTexFilter::Bilinear;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
         sky_transmittance_lut_tex_ =
@@ -2541,7 +2541,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
         params.w = params.h = SKY_MULTISCATTER_LUT_RES;
         params.format = eTexFormat::RGBA32F;
         params.sampling.wrap = eTexWrap::ClampToEdge;
-        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.filter = eTexFilter::Bilinear;
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
         sky_multiscatter_lut_tex_ =

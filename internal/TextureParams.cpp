@@ -5,43 +5,14 @@
 #include <algorithm>
 
 namespace Ray {
-const int g_per_pixel_data_len[] = {
-    -1, // Undefined
-    3,  // RGB8
-    4,  // RGBA8
-    4,  // RGBA8_snorm
-    4,  // BGRA8
-    4,  // R32F
-    2,  // R16F
-    1,  // R8
-    2,  // RawR16UI
-    4,  // R32UI
-    2,  // RG8
-    12, // RGB32F
-    16, // RGBA32F
-    4,  // RGBE8
-    6,  // RGB16F
-    8,  // RGBA16F
-    4,  // RG16_snorm
-    4,  // RG16
-    4,  // RG16F
-    8,  // RG32F
-    8,  // RG32UI
-    4,  // RGB10_A2
-    4,  // RG11F_B10F
-    2,  // D16
-    4,  // D24_S8
-    5,  // D32_S8
-    4,  // D32
-    -1, // BC1
-    -1, // BC2
-    -1, // BC3
-    -1, // BC4
-    -1, // BC5
-    -1, // ASTC
-    -1  // None
+#define DECORATE(X, Y, Z, W, XX) {Y, Z},
+struct {
+    int channel_count;
+    int pp_data_len;
+} g_tex_format_info[] = {
+#include "TextureFormat.inl"
 };
-static_assert(sizeof(g_per_pixel_data_len) / sizeof(g_per_pixel_data_len[0]) == int(eTexFormat::_Count), "!");
+#undef DECORATE
 
 extern const int g_block_res[][2] = {
     {4, 4},   // _4x4
@@ -62,54 +33,14 @@ extern const int g_block_res[][2] = {
 static_assert(sizeof(g_block_res) / sizeof(g_block_res[0]) == int(eTexBlock::_None), "!");
 } // namespace Ray
 
-int Ray::GetColorChannelCount(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
-    switch (format) {
-    case eTexFormat::RGBA8:
-    case eTexFormat::RGBA8_snorm:
-    case eTexFormat::BGRA8:
-    case eTexFormat::RGBA32F:
-    case eTexFormat::RGBE8:
-    case eTexFormat::RGBA16F:
-    case eTexFormat::RGB10_A2:
-    case eTexFormat::BC2:
-    case eTexFormat::BC3:
-        return 4;
-    case eTexFormat::RGB8:
-    case eTexFormat::RGB32F:
-    case eTexFormat::RGB16F:
-    case eTexFormat::RG11F_B10F:
-    case eTexFormat::BC1:
-        return 3;
-    case eTexFormat::RG8:
-    case eTexFormat::RG16:
-    case eTexFormat::RG16_snorm:
-    case eTexFormat::RG16F:
-    case eTexFormat::RG32F:
-    case eTexFormat::RG32UI:
-    case eTexFormat::BC5:
-        return 2;
-    case eTexFormat::R32F:
-    case eTexFormat::R16F:
-    case eTexFormat::R8:
-    case eTexFormat::RawR16UI:
-    case eTexFormat::R32UI:
-    case eTexFormat::BC4:
-        return 1;
-    case eTexFormat::D16:
-    case eTexFormat::D24_S8:
-    case eTexFormat::D32_S8:
-    case eTexFormat::D32:
-    case eTexFormat::Undefined:
-    default:
-        return 0;
-    }
+int Ray::GetChannelCount(const eTexFormat format) {
+    return g_tex_format_info[int(format)].channel_count;
 }
 
-int Ray::GetPerPixelDataLen(const eTexFormat format) { return g_per_pixel_data_len[int(format)]; }
+int Ray::GetPerPixelDataLen(const eTexFormat format) { return g_tex_format_info[int(format)].pp_data_len; }
 
 int Ray::GetBlockLenBytes(const eTexFormat format, const eTexBlock block) {
-    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
         assert(block == eTexBlock::_4x4);
@@ -122,8 +53,6 @@ int Ray::GetBlockLenBytes(const eTexFormat format, const eTexBlock block) {
     case eTexFormat::BC4:
         assert(block == eTexBlock::_4x4);
         return 8;
-    case eTexFormat::ASTC:
-        assert(false);
     default:
         return -1;
     }
@@ -147,11 +76,11 @@ uint32_t Ray::EstimateMemory(const Tex2DParams &params) {
 
             total_len += uint32_t(block_len) * block_cnt;
         } else {
-            assert(g_per_pixel_data_len[int(params.format)] != -1);
-            total_len += w * h * g_per_pixel_data_len[int(params.format)];
+            assert(g_tex_format_info[int(params.format)].pp_data_len != 0);
+            total_len += w * h * g_tex_format_info[int(params.format)].pp_data_len;
         }
     }
-    return params.cube ? 6 * total_len : total_len;
+    return total_len;
 }
 
 //
@@ -218,7 +147,7 @@ Ray::eTexFormat Ray::FormatFromGLInternalFormat(const uint32_t gl_internal_forma
         return eTexFormat::BC3;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR:
         (*is_srgb) = true;
-    case GL_COMPRESSED_RGBA_ASTC_4x4_KHR:
+    /*case GL_COMPRESSED_RGBA_ASTC_4x4_KHR:
         (*block) = eTexBlock::_4x4;
         return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR:
@@ -285,7 +214,7 @@ Ray::eTexFormat Ray::FormatFromGLInternalFormat(const uint32_t gl_internal_forma
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_12x12_KHR:
         (*block) = eTexBlock::_12x12;
-        return eTexFormat::ASTC;
+        return eTexFormat::ASTC;*/
     default:
         assert(false && "Unsupported format!");
     }

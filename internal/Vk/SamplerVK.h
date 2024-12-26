@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#undef Always
 
 #include "../SamplingParams.h"
 #include "Api.h"

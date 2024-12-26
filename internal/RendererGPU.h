@@ -410,7 +410,7 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
         Texture2D{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     { // Texture that holds required sample count per pixel
         Tex2DParams uparams = params;
-        uparams.format = eTexFormat::RawR16UI;
+        uparams.format = eTexFormat::R16UI;
         required_samples_buf_ =
             Texture2D{"Required samples Image", ctx_.get(), uparams, ctx_->default_memory_allocs(), ctx_->log()};
     }

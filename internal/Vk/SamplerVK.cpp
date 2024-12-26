@@ -5,43 +5,29 @@
 
 namespace Ray {
 namespace Vk {
+#define DECORATE(X, Y, Z, W) Y,
 extern const VkFilter g_vk_min_mag_filter[] = {
-    VK_FILTER_NEAREST, // Nearest
-    VK_FILTER_LINEAR,  // Bilinear
-    VK_FILTER_LINEAR,  // Trilinear
-    VK_FILTER_LINEAR,  // BilinearNoMipmap
-    VK_FILTER_NEAREST, // NearestMipmap
+#include "../TextureFilter.inl"
 };
-static_assert(COUNT_OF(g_vk_min_mag_filter) == size_t(eTexFilter::_Count), "!");
+#undef DECORATE
 
-extern const VkSamplerAddressMode g_vk_wrap_mode[] = {
-    VK_SAMPLER_ADDRESS_MODE_REPEAT,          // Repeat
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,   // ClampToEdge
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, // ClampToBorder
-};
-static_assert(COUNT_OF(g_vk_wrap_mode) == size_t(eTexWrap::_Count), "!");
-
+#define DECORATE(X, Y, Z, W) Z,
 extern const VkSamplerMipmapMode g_vk_mipmap_mode[] = {
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // Nearest
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // Bilinear
-    VK_SAMPLER_MIPMAP_MODE_LINEAR,  // Trilinear
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // BilinearNoMipmap
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // NearestMipmap
+#include "../TextureFilter.inl"
 };
-static_assert(COUNT_OF(g_vk_mipmap_mode) == size_t(eTexFilter::_Count), "!");
+#undef DECORATE
 
-extern const VkCompareOp g_vk_compare_ops[] = {
-    VK_COMPARE_OP_NEVER,            // None
-    VK_COMPARE_OP_LESS_OR_EQUAL,    // LEqual
-    VK_COMPARE_OP_GREATER_OR_EQUAL, // GEqual
-    VK_COMPARE_OP_LESS,             // Less
-    VK_COMPARE_OP_GREATER,          // Greater
-    VK_COMPARE_OP_EQUAL,            // Equal
-    VK_COMPARE_OP_NOT_EQUAL,        // NotEqual
-    VK_COMPARE_OP_ALWAYS,           // Always
-    VK_COMPARE_OP_NEVER             // Never
+#define DECORATE(X, Y, Z) Y,
+extern const VkSamplerAddressMode g_vk_wrap_mode[] = {
+#include "../TextureWrap.inl"
 };
-static_assert(COUNT_OF(g_vk_compare_ops) == size_t(eTexCompare::_Count), "!");
+#undef DECORATE
+
+#define DECORATE(X, Y, Z) Y,
+extern const VkCompareOp g_vk_compare_ops[] = {
+#include "../TextureCompare.inl"
+};
+#undef DECORATE
 
 extern const float AnisotropyLevel = 4.0f;
 } // namespace Vk

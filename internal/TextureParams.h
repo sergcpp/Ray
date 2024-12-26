@@ -5,64 +5,32 @@
 #include "SamplingParams.h"
 
 namespace Ray {
+#define DECORATE(X, Y, Z, W, XX) X,
 enum class eTexFormat : uint8_t {
-    Undefined,
-    RGB8,
-    RGBA8,
-    RGBA8_snorm,
-    BGRA8,
-    R32F,
-    R16F,
-    R8,
-    RawR16UI,
-    R32UI,
-    RG8,
-    RGB32F,
-    RGBA32F,
-    RGBE8,
-    RGB16F,
-    RGBA16F,
-    RG16_snorm,
-    RG16,
-    RG16F,
-    RG32F,
-    RG32UI,
-    RGB10_A2,
-    RG11F_B10F,
-    D16,
-    D24_S8,
-    D32_S8,
-    D32,
-    BC1,
-    BC2,
-    BC3,
-    BC4,
-    BC5,
-    ASTC,
-    None,
+#include "TextureFormat.inl"
     _Count
 };
+#undef DECORATE
 
 inline bool IsDepthFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
-    return format == eTexFormat::D16 || format == eTexFormat::D24_S8 ||
-           format == eTexFormat::D32_S8 || format == eTexFormat::D32;
+    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
+    return format == eTexFormat::D16 || format == eTexFormat::D24_S8 || format == eTexFormat::D32_S8 ||
+           format == eTexFormat::D32;
 }
 
 inline bool IsDepthStencilFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
     return format == eTexFormat::D24_S8 || format == eTexFormat::D32_S8;
 }
 
 inline bool IsCompressedFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
     case eTexFormat::BC2:
     case eTexFormat::BC3:
     case eTexFormat::BC4:
     case eTexFormat::BC5:
-    case eTexFormat::ASTC:
         return true;
     default:
         return false;
@@ -71,8 +39,8 @@ inline bool IsCompressedFormat(const eTexFormat format) {
 }
 
 inline bool IsUintFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
-    if (format == eTexFormat::RawR16UI || format == eTexFormat::R32UI || format == eTexFormat::RG32UI) {
+    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
+    if (format == eTexFormat::R16UI || format == eTexFormat::R32UI || format == eTexFormat::RG32UI) {
         return true;
     }
     return false;
@@ -96,16 +64,7 @@ enum class eTexBlock : uint8_t {
     _None
 };
 
-enum class eTexFlagBits : uint16_t {
-    NoOwnership = (1u << 0u),
-    Mutable = (1u << 1u), // TODO: remove this
-    Signed = (1u << 2u),
-    SRGB = (1u << 3u),
-    NoRepeat = (1u << 4u),
-    MIPMin = (1u << 5u),
-    MIPMax = (1u << 6u),
-    NoBias = (1u << 7u)
-};
+enum class eTexFlagBits : uint8_t { NoOwnership = (1u << 0u), SRGB = (1u << 1u) };
 using eTexFlags = eTexFlagBits;
 inline eTexFlags operator|(eTexFlags a, eTexFlags b) { return eTexFlags(uint16_t(a) | uint16_t(b)); }
 inline eTexFlags &operator|=(eTexFlags &a, eTexFlags b) { return a = eTexFlags(uint16_t(a) | uint16_t(b)); }
@@ -138,21 +97,19 @@ struct Tex2DParams {
     eTexFlags flags = {};
     uint8_t mip_count = 1;
     eTexUsage usage = {};
-    uint8_t cube = 0;
     uint8_t samples = 1;
     uint8_t fallback_color[4] = {0, 255, 255, 255};
     eTexFormat format = eTexFormat::Undefined;
     eTexBlock block = eTexBlock::_None;
     SamplingParams sampling;
 };
-static_assert(sizeof(Tex2DParams) == 22, "!");
+static_assert(sizeof(Tex2DParams) == 20, "!");
 
 inline bool operator==(const Tex2DParams &lhs, const Tex2DParams &rhs) {
     return lhs.w == rhs.w && lhs.h == rhs.h && lhs.flags == rhs.flags && lhs.mip_count == rhs.mip_count &&
-           lhs.usage == rhs.usage && lhs.cube == rhs.cube && lhs.samples == rhs.samples &&
-           lhs.fallback_color[0] == rhs.fallback_color[0] && lhs.fallback_color[1] == rhs.fallback_color[1] &&
-           lhs.fallback_color[2] == rhs.fallback_color[2] && lhs.fallback_color[3] == rhs.fallback_color[3] &&
-           lhs.format == rhs.format && lhs.sampling == rhs.sampling;
+           lhs.usage == rhs.usage && lhs.samples == rhs.samples && lhs.fallback_color[0] == rhs.fallback_color[0] &&
+           lhs.fallback_color[1] == rhs.fallback_color[1] && lhs.fallback_color[2] == rhs.fallback_color[2] &&
+           lhs.fallback_color[3] == rhs.fallback_color[3] && lhs.format == rhs.format && lhs.sampling == rhs.sampling;
 }
 inline bool operator!=(const Tex2DParams &lhs, const Tex2DParams &rhs) { return !operator==(lhs, rhs); }
 
@@ -164,13 +121,13 @@ struct Tex3DParams {
     eTexBlock block = eTexBlock::_None;
     SamplingParams sampling;
 };
-static_assert(sizeof(Tex2DParams) == 22, "!");
+static_assert(sizeof(Tex3DParams) == 16, "!");
 
 enum class eTexLoadStatus { Found, Reinitialized, CreatedDefault, CreatedFromData };
 
 // const int TextureDataPitchAlignment = 256;
 
-int GetColorChannelCount(eTexFormat format);
+int GetChannelCount(eTexFormat format);
 int GetPerPixelDataLen(eTexFormat format);
 int GetBlockLenBytes(eTexFormat format, eTexBlock block);
 int GetBlockCount(int w, int h, eTexBlock block);

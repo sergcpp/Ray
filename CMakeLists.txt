@@ -99,6 +99,9 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h
                           internal/SparseStorageGPU.h
+                          internal/TextureCompare.inl
+                          internal/TextureFilter.inl
+                          internal/TextureFormat.inl
                           internal/TextureParams.h
                           internal/TextureParams.cpp
                           internal/TextureSplitter.h
@@ -109,6 +112,7 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/TextureUtils.cpp
                           internal/TextureUtilsNEON.cpp
                           internal/TextureUtilsSSE2.cpp
+                          internal/TextureWrap.inl
                           internal/Time_.h
                           internal/Time.cpp
                           internal/TonemapRef.h

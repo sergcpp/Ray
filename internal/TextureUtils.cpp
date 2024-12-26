@@ -14,12 +14,6 @@
 #define _ABS(x) ((x) < 0 ? -(x) : (x))
 #define _CLAMP(x, lo, hi) (_MIN(_MAX((x), (lo)), (hi)))
 
-#define _MIN3(x, y, z) _MIN((x), _MIN((y), (z)))
-#define _MAX3(x, y, z) _MAX((x), _MAX((y), (z)))
-
-#define _MIN4(x, y, z, w) _MIN(_MIN((x), (y)), _MIN((z), (w)))
-#define _MAX4(x, y, z, w) _MAX(_MAX((x), (y)), _MAX((z), (w)))
-
 namespace Ray {
 uint16_t f32_to_f16(const float value) {
     int32_t i;
@@ -192,31 +186,6 @@ uint32_t next_power_of_two(uint32_t v) {
 }
 } // namespace Ray
 
-void Ray::RGBMDecode(const uint8_t rgbm[4], float out_rgb[3]) {
-    out_rgb[0] = 4.0f * (rgbm[0] / 255.0f) * (rgbm[3] / 255.0f);
-    out_rgb[1] = 4.0f * (rgbm[1] / 255.0f) * (rgbm[3] / 255.0f);
-    out_rgb[2] = 4.0f * (rgbm[2] / 255.0f) * (rgbm[3] / 255.0f);
-}
-
-void Ray::RGBMEncode(const float rgb[3], uint8_t out_rgbm[4]) {
-    float fr = rgb[0] / 4.0f;
-    float fg = rgb[1] / 4.0f;
-    float fb = rgb[2] / 4.0f;
-    float fa = std::max(std::max(fr, fg), std::max(fb, 1e-6f));
-    if (fa > 1.0f)
-        fa = 1.0f;
-
-    fa = std::ceil(fa * 255.0f) / 255.0f;
-    fr /= fa;
-    fg /= fa;
-    fb /= fa;
-
-    out_rgbm[0] = (uint8_t)_CLAMP(int(fr * 255), 0, 255);
-    out_rgbm[1] = (uint8_t)_CLAMP(int(fg * 255), 0, 255);
-    out_rgbm[2] = (uint8_t)_CLAMP(int(fb * 255), 0, 255);
-    out_rgbm[3] = (uint8_t)_CLAMP(int(fa * 255), 0, 255);
-}
-
 std::unique_ptr<float[]> Ray::ConvertRGBE_to_RGB32F(const uint8_t image_data[], const int w, const int h) {
     std::unique_ptr<float[]> fp_data(new float[w * h * 3]);
 
@@ -305,19 +274,6 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
     return u8_data;
 }
 
-std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBM(const float image_data[], const int w, const int h,
-                                                      const int channels) {
-    std::unique_ptr<uint8_t[]> u8_data(new uint8_t[w * h * 4]);
-
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            RGBMEncode(&image_data[channels * (y * w + x)], &u8_data[(y * w + x) * 4]);
-        }
-    }
-
-    return u8_data;
-}
-
 void Ray::ConvertRGB_to_YCoCg_rev(const uint8_t in_RGB[3], uint8_t out_YCoCg[3]) {
     RGB_to_YCoCg_reversible(in_RGB, out_YCoCg);
 }
@@ -391,174 +347,6 @@ std::unique_ptr<uint8_t[]> Ray::ConvertCoCgxY_to_RGB(const uint8_t image_data[],
     }
 
     return u8_data;
-}
-
-int Ray::InitMipMaps(std::unique_ptr<uint8_t[]> mipmaps[16], int widths[16], int heights[16], const int channels,
-                     const eMipOp op[4]) {
-    int mip_count = 1;
-
-    int _w = widths[0], _h = heights[0];
-    while (_w > 1 || _h > 1) {
-        int _prev_w = _w, _prev_h = _h;
-        _w = std::max(_w / 2, 1);
-        _h = std::max(_h / 2, 1);
-        if (!mipmaps[mip_count]) {
-            mipmaps[mip_count] = std::make_unique<uint8_t[]>(_w * _h * channels);
-        }
-        widths[mip_count] = _w;
-        heights[mip_count] = _h;
-        const uint8_t *tex = mipmaps[mip_count - 1].get();
-
-        int count = 0;
-
-        for (int j = 0; j < _prev_h; j += 2) {
-            for (int i = 0; i < _prev_w; i += 2) {
-                for (int k = 0; k < channels; k++) {
-                    if (op[k] == eMipOp::Skip) {
-                        continue;
-                    } else if (op[k] == eMipOp::Zero) {
-                        mipmaps[mip_count][count * channels + k] = 0;
-                    }
-
-                    // 4x4 pixel neighbourhood
-                    int c[4][4];
-
-                    // fetch inner quad
-                    c[1][1] = tex[((j + 0) * _prev_w + i + 0) * channels + k];
-                    c[1][2] = tex[((j + 0) * _prev_w + i + 1) * channels + k];
-                    c[2][1] = tex[((j + 1) * _prev_w + i + 0) * channels + k];
-                    c[2][2] = tex[((j + 1) * _prev_w + i + 1) * channels + k];
-
-                    if (op[k] == eMipOp::Avg) {
-                        mipmaps[mip_count][count * channels + k] = uint8_t((c[1][1] + c[1][2] + c[2][1] + c[2][2]) / 4);
-                    } else if (op[k] == eMipOp::Min) {
-                        mipmaps[mip_count][count * channels + k] = uint8_t(_MIN4(c[1][1], c[1][2], c[2][1], c[2][2]));
-                    } else if (op[k] == eMipOp::Max) {
-                        mipmaps[mip_count][count * channels + k] = uint8_t(_MAX4(c[1][1], c[1][2], c[2][1], c[2][2]));
-                    } else if (op[k] == eMipOp::MinBilinear || op[k] == eMipOp::MaxBilinear) {
-
-                        // fetch outer quad
-                        for (int dy = -1; dy < 3; dy++) {
-                            for (int dx = -1; dx < 3; dx++) {
-                                if ((dx == 0 || dx == 1) && (dy == 0 || dy == 1)) {
-                                    continue;
-                                }
-
-                                const int i0 = (i + dx + _prev_w) % _prev_w;
-                                const int j0 = (j + dy + _prev_h) % _prev_h;
-
-                                c[dy + 1][dx + 1] = tex[(j0 * _prev_w + i0) * channels + k];
-                            }
-                        }
-
-                        static const int quadrants[2][2][2] = {{{-1, -1}, {+1, -1}}, {{-1, +1}, {+1, +1}}};
-
-                        int test_val = c[1][1];
-
-                        for (int dj = 1; dj < 3; dj++) {
-                            for (int di = 1; di < 3; di++) {
-                                const int i0 = di + quadrants[dj - 1][di - 1][0];
-                                const int j0 = dj + quadrants[dj - 1][di - 1][1];
-
-                                if (op[k] == eMipOp::MinBilinear) {
-                                    test_val = _MIN(test_val, (c[dj][di] + c[dj][i0]) / 2);
-                                    test_val = _MIN(test_val, (c[dj][di] + c[j0][di]) / 2);
-                                } else if (op[k] == eMipOp::MaxBilinear) {
-                                    test_val = _MAX(test_val, (c[dj][di] + c[dj][i0]) / 2);
-                                    test_val = _MAX(test_val, (c[dj][di] + c[j0][di]) / 2);
-                                }
-                            }
-                        }
-
-                        for (int dj = 0; dj < 3; dj++) {
-                            for (int di = 0; di < 3; di++) {
-                                if (di == 1 && dj == 1) {
-                                    continue;
-                                }
-
-                                if (op[k] == eMipOp::MinBilinear) {
-                                    test_val = _MIN(test_val, (c[dj + 0][di + 0] + c[dj + 0][di + 1] +
-                                                               c[dj + 1][di + 0] + c[dj + 1][di + 1]) /
-                                                                  4);
-                                } else if (op[k] == eMipOp::MaxBilinear) {
-                                    test_val = _MAX(test_val, (c[dj + 0][di + 0] + c[dj + 0][di + 1] +
-                                                               c[dj + 1][di + 0] + c[dj + 1][di + 1]) /
-                                                                  4);
-                                }
-                            }
-                        }
-
-                        c[1][1] = test_val;
-
-                        if (op[k] == eMipOp::MinBilinear) {
-                            mipmaps[mip_count][count * channels + k] =
-                                uint8_t(_MIN4(c[1][1], c[1][2], c[2][1], c[2][2]));
-                        } else if (op[k] == eMipOp::MaxBilinear) {
-                            mipmaps[mip_count][count * channels + k] =
-                                uint8_t(_MAX4(c[1][1], c[1][2], c[2][1], c[2][2]));
-                        }
-                    }
-                }
-
-                count++;
-            }
-        }
-
-        mip_count++;
-    }
-
-    return mip_count;
-}
-
-int Ray::InitMipMapsRGBM(std::unique_ptr<uint8_t[]> mipmaps[16], int widths[16], int heights[16]) {
-    int mip_count = 1;
-
-    int _w = widths[0], _h = heights[0];
-    while (_w > 1 || _h > 1) {
-        int _prev_w = _w, _prev_h = _h;
-        _w = std::max(_w / 2, 1);
-        _h = std::max(_h / 2, 1);
-        mipmaps[mip_count] = std::make_unique<uint8_t[]>(_w * _h * 4);
-        widths[mip_count] = _w;
-        heights[mip_count] = _h;
-        const uint8_t *tex = mipmaps[mip_count - 1].get();
-
-        int count = 0;
-
-        for (int j = 0; j < _prev_h; j += 2) {
-            for (int i = 0; i < _prev_w; i += 2) {
-                float rgb_sum[3];
-                RGBMDecode(&tex[((j + 0) * _prev_w + i) * 4], rgb_sum);
-
-                float temp[3];
-                RGBMDecode(&tex[((j + 0) * _prev_w + i + 1) * 4], temp);
-                rgb_sum[0] += temp[0];
-                rgb_sum[1] += temp[1];
-                rgb_sum[2] += temp[2];
-
-                RGBMDecode(&tex[((j + 1) * _prev_w + i) * 4], temp);
-                rgb_sum[0] += temp[0];
-                rgb_sum[1] += temp[1];
-                rgb_sum[2] += temp[2];
-
-                RGBMDecode(&tex[((j + 1) * _prev_w + i + 1) * 4], temp);
-                rgb_sum[0] += temp[0];
-                rgb_sum[1] += temp[1];
-                rgb_sum[2] += temp[2];
-
-                rgb_sum[0] /= 4.0f;
-                rgb_sum[1] /= 4.0f;
-                rgb_sum[2] /= 4.0f;
-
-                RGBMEncode(rgb_sum, &mipmaps[mip_count][count * 4]);
-                count++;
-            }
-        }
-
-        mip_count++;
-    }
-
-    return mip_count;
 }
 
 namespace Ray {
@@ -2188,8 +1976,3 @@ void Ray::WritePFM(const char *base_name, const float values[], int w, int h, in
 #undef _ABS
 #undef _CLAMP
 
-#undef _MIN3
-#undef _MAX3
-
-#undef _MIN4
-#undef _MAX4
