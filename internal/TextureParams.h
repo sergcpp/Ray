@@ -13,18 +13,18 @@ enum class eTexFormat : uint8_t {
 #undef DECORATE
 
 inline bool IsDepthFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
     return format == eTexFormat::D16 || format == eTexFormat::D24_S8 || format == eTexFormat::D32_S8 ||
            format == eTexFormat::D32;
 }
 
 inline bool IsDepthStencilFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
     return format == eTexFormat::D24_S8 || format == eTexFormat::D32_S8;
 }
 
 inline bool IsCompressedFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
     case eTexFormat::BC2:
@@ -39,7 +39,7 @@ inline bool IsCompressedFormat(const eTexFormat format) {
 }
 
 inline bool IsUintFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
     if (format == eTexFormat::R16UI || format == eTexFormat::R32UI || format == eTexFormat::RG32UI) {
         return true;
     }
