@@ -18,12 +18,12 @@ enum D3D12_HEAP_TYPE;
 namespace Ray {
 namespace Dx {
 class Buffer;
-class MemoryAllocator;
+class MemAllocator;
 
 struct MemAllocation {
     uint32_t offset = 0, block = 0;
     uint16_t pool = 0;
-    MemoryAllocator *owner = nullptr;
+    MemAllocator *owner = nullptr;
 
     MemAllocation() = default;
     MemAllocation(const MemAllocation &rhs) = delete;
@@ -49,8 +49,8 @@ struct MemAllocation {
     void Release();
 };
 
-class MemoryAllocator {
-    char name_[32] = {};
+class MemAllocator {
+    std::string name_;
     Context *ctx_ = nullptr;
     float growth_factor_;
     uint32_t max_pool_size_;
@@ -67,15 +67,15 @@ class MemoryAllocator {
     bool AllocateNewPool(uint32_t size);
 
   public:
-    MemoryAllocator(const char name[32], Context *ctx, uint32_t initial_pool_size, D3D12_HEAP_TYPE heap_type,
-                    float growth_factor, uint32_t max_pool_size);
-    ~MemoryAllocator();
+    MemAllocator(const char *name, Context *ctx, uint32_t initial_pool_size, D3D12_HEAP_TYPE heap_type,
+                 float growth_factor, uint32_t max_pool_size);
+    ~MemAllocator();
 
-    MemoryAllocator(const MemoryAllocator &rhs) = delete;
-    MemoryAllocator(MemoryAllocator &&rhs) = default;
+    MemAllocator(const MemAllocator &rhs) = delete;
+    MemAllocator(MemAllocator &&rhs) = default;
 
-    MemoryAllocator &operator=(const MemoryAllocator &rhs) = delete;
-    MemoryAllocator &operator=(MemoryAllocator &&rhs) = default;
+    MemAllocator &operator=(const MemAllocator &rhs) = delete;
+    MemAllocator &operator=(MemAllocator &&rhs) = default;
 
     ID3D12Heap *heap(const int pool) const { return pools_[pool].heap; }
     D3D12_HEAP_TYPE heap_type() const { return heap_type_; }
@@ -86,21 +86,19 @@ class MemoryAllocator {
     void Print(ILog *log) const {}
 };
 
-class MemoryAllocators {
-    char name_[16] = {};
+class MemAllocators {
+    std::string name_;
     Context *ctx_;
     uint32_t initial_pool_size_;
     float growth_factor_;
     uint32_t max_pool_size_;
-    SmallVector<MemoryAllocator, 4> allocators_;
+    SmallVector<MemAllocator, 4> allocators_;
 
   public:
-    MemoryAllocators(const char name[16], Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
-                     const uint32_t max_pool_size)
-        : ctx_(ctx), initial_pool_size_(initial_pool_size), growth_factor_(growth_factor),
-          max_pool_size_(max_pool_size) {
-        strcpy(name_, name);
-    }
+    MemAllocators(const char *name, Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
+                  const uint32_t max_pool_size)
+        : name_(name), ctx_(ctx), initial_pool_size_(initial_pool_size), growth_factor_(growth_factor),
+          max_pool_size_(max_pool_size) {}
 
     MemAllocation Allocate(const uint32_t alignment, const uint32_t size, const D3D12_HEAP_TYPE heap_type) {
         int alloc_index = -1;
@@ -112,16 +110,14 @@ class MemoryAllocators {
         }
 
         if (alloc_index == -1) {
-            char name[32];
-            snprintf(name, sizeof(name), "%s (type %i)", name_, int(heap_type));
+            std::string name = name_;
+            name += " (type " + std::to_string(heap_type) + ")";
             alloc_index = int(allocators_.size());
-            allocators_.emplace_back(name, ctx_, initial_pool_size_, heap_type, growth_factor_, max_pool_size_);
+            allocators_.emplace_back(name.c_str(), ctx_, initial_pool_size_, heap_type, growth_factor_, max_pool_size_);
         }
 
         return allocators_[alloc_index].Allocate(alignment, size);
     }
-
-    void Print(ILog *log);
 };
 } // namespace Dx
 } // namespace Ray

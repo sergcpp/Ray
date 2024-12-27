@@ -92,16 +92,6 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
             new_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             new_write.descriptorCount = 1;
             new_write.pBufferInfo = &ubuf;
-        } else if (b.trg == eBindTarget::TBuf) {
-            ++descr_sizes.tbuf_count;
-
-            auto &new_write = descr_writes.emplace_back();
-            new_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            new_write.dstBinding = b.loc;
-            new_write.dstArrayElement = 0;
-            new_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-            new_write.descriptorCount = 1;
-            new_write.pTexelBufferView = &b.handle.tex_buf->view();
         } else if (b.trg == eBindTarget::SBufRO || b.trg == eBindTarget::SBufRW) {
             auto &sbuf = sbuf_infos[descr_sizes.sbuf_count++];
             sbuf.buffer = b.handle.buf->vk_handle();

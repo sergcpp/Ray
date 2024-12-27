@@ -60,7 +60,7 @@ void Ray::Vk::Context::Destroy() {
             api_.vkDestroyQueryPool(device_, query_pools_[i], nullptr);
         }
 
-        default_memory_allocs_ = {};
+        default_mem_allocs_ = {};
 
         api_.vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);
 
@@ -302,9 +302,9 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
         subgroup_supported_ &= (subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT) != 0;
     }
 
-    default_memory_allocs_ =
-        std::make_unique<MemoryAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
-                                           1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
+    default_mem_allocs_ =
+        std::make_unique<MemAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
+                                        1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         const int PoolStep = 8;

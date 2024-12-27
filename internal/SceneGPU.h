@@ -718,7 +718,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     p.sampling.filter = eTexFilter::Nearest;
 
     std::pair<uint32_t, uint32_t> ret =
-        bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p, ctx_->default_memory_allocs(), log_);
+        bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p, ctx_->default_mem_allocs(), log_);
 
     { // Submit GPU commands
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -1528,7 +1528,7 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
             p.mip_count = 1;
             p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
-            env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), log_);
+            env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
         }
         { // add env light source
             light_t l = {};
@@ -1553,7 +1553,7 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
         p.mip_count = 1;
         p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
-        env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), log_);
+        env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
     }
 
     if (use_bindless_ && env_.env_map != InvalidTextureHandle._index) {
@@ -1653,7 +1653,7 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
     p.h = res[1];
     p.format = eTexFormat::RGBA32F;
     p.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer;
-    Texture2D temp_img = Texture2D{"Temp Sky Tex", ctx_, p, ctx_->default_memory_allocs(), log_};
+    Texture2D temp_img = Texture2D{"Temp Sky Tex", ctx_, p, ctx_->default_mem_allocs(), log_};
 
     { // Write sky image
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -1800,7 +1800,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::ClampToEdge;
 
-        sky_moon_tex_ = Texture2D{"Moon Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
+        sky_moon_tex_ = Texture2D{"Moon Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 4 * MOON_TEX_W * MOON_TEX_H);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1828,7 +1828,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
-        sky_weather_tex_ = Texture2D{"Weather Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
+        sky_weather_tex_ = Texture2D{"Weather Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 4 * WEATHER_TEX_RES * WEATHER_TEX_RES);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1857,7 +1857,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
-        sky_cirrus_tex_ = Texture2D{"Cirrus Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
+        sky_cirrus_tex_ = Texture2D{"Cirrus Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 2 * CIRRUS_TEX_RES * CIRRUS_TEX_RES);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1881,7 +1881,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
-        sky_curl_tex_ = Texture2D{"Curl Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
+        sky_curl_tex_ = Texture2D{"Curl Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 4 * CURL_TEX_RES * CURL_TEX_RES);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1909,7 +1909,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;
 
-        sky_noise3d_tex_ = Texture3D{"Noise 3d Tex", ctx_, params, ctx_->default_memory_allocs(), log_};
+        sky_noise3d_tex_ = Texture3D{"Noise 3d Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         const uint32_t data_len = NOISE_3D_RES * NOISE_3D_RES * round_up(NOISE_3D_RES, TextureDataPitchAlignment);
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, data_len);
@@ -2193,7 +2193,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     p.mip_count = env_.qtree_levels;
     p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
-    env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), log_);
+    env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
 
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
@@ -2534,7 +2534,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
         sky_transmittance_lut_tex_ =
-            Texture2D{"Sky Transmittance LUT", ctx_, params, ctx_->default_memory_allocs(), log_};
+            Texture2D{"Sky Transmittance LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
     }
     if (!sky_multiscatter_lut_tex_.ready()) {
         Tex2DParams params;
@@ -2545,7 +2545,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
         params.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
         sky_multiscatter_lut_tex_ =
-            Texture2D{"Sky Multiscatter LUT", ctx_, params, ctx_->default_memory_allocs(), log_};
+            Texture2D{"Sky Multiscatter LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
     }
 
     // Upload textures

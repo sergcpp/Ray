@@ -65,7 +65,7 @@ class Context {
 
     uint32_t max_combined_image_samplers_ = 0, max_sampled_images_ = 0, max_samplers_ = 0;
 
-    std::unique_ptr<MemoryAllocators> default_memory_allocs_;
+    std::unique_ptr<MemAllocators> default_mem_allocs_;
     std::unique_ptr<DescrMultiPoolAlloc> default_descr_alloc_[MaxFramesInFlight];
 
   public:
@@ -113,7 +113,7 @@ class Context {
     const VkFence &in_flight_fence(const int i) const { return in_flight_fences_[i]; }
     VkQueryPool query_pool(const int i) const { return query_pools_[i]; }
 
-    MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
+    MemAllocators *default_mem_allocs() { return default_mem_allocs_.get(); }
     DescrMultiPoolAlloc *default_descr_alloc() const { return default_descr_alloc_[backend_frame].get(); }
 
     int WriteTimestamp(VkCommandBuffer cmd_buf, bool start);
