@@ -396,23 +396,22 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     params.usage = eTexUsageBits::Sampled | eTexUsageBits::Storage | eTexUsageBits::Transfer;
     params.sampling.wrap = eTexWrap::ClampToEdge;
 
-    temp_buf0_ = Texture2D{"Temp Image 0", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    temp_buf1_ = Texture2D{"Temp Image 1", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    full_buf_ = Texture2D{"Full Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    half_buf_ = Texture2D{"Half Image [1]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    base_color_buf_ = Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    temp_buf0_ = Texture2D{"Temp Image 0", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    temp_buf1_ = Texture2D{"Temp Image 1", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    full_buf_ = Texture2D{"Full Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    half_buf_ = Texture2D{"Half Image [1]", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    base_color_buf_ = Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     temp_depth_normals_buf_ =
-        Texture2D{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    depth_normals_buf_ =
-        Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+        Texture2D{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    depth_normals_buf_ = Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     raw_filtered_buf_ =
-        Texture2D{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+        Texture2D{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     { // Texture that holds required sample count per pixel
         Tex2DParams uparams = params;
         uparams.format = eTexFormat::R16UI;
         required_samples_buf_ =
-            Texture2D{"Required samples Image", ctx_.get(), uparams, ctx_->default_memory_allocs(), ctx_->log()};
+            Texture2D{"Required samples Image", ctx_.get(), uparams, ctx_->default_mem_allocs(), ctx_->log()};
     }
 
     { // Sampler with black border

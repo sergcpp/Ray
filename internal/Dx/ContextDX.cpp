@@ -74,7 +74,7 @@ void Ray::Dx::Context::Destroy() {
         DestroyDeferredResources(i);
     }
 
-    default_memory_allocs_ = {};
+    default_mem_allocs_ = {};
     staging_descr_alloc_ = {};
 
     SAFE_RELEASE(command_queue_);
@@ -356,9 +356,9 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
         subgroup_supported_ = (options1.WaveOps == TRUE);
     }
 
-    default_memory_allocs_ =
-        std::make_unique<MemoryAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
-                                           1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
+    default_mem_allocs_ =
+        std::make_unique<MemAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
+                                        1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
     staging_descr_alloc_ = std::make_unique<DescrMultiPoolAlloc<FreelistAllocAdapted>>(this, false, 16 * 1024);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {

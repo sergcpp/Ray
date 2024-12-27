@@ -34,23 +34,21 @@ void Ray::Vk::MemAllocation::Release() {
     }
 }
 
-Ray::Vk::MemoryAllocator::MemoryAllocator(const char name[32], Context *ctx, const uint32_t initial_pool_size,
-                                          uint32_t mem_type_index, const float growth_factor,
-                                          const uint32_t max_pool_size)
-    : ctx_(ctx), growth_factor_(growth_factor), max_pool_size_(max_pool_size), mem_type_index_(mem_type_index) {
-    strcpy(name_, name);
-
+Ray::Vk::MemAllocator::MemAllocator(const char *name, Context *ctx, const uint32_t initial_pool_size,
+                                    uint32_t mem_type_index, const float growth_factor, const uint32_t max_pool_size)
+    : name_(name), ctx_(ctx), growth_factor_(growth_factor), max_pool_size_(max_pool_size),
+      mem_type_index_(mem_type_index) {
     assert(growth_factor_ > 1.0f);
     AllocateNewPool(initial_pool_size);
 }
 
-Ray::Vk::MemoryAllocator::~MemoryAllocator() {
+Ray::Vk::MemAllocator::~MemAllocator() {
     for (MemPool &pool : pools_) {
         ctx_->api().vkFreeMemory(ctx_->device(), pool.mem, nullptr);
     }
 }
 
-bool Ray::Vk::MemoryAllocator::AllocateNewPool(const uint32_t size) {
+bool Ray::Vk::MemAllocator::AllocateNewPool(const uint32_t size) {
     VkMemoryAllocateInfo buf_alloc_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     buf_alloc_info.allocationSize = VkDeviceSize(size);
     buf_alloc_info.memoryTypeIndex = mem_type_index_;
@@ -70,7 +68,7 @@ bool Ray::Vk::MemoryAllocator::AllocateNewPool(const uint32_t size) {
     return res == VK_SUCCESS;
 }
 
-Ray::Vk::MemAllocation Ray::Vk::MemoryAllocator::Allocate(const uint32_t alignment, const uint32_t size) {
+Ray::Vk::MemAllocation Ray::Vk::MemAllocator::Allocate(const uint32_t alignment, const uint32_t size) {
     auto allocation = alloc_.Alloc(alignment, size);
 
     if (allocation.block == 0xffffffff) {
@@ -96,13 +94,13 @@ Ray::Vk::MemAllocation Ray::Vk::MemoryAllocator::Allocate(const uint32_t alignme
     return new_alloc;
 }
 
-void Ray::Vk::MemoryAllocator::Free(const uint32_t block) {
+void Ray::Vk::MemAllocator::Free(const uint32_t block) {
     alloc_.Free(block);
     assert(alloc_.IntegrityCheck());
 }
 
-Ray::Vk::MemAllocation Ray::Vk::MemoryAllocators::Allocate(const uint32_t alignment, const uint32_t size,
-                                                           const uint32_t mem_type_index) {
+Ray::Vk::MemAllocation Ray::Vk::MemAllocators::Allocate(const uint32_t alignment, const uint32_t size,
+                                                        const uint32_t mem_type_index) {
     if (mem_type_index == 0xffffffff) {
         return {};
     }
@@ -116,17 +114,18 @@ Ray::Vk::MemAllocation Ray::Vk::MemoryAllocators::Allocate(const uint32_t alignm
     }
 
     if (alloc_index == -1) {
-        char name[32];
-        snprintf(name, sizeof(name), "%s (type %i)", name_, int(mem_type_index));
+        std::string name = name_;
+        name += " (type " + std::to_string(mem_type_index) + ")";
         alloc_index = int(allocators_.size());
-        allocators_.emplace_back(name, ctx_, initial_pool_size_, mem_type_index, growth_factor_, max_pool_size_);
+        allocators_.emplace_back(name.c_str(), ctx_, initial_pool_size_, mem_type_index, growth_factor_,
+                                 max_pool_size_);
     }
 
     return allocators_[alloc_index].Allocate(alignment, size);
 }
 
-Ray::Vk::MemAllocation Ray::Vk::MemoryAllocators::Allocate(const VkMemoryRequirements &mem_req,
-                                                           const VkMemoryPropertyFlags desired_mem_flags) {
+Ray::Vk::MemAllocation Ray::Vk::MemAllocators::Allocate(const VkMemoryRequirements &mem_req,
+                                                        const VkMemoryPropertyFlags desired_mem_flags) {
     uint32_t mem_type_index =
         FindMemoryType(0, &ctx_->mem_properties(), mem_req.memoryTypeBits, desired_mem_flags, uint32_t(mem_req.size));
     while (mem_type_index != 0xffffffff) {
@@ -138,15 +137,6 @@ Ray::Vk::MemAllocation Ray::Vk::MemoryAllocators::Allocate(const VkMemoryRequire
                                         desired_mem_flags, uint32_t(mem_req.size));
     }
     return {};
-}
-
-void Ray::Vk::MemoryAllocators::Print(ILog *log) {
-    /*log->Info("=================================================================");
-    log->Info("MemAllocs %s", name_);
-    for (const auto &alloc : allocators_) {
-        alloc.Print(log);
-    }
-    log->Info("=================================================================");*/
 }
 
 #pragma warning(pop)

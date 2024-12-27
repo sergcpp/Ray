@@ -34,7 +34,7 @@ class Buffer;
 class BumpAlloc;
 class FreelistAllocAdapted;
 template <class Allocator> class DescrMultiPoolAlloc;
-class MemoryAllocators;
+class MemAllocators;
 
 using CommandBuffer = ID3D12GraphicsCommandList *;
 
@@ -81,7 +81,7 @@ class Context {
 
     uint32_t max_combined_image_samplers_ = 0, max_sampled_images_ = 0, max_samplers_ = 0;
 
-    std::unique_ptr<MemoryAllocators> default_memory_allocs_;
+    std::unique_ptr<MemAllocators> default_mem_allocs_;
     std::unique_ptr<DescrMultiPoolAlloc<BumpAlloc>> default_descr_alloc_[MaxFramesInFlight];
     std::unique_ptr<DescrMultiPoolAlloc<FreelistAllocAdapted>> staging_descr_alloc_;
 
@@ -132,7 +132,7 @@ class Context {
     HANDLE fence_event() const { return fence_event_; }
     ID3D12QueryHeap *query_heap(const int i) const { return query_heaps_[i]; }
 
-    MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
+    MemAllocators *default_mem_allocs() { return default_mem_allocs_.get(); }
     DescrMultiPoolAlloc<BumpAlloc> *default_descr_alloc() { return default_descr_alloc_[backend_frame].get(); }
     DescrMultiPoolAlloc<FreelistAllocAdapted> *staging_descr_alloc() { return staging_descr_alloc_.get(); }
 
