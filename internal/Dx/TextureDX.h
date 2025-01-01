@@ -107,7 +107,7 @@ class Texture2D {
     void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
 
-    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, eTexBlock block, bool is_srgb,
+    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, bool is_srgb,
                  ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, ILog *log);
 
     Context *ctx() { return ctx_; }
@@ -191,7 +191,7 @@ DXGI_FORMAT DXFormatFromTexFormat(eTexFormat format);
 DXGI_FORMAT ToSRGBFormat(DXGI_FORMAT format);
 
 bool RequiresManualSRGBConversion(eTexFormat format);
-bool CanBeBlockCompressed(int w, int h, int mip_count, eTexBlock block);
+bool CanBeBlockCompressed(int w, int h, int mip_count);
 
 } // namespace Dx
 } // namespace Ray

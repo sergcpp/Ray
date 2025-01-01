@@ -101,7 +101,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
 
         auto &att_desc = pass_attachments.emplace_back();
         att_desc.format = VKFormatFromTexFormat(_color_rts[i].format);
-        if (bool(_color_rts[i].flags & eTexFlagBits::SRGB)) {
+        if (_color_rts[i].flags & eTexFlags::SRGB) {
             att_desc.format = ToSRGBFormat(att_desc.format);
         }
         att_desc.samples = VkSampleCountFlagBits(_color_rts[i].samples);

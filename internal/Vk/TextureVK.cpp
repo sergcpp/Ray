@@ -25,7 +25,7 @@ extern const VkCompareOp g_vk_compare_ops[];
 
 extern const float AnisotropyLevel;
 
-#define DECORATE(X, Y, Z, W, XX) W,
+#define DECORATE(X, Y, Z, W, XX, YY, ZZ) YY,
 extern const VkFormat g_vk_formats[] = {
 #include "../TextureFormat.inl"
 };
@@ -94,19 +94,19 @@ VkFormat ToSRGBFormat(const VkFormat format) {
     return VK_FORMAT_UNDEFINED;
 }
 
-VkImageUsageFlags to_vk_image_usage(const eTexUsage usage, const eTexFormat format) {
+VkImageUsageFlags to_vk_image_usage(const Bitmask<eTexUsage> usage, const eTexFormat format) {
     VkImageUsageFlags ret = 0;
-    if (uint8_t(usage & eTexUsage::Transfer)) {
+    if (usage & eTexUsage::Transfer) {
         ret |= (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
     }
-    if (uint8_t(usage & eTexUsage::Sampled)) {
+    if (usage & eTexUsage::Sampled) {
         ret |= VK_IMAGE_USAGE_SAMPLED_BIT;
     }
-    if (uint8_t(usage & eTexUsage::Storage)) {
+    if (usage & eTexUsage::Storage) {
         assert(!IsCompressedFormat(format));
         ret |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
-    if (uint8_t(usage & eTexUsage::RenderTarget)) {
+    if (usage & eTexUsage::RenderTarget) {
         assert(!IsCompressedFormat(format));
         if (IsDepthFormat(format)) {
             ret |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -195,7 +195,7 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         _p.w = _p.h = 1;
         _p.mip_count = 1;
         _p.format = eTexFormat::RGBA8;
-        _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
+        _p.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
 
         InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, _p, log);
         // mark it as not ready
@@ -214,7 +214,7 @@ void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
 }
 
 void Ray::Vk::Texture2D::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
+    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
         for (VkImageView view : handle_.views) {
             if (view) {
                 ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
@@ -230,8 +230,7 @@ void Ray::Vk::Texture2D::Free() {
 }
 
 bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                                 const eTexBlock block, const bool is_srgb, VkCommandBuffer cmd_buf,
-                                 MemAllocators *mem_allocs, ILog *log) {
+                                 const bool is_srgb, VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, ILog *log) {
     VkImage new_image = VK_NULL_HANDLE;
     VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
@@ -251,7 +250,6 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         }
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        assert(uint8_t(params.usage) != 0);
         img_info.usage = to_vk_image_usage(params.usage, format);
 
         img_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -455,14 +453,13 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     params.w = w;
     params.h = h;
     if (is_srgb) {
-        params.flags |= eTexFlagBits::SRGB;
+        params.flags |= eTexFlags::SRGB;
     } else {
-        params.flags &= ~eTexFlagBits::SRGB;
+        params.flags &= ~Bitmask<eTexFlags>(eTexFlags::SRGB);
     }
     params.mip_count = mip_count;
     params.samples = samples;
     params.format = format;
-    params.block = block;
     initialized_mips_ = new_initialized_mips;
 
     this->resource_state = new_resource_state;
@@ -487,12 +484,11 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
         img_info.mipLevels = params.mip_count;
         img_info.arrayLayers = 1;
         img_info.format = g_vk_formats[size_t(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
+        if (p.flags & eTexFlags::SRGB) {
             img_info.format = ToSRGBFormat(img_info.format);
         }
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        assert(uint8_t(p.usage) != 0);
         img_info.usage = to_vk_image_usage(p.usage, p.format);
 
         img_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -543,7 +539,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
         view_info.image = handle_.img;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         view_info.format = g_vk_formats[size_t(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
+        if (p.flags & eTexFlags::SRGB) {
             view_info.format = ToSRGBFormat(view_info.format);
         }
         if (IsDepthStencilFormat(p.format)) {
@@ -558,7 +554,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 1;
 
-        if (GetChannelCount(p.format) == 1 && int(p.usage & eTexUsageBits::Storage) == 0) {
+        if (GetChannelCount(p.format) == 1 && !bool(p.usage & eTexUsage::Storage)) {
             view_info.components.r = VK_COMPONENT_SWIZZLE_R;
             view_info.components.g = VK_COMPONENT_SWIZZLE_R;
             view_info.components.b = VK_COMPONENT_SWIZZLE_R;
@@ -985,12 +981,11 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
         img_info.mipLevels = 1;
         img_info.arrayLayers = 1;
         img_info.format = g_vk_formats[size_t(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
+        if (p.flags & eTexFlags::SRGB) {
             img_info.format = ToSRGBFormat(img_info.format);
         }
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        assert(uint8_t(p.usage) != 0);
         img_info.usage = to_vk_image_usage(p.usage, p.format);
 
         img_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -1100,7 +1095,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
 }
 
 void Ray::Vk::Texture3D::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
+    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
         for (VkImageView view : handle_.views) {
             if (view) {
                 ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
@@ -1200,7 +1195,7 @@ bool Ray::Vk::RequiresManualSRGBConversion(const eTexFormat format) {
     return vk_format == ToSRGBFormat(vk_format);
 }
 
-bool Ray::Vk::CanBeBlockCompressed(int w, int h, int mip_count, eTexBlock block) {
+bool Ray::Vk::CanBeBlockCompressed(int w, int h, int mip_count) {
     // assume non-multiple of block size resolutions are supported
     return true;
 }

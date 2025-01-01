@@ -1,8 +1,6 @@
 #pragma once
 
 #include <limits>
-#undef min
-#undef max
 
 namespace Ray {
 template <typename T, int FpBits> class Fixed {
