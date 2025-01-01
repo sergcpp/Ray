@@ -500,7 +500,8 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
 }
 
 void Ray::Dx::TextureAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
-                                         const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf, const int data_off) const {
+                                         const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf,
+                                         const int data_off) const {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
     if (resource_state != eResState::CopySrc) {
@@ -543,8 +544,7 @@ void Ray::Dx::TextureAtlas::CopyRegionTo(const int page, const int x, const int 
     dst_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(real_format_)];
     if (IsCompressedFormat(real_format_)) {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(GetBlockCount(w, 1, eTexBlock::_4x4) * GetBlockLenBytes(real_format_, eTexBlock::_4x4),
-                     TextureDataPitchAlignment);
+            round_up(GetBlockCount(w, 1, real_format_) * GetBlockLenBytes(real_format_), TextureDataPitchAlignment);
     } else {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
             round_up(w * GetPerPixelDataLen(real_format_), TextureDataPitchAlignment);

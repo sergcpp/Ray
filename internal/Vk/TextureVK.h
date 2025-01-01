@@ -37,7 +37,8 @@ struct TexHandle {
 
     explicit operator bool() const { return img != VK_NULL_HANDLE; }
 };
-// static_assert(sizeof(TexHandle) == 56, "!");
+static_assert(sizeof(TexHandle) == 48, "!");
+
 inline bool operator==(const TexHandle &lhs, const TexHandle &rhs) {
     return lhs.img == rhs.img && lhs.views == rhs.views && lhs.sampler == rhs.sampler &&
            lhs.generation == rhs.generation;
@@ -104,8 +105,8 @@ class Texture2D {
     void Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf,
               MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
 
-    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, eTexBlock block, bool is_srgb,
-                 VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, ILog *log);
+    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, bool is_srgb, VkCommandBuffer cmd_buf,
+                 MemAllocators *mem_allocs, ILog *log);
 
     Context *ctx() const { return ctx_; }
     const TexHandle &handle() const { return handle_; }
@@ -181,7 +182,7 @@ class Texture3D {
 VkFormat VKFormatFromTexFormat(eTexFormat format);
 
 bool RequiresManualSRGBConversion(eTexFormat format);
-bool CanBeBlockCompressed(int w, int h, int mip_count, eTexBlock block);
+bool CanBeBlockCompressed(int w, int h, int mip_count);
 
 } // namespace Vk
 } // namespace Ray

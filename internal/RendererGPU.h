@@ -393,7 +393,7 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     params.w = w;
     params.h = h;
     params.format = eTexFormat::RGBA32F;
-    params.usage = eTexUsageBits::Sampled | eTexUsageBits::Storage | eTexUsageBits::Transfer;
+    params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Storage | eTexUsage::Transfer;
     params.sampling.wrap = eTexWrap::ClampToEdge;
 
     temp_buf0_ = Texture2D{"Temp Image 0", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};

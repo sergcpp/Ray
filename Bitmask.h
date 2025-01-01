@@ -20,13 +20,22 @@ template <class enum_type, typename = typename std::enable_if<std::is_enum<enum_
     Bitmask &operator=(const Bitmask &rhs) = default;
     Bitmask &operator=(Bitmask &&rhs) = default;
 
-    Bitmask operator|(const enum_type rhs) { return Bitmask(mask_ | to_mask(rhs)); }
-    Bitmask operator|(const Bitmask rhs) { return Bitmask(mask_ | rhs.mask_); }
+    Bitmask operator|(const Bitmask rhs) const { return Bitmask(mask_ | rhs.mask_); }
+    Bitmask operator|=(const Bitmask rhs) { return (*this) = Bitmask(mask_ | rhs.mask_); }
 
-    Bitmask operator|=(const enum_type rhs) { return (*this) = Bitmask(mask_ | to_mask(rhs)); }
+    Bitmask operator&(const Bitmask rhs) const { return Bitmask(mask_ & rhs.mask_); }
+    Bitmask operator&=(const Bitmask rhs) { return (*this) = Bitmask(mask_ & rhs.mask_); }
 
-    bool operator&(const enum_type rhs) const { return (mask_ & to_mask(rhs)) != 0; }
-    bool operator&(const Bitmask rhs) const { return (mask_ & rhs.mask_) != 0; }
+    Bitmask operator~() const { return Bitmask(~mask_); }
+
+    bool operator==(const enum_type rhs) const { return mask_ == to_mask(rhs); }
+    bool operator==(const Bitmask rhs) const { return mask_ == rhs.mask_; }
+
+    bool operator!=(const enum_type rhs) const { return mask_ != to_mask(rhs); }
+    bool operator!=(const Bitmask rhs) const { return mask_ != rhs.mask_; }
+
+    operator bool() const { return mask_ != 0; }
+    explicit operator underlying_type() const { return mask_; }
 
   private:
     underlying_type mask_;

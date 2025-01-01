@@ -32,7 +32,7 @@ extern const D3D12_COMPARISON_FUNC g_dx_compare_func[];
 
 extern const float AnisotropyLevel;
 
-#define DECORATE(X, Y, Z, W, XX) XX,
+#define DECORATE(X, Y, Z, W, XX, YY, ZZ) ZZ,
 extern const DXGI_FORMAT g_dx_formats[] = {
 #include "../TextureFormat.inl"
 };
@@ -57,13 +57,13 @@ DXGI_FORMAT ToSRGBFormat(const DXGI_FORMAT format) {
     return DXGI_FORMAT_UNKNOWN;
 }
 
-D3D12_RESOURCE_FLAGS to_dx_image_flags(const eTexUsage usage, const eTexFormat format) {
+D3D12_RESOURCE_FLAGS to_dx_image_flags(const Bitmask<eTexUsage> usage, const eTexFormat format) {
     D3D12_RESOURCE_FLAGS ret = D3D12_RESOURCE_FLAG_NONE;
-    if (uint8_t(usage & eTexUsage::Storage)) {
+    if (usage & eTexUsage::Storage) {
         assert(!IsCompressedFormat(format));
         ret |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
-    if (uint8_t(usage & eTexUsage::RenderTarget)) {
+    if (usage & eTexUsage::RenderTarget) {
         assert(!IsCompressedFormat(format));
         if (IsDepthFormat(format)) {
             ret |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -162,7 +162,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
         _p.w = _p.h = 1;
         _p.mip_count = 1;
         _p.format = eTexFormat::RGBA8;
-        _p.usage = eTexUsage::Sampled | eTexUsage::Transfer;
+        _p.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
 
         InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, _p, log);
         // mark it as not ready
@@ -182,7 +182,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2D
 }
 
 void Ray::Dx::Texture2D::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
+    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
         ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
         ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
@@ -194,8 +194,8 @@ void Ray::Dx::Texture2D::Free() {
 }
 
 bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                                 const eTexBlock block, const bool is_srgb, ID3D12GraphicsCommandList *cmd_buf,
-                                 MemAllocators *mem_allocs, ILog *log) {
+                                 const bool is_srgb, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
+                                 ILog *log) {
     ID3D12Resource *new_image = nullptr;
     // VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
@@ -454,7 +454,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
         image_desc.DepthOrArraySize = 1;
         image_desc.MipLevels = params.mip_count;
         image_desc.Format = g_dx_formats[int(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
+        if (p.flags & eTexFlags::SRGB) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
         }
         image_desc.SampleDesc.Count = p.samples;
@@ -488,14 +488,14 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
         ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const UINT SAMPLER_INCR = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
-    const bool requires_uav = int(p.usage & eTexUsageBits::Storage) != 0;
+    const bool requires_uav = bool(p.usage & eTexUsage::Storage);
 
     handle_.views_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
 
     { // create default SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.Format = g_dx_formats[int(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
+        if (p.flags & eTexFlags::SRGB) {
             srv_desc.Format = ToSRGBFormat(srv_desc.Format);
         }
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -505,7 +505,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
         srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
 
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        if (GetChannelCount(p.format) == 1 && int(p.usage & eTexUsageBits::Storage) == 0) {
+        if (GetChannelCount(p.format) == 1 && !bool(p.usage & eTexUsage::Storage)) {
             srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
         }
 
@@ -694,13 +694,12 @@ void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const i
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = 1;
     src_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(params.format)];
-    if (bool(params.flags & eTexFlagBits::SRGB)) {
+    if (params.flags & eTexFlags::SRGB) {
         src_loc.PlacedFootprint.Footprint.Format = ToSRGBFormat(src_loc.PlacedFootprint.Footprint.Format);
     }
     if (IsCompressedFormat(params.format)) {
-        src_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(GetBlockCount(sizex, 1, params.block) * GetBlockLenBytes(params.format, params.block),
-                     TextureDataPitchAlignment);
+        src_loc.PlacedFootprint.Footprint.RowPitch = round_up(
+            GetBlockCount(sizex, 1, params.format) * GetBlockLenBytes(params.format), TextureDataPitchAlignment);
     } else {
         src_loc.PlacedFootprint.Footprint.RowPitch =
             round_up(sizex * GetPerPixelDataLen(params.format), TextureDataPitchAlignment);
@@ -822,10 +821,9 @@ void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
     dst_loc.PlacedFootprint.Footprint.Depth = 1;
     dst_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(src_tex.params.format)];
     if (IsCompressedFormat(src_tex.params.format)) {
-        dst_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(GetBlockCount(src_tex.params.w, 1, src_tex.params.block) *
-                         GetBlockLenBytes(src_tex.params.format, src_tex.params.block),
-                     TextureDataPitchAlignment);
+        dst_loc.PlacedFootprint.Footprint.RowPitch = round_up(
+            GetBlockCount(src_tex.params.w, 1, src_tex.params.format) * GetBlockLenBytes(src_tex.params.format),
+            TextureDataPitchAlignment);
     } else {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
             round_up(src_tex.params.w * GetPerPixelDataLen(src_tex.params.format), TextureDataPitchAlignment);
@@ -945,7 +943,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
         image_desc.DepthOrArraySize = p.d;
         image_desc.MipLevels = 1;
         image_desc.Format = g_dx_formats[int(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
+        if (p.flags & eTexFlags::SRGB) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
         }
         image_desc.SampleDesc.Count = 1;
@@ -1024,7 +1022,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
 }
 
 void Ray::Dx::Texture3D::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
+    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
         ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
         ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
@@ -1101,11 +1099,14 @@ bool Ray::Dx::RequiresManualSRGBConversion(const eTexFormat format) {
     return dxgi_format == ToSRGBFormat(dxgi_format);
 }
 
-bool Ray::Dx::CanBeBlockCompressed(int w, int h, const int mip_count, const eTexBlock block) {
+bool Ray::Dx::CanBeBlockCompressed(int w, int h, const int mip_count) {
+    // NOTE: Assume only BC-formats for now
+    static const int block_res[2] = {4, 4};
+
     bool ret = true;
     for (int i = 0; i < mip_count && ret; ++i) {
         // make sure resolution is multiple of block size
-        ret &= (w % g_block_res[int(block)][0]) == 0 && (h % g_block_res[int(block)][1]) == 0;
+        ret &= (w % block_res[0]) == 0 && (h % block_res[1]) == 0;
         w /= 2;
         h /= 2;
     }
