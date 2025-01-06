@@ -301,8 +301,8 @@ void InsetYCoCgBBox_NEON(uint8_t min_color[4], uint8_t max_color[4]) {
     min_col = vcombine_u8(vqmovun_s16(min_col), vqmovun_s16(min_col));
     max_col = vcombine_u8(vqmovun_s16(max_col), vqmovun_s16(max_col));
 
-    vst1q_lane_u8(min_color, min_col, 0);
-    vst1q_lane_u8(max_color, max_col, 0);
+    vst1q_lane_s32(reinterpret_cast<int32_t *>(min_color), min_col, 0);
+    vst1q_lane_s32(reinterpret_cast<int32_t *>(max_color), max_col, 0);
 }
 
 alignas(16) static const int16_t CoCgMask[] = {-1, 0, -1, 0, -1, 0, -1, 0};
