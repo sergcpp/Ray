@@ -844,13 +844,13 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
 
     //////////////////////////////////////////////////////////////////////////////////
 
-    const int w_rounded = 16 * ((w_ + 15) / 16);
-    const int h_rounded = 16 * ((h_ + 15) / 16);
+    const int w_rounded = round_up(w_, 16);
+    const int h_rounded = round_up(h_, 16);
 
     rect_t r = region.rect();
     if (pass < 15) {
-        r.w = 16 * ((r.w + 15) / 16);
-        r.h = 16 * ((r.h + 15) / 16);
+        r.w = round_up(r.w, 16);
+        r.h = round_up(r.h, 16);
     }
 
     Buffer *weights = &unet_weights_;

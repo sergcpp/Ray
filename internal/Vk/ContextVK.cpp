@@ -219,7 +219,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
 
     if (!external_ && !InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
                                     ray_query_supported_, fp16_supported_, int64_supported_, int64_atomics_supported_,
-                                    coop_matrix_supported_, g_enabled_layers, g_enabled_layers_count, log)) {
+                                    coop_matrix_supported_, log)) {
         return false;
     }
 
@@ -659,8 +659,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
 bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                                     uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
                                     bool enable_fp16, bool enable_int64, bool enable_int64_atomics,
-                                    bool enable_coop_matrix, const char *enabled_layers[], int enabled_layers_count,
-                                    ILog *log) {
+                                    bool enable_coop_matrix, ILog *log) {
     VkDeviceQueueCreateInfo queue_create_infos[2] = {{}, {}};
     const float queue_priorities[] = {1.0f};
 
@@ -676,11 +675,8 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
     VkDeviceCreateInfo device_info = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     device_info.queueCreateInfoCount = infos_count;
     device_info.pQueueCreateInfos = queue_create_infos;
-    device_info.enabledLayerCount = enabled_layers_count;
-    device_info.ppEnabledLayerNames = enabled_layers;
 
     SmallVector<const char *, 16> device_extensions;
-
     device_extensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
     // device_extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);

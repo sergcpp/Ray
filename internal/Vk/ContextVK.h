@@ -158,7 +158,7 @@ class Context {
     static bool InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                              uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
                              bool enable_fp16, bool enable_int64, bool enable_int64_atomics, bool enable_coop_matrix,
-                             const char *enabled_layers[], int enabled_layers_count, ILog *log);
+                             ILog *log);
     static bool InitCommandBuffers(const Api &api, VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
                                    VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
                                    VkSemaphore render_finished_semaphores[MaxFramesInFlight],
