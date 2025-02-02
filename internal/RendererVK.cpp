@@ -175,6 +175,7 @@ namespace Vk {
 #include "shaders/output/spatial_cache_update.comp.spv.inl"
 #include "shaders/output/spatial_cache_update_compat.comp.spv.inl"
 } // namespace Vk
+void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
 } // namespace Ray
 
 #if 0
@@ -411,8 +412,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     }
 #endif
 
-    const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame];
-    if (!ctx_->frame_cpu_synced[ctx_->backend_frame]) {
+    const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP;
+    if (!ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP) {
         ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
         ctx_->DestroyDeferredResources(ctx_->backend_frame);
         ctx_->default_descr_alloc()->Reset();
@@ -776,8 +777,8 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     }
 #endif
 
-    const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame];
-    if (!ctx_->frame_cpu_synced[ctx_->backend_frame]) {
+    const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP;
+    if (!ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP) {
         ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
         ctx_->DestroyDeferredResources(ctx_->backend_frame);
         ctx_->default_descr_alloc()->Reset();
@@ -886,8 +887,8 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
             ctx_->api().vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
         }
 #endif
-        const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame];
-        if (!ctx_->frame_cpu_synced[ctx_->backend_frame]) {
+        const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP;
+        if (!ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP) {
             ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
             ctx_->DestroyDeferredResources(ctx_->backend_frame);
             ctx_->default_descr_alloc()->Reset();
@@ -1171,6 +1172,8 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
         }
 
         debug_buf.Unmap();
+
+        //WritePFM("test.pfm", data1.data(), 720, 900, 1);
 #else
         if (!external_cmd_buf_.vk_cmd_buf) {
             ctx_->api().vkEndCommandBuffer(cmd_buf);
@@ -1306,8 +1309,8 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
 #endif
     }
 
-    const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame];
-    if (!ctx_->frame_cpu_synced[ctx_->backend_frame]) {
+    const bool reset_queries = !ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP;
+    if (!ctx_->frame_cpu_synced[ctx_->backend_frame] || RUN_IN_LOCKSTEP) {
         ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
         ctx_->DestroyDeferredResources(ctx_->backend_frame);
         ctx_->default_descr_alloc()->Reset();
