@@ -22,7 +22,7 @@ jobs:
           config: "Release"
           bin-dir: "windows-x86_64"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-x86_64
           path: windows-x86_64/
@@ -70,7 +70,7 @@ jobs:
           config: "Asan"
           bin-dir: "windows-x86_64-asan"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-x86_64-asan
           path: windows-x86_64-asan/
@@ -132,7 +132,7 @@ jobs:
           config: "Release"
           bin-dir: "windows-arm64"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-arm64
           path: windows-arm64/
@@ -180,7 +180,7 @@ jobs:
           config: "Release"
           bin-dir: "linux-x86_64"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64
           path: linux-x86_64/
@@ -228,7 +228,7 @@ jobs:
           config: "Tsan"
           bin-dir: "linux-x86_64-tsan"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64-tsan
           path: linux-x86_64-tsan/
@@ -248,7 +248,7 @@ jobs:
           config: "Release"
           bin-dir: "macos-universal"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-universal
           path: macos-universal/
@@ -298,7 +298,7 @@ jobs:
           out-dir: "windows-x86_64-cpu-output"
           test-args: "--nogpu -j4"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-cpu-output
@@ -321,7 +321,7 @@ jobs:
           out-dir: "windows-x86_64-gpu-nv-output"
           test-args: "--device NV --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-gpu-nv-output
@@ -344,7 +344,7 @@ jobs:
           out-dir: "windows-x86_64-gpu-amd-output"
           test-args: "--device AMD --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-gpu-amd-output
@@ -367,7 +367,7 @@ jobs:
           out-dir: "windows-x86_64-gpu-arc-output"
           test-args: "--device Arc --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-gpu-arc-output
@@ -390,7 +390,7 @@ jobs:
           out-dir: "windows-x86_64-gpu-xe-output"
           test-args: "--device Xe --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-gpu-xe-output
@@ -413,7 +413,7 @@ jobs:
           out-dir: "windows-arm64-cpu-output"
           test-args: "--nogpu -j4"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-arm64-cpu-output
@@ -436,7 +436,7 @@ jobs:
           out-dir: "windows-arm64-gpu-adreno-output"
           test-args: "--device Adreno --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-arm64-gpu-adreno-output
@@ -459,7 +459,7 @@ jobs:
           out-dir: "linux-x86_64-cpu-output"
           test-args: "--nogpu -j4"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: linux-x86_64-cpu-output
@@ -482,7 +482,7 @@ jobs:
           out-dir: "linux-x86_64-gpu-amd-output"
           test-args: "--device AMD --nocpu --nohwrt"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: linux-x86_64-gpu-amd-output
@@ -505,7 +505,7 @@ jobs:
           out-dir: "linux-x86_64-gpu-nv-output"
           test-args: "--device NV --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: linux-x86_64-gpu-nv-output
@@ -528,7 +528,7 @@ jobs:
           out-dir: "macos-arm64-cpu-output"
           test-args: "--nogpu -j4"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: macos-arm64-cpu-output
@@ -551,7 +551,7 @@ jobs:
           out-dir: "macos-arm64-gpu-m1-output"
           test-args: "--device M1 --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: macos-arm64-gpu-m1-output
@@ -575,7 +575,7 @@ jobs:
           out-dir: "macos-x86_64-cpu-output"
           test-args: "--nogpu -j4"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: macos-x86_64-cpu-output
@@ -599,7 +599,7 @@ jobs:
           test-args: "--arch SSE2 --nogpu -j4"
           sde-args: "-p4p"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-cpu-sse2-output
@@ -623,7 +623,7 @@ jobs:
           test-args: "--arch SSE41 --nogpu -j4"
           sde-args: "-pnr"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-cpu-sse41-output
@@ -647,7 +647,7 @@ jobs:
           test-args: "--arch AVX --nogpu -j4"
           sde-args: "-snb"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-cpu-avx-output
@@ -671,7 +671,7 @@ jobs:
           test-args: "--arch AVX2 --nogpu -j4"
           sde-args: "-hsw"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-cpu-avx2-output
@@ -695,7 +695,7 @@ jobs:
           test-args: "--arch AVX512 --nogpu -j4"
           sde-args: "-future"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-cpu-avx512-output
@@ -719,7 +719,7 @@ jobs:
           out-dir: "linux-x86_64-cpu-tsan-output"
           test-args: "--nogpu -j4"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: linux-x86_64-cpu-tsan-output
@@ -743,7 +743,7 @@ jobs:
           out-dir: "windows-x86_64-cpu-asan-output"
           test-args: "--nogpu -j4"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-cpu-asan-output
@@ -767,7 +767,7 @@ jobs:
           out-dir: "windows-x86_64-gpu-nv-asan-output"
           test-args: "--device NV --nocpu"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-x86_64-gpu-nv-asan-output
@@ -790,7 +790,7 @@ jobs:
           out-dir: "windows-arm64-cpu-perf-output"
           test-args: "--nogpu -j4 --time_limit 1.65"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-arm64-cpu-perf-output
@@ -813,7 +813,7 @@ jobs:
           out-dir: "windows-arm64-gpu-perf-output"
           test-args: "--nocpu -j4 -vl 0 --time_limit 1.35"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-arm64-gpu-perf-output
@@ -827,95 +827,95 @@ jobs:
         uses: actions/checkout@v4
         with:
           sparse-checkout: scripts/analyze_output.py
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-cpu-output
           path: windows-x86_64-cpu-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-gpu-nv-output
           path: windows-x86_64-gpu-nv-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-gpu-amd-output
           path: windows-x86_64-gpu-amd-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-gpu-arc-output
           path: windows-x86_64-gpu-arc-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-gpu-xe-output
           path: windows-x86_64-gpu-xe-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-arm64-cpu-output
           path: windows-arm64-cpu-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-arm64-gpu-adreno-output
           path: windows-arm64-gpu-adreno-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: linux-x86_64-cpu-output
           path: linux-x86_64-cpu-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: linux-x86_64-gpu-amd-output
           path: linux-x86_64-gpu-amd-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: linux-x86_64-gpu-nv-output
           path: linux-x86_64-gpu-nv-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: macos-arm64-cpu-output
           path: macos-arm64-cpu-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: macos-arm64-gpu-m1-output
           path: macos-arm64-gpu-m1-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: macos-x86_64-cpu-output
           path: macos-x86_64-cpu-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-cpu-sse2-output
           path: windows-x86_64-cpu-sse2-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-cpu-sse41-output
           path: windows-x86_64-cpu-sse41-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-cpu-avx-output
           path: windows-x86_64-cpu-avx-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-cpu-avx2-output
           path: windows-x86_64-cpu-avx2-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-cpu-avx512-output
           path: windows-x86_64-cpu-avx512-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: linux-x86_64-cpu-tsan-output
           path: linux-x86_64-cpu-tsan-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-cpu-asan-output
           path: windows-x86_64-cpu-asan-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-gpu-nv-asan-output
           path: windows-x86_64-gpu-nv-asan-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-arm64-cpu-perf-output
           path: windows-arm64-cpu-perf-output/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: windows-arm64-gpu-perf-output
           path: windows-arm64-gpu-perf-output/

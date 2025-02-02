@@ -14,7 +14,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         name: ${{ inputs.bin-dir }}
         path: ${{ inputs.bin-dir }}/
