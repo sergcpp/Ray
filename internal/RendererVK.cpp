@@ -1148,32 +1148,7 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
 #endif
 
 #if RUN_IN_LOCKSTEP
-        Buffer debug_buf("Tensors Debug Buf", ctx_.get(), eBufType::Readback, unet_tensors_heap_.size());
-
-        CopyBufferToBuffer(unet_tensors_heap_, 0, debug_buf, 0, unet_tensors_heap_.size(), cmd_buf);
-
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
-
-        const uint16_t *_data = (const uint16_t *)debug_buf.Map();
-        _data += unet_tensors_.upsample1_offset / sizeof(uint16_t);
-
-        const int debug_stride = 273;
-        const int channels = 64;
-
-        std::vector<float> data1, data2, data3;
-        for (int i = debug_stride * channels * 0; i < debug_stride * channels * 1; ++i) {
-            data1.push_back(f16_to_f32(_data[i]));
-        }
-        for (int i = debug_stride * channels * 1; i < debug_stride * channels * 2; ++i) {
-            data2.push_back(f16_to_f32(_data[i]));
-        }
-        for (int i = debug_stride * channels * 2; i < debug_stride * channels * 3; ++i) {
-            data3.push_back(f16_to_f32(_data[i]));
-        }
-
-        debug_buf.Unmap();
-
-        //WritePFM("test.pfm", data1.data(), 720, 900, 1);
 #else
         if (!external_cmd_buf_.vk_cmd_buf) {
             ctx_->api().vkEndCommandBuffer(cmd_buf);
@@ -1213,6 +1188,28 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
 #endif
     } else {
 #if RUN_IN_LOCKSTEP
+        /*if (pass == 1) {
+            Buffer debug_buf("Tensors Debug Buf", ctx_.get(), eBufType::Readback, unet_tensors_heap_.size());
+
+            CopyBufferToBuffer(unet_tensors_heap_, 0, debug_buf, 0, unet_tensors_heap_.size(), cmd_buf);
+
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
+
+            const uint16_t *_data = (const uint16_t *)debug_buf.Map();
+            _data += unet_tensors_.pool1_offset / sizeof(uint16_t);
+
+            const int stride = 369;
+            const int channels = 32;
+
+            std::vector<float> data1;
+            for (int i = 0; i < stride * 500; ++i) {
+                data1.push_back(f16_to_f32(_data[i * channels]));
+            }
+            WritePFM("test", data1.data(), stride, 500, 1);
+
+            debug_buf.Unmap();
+        }*/
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #endif
     }

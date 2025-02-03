@@ -506,7 +506,7 @@ void main() {
 
             for (int jj = 0; jj < 16; jj += 2) {
                 for (int ii = 0; ii < 8; ++ii) {
-                    float16_t out_val = max(g_mat_staging0[(jj + 0) * 8 + ii], g_mat_staging0[(jj + 1) * 8 + ii]);
+                    const float16_t out_val = max(g_mat_staging0[(jj + 0) * 8 + ii], g_mat_staging0[(jj + 1) * 8 + ii]);
                     g_out_buf[OUT_CHANNELS * ((y / 2 + 1) * g_params.output_stride + x / 2 + j * 16 / 2 + jj / 2 + 1) + c + i * 8 + ii] = max(out_val, float16_t(0.0));
                 }
             }
@@ -566,8 +566,13 @@ void main() {
     ///
 
 #if !OUT_IMG
+#if DOWNSAMPLE
+    for (int yy = (y / 2); yy < min((y / 2) + 2, g_params.out_dims.y); ++yy) {
+        for (int xx = (x / 2) + li.x; xx < min((x / 2) + TILE_M, g_params.out_dims.x); xx += 32) {
+#else
     for (int yy = y; yy < min(y + 2, g_params.out_dims.y); ++yy) {
         for (int xx = x + li.x; xx < min(x + TILE_M, g_params.out_dims.x); xx += 32) {
+#endif
             for (int cc = c; cc < min(c + TILE_N, OUT_CHANNELS); ++cc) {
                 const ivec2 gi = ivec2(xx, yy);
 
@@ -869,8 +874,13 @@ void main() {
 
 #if !OUT_IMG
     for (int cc = c; cc < min(c + C_COLS, OUT_CHANNELS); ++cc) {
+#if DOWNSAMPLE
+        for (int yy = (y / 2); yy < min((y / 2) + 2, g_params.out_dims.y); ++yy) {
+            for (int xx = (x / 2); xx < min((x / 2) + C_ROWS, g_params.out_dims.x); ++xx) {
+#else
         for (int yy = y; yy < min(y + 2, g_params.out_dims.y); ++yy) {
             for (int xx = x; xx < min(x + C_ROWS, g_params.out_dims.x); ++xx) {
+#endif
                 const ivec2 gi = ivec2(xx, yy);
 
                 if (gi.x == 0) {
