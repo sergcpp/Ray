@@ -329,7 +329,7 @@ int Ray::SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_fil
 }
 
 template <typename T>
-int Ray::SetupUNetWeights(const bool gemm, const int alignment, unet_weight_offsets_t *out_offsets, T out_weights[]) {
+int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offsets, T out_weights[]) {
     Span<const uint16_t> enc_conv0_weight = unet_weights_hdr_alb_nrm::enc_conv0_weight,
                          enc_conv0_bias = unet_weights_hdr_alb_nrm::enc_conv0_bias,
                          enc_conv1_weight = unet_weights_hdr_alb_nrm::enc_conv1_weight,
@@ -454,18 +454,12 @@ int Ray::SetupUNetWeights(const bool gemm, const int alignment, unet_weight_offs
     if (out_weights) {
         std::vector<T> temp;
 
-        if (gemm) {
-            for (int i = 0; i < enc_conv0_weight.size(); ++i) {
-                out_weights[out_offsets->enc_conv0_weight + i] = convert_weight<T>(enc_conv0_weight[i]);
-            }
-        } else {
-            temp.resize(enc_conv0_weight.size());
-            for (int i = 0; i < enc_conv0_weight.size(); ++i) {
-                temp[i] = convert_weight<T>(enc_conv0_weight[i]);
-            }
-            ReorderWeights_Conv3x3_Direct(temp.data(), input_channels, 32, alignment,
-                                          &out_weights[out_offsets->enc_conv0_weight]);
+        temp.resize(enc_conv0_weight.size());
+        for (int i = 0; i < enc_conv0_weight.size(); ++i) {
+            temp[i] = convert_weight<T>(enc_conv0_weight[i]);
         }
+        ReorderWeights_Conv3x3_Direct(temp.data(), input_channels, 32, alignment,
+                                      &out_weights[out_offsets->enc_conv0_weight]);
         for (int i = 0; i < enc_conv0_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv0_bias + i] = convert_weight<T>(enc_conv0_bias[i]);
         }
@@ -584,16 +578,8 @@ int Ray::SetupUNetWeights(const bool gemm, const int alignment, unet_weight_offs
         for (int i = 0; i < dec_conv1a_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv1a_weight[i]);
         }
-        if (gemm) {
-            ReorderWeights_Conv3x3_1Direct_2GEMM(temp.data(), 64, input_channels, 64,
-                                                 &out_weights[out_offsets->dec_conv1a_weight]);
-        } else {
-            // ReorderWeights_Conv3x3_Direct(temp.data(), 64 + input_channels, 64, 1,
-            //                               &out_weights[out_offsets->dec_conv1a_weight]);
-
-            ReorderWeights_Conv3x3_Direct(temp.data(), 64, input_channels, 64, alignment,
-                                          &out_weights[out_offsets->dec_conv1a_weight]);
-        }
+        ReorderWeights_Conv3x3_Direct(temp.data(), 64, input_channels, 64, alignment,
+                                      &out_weights[out_offsets->dec_conv1a_weight]);
         for (int i = 0; i < dec_conv1a_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv1a_bias + i] = convert_weight<T>(dec_conv1a_bias[i]);
         }
@@ -620,7 +606,5 @@ int Ray::SetupUNetWeights(const bool gemm, const int alignment, unet_weight_offs
     return total_count;
 }
 
-template int Ray::SetupUNetWeights<float>(bool gemm, int alignment, unet_weight_offsets_t *out_offsets,
-                                          float out_weights[]);
-template int Ray::SetupUNetWeights<uint16_t>(bool gemm, int alignment, unet_weight_offsets_t *out_offsets,
-                                             uint16_t out_weights[]);
+template int Ray::SetupUNetWeights<float>(int alignment, unet_weight_offsets_t *out_offsets, float out_weights[]);
+template int Ray::SetupUNetWeights<uint16_t>(int alignment, unet_weight_offsets_t *out_offsets, uint16_t out_weights[]);

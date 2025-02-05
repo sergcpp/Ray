@@ -449,8 +449,8 @@ struct ray_hash_t {
 };
 
 enum class eActivation { ReLU };
-enum class ePostOp { None, Downscale, HDRTransfer, PositiveNormalize };
-enum class ePreOp { None, Upscale, HDRTransfer, PositiveNormalize };
+enum class ePostOp { None, Downsample, HDRTransfer, PositiveNormalize };
+enum class ePreOp { None, Upsample, HDRTransfer, PositiveNormalize };
 
 /*struct pass_info_t {
     int iteration, bounce;

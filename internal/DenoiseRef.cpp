@@ -132,206 +132,120 @@ template void Ray::Ref::JointNLMFilter<3 /* WINDOW_SIZE */, 1 /* NEIGHBORHOOD_SI
     float feature1_weight, const rect_t &output_rect, int output_stride, color_rgba_t output[]);
 
 template <int InChannels, int OutChannels, int OutPxPitch, Ray::ePostOp PostOp, Ray::eActivation Activation>
-void Ray::Ref::Convolution3x3_Direct(const float data[], const rect_t &rect, int w, int h, int stride,
-                                     const float weights[], const float biases[], float output[], int output_stride) {
-    static_assert((InChannels % 4) == 0, "!");
-
-    if (!output_stride) {
-        if (PostOp == ePostOp::Downscale) {
-            output_stride = (w + 1) / 2;
-        } else {
-            output_stride = w;
-        }
-    }
-
-    if (PostOp == ePostOp::Downscale) {
-        if (OutChannels == OutPxPitch) {
-            for (int y = (rect.y / 2); y < (rect.y + rect.h + 1) / 2; ++y) {
-                float *ptr = &output[OutChannels * (y * output_stride + (rect.x / 2))];
-                std::fill(ptr, ptr + ((rect.w + 1) / 2) * OutChannels, 0.0f);
-            }
-        } else {
-            for (int y = (rect.y / 2); y < (rect.y + rect.h + 1) / 2; ++y) {
-                for (int x = (rect.x / 2); x < (rect.x + rect.w + 1) / 2; ++x) {
-                    for (int c = 0; c < OutChannels; ++c) {
-                        output[OutPxPitch * (y * output_stride + (rect.x / 2)) + c] = 0.0f;
-                    }
-                }
-            }
-        }
-    }
-
-    int y = rect.y;
-    for (; y < rect.y + rect.h - 7; y += 8) {
-        Convolution3x3_Direct_ProcessRows<8, 4, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            y, data, rect, w, h, stride, weights, biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h - 3; y += 4) {
-        Convolution3x3_Direct_ProcessRows<4, 4, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            y, data, rect, w, h, stride, weights, biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h; ++y) {
-        Convolution3x3_Direct_ProcessRows<1, 4, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            y, data, rect, w, h, stride, weights, biases, output, output_stride);
-    }
+void Ray::Ref::Convolution3x3(const float data[], const rect_t &rect, const int w, const int h, const int stride,
+                              const float weights[], const float biases[], float output[], const int output_stride) {
+    Convolution3x3<4, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(data, rect, w, h, stride, weights,
+                                                                               biases, output, output_stride);
 }
 
 template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, Ray::ePreOp PreOp1,
           Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePostOp PostOp, Ray::eActivation Activation>
-void Ray::Ref::Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[], const rect_t &rect,
-                                   int in_w, int in_h, int w, int h, int stride, const float weights[],
-                                   const float biases[], float output[], int output_stride) {
-    Convolution3x3_GEMM<4, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3, PostOp,
-                        Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights, biases, output,
-                                    output_stride);
+void Ray::Ref::Convolution3x3(const float data1[], const float data2[], const float data3[], const rect_t &rect,
+                              const int in_w, const int in_h, const int w, const int h, const int stride,
+                              const float weights[], const float biases[], float output[], const int output_stride,
+                              aligned_vector<float, 64> &temp_data) {
+    Convolution3x3<4, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3, PostOp,
+                   Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights, biases, output,
+                               output_stride, temp_data);
 }
 
-template void Ray::Ref::Convolution3x3_Direct<32, 3, 4, Ray::ePostOp::HDRTransfer, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<32, 3, 4, Ray::ePostOp::HDRTransfer, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<32, 32, 32, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<32, 32, 32, Ray::ePostOp::Downsample, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<32, 48, 48, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<32, 48, 48, Ray::ePostOp::Downsample, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<48, 64, 64, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<48, 64, 64, Ray::ePostOp::Downsample, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<64, 32, 32, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<64, 32, 32, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<64, 64, 64, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<64, 64, 64, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<64, 80, 80, Ray::ePostOp::Downscale, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<64, 80, 80, Ray::ePostOp::Downsample, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<80, 96, 96, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<80, 96, 96, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<96, 96, 96, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<96, 96, 96, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_Direct<112, 112, 112, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<112, 112, 112, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data[], const rect_t &rect, int w, int h, int stride, const float weights[], const float biases[],
     float output[], int output_stride);
 
-template void Ray::Ref::Convolution3x3_GEMM<3, 0, 0, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                            Ray::ePreOp::None, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+template void Ray::Ref::Convolution3x3<3, 0, 0, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None, Ray::ePreOp::None,
+                                       Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
-    int stride, const float weights[], const float biases[], float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_GEMM<3, 3, 0, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                            Ray::ePreOp::None, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+    int stride, const float weights[], const float biases[], float output[], int output_stride,
+    aligned_vector<float, 64> &temp_data);
+template void Ray::Ref::Convolution3x3<3, 3, 0, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None, Ray::ePreOp::None,
+                                       Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
-    int stride, const float weights[], const float biases[], float output[], int output_stride);
-template void Ray::Ref::Convolution3x3_GEMM<3, 3, 3, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                            Ray::ePreOp::PositiveNormalize, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+    int stride, const float weights[], const float biases[], float output[], int output_stride,
+    aligned_vector<float, 64> &temp_data);
+template void Ray::Ref::Convolution3x3<3, 3, 3, 4, 32, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
+                                       Ray::ePreOp::PositiveNormalize, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w, int in_h, int w, int h,
-    int stride, const float weights[], const float biases[], float output[], int output_stride);
+    int stride, const float weights[], const float biases[], float output[], int output_stride,
+    aligned_vector<float, 64> &temp_data);
 
 template <int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1, Ray::ePostOp PostOp,
           Ray::eActivation Activation>
-void Ray::Ref::ConvolutionConcat3x3_Direct(const float data1[], const float data2[], const rect_t &rect, int w, int h,
-                                           int stride1, int stride2, const float weights[], const float biases[],
-                                           float output[], int output_stride) {
-    static_assert((InChannels1 % 4) == 0 && (InChannels2 % 4) == 0, "!");
-
-    int y = rect.y;
-    for (; y < rect.y + rect.h - 7; y += 8) {
-        ConvolutionConcat3x3_Direct_ProcessRows<8, 4, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
-                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
-                                                            biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h - 3; y += 4) {
-        ConvolutionConcat3x3_Direct_ProcessRows<4, 4, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
-                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
-                                                            biases, output, output_stride);
-    }
-
-    for (; y < rect.y + rect.h; ++y) {
-        ConvolutionConcat3x3_Direct_ProcessRows<1, 4, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
-                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
-                                                            biases, output, output_stride);
-    }
-}
-
-template <int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1, Ray::eActivation Activation>
-void Ray::Ref::ConvolutionConcat3x3_GEMM(const float data1[], const float data2[], const rect_t &rect, int w, int h,
-                                         const float weights[], const float biases[], float output[]) {
-    ConvolutionConcat3x3_GEMM<4, InChannels1, InChannels2, OutChannels, PreOp1, Activation>(data1, data2, rect, w, h,
-                                                                                            weights, biases, output);
+void Ray::Ref::ConvolutionConcat3x3(const float data1[], const float data2[], const rect_t &rect, const int w,
+                                    const int h, const int stride1, const int stride2, const float weights[],
+                                    const float biases[], float output[], const int output_stride) {
+    ConvolutionConcat3x3<4, InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
+        data1, data2, rect, w, h, stride1, stride2, weights, biases, output, output_stride);
 }
 
 template <int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
           Ray::ePreOp PreOp1, Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePreOp PreOp4, Ray::ePostOp PostOp,
           Ray::eActivation Activation>
-void Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM(const float data1[], const float data2[], const float data3[],
-                                                  const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
-                                                  int stride1, int stride2, const float weights[], const float biases[],
-                                                  float output[], int output_stride) {
-    static_assert((InChannels1 % 4) == 0, "!");
-
-    int y = rect.y;
-    for (; y < rect.y + rect.h - 7; y += 8) {
-        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<8, 4, InChannels1, InChannels2, InChannels3, InChannels4,
-                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
-                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
-                                                                   stride1, stride2, weights, biases, output,
-                                                                   output_stride);
-    }
-
-    for (; y < rect.y + rect.h - 3; y += 4) {
-        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<4, 4, InChannels1, InChannels2, InChannels3, InChannels4,
-                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
-                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
-                                                                   stride1, stride2, weights, biases, output,
-                                                                   output_stride);
-    }
-
-    for (; y < rect.y + rect.h; ++y) {
-        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<1, 4, InChannels1, InChannels2, InChannels3, InChannels4,
-                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
-                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
-                                                                   stride1, stride2, weights, biases, output,
-                                                                   output_stride);
-    }
+void Ray::Ref::ConvolutionConcat3x3(const float data1[], const float data2[], const float data3[], const float data4[],
+                                    const rect_t &rect, const int w, const int h, const int w2, const int h2,
+                                    const int stride1, const int stride2, const float weights[], const float biases[],
+                                    float output[], const int output_stride, aligned_vector<float, 64> &temp_data) {
+    ConvolutionConcat3x3<4, InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2, OutChannels, PreOp1, PreOp2,
+                         PreOp3, PreOp4, PostOp, Activation>(data1, data2, data3, data4, rect, w, h, w2, h2, stride1,
+                                                             stride2, weights, biases, output, output_stride,
+                                                             temp_data);
 }
 
 template void
-Ray::Ref::ConvolutionConcat3x3_Direct<96, 64, 112, Ray::ePreOp::Upscale, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+Ray::Ref::ConvolutionConcat3x3<96, 64, 112, Ray::ePreOp::Upsample, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data1[], const float data2[], const rect_t &rect, int w, int h, int stride1, int stride2,
     const float weights[], const float biases[], float output[], int output_stride);
 template void
-Ray::Ref::ConvolutionConcat3x3_Direct<112, 48, 96, Ray::ePreOp::Upscale, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+Ray::Ref::ConvolutionConcat3x3<112, 48, 96, Ray::ePreOp::Upsample, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data1[], const float data2[], const rect_t &rect, int w, int h, int stride1, int stride2,
     const float weights[], const float biases[], float output[], int output_stride);
 template void
-Ray::Ref::ConvolutionConcat3x3_Direct<96, 32, 64, Ray::ePreOp::Upscale, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+Ray::Ref::ConvolutionConcat3x3<96, 32, 64, Ray::ePreOp::Upsample, Ray::ePostOp::None, Ray::eActivation::ReLU>(
     const float data1[], const float data2[], const rect_t &rect, int w, int h, int stride1, int stride2,
     const float weights[], const float biases[], float output[], int output_stride);
 
-template void Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM<
-    64, 3, 0, 0, 4, 64, Ray::ePreOp::Upscale, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None, Ray::ePreOp::None,
-    Ray::ePostOp::None, Ray::eActivation::ReLU>(const float data1[], const float data2[], const float data3[],
-                                                const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
-                                                int stride1, int stride2, const float weights[], const float biases[],
-                                                float output[], int output_stride);
-template void Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM<
-    64, 3, 3, 0, 4, 64, Ray::ePreOp::Upscale, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None, Ray::ePreOp::None,
-    Ray::ePostOp::None, Ray::eActivation::ReLU>(const float data1[], const float data2[], const float data3[],
-                                                const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
-                                                int stride1, int stride2, const float weights[], const float biases[],
-                                                float output[], int output_stride);
 template void
-Ray::Ref::ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upscale, Ray::ePreOp::HDRTransfer,
-                                             Ray::ePreOp::None, Ray::ePreOp::PositiveNormalize, Ray::ePostOp::None,
-                                             Ray::eActivation::ReLU>(const float data1[], const float data2[],
-                                                                     const float data3[], const float data4[],
-                                                                     const rect_t &rect, int w, int h, int w2, int h2,
-                                                                     int stride1, int stride2, const float weights[],
-                                                                     const float biases[], float output[],
-                                                                     int output_stride);
+Ray::Ref::ConvolutionConcat3x3<64, 3, 0, 0, 4, 64, Ray::ePreOp::Upsample, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
+                               Ray::ePreOp::None, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+    const float data1[], const float data2[], const float data3[], const float data4[], const rect_t &rect, int w,
+    int h, int w2, int h2, int stride1, int stride2, const float weights[], const float biases[], float output[],
+    int output_stride, aligned_vector<float, 64> &temp_data);
+template void
+Ray::Ref::ConvolutionConcat3x3<64, 3, 3, 0, 4, 64, Ray::ePreOp::Upsample, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
+                               Ray::ePreOp::None, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+    const float data1[], const float data2[], const float data3[], const float data4[], const rect_t &rect, int w,
+    int h, int w2, int h2, int stride1, int stride2, const float weights[], const float biases[], float output[],
+    int output_stride, aligned_vector<float, 64> &temp_data);
+template void
+Ray::Ref::ConvolutionConcat3x3<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upsample, Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
+                               Ray::ePreOp::PositiveNormalize, Ray::ePostOp::None, Ray::eActivation::ReLU>(
+    const float data1[], const float data2[], const float data3[], const float data4[], const rect_t &rect, int w,
+    int h, int w2, int h2, int stride1, int stride2, const float weights[], const float biases[], float output[],
+    int output_stride, aligned_vector<float, 64> &temp_data);

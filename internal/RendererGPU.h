@@ -533,7 +533,7 @@ Ray::NS::Renderer::InitUNetFilter(const bool alias_memory,
     Buffer temp_upload_buf;
 
     if (use_fp16_) {
-        const int total_count = SetupUNetWeights<uint16_t>(false, 8, nullptr, nullptr);
+        const int total_count = SetupUNetWeights<uint16_t>(8, nullptr, nullptr);
 
         temp_upload_buf =
             Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(uint16_t))};
@@ -541,12 +541,12 @@ Ray::NS::Renderer::InitUNetFilter(const bool alias_memory,
             Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
 
         uint16_t *out_weights = (uint16_t *)temp_upload_buf.Map();
-        SetupUNetWeights(false, 8, &unet_offsets_, out_weights);
+        SetupUNetWeights(8, &unet_offsets_, out_weights);
         temp_upload_buf.Unmap();
 
         CopyBufferToBuffer(temp_upload_buf, 0, unet_weights_, 0, sizeof(uint16_t) * total_count, cmd_buf);
     } else {
-        const int total_count = SetupUNetWeights<float>(false, 8, nullptr, nullptr);
+        const int total_count = SetupUNetWeights<float>(8, nullptr, nullptr);
 
         temp_upload_buf =
             Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
@@ -554,7 +554,7 @@ Ray::NS::Renderer::InitUNetFilter(const bool alias_memory,
             Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
 
         float *out_weights = (float *)temp_upload_buf.Map();
-        SetupUNetWeights(false, 8, &unet_offsets_, out_weights);
+        SetupUNetWeights(8, &unet_offsets_, out_weights);
         temp_upload_buf.Unmap();
 
         CopyBufferToBuffer(temp_upload_buf, 0, unet_weights_, 0, sizeof(float) * total_count, cmd_buf);

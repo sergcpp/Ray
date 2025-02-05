@@ -624,10 +624,10 @@ void main() {
 
 #if IMG_INPUT1
     for (int j = 0; j < 3 * IN_CHANNELS1; ++j) {
+        const int x_off = (j / IN_CHANNELS1), ch = (j % IN_CHANNELS1);
+
         float16_t A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
         for (int i = 0; i < C_ROWS; ++i) {
-            const int x_off = (j / IN_CHANNELS1), ch = (j % IN_CHANNELS1);
-
             vec2 tex_coord = (vec2(x + i + x_off, y) + vec2(0.5)) * g_params.inv_img_size;
             if (ch < 3) {
                 A0[i] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch]));
@@ -745,10 +745,10 @@ void main() {
 
 #if BUF_INPUT1 && !BUF_INPUT2 && IMG_INPUT2
     for (int j = 0; j < 3 * IN_CHANNELS2; ++j) {
+        const int x_off = (j / IN_CHANNELS2), ch = (j % IN_CHANNELS2);
+
         float16_t A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
         for (int i = 0; i < C_ROWS; ++i) {
-            const int x_off = (j / IN_CHANNELS2), ch = (j % IN_CHANNELS2);
-
             vec2 tex_coord = (vec2(x + i + x_off, y) + vec2(0.5)) * g_params.inv_img_size;
             if (ch < 3) {
                 A0[i] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch]));

@@ -4,7 +4,8 @@
 
 namespace Ray {
 namespace NS {
-void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_channels, float output[]) {
+void ClearBorders(const rect_t &rect, const int w, const int h, const bool downscaled, const int out_channels,
+                  float output[]) {
     if (!downscaled) {
         for (int y = rect.y; y < rect.y + rect.h; ++y) {
             for (int i = 0; i < out_channels; ++i) {
@@ -73,7 +74,7 @@ static const float y1 = 3.22087631e-02f;
 static const float x0 = 2.23151711e-03f;
 static const float x1 = 3.70974749e-01f;
 
-template <ePreOp PreOp> force_inline float input(float val) {
+template <ePreOp PreOp> force_inline float input(const float val) {
     static const float norm_scale = 0.318967164f;
 
     if (PreOp == ePreOp::HDRTransfer) {
@@ -111,745 +112,475 @@ template <ePostOp PostOp> force_inline float output(float val) {
 }
 } // namespace transfer
 
-template <int RowsPortion, int S, int InChannels, int OutChannels, int OutPxPitch, ePostOp PostOp,
-          eActivation Activation>
-void Convolution3x3_Direct_ProcessRows(int y, const float *__restrict data, const rect_t &rect, int w, int h,
-                                       int stride, const float *__restrict weights, const float *__restrict biases,
-                                       float *__restrict output, const int output_stride) {
+template <int S, int InChannels, int OutChannels, int OutPxPitch, ePostOp PostOp, eActivation Activation>
+void Convolution3x3(const float *restrict data, const rect_t &rect, const int w, const int h, const int stride,
+                    const float *restrict weights, const float *restrict biases, float *restrict output,
+                    const int output_stride) {
     static_assert((InChannels % S) == 0, "!");
-    static_assert(RowsPortion <= 8, "!");
 
-#define index(y, x) InChannels *((y)*stride + (x))
+    const int RoundedTriple = 8 * ((3 * InChannels + 7) / 8); // stride and offset must be aligned
 
-    for (int x = rect.x; x < rect.x + rect.w; ++x) {
-        const int ii[] = {index(y - 1, x - 1), //
-                          index(y, x - 1),     //
-                          index(y + 1, x - 1), //
-                          index(y + 2, x - 1), //
-                          index(y + 3, x - 1), //
-                          index(y + 4, x - 1), //
-                          index(y + 5, x - 1), //
-                          index(y + 6, x - 1), //
-                          index(y + 7, x - 1), //
-                          index(y + 8, x - 1)};
+#define C_ROWS 4
+#define C_COLS 8
 
-        for (int i = 0; i < OutChannels; ++i) {
-            fvec<S> val[RowsPortion] = {};
-            for (int j = 0; j < 3 * InChannels; j += S) {
-                if (RowsPortion == 8) {
-                    UNROLLED_FOR(k, 8, {
-                        val[k % RowsPortion] =
-                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], vector_aligned},
-                                  fvec<S>{&data[ii[k + 0] + j]}, val[k % RowsPortion]);
-                        val[k % RowsPortion] =
-                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], vector_aligned},
-                                  fvec<S>{&data[ii[k + 1] + j]}, val[k % RowsPortion]);
-                        val[k % RowsPortion] =
-                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], vector_aligned},
-                                  fvec<S>{&data[ii[k + 2] + j]}, val[k % RowsPortion]);
+    for (int y = rect.y; y < rect.y + rect.h; y += 2) {
+        for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
+            for (int i = 0; i < OutChannels; i += C_COLS) {
+                fvec<S> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
+                for (int di = 0; di < C_COLS; ++di) {
+                    C0[0][di] = {};
+                    C0[0][di].template set<0>(biases[i + di]);
+                    UNROLLED_FOR(k, C_ROWS, { C1[k][di] = C0[k][di] = C0[0][di]; })
+                }
+                for (int j = 0; j < 3 * InChannels; j += S) {
+                    fvec<S> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+                    UNROLLED_FOR(k, C_ROWS, {
+                        A0[k] = fvec<S>{&data[InChannels * ((y - 1) * stride + x - 1 + k) + j]};
+                        A1[k] = fvec<S>{&data[InChannels * ((y + 0) * stride + x - 1 + k) + j]};
+                        A2[k] = fvec<S>{&data[InChannels * ((y + 1) * stride + x - 1 + k) + j]};
+                        A3[k] = fvec<S>{&data[InChannels * ((y + 2) * stride + x - 1 + k) + j]};
                     })
-                } else if (RowsPortion == 4) {
-                    UNROLLED_FOR(k, 4, {
-                        val[k % RowsPortion] =
-                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], vector_aligned},
-                                  fvec<S>{&data[ii[k + 0] + j]}, val[k % RowsPortion]);
-                        val[k % RowsPortion] =
-                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], vector_aligned},
-                                  fvec<S>{&data[ii[k + 1] + j]}, val[k % RowsPortion]);
-                        val[k % RowsPortion] =
-                            fmadd(fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], vector_aligned},
-                                  fvec<S>{&data[ii[k + 2] + j]}, val[k % RowsPortion]);
-                    })
-                } else {
-                    for (int k = 0; k < RowsPortion; ++k) {
-                        val[k] = fmadd(fvec<S>{&weights[i * InChannels * 9 + 0 * InChannels + j], vector_aligned},
-                                       fvec<S>{&data[ii[k + 0] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&weights[i * InChannels * 9 + 3 * InChannels + j], vector_aligned},
-                                       fvec<S>{&data[ii[k + 1] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&weights[i * InChannels * 9 + 6 * InChannels + j], vector_aligned},
-                                       fvec<S>{&data[ii[k + 2] + j]}, val[k]);
+                    const float *p_weights = &weights[i * RoundedTriple * 3 + j];
+                    for (int ii = i; ii < std::min(i + C_COLS, OutChannels); ++ii) {
+                        const fvec<S> B0 = fvec<S>{&p_weights[0 * RoundedTriple], vector_aligned};
+                        const fvec<S> B1 = fvec<S>{&p_weights[1 * RoundedTriple], vector_aligned};
+                        const fvec<S> B2 = fvec<S>{&p_weights[2 * RoundedTriple], vector_aligned};
+                        p_weights += RoundedTriple * 3;
+
+                        UNROLLED_FOR(k, C_ROWS, {
+                            C0[k][ii - i] = fmadd(A0[k], B0, C0[k][ii - i]);
+                            C0[k][ii - i] = fmadd(A1[k], B1, C0[k][ii - i]);
+                            C0[k][ii - i] = fmadd(A2[k], B2, C0[k][ii - i]);
+
+                            C1[k][ii - i] = fmadd(A1[k], B0, C1[k][ii - i]);
+                            C1[k][ii - i] = fmadd(A2[k], B1, C1[k][ii - i]);
+                            C1[k][ii - i] = fmadd(A3[k], B2, C1[k][ii - i]);
+                        })
                     }
                 }
-            }
-
-            for (int k = 0; k < RowsPortion; ++k) {
-                float final_val = biases[i] + hsum(val[k]);
-                if (Activation == eActivation::ReLU) {
-                    final_val = fmaxf(0.0f, final_val);
+                float _C0[C_ROWS][C_COLS], _C1[C_ROWS][C_COLS];
+                for (int k = 0; k < C_ROWS; ++k) {
+                    for (int di = 0; di < C_COLS; ++di) {
+                        _C0[k][di] = hsum(C0[k][di]);
+                        _C1[k][di] = hsum(C1[k][di]);
+                        if (Activation == eActivation::ReLU) {
+                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
+                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                        }
+                    }
                 }
-
-                if (PostOp == ePostOp::Downscale) {
-                    float &out = output[OutPxPitch * (((y + k) / 2) * output_stride + (x / 2)) + i];
-                    out = fmaxf(out, final_val);
+                if (PostOp == ePostOp::Downsample) {
+                    for (int k = 0; k < C_ROWS; k += 2) {
+                        for (int di = 0; di < C_COLS; ++di) {
+                            _C0[k][di] = fmaxf(fmaxf(_C0[k][di], _C0[k + 1][di]), fmaxf(_C1[k][di], _C1[k + 1][di]));
+                            _C0[k][di] = fmaxf(_C0[k][di], 0.0f);
+                        }
+                    }
+                    for (int xx = x; xx < std::min(x + C_ROWS, rect.x + rect.w); xx += 2) {
+                        for (int ii = i; ii < std::min(i + C_COLS, OutChannels); ++ii) {
+                            output[OutPxPitch * ((y / 2) * output_stride + (xx / 2)) + ii] =
+                                transfer::output<PostOp>(_C0[xx - x][ii - i]);
+                        }
+                    }
                 } else {
-                    output[OutPxPitch * ((y + k) * output_stride + x) + i] = transfer::output<PostOp>(final_val);
+                    for (int xx = x; xx < std::min(x + C_ROWS, rect.x + rect.w); ++xx) {
+                        for (int ii = i; ii < std::min(i + C_COLS, OutChannels); ++ii) {
+                            output[OutPxPitch * ((y + 0) * output_stride + xx) + ii] =
+                                transfer::output<PostOp>(_C0[xx - x][ii - i]);
+                            if (y + 1 < rect.y + rect.h) {
+                                output[OutPxPitch * ((y + 1) * output_stride + xx) + ii] =
+                                    transfer::output<PostOp>(_C1[xx - x][ii - i]);
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-#undef index
+#undef C_ROWS
+#undef C_COLS
 }
 
-template <int RowsPortion, int S, int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1, ePostOp PostOp,
-          eActivation Activation>
-void ConvolutionConcat3x3_Direct_ProcessRows(int y, const float *__restrict data1, const float *__restrict data2,
-                                             const rect_t &rect, int w, int h, int stride1, int stride2,
-                                             const float *__restrict weights, const float *__restrict biases,
-                                             float *__restrict output, int output_stride) {
-    static_assert((InChannels1 % S) == 0 && (InChannels2 % S) == 0, "!");
-    static_assert(RowsPortion <= 8, "!");
+template <int S, int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, ePreOp PreOp1,
+          ePreOp PreOp2, ePreOp PreOp3, ePostOp PostOp, eActivation Activation>
+void Convolution3x3(const float *restrict data1, const float *restrict data2, const float *restrict data3,
+                    const rect_t &rect, const int in_w, const int in_h, const int w, const int h, const int stride,
+                    const float *restrict weights, const float *restrict biases, float *restrict output,
+                    const int output_stride, aligned_vector<float, 64> &temp_data) {
+    const int InChannels123 = (InChannels1 + InChannels2 + InChannels3);
 
-    const int div1 = (PreOp1 == ePreOp::Upscale) ? 2 : 1;
+    const int RoundedTriple = 8 * ((3 * InChannels123 + 7) / 8); // stride and offset must be aligned
 
-#define index1(y, x) InChannels1 *((y)*stride1 + (x))
-#define index2(y, x) InChannels2 *((y)*stride2 + (x))
-
-    for (int x = rect.x; x < rect.x + rect.w; ++x) {
-        const int add = ((x + 1) % div1);
-
-        const int ii1[] = {
-            index1(y == 0 ? -1 : (y - 1) / div1, x == 0 ? -1 : (x - 1) / div1), //
-            index1(y / div1, x == 0 ? -1 : (x - 1) / div1),                     //
-            index1((y + 1) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 2) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 3) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 4) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 5) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 6) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 7) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 8) / div1, x == 0 ? -1 : (x - 1) / div1)                //
-        };
-
-        const int ii2[] = {
-            index2(y - 1, x - 1), //
-            index2(y, x - 1),     //
-            index2(y + 1, x - 1), //
-            index2(y + 2, x - 1), //
-            index2(y + 3, x - 1), //
-            index2(y + 4, x - 1), //
-            index2(y + 5, x - 1), //
-            index2(y + 6, x - 1), //
-            index2(y + 7, x - 1), //
-            index2(y + 8, x - 1)  //
-        };
-
-        for (int i = 0; i < OutChannels; ++i) {
-            fvec<S> val[8] = {};
-
-            const float *p_weights = &weights[i * (InChannels1 + InChannels2) * 9];
-            for (int j = 0; j < InChannels1; j += S) {
-                UNROLLED_FOR(k, 8, {
-                    if (k < RowsPortion) {
-                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 0] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[1 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 0] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[2 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 0] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
-
-                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 1] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[4 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 1] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[5 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 1] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
-
-                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 2] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[7 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 2] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[8 * InChannels1 + j], vector_aligned},
-                                       fvec<S>{&data1[ii1[k + 2] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
-                    }
-                })
-            }
-            p_weights += 9 * InChannels1;
-            for (int j = 0; j < 3 * InChannels2; j += S) {
-                if (RowsPortion == 8) {
-                    UNROLLED_FOR(k, 8, {
-                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
-                    })
-                } else if (RowsPortion == 4) {
-                    UNROLLED_FOR(k, 4, {
-                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
-                    })
-                } else {
-                    for (int k = 0; k < RowsPortion; ++k) {
-                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 0] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 1] + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels2 + j], vector_aligned},
-                                       fvec<S>{&data2[ii2[k + 2] + j]}, val[k]);
-                    }
+    // Preload data
+    const int stride123 = rect.w + 2, req_size = InChannels123 * stride123 * (rect.h + 2);
+    temp_data.resize(req_size + 16);
+    float *data123 = temp_data.data();
+    int index = 0;
+    for (int y = rect.y - 1; y < rect.y + rect.h + 1; ++y) {
+        for (int x = rect.x - 1; x < rect.x + rect.w + 1; ++x) {
+            if (x >= 0 && x < in_w && y >= 0 && y < in_h) {
+                for (int j = 0; j < InChannels1; ++j) {
+                    data123[index++] = transfer::input<PreOp1>(data1[PxPitch * (y * stride + x) + j]);
                 }
-            }
-
-            for (int k = 0; k < RowsPortion; ++k) {
-                float final_val = biases[i] + hsum(val[k]);
-                if (Activation == eActivation::ReLU) {
-                    final_val = fmaxf(0.0f, final_val);
+                for (int j = 0; j < InChannels2; ++j) {
+                    data123[index++] = transfer::input<PreOp2>(data2[PxPitch * (y * stride + x) + j]);
                 }
-                output[OutChannels * ((y + k) * output_stride + x) + i] = final_val;
+                for (int j = 0; j < InChannels3; ++j) {
+                    data123[index++] = transfer::input<PreOp3>(data3[PxPitch * (y * stride + x) + j]);
+                }
+            } else {
+                for (int j = 0; j < InChannels123; ++j) {
+                    data123[index++] = 0.0f;
+                }
             }
         }
     }
+    while (index < temp_data.size()) {
+        data123[index++] = 0.0f;
+    }
+
+#define C_ROWS 4
+#define C_COLS 8
+
+    for (int y = rect.y; y < rect.y + rect.h; y += 2) {
+        for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
+            for (int i = 0; i < OutChannels; i += C_COLS) {
+                fvec<S> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
+                for (int di = 0; di < C_COLS; ++di) {
+                    C0[0][di] = {};
+                    C0[0][di].template set<0>(biases[i + di]);
+                    UNROLLED_FOR(k, C_ROWS, { C1[k][di] = C0[k][di] = C0[0][di]; })
+                }
+                for (int j = 0; j < 3 * InChannels123; j += S) {
+                    fvec<S> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+                    const float *p_data123 = &data123[InChannels123 * ((y - rect.y) * stride123 + x - rect.x) + j];
+                    UNROLLED_FOR(k, C_ROWS, {
+                        A0[k] = fvec<S>{&p_data123[InChannels123 * (0 * stride123 + k)]};
+                        A1[k] = fvec<S>{&p_data123[InChannels123 * (1 * stride123 + k)]};
+                        A2[k] = fvec<S>{&p_data123[InChannels123 * (2 * stride123 + k)]};
+                        A3[k] = fvec<S>{&p_data123[InChannels123 * (3 * stride123 + k)]};
+                    })
+                    const float *p_weights = &weights[i * RoundedTriple * 3 + j];
+                    static_assert((OutChannels % C_COLS) == 0, "!");
+                    for (int di = 0; di < C_COLS; ++di) {
+                        const fvec<S> B0 = fvec<S>{&p_weights[0 * RoundedTriple], vector_aligned};
+                        const fvec<S> B1 = fvec<S>{&p_weights[1 * RoundedTriple], vector_aligned};
+                        const fvec<S> B2 = fvec<S>{&p_weights[2 * RoundedTriple], vector_aligned};
+                        p_weights += RoundedTriple * 3;
+
+                        UNROLLED_FOR(k, C_ROWS, {
+                            C0[k][di] = fmadd(A0[k], B0, C0[k][di]);
+                            C0[k][di] = fmadd(A1[k], B1, C0[k][di]);
+                            C0[k][di] = fmadd(A2[k], B2, C0[k][di]);
+
+                            C1[k][di] = fmadd(A1[k], B0, C1[k][di]);
+                            C1[k][di] = fmadd(A2[k], B1, C1[k][di]);
+                            C1[k][di] = fmadd(A3[k], B2, C1[k][di]);
+                        })
+                    }
+                }
+                float _C0[C_ROWS][C_COLS], _C1[C_ROWS][C_COLS];
+                for (int k = 0; k < C_ROWS; ++k) {
+                    for (int di = 0; di < C_COLS; ++di) {
+                        _C0[k][di] = hsum(C0[k][di]);
+                        _C1[k][di] = hsum(C1[k][di]);
+                        if (Activation == eActivation::ReLU) {
+                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
+                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                        }
+                    }
+                }
+                for (int xx = x; xx < std::min(x + C_ROWS, rect.x + rect.w); ++xx) {
+                    for (int ii = i; ii < std::min(i + C_COLS, OutChannels); ++ii) {
+                        output[OutChannels * ((y + 0) * output_stride + xx) + ii] =
+                            transfer::output<PostOp>(_C0[xx - x][ii - i]);
+                        if (y + 1 < rect.y + rect.h) {
+                            output[OutChannels * ((y + 1) * output_stride + xx) + ii] =
+                                transfer::output<PostOp>(_C1[xx - x][ii - i]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+#undef C_ROWS
+#undef C_COLS
+}
+
+template <int S, int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1, ePostOp PostOp,
+          eActivation Activation>
+void ConvolutionConcat3x3(const float *restrict data1, const float *restrict data2, const rect_t &rect, const int w,
+                          const int h, const int stride1, const int stride2, const float *restrict weights,
+                          const float *restrict biases, float *restrict output, const int output_stride) {
+    static_assert((InChannels1 % S) == 0 && (InChannels2 % S) == 0, "!");
+
+    const int RoundedTriple1 = 8 * ((3 * InChannels1 + 7) / 8),
+              RoundedTriple2 = 8 * ((3 * InChannels2 + 7) / 8); // stride and offset must be aligned
+
+#define index1(y, x) InChannels1 *((y) * stride1 + (x))
+#define index2(y, x) InChannels2 *((y) * stride2 + (x))
+
+#define C_ROWS 4
+#define C_COLS 8
+
+    for (int y = rect.y; y < rect.y + rect.h; y += 2) {
+        for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
+            for (int i = 0; i < OutChannels; i += C_COLS) {
+                fvec<S> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
+                for (int di = 0; di < C_COLS; ++di) {
+                    C0[0][di] = {};
+                    C0[0][di].template set<0>(biases[i + di]);
+                    UNROLLED_FOR(k, C_ROWS, { C1[k][di] = C0[k][di] = C0[0][di]; })
+                }
+                for (int j = 0; j < 3 * InChannels1; j += S) {
+                    fvec<S> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+                    if (PreOp1 == ePreOp::Upsample) {
+                        const int x_off = (j / InChannels1), ch = (j % InChannels1);
+                        UNROLLED_FOR(k, C_ROWS, {
+                            const int x_final = (x + x_off + k - 1 + 2) / 2 - 1;
+                            A0[k] = fvec<S>{&data1[index1((y == 0 ? -1 : (y - 1) / 2), x_final) + ch]};
+                            A1[k] = fvec<S>{&data1[index1((y + 0) / 2, x_final) + ch]};
+                            A2[k] = fvec<S>{&data1[index1((y + 1) / 2, x_final) + ch]};
+                            A3[k] = fvec<S>{&data1[index1((y + 2) / 2, x_final) + ch]};
+                        })
+                    } else {
+                        UNROLLED_FOR(k, C_ROWS, {
+                            A0[k] = fvec<S>{&data1[index1(y - 1, x - 1 + k) + j]};
+                            A1[k] = fvec<S>{&data1[index1(y + 0, x - 1 + k) + j]};
+                            A2[k] = fvec<S>{&data1[index1(y + 1, x - 1 + k) + j]};
+                            A3[k] = fvec<S>{&data1[index1(y + 2, x - 1 + k) + j]};
+                        })
+                    }
+                    const float *p_weights = &weights[i * (RoundedTriple1 + RoundedTriple2) * 3 + j];
+                    static_assert((OutChannels % C_COLS) == 0, "!");
+                    for (int di = 0; di < C_COLS; ++di) {
+                        const fvec<S> B0 = fvec<S>{&p_weights[0 * RoundedTriple1], vector_aligned};
+                        const fvec<S> B1 = fvec<S>{&p_weights[1 * RoundedTriple1], vector_aligned};
+                        const fvec<S> B2 = fvec<S>{&p_weights[2 * RoundedTriple1], vector_aligned};
+                        p_weights += (RoundedTriple1 + RoundedTriple2) * 3;
+
+                        UNROLLED_FOR(k, C_ROWS, {
+                            C0[k][di] = fmadd(A0[k], B0, C0[k][di]);
+                            C0[k][di] = fmadd(A1[k], B1, C0[k][di]);
+                            C0[k][di] = fmadd(A2[k], B2, C0[k][di]);
+
+                            C1[k][di] = fmadd(A1[k], B0, C1[k][di]);
+                            C1[k][di] = fmadd(A2[k], B1, C1[k][di]);
+                            C1[k][di] = fmadd(A3[k], B2, C1[k][di]);
+                        })
+                    }
+                }
+                for (int j = 0; j < 3 * InChannels2; j += S) {
+                    fvec<S> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+                    UNROLLED_FOR(k, C_ROWS, {
+                        A0[k] = fvec<S>{&data2[index2(y - 1, x - 1 + k) + j]};
+                        A1[k] = fvec<S>{&data2[index2(y + 0, x - 1 + k) + j]};
+                        A2[k] = fvec<S>{&data2[index2(y + 1, x - 1 + k) + j]};
+                        A3[k] = fvec<S>{&data2[index2(y + 2, x - 1 + k) + j]};
+                    })
+                    const float *p_weights =
+                        &weights[i * (RoundedTriple1 + RoundedTriple2) * 3 + 3 * RoundedTriple1 + j];
+                    static_assert((OutChannels % C_COLS) == 0, "!");
+                    for (int di = 0; di < C_COLS; ++di) {
+                        const fvec<S> B0 = fvec<S>{&p_weights[0 * RoundedTriple2], vector_aligned};
+                        const fvec<S> B1 = fvec<S>{&p_weights[1 * RoundedTriple2], vector_aligned};
+                        const fvec<S> B2 = fvec<S>{&p_weights[2 * RoundedTriple2], vector_aligned};
+                        p_weights += (RoundedTriple1 + RoundedTriple2) * 3;
+
+                        UNROLLED_FOR(k, C_ROWS, {
+                            C0[k][di] = fmadd(A0[k], B0, C0[k][di]);
+                            C0[k][di] = fmadd(A1[k], B1, C0[k][di]);
+                            C0[k][di] = fmadd(A2[k], B2, C0[k][di]);
+
+                            C1[k][di] = fmadd(A1[k], B0, C1[k][di]);
+                            C1[k][di] = fmadd(A2[k], B1, C1[k][di]);
+                            C1[k][di] = fmadd(A3[k], B2, C1[k][di]);
+                        })
+                    }
+                }
+                float _C0[C_ROWS][C_COLS], _C1[C_ROWS][C_COLS];
+                for (int k = 0; k < C_ROWS; ++k) {
+                    for (int di = 0; di < C_COLS; ++di) {
+                        _C0[k][di] = hsum(C0[k][di]);
+                        _C1[k][di] = hsum(C1[k][di]);
+                        if (Activation == eActivation::ReLU) {
+                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
+                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                        }
+                    }
+                }
+                for (int xx = x; xx < std::min(x + C_ROWS, rect.x + rect.w); ++xx) {
+                    for (int ii = i; ii < std::min(i + C_COLS, OutChannels); ++ii) {
+                        output[OutChannels * ((y + 0) * output_stride + xx) + ii] =
+                            transfer::output<PostOp>(_C0[xx - x][ii - i]);
+                        if (y + 1 < rect.y + rect.h) {
+                            output[OutChannels * ((y + 1) * output_stride + xx) + ii] =
+                                transfer::output<PostOp>(_C1[xx - x][ii - i]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+#undef C_ROWS
+#undef C_COLS
 
 #undef index1
 #undef index2
 }
 
-template <int S, int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, ePreOp PreOp1,
-          ePreOp PreOp2, ePreOp PreOp3, ePostOp PostOp, eActivation Activation>
-void Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w,
-                         int in_h, int w, int h, int stride, const float weights[], const float biases[],
-                         float output[], int output_stride) {
-    static_assert(S == 4 || S == 8 || S == 16, "!");
-    if (!output_stride) {
-        if (PostOp == ePostOp::Downscale) {
-            output_stride = (w + 1) / 2;
-        } else {
-            output_stride = w;
-        }
-    }
+template <int S, int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch234, int OutChannels,
+          ePreOp PreOp1, ePreOp PreOp2, ePreOp PreOp3, ePreOp PreOp4, ePostOp PostOp, eActivation Activation>
+void ConvolutionConcat3x3(const float *restrict data1, const float *restrict data2, const float *restrict data3,
+                          const float *restrict data4, const rect_t &rect, const int w, const int h, const int w234,
+                          const int h234, const int stride1, const int stride234, const float *restrict weights,
+                          const float *restrict biases, float *restrict output, int output_stride,
+                          aligned_vector<float, 64> &temp_data) {
+    const int InChannels234 = (InChannels2 + InChannels3 + InChannels4);
 
-    if (PostOp == ePostOp::Downscale) {
-        for (int y = (rect.y / 2); y < (rect.y + rect.h + 1) / 2; ++y) {
-            float *ptr = &output[OutChannels * (y * output_stride + (rect.x / 2))];
-            std::fill(ptr, ptr + ((rect.w + 1) / 2) * OutChannels, 0.0f);
-        }
-    }
+    const int RoundedTriple1 = 8 * ((3 * InChannels1 + 7) / 8),
+              RoundedTriple2 = 8 * ((3 * InChannels234 + 7) / 8); // stride and offset must be aligned
 
-#define fetch1(y, x, c)                                                                                                \
-    ((x) >= 0 && (x) < in_w && (y) >= 0 && (y) < in_h)                                                                 \
-        ? transfer::input<PreOp1>(data1[PxPitch * ((y)*stride + (x)) + (c)])                                           \
-        : 0.0f
-#define fetch2(y, x, c)                                                                                                \
-    ((x) >= 0 && (x) < in_w && (y) >= 0 && (y) < in_h)                                                                 \
-        ? transfer::input<PreOp2>(data2[PxPitch * ((y)*stride + (x)) + (c)])                                           \
-        : 0.0f
-#define fetch3(y, x, c)                                                                                                \
-    ((x) >= 0 && (x) < in_w && (y) >= 0 && (y) < in_h)                                                                 \
-        ? transfer::input<PreOp3>(data3[PxPitch * ((y)*stride + (x)) + (c)])                                           \
-        : 0.0f
+#define index1(y, x) InChannels1 *((y) * stride1 + (x))
 
-    for (int y = rect.y; y < rect.y + rect.h; ++y) {
-        alignas(4 * S) float input[(InChannels1 + InChannels2 + InChannels3) * 9];
-        for (int c = 0; c < InChannels1; ++c) {
-            input[c * 9 + 0] = fetch1(y - 1, rect.x - 1, c);
-            input[c * 9 + 1] = fetch1(y - 1, rect.x, c);
-
-            input[c * 9 + 3] = fetch1(y, rect.x - 1, c);
-            input[c * 9 + 4] = fetch1(y, rect.x, c);
-
-            input[c * 9 + 6] = fetch1(y + 1, rect.x - 1, c);
-            input[c * 9 + 7] = fetch1(y + 1, rect.x, c);
-        }
-        for (int c = 0; c < InChannels2; ++c) {
-            input[(InChannels1 + c) * 9 + 0] = fetch2(y - 1, rect.x - 1, c);
-            input[(InChannels1 + c) * 9 + 1] = fetch2(y - 1, rect.x, c);
-
-            input[(InChannels1 + c) * 9 + 3] = fetch2(y, rect.x - 1, c);
-            input[(InChannels1 + c) * 9 + 4] = fetch2(y, rect.x, c);
-
-            input[(InChannels1 + c) * 9 + 6] = fetch2(y + 1, rect.x - 1, c);
-            input[(InChannels1 + c) * 9 + 7] = fetch2(y + 1, rect.x, c);
-        }
-        for (int c = 0; c < InChannels3; ++c) {
-            input[(InChannels1 + InChannels2 + c) * 9 + 0] = fetch3(y - 1, rect.x - 1, c);
-            input[(InChannels1 + InChannels2 + c) * 9 + 1] = fetch3(y - 1, rect.x, c);
-
-            input[(InChannels1 + InChannels2 + c) * 9 + 3] = fetch3(y, rect.x - 1, c);
-            input[(InChannels1 + InChannels2 + c) * 9 + 4] = fetch3(y, rect.x, c);
-
-            input[(InChannels1 + InChannels2 + c) * 9 + 6] = fetch3(y + 1, rect.x - 1, c);
-            input[(InChannels1 + InChannels2 + c) * 9 + 7] = fetch3(y + 1, rect.x, c);
-        }
-
-        const int InChannels = (InChannels1 + InChannels2 + InChannels3);
-
-        for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            for (int c = 0; c < InChannels1; ++c) {
-                input[c * 9 + 2] = fetch1(y - 1, x + 1, c);
-                input[c * 9 + 5] = fetch1(y, x + 1, c);
-                input[c * 9 + 8] = fetch1(y + 1, x + 1, c);
-            }
-            for (int c = 0; c < InChannels2; ++c) {
-                input[(InChannels1 + c) * 9 + 2] = fetch2(y - 1, x + 1, c);
-                input[(InChannels1 + c) * 9 + 5] = fetch2(y, x + 1, c);
-                input[(InChannels1 + c) * 9 + 8] = fetch2(y + 1, x + 1, c);
-            }
-            for (int c = 0; c < InChannels3; ++c) {
-                input[(InChannels1 + InChannels2 + c) * 9 + 2] = fetch3(y - 1, x + 1, c);
-                input[(InChannels1 + InChannels2 + c) * 9 + 5] = fetch3(y, x + 1, c);
-                input[(InChannels1 + InChannels2 + c) * 9 + 8] = fetch3(y + 1, x + 1, c);
-            }
-
-            for (int i = 0; i < OutChannels; ++i) {
-                fvec<S> val = 0.0f;
-
-                int j = 0;
-                for (; j < InChannels * 9 - S + 1; j += S) {
-                    val = fmadd(fvec<S>{&weights[i * InChannels * 9 + j]}, fvec<S>{&input[j], vector_aligned}, val);
+    // Preload data
+    const int _stride234 = rect.w + 2, req_size = InChannels234 * _stride234 * (rect.h + 2);
+    temp_data.resize(req_size + 16);
+    float *data234 = temp_data.data();
+    int index = 0;
+    for (int y = rect.y - 1; y < rect.y + rect.h + 1; ++y) {
+        for (int x = rect.x - 1; x < rect.x + rect.w + 1; ++x) {
+            if (x >= 0 && x < w234 && y >= 0 && y < h234) {
+                for (int j = 0; j < InChannels2; ++j) {
+                    data234[index++] = transfer::input<PreOp2>(data2[PxPitch234 * (y * stride234 + x) + j]);
                 }
-
-                float final_val = biases[i];
-                final_val += hsum(val);
-
-                for (; j < InChannels * 9; ++j) {
-                    final_val += weights[i * InChannels * 9 + j] * input[j];
+                for (int j = 0; j < InChannels3; ++j) {
+                    data234[index++] = transfer::input<PreOp3>(data3[PxPitch234 * (y * stride234 + x) + j]);
                 }
-
-                if (Activation == eActivation::ReLU) {
-                    final_val = fmaxf(0.0f, final_val);
-                }
-
-                if (PostOp == ePostOp::Downscale) {
-                    float &out = output[OutChannels * ((y / 2) * ((w + 1) / 2) + (x / 2)) + i];
-                    out = fmaxf(out, final_val);
-                } else {
-                    output[OutChannels * (y * output_stride + x) + i] = final_val;
-                }
-            }
-
-            for (int c = 0; c < InChannels; ++c) {
-                input[c * 9 + 0] = input[c * 9 + 1];
-                input[c * 9 + 1] = input[c * 9 + 2];
-
-                input[c * 9 + 3] = input[c * 9 + 4];
-                input[c * 9 + 4] = input[c * 9 + 5];
-
-                input[c * 9 + 6] = input[c * 9 + 7];
-                input[c * 9 + 7] = input[c * 9 + 8];
-            }
-        }
-    }
-
-#undef fetch1
-#undef fetch2
-#undef fetch3
-}
-
-template <int S, int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1, eActivation Activation>
-void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__restrict data2, const rect_t &rect, int w,
-                               int h, const float *__restrict weights, const float *__restrict biases,
-                               float *__restrict output) {
-    const int div1 = (PreOp1 == ePreOp::Upscale) ? 2 : 1;
-
-    const int w1 = (w + div1 - 1) / div1, h1 = (h + div1 - 1) / div1;
-
-#define fetch1(y, x, c) data1[InChannels1 * ((y)*w1 + (x)) + (c)]
-#define fetch2(y, x, c) data2[InChannels2 * ((y)*w + (x)) + (c)]
-
-    for (int y = rect.y; y < rect.y + rect.h; ++y) {
-        alignas(S * 4) float input1[InChannels1 * 9], input2[InChannels2 * 9];
-        for (int c = 0; c < InChannels1; ++c) {
-            input1[c * 9 + 0] = fetch1(std::max((y - 1) / div1, 0), std::max((rect.x - 1) / div1, 0), c);
-            input1[c * 9 + 1] = fetch1(std::max((y - 1) / div1, 0), rect.x / div1, c);
-
-            input1[c * 9 + 3] = fetch1(y / div1, std::max((rect.x - 1) / div1, 0), c);
-            input1[c * 9 + 4] = fetch1(y / div1, rect.x / div1, c);
-
-            input1[c * 9 + 6] = fetch1(std::min((y + 1) / div1, h1 - 1), std::max((rect.x - 1) / div1, 0), c);
-            input1[c * 9 + 7] = fetch1(std::min((y + 1) / div1, h1 - 1), rect.x / div1, c);
-        }
-        for (int c = 0; c < InChannels2; ++c) {
-            input2[c * 9 + 0] = fetch2(std::max(y - 1, 0), std::max(rect.x - 1, 0), c);
-            input2[c * 9 + 1] = fetch2(std::max(y - 1, 0), rect.x, c);
-
-            input2[c * 9 + 3] = fetch2(y, std::max(rect.x - 1, 0), c);
-            input2[c * 9 + 4] = fetch2(y, rect.x, c);
-
-            input2[c * 9 + 6] = fetch2(std::min(y + 1, h - 1), std::max(rect.x - 1, 0), c);
-            input2[c * 9 + 7] = fetch2(std::min(y + 1, h - 1), rect.x, c);
-        }
-
-        for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            for (int c = 0; c < InChannels1; ++c) {
-                input1[c * 9 + 2] = fetch1(std::max((y - 1) / div1, 0), std::min((x + 1) / div1, w1 - 1), c);
-                input1[c * 9 + 5] = fetch1(y / div1, std::min((x + 1) / div1, w1 - 1), c);
-                input1[c * 9 + 8] = fetch1(std::min((y + 1) / div1, h1 - 1), std::min((x + 1) / div1, w1 - 1), c);
-            }
-            for (int c = 0; c < InChannels2; ++c) {
-                input2[c * 9 + 2] = fetch2(std::max(y - 1, 0), std::min(x + 1, w - 1), c);
-                input2[c * 9 + 5] = fetch2(y, std::min(x + 1, w - 1), c);
-                input2[c * 9 + 8] = fetch2(std::min(y + 1, h - 1), std::min(x + 1, w - 1), c);
-            }
-
-            if ((InChannels1 % S) == 0 && InChannels1 >= S && (InChannels2 % S) == 0 && InChannels2 >= S) {
-                for (int i = 0; i < OutChannels; ++i) {
-                    fvec<S> val[3] = {0.0f};
-                    for (int j = 0; j < InChannels1 * 9; j += S * 9) {
-                        val[0] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 0 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 0 * S], vector_aligned}, val[0]);
-                        val[1] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 1 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 1 * S], vector_aligned}, val[1]);
-                        val[2] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 2 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 2 * S], vector_aligned}, val[2]);
-                        val[0] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 3 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 3 * S], vector_aligned}, val[0]);
-                        val[1] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 4 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 4 * S], vector_aligned}, val[1]);
-                        val[2] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 5 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 5 * S], vector_aligned}, val[2]);
-                        val[0] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 6 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 6 * S], vector_aligned}, val[0]);
-                        val[1] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 7 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 7 * S], vector_aligned}, val[1]);
-                        val[2] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 8 * S], vector_aligned},
-                                  fvec<S>{&input1[j + 8 * S], vector_aligned}, val[2]);
-                    }
-                    for (int j = 0; j < InChannels2 * 9; j += S * 9) {
-                        val[0] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 0 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 0 * S], vector_aligned}, val[0]);
-                        val[1] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 1 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 1 * S], vector_aligned}, val[1]);
-                        val[2] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 2 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 2 * S], vector_aligned}, val[2]);
-                        val[0] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 3 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 3 * S], vector_aligned}, val[0]);
-                        val[1] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 4 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 4 * S], vector_aligned}, val[1]);
-                        val[2] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 5 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 5 * S], vector_aligned}, val[2]);
-                        val[0] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 6 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 6 * S], vector_aligned}, val[0]);
-                        val[1] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 7 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 7 * S], vector_aligned}, val[1]);
-                        val[2] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 8 * S],
-                                          vector_aligned},
-                                  fvec<S>{&input2[j + 8 * S], vector_aligned}, val[2]);
-                    }
-
-                    val[0] += val[1];
-                    val[0] += val[2];
-
-                    float final_val = biases[i];
-                    final_val += hsum(val[0]);
-                    if (Activation == eActivation::ReLU) {
-                        final_val = fmaxf(0.0f, final_val);
-                    }
-
-                    output[OutChannels * (y * w + x) + i] = final_val;
-                }
-            } else if ((InChannels1 % S) == 0 && InChannels1 >= S && InChannels2 == 3 && S <= 8) {
-                for (int i = 0; i < OutChannels; ++i) {
-                    fvec<S> val[3] = {0.0f, 0.0f, 0.0f};
-                    for (int j = 0; j < InChannels1 * 9; j += S * 9) {
-                        val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 0 * S]},
-                                       fvec<S>{&input1[j + 0 * S], vector_aligned}, val[0]);
-                        val[1] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 1 * S]},
-                                       fvec<S>{&input1[j + 1 * S], vector_aligned}, val[1]);
-                        val[2] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 2 * S]},
-                                       fvec<S>{&input1[j + 2 * S], vector_aligned}, val[2]);
-                        val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 3 * S]},
-                                       fvec<S>{&input1[j + 3 * S], vector_aligned}, val[0]);
-                        val[1] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 4 * S]},
-                                       fvec<S>{&input1[j + 4 * S], vector_aligned}, val[1]);
-                        val[2] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 5 * S]},
-                                       fvec<S>{&input1[j + 5 * S], vector_aligned}, val[2]);
-                        val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 6 * S]},
-                                       fvec<S>{&input1[j + 6 * S], vector_aligned}, val[0]);
-                        val[1] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 7 * S]},
-                                       fvec<S>{&input1[j + 7 * S], vector_aligned}, val[1]);
-                        val[2] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + j + 8 * S]},
-                                       fvec<S>{&input1[j + 8 * S], vector_aligned}, val[2]);
-                    }
-
-                    int j = 0;
-                    for (; j < InChannels2 * 9 - S; j += S * 3) {
-                        val[0] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 0 * S]},
-                                  fvec<S>{&input2[j + 0 * S], vector_aligned}, val[0]);
-                        val[1] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 1 * S]},
-                                  fvec<S>{&input2[j + 1 * S], vector_aligned}, val[1]);
-                        val[2] =
-                            fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j + 2 * S]},
-                                  fvec<S>{&input2[j + 2 * S], vector_aligned}, val[2]);
-                    }
-                    fvec<S> last_input = 0.0f;
-                    last_input.template set<0>(input2[j + 0]);
-                    last_input.template set<1>(input2[j + 1]);
-                    last_input.template set<2>(input2[j + 2]);
-
-                    val[0] = fmadd(fvec<S>{&weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j]},
-                                   last_input, val[0]);
-
-                    val[0] += val[1];
-                    val[0] += val[2];
-
-                    float final_val = biases[i];
-                    final_val += hsum(val[0]);
-                    if (Activation == eActivation::ReLU) {
-                        final_val = fmaxf(0.0f, final_val);
-                    }
-
-                    output[OutChannels * (y * w + x) + i] = final_val;
+                for (int j = 0; j < InChannels4; ++j) {
+                    data234[index++] = transfer::input<PreOp4>(data4[PxPitch234 * (y * stride234 + x) + j]);
                 }
             } else {
-                for (int i = 0; i < OutChannels; ++i) {
-                    float val = biases[i];
-                    for (int j = 0; j < InChannels1 * 9; ++j) {
-                        val += weights[i * (InChannels1 + InChannels2) * 9 + j] * input1[j];
-                    }
-                    for (int j = 0; j < InChannels2 * 9; ++j) {
-                        val += weights[i * (InChannels1 + InChannels2) * 9 + InChannels1 * 9 + j] * input2[j];
-                    }
-                    if (Activation == eActivation::ReLU) {
-                        val = fmaxf(0.0f, val);
-                    }
-
-                    output[OutChannels * (y * w + x) + i] = val;
+                for (int j = 0; j < InChannels234; ++j) {
+                    data234[index++] = 0.0f;
                 }
             }
+        }
+    }
+    while (index < temp_data.size()) {
+        data234[index++] = 0.0f;
+    }
 
-            for (int c = 0; c < InChannels1; ++c) {
-                input1[c * 9 + 0] = input1[c * 9 + 1];
-                input1[c * 9 + 1] = input1[c * 9 + 2];
+#define C_ROWS 4
+#define C_COLS 8
 
-                input1[c * 9 + 3] = input1[c * 9 + 4];
-                input1[c * 9 + 4] = input1[c * 9 + 5];
+    for (int y = rect.y; y < rect.y + rect.h; y += 2) {
+        for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
+            for (int i = 0; i < OutChannels; i += C_COLS) {
+                fvec<S> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
+                for (int di = 0; di < C_COLS; ++di) {
+                    C0[0][di] = {};
+                    C0[0][di].template set<0>(biases[i + di]);
+                    UNROLLED_FOR(k, C_ROWS, { C1[k][di] = C0[k][di] = C0[0][di]; })
+                }
+                for (int j = 0; j < 3 * InChannels1; j += S) {
+                    fvec<S> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+                    if (PreOp1 == ePreOp::Upsample) {
+                        const int x_off = (j / InChannels1), ch = (j % InChannels1);
+                        UNROLLED_FOR(k, C_ROWS, {
+                            const int x_final = (x + x_off + k - 1 + 2) / 2 - 1;
+                            A0[k] = fvec<S>{&data1[index1((y == 0 ? -1 : (y - 1) / 2), x_final) + ch]};
+                            A1[k] = fvec<S>{&data1[index1((y + 0) / 2, x_final) + ch]};
+                            A2[k] = fvec<S>{&data1[index1((y + 1) / 2, x_final) + ch]};
+                            A3[k] = fvec<S>{&data1[index1((y + 2) / 2, x_final) + ch]};
+                        })
+                    } else {
+                        UNROLLED_FOR(k, C_ROWS, {
+                            A0[k] = fvec<S>{&data1[index1(y - 1, x - 1 + k) + j]};
+                            A1[k] = fvec<S>{&data1[index1(y + 0, x - 1 + k) + j]};
+                            A2[k] = fvec<S>{&data1[index1(y + 1, x - 1 + k) + j]};
+                            A3[k] = fvec<S>{&data1[index1(y + 2, x - 1 + k) + j]};
+                        })
+                    }
+                    const float *p_weights = &weights[i * (RoundedTriple1 + RoundedTriple2) * 3 + j];
+                    static_assert((OutChannels % C_COLS) == 0, "!");
+                    for (int di = 0; di < C_COLS; ++di) {
+                        const fvec<S> B0 = fvec<S>{&p_weights[0 * RoundedTriple1], vector_aligned};
+                        const fvec<S> B1 = fvec<S>{&p_weights[1 * RoundedTriple1], vector_aligned};
+                        const fvec<S> B2 = fvec<S>{&p_weights[2 * RoundedTriple1], vector_aligned};
+                        p_weights += (RoundedTriple1 + RoundedTriple2) * 3;
 
-                input1[c * 9 + 6] = input1[c * 9 + 7];
-                input1[c * 9 + 7] = input1[c * 9 + 8];
-            }
+                        UNROLLED_FOR(k, C_ROWS, {
+                            C0[k][di] = fmadd(A0[k], B0, C0[k][di]);
+                            C0[k][di] = fmadd(A1[k], B1, C0[k][di]);
+                            C0[k][di] = fmadd(A2[k], B2, C0[k][di]);
 
-            for (int c = 0; c < InChannels2; ++c) {
-                input2[c * 9 + 0] = input2[c * 9 + 1];
-                input2[c * 9 + 1] = input2[c * 9 + 2];
+                            C1[k][di] = fmadd(A1[k], B0, C1[k][di]);
+                            C1[k][di] = fmadd(A2[k], B1, C1[k][di]);
+                            C1[k][di] = fmadd(A3[k], B2, C1[k][di]);
+                        })
+                    }
+                }
+                for (int j = 0; j < 3 * InChannels234; j += S) {
+                    fvec<S> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+                    const float *p_data234 = &data234[InChannels234 * ((y - rect.y) * _stride234 + x - rect.x) + j];
+                    UNROLLED_FOR(k, C_ROWS, {
+                        A0[k] = fvec<S>{&p_data234[InChannels234 * (0 * _stride234 + k)]};
+                        A1[k] = fvec<S>{&p_data234[InChannels234 * (1 * _stride234 + k)]};
+                        A2[k] = fvec<S>{&p_data234[InChannels234 * (2 * _stride234 + k)]};
+                        A3[k] = fvec<S>{&p_data234[InChannels234 * (3 * _stride234 + k)]};
+                    })
+                    const float *p_weights =
+                        &weights[i * (RoundedTriple1 + RoundedTriple2) * 3 + 3 * RoundedTriple1 + j];
+                    static_assert((OutChannels % C_COLS) == 0, "!");
+                    for (int di = 0; di < C_COLS; ++di) {
+                        const fvec<S> B0 = fvec<S>{&p_weights[0 * RoundedTriple2], vector_aligned};
+                        const fvec<S> B1 = fvec<S>{&p_weights[1 * RoundedTriple2], vector_aligned};
+                        const fvec<S> B2 = fvec<S>{&p_weights[2 * RoundedTriple2], vector_aligned};
+                        p_weights += (RoundedTriple1 + RoundedTriple2) * 3;
 
-                input2[c * 9 + 3] = input2[c * 9 + 4];
-                input2[c * 9 + 4] = input2[c * 9 + 5];
+                        UNROLLED_FOR(k, C_ROWS, {
+                            C0[k][di] = fmadd(A0[k], B0, C0[k][di]);
+                            C0[k][di] = fmadd(A1[k], B1, C0[k][di]);
+                            C0[k][di] = fmadd(A2[k], B2, C0[k][di]);
 
-                input2[c * 9 + 6] = input2[c * 9 + 7];
-                input2[c * 9 + 7] = input2[c * 9 + 8];
+                            C1[k][di] = fmadd(A1[k], B0, C1[k][di]);
+                            C1[k][di] = fmadd(A2[k], B1, C1[k][di]);
+                            C1[k][di] = fmadd(A3[k], B2, C1[k][di]);
+                        })
+                    }
+                }
+                float _C0[C_ROWS][C_COLS], _C1[C_ROWS][C_COLS];
+                for (int k = 0; k < C_ROWS; ++k) {
+                    for (int di = 0; di < C_COLS; ++di) {
+                        _C0[k][di] = hsum(C0[k][di]);
+                        _C1[k][di] = hsum(C1[k][di]);
+                        if (Activation == eActivation::ReLU) {
+                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
+                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                        }
+                    }
+                }
+                for (int xx = x; xx < std::min(x + C_ROWS, rect.x + rect.w); ++xx) {
+                    for (int ii = i; ii < std::min(i + C_COLS, OutChannels); ++ii) {
+                        output[OutChannels * ((y + 0) * output_stride + xx) + ii] =
+                            transfer::output<PostOp>(_C0[xx - x][ii - i]);
+                        if (y + 1 < rect.y + rect.h) {
+                            output[OutChannels * ((y + 1) * output_stride + xx) + ii] =
+                                transfer::output<PostOp>(_C1[xx - x][ii - i]);
+                        }
+                    }
+                }
             }
         }
     }
 
-#undef fetch1
-#undef fetch2
-}
+#undef C_ROWS
+#undef C_COLS
 
-template <int RowsPortion, int S, int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch234,
-          int OutChannels, ePreOp PreOp1, ePreOp PreOp2, ePreOp PreOp3, ePreOp PreOp4, ePostOp PostOp,
-          eActivation Activation>
-void ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows(int y, const float data1[], const float data2[],
-                                                    const float data3[], const float data4[], const rect_t &rect, int w,
-                                                    int h, int w234, int h234, int stride1, int stride234,
-                                                    const float *__restrict weights, const float biases[],
-                                                    float *__restrict output, int output_stride) {
-    const int div1 = (PreOp1 == ePreOp::Upscale) ? 2 : 1;
-
-#define index1(y, x) InChannels1 *((y)*stride1 + (x))
-#define fetch2(y, x, c)                                                                                                \
-    ((x) >= 0 && (x) < w234 && (y) >= 0 && (y) < h234)                                                                 \
-        ? transfer::input<PreOp2>(data2[PxPitch234 * ((y)*stride234 + (x)) + (c)])                                     \
-        : 0.0f
-#define fetch3(y, x, c)                                                                                                \
-    ((x) >= 0 && (x) < w234 && (y) >= 0 && (y) < h234)                                                                 \
-        ? transfer::input<PreOp3>(data3[PxPitch234 * ((y)*stride234 + (x)) + (c)])                                     \
-        : 0.0f
-#define fetch4(y, x, c)                                                                                                \
-    ((x) >= 0 && (x) < w234 && (y) >= 0 && (y) < h234)                                                                 \
-        ? transfer::input<PreOp4>(data4[PxPitch234 * ((y)*stride234 + (x)) + (c)])                                     \
-        : 0.0f
-
-    alignas(S * 4) float input234[8][(InChannels2 + InChannels3 + InChannels4) * 9];
-    for (int k = 0; k < RowsPortion; ++k) {
-        for (int c = 0; c < InChannels2; ++c) {
-            input234[k][c * 9 + 0] = fetch2(y - 1 + k, rect.x - 1, c);
-            input234[k][c * 9 + 1] = fetch2(y - 1 + k, rect.x, c);
-
-            input234[k][c * 9 + 3] = fetch2(y + k, rect.x - 1, c);
-            input234[k][c * 9 + 4] = fetch2(y + k, rect.x, c);
-
-            input234[k][c * 9 + 6] = fetch2(y + 1 + k, rect.x - 1, c);
-            input234[k][c * 9 + 7] = fetch2(y + 1 + k, rect.x, c);
-        }
-        for (int c = 0; c < InChannels3; ++c) {
-            input234[k][(InChannels2 + c) * 9 + 0] = fetch3(y - 1 + k, rect.x - 1, c);
-            input234[k][(InChannels2 + c) * 9 + 1] = fetch3(y - 1 + k, rect.x, c);
-
-            input234[k][(InChannels2 + c) * 9 + 3] = fetch3(y + k, rect.x - 1, c);
-            input234[k][(InChannels2 + c) * 9 + 4] = fetch3(y + k, rect.x, c);
-
-            input234[k][(InChannels2 + c) * 9 + 6] = fetch3(y + 1 + k, rect.x - 1, c);
-            input234[k][(InChannels2 + c) * 9 + 7] = fetch3(y + 1 + k, rect.x, c);
-        }
-        for (int c = 0; c < InChannels4; ++c) {
-            input234[k][(InChannels2 + InChannels3 + c) * 9 + 0] = fetch4(y - 1 + k, rect.x - 1, c);
-            input234[k][(InChannels2 + InChannels3 + c) * 9 + 1] = fetch4(y - 1 + k, rect.x, c);
-
-            input234[k][(InChannels2 + InChannels3 + c) * 9 + 3] = fetch4(y + k, rect.x - 1, c);
-            input234[k][(InChannels2 + InChannels3 + c) * 9 + 4] = fetch4(y + k, rect.x, c);
-
-            input234[k][(InChannels2 + InChannels3 + c) * 9 + 6] = fetch4(y + 1 + k, rect.x - 1, c);
-            input234[k][(InChannels2 + InChannels3 + c) * 9 + 7] = fetch4(y + 1 + k, rect.x, c);
-        }
-    }
-
-    for (int x = rect.x; x < rect.x + rect.w; ++x) {
-        const int add = ((x + 1) % div1);
-
-        const int ii1[] = {
-            index1(y == 0 ? -1 : (y - 1) / div1, x == 0 ? -1 : (x - 1) / div1), //
-            index1(y / div1, x == 0 ? -1 : (x - 1) / div1),                     //
-            index1((y + 1) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 2) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 3) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 4) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 5) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 6) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 7) / div1, x == 0 ? -1 : (x - 1) / div1),               //
-            index1((y + 8) / div1, x == 0 ? -1 : (x - 1) / div1)                //
-        };
-
-        for (int c = 0; c < InChannels2; ++c) {
-            UNROLLED_FOR(k, 8, {
-                if (k < RowsPortion) {
-                    input234[k][c * 9 + 2] = fetch2(y - 1 + k, x + 1, c);
-                    input234[k][c * 9 + 5] = fetch2(y + k, x + 1, c);
-                    input234[k][c * 9 + 8] = fetch2(y + 1 + k, x + 1, c);
-                }
-            })
-        }
-        for (int c = 0; c < InChannels3; ++c) {
-            UNROLLED_FOR(k, 8, {
-                if (k < RowsPortion) {
-                    input234[k][(InChannels2 + c) * 9 + 2] = fetch3(y - 1 + k, x + 1, c);
-                    input234[k][(InChannels2 + c) * 9 + 5] = fetch3(y + k, x + 1, c);
-                    input234[k][(InChannels2 + c) * 9 + 8] = fetch3(y + 1 + k, x + 1, c);
-                }
-            })
-        }
-        for (int c = 0; c < InChannels4; ++c) {
-            UNROLLED_FOR(k, 8, {
-                if (k < RowsPortion) {
-                    input234[k][(InChannels2 + InChannels3 + c) * 9 + 2] = fetch4(y - 1 + k, x + 1, c);
-                    input234[k][(InChannels2 + InChannels3 + c) * 9 + 5] = fetch4(y + k, x + 1, c);
-                    input234[k][(InChannels2 + InChannels3 + c) * 9 + 8] = fetch4(y + 1 + k, x + 1, c);
-                }
-            })
-        }
-
-        const int InChannels234 = (InChannels2 + InChannels3 + InChannels4);
-
-        for (int i = 0; i < OutChannels; ++i) {
-            fvec<S> val[8] = {};
-
-            const float *p_weights = &weights[i * (InChannels1 + InChannels234) * 9];
-            for (int j = 0; j < InChannels1; j += S) {
-                UNROLLED_FOR(k, 8, {
-                    if (k < RowsPortion) {
-                        val[k] = fmadd(fvec<S>{&p_weights[0 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 0] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[1 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 0] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[2 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 0] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
-
-                        val[k] = fmadd(fvec<S>{&p_weights[3 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 1] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[4 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 1] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[5 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 1] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
-
-                        val[k] = fmadd(fvec<S>{&p_weights[6 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 2] + ((add + 0) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[7 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 2] + ((add + 1) / div1) * InChannels1 + j]}, val[k]);
-                        val[k] = fmadd(fvec<S>{&p_weights[8 * InChannels1 + j]},
-                                       fvec<S>{&data1[ii1[k + 2] + ((add + 2) / div1) * InChannels1 + j]}, val[k]);
-                    }
-                })
-            }
-
-            p_weights += InChannels1 * 9;
-
-            int j = 0;
-            for (; j < InChannels234 * 9 - S + 1; j += S) {
-                UNROLLED_FOR(k, 8, {
-                    if (k < RowsPortion) {
-                        val[k] = fmadd(fvec<S>{&p_weights[j]}, fvec<S>{&input234[k][j]}, val[k]);
-                    }
-                })
-            }
-
-            for (int k = 0; k < RowsPortion; ++k) {
-                fvec<S> last_input = 0.0f;
-                UNROLLED_FOR(l, 16, {
-                    if (l < ((InChannels234 * 9) % S)) {
-                        last_input.template set<l>(input234[k][j + l]);
-                    }
-                })
-                val[k] = fmadd(fvec<S>{&p_weights[j]}, last_input, val[k]);
-
-                float final_val = biases[i] + hsum(val[k]);
-                if (Activation == eActivation::ReLU) {
-                    final_val = std::max(0.0f, final_val);
-                }
-                output[OutChannels * ((y + k) * output_stride + x) + i] = final_val;
-            }
-        }
-
-        for (int c = 0; c < InChannels234; ++c) {
-            UNROLLED_FOR(k, 8, {
-                if (k < RowsPortion) {
-                    input234[k][c * 9 + 0] = input234[k][c * 9 + 1];
-                    input234[k][c * 9 + 1] = input234[k][c * 9 + 2];
-
-                    input234[k][c * 9 + 3] = input234[k][c * 9 + 4];
-                    input234[k][c * 9 + 4] = input234[k][c * 9 + 5];
-
-                    input234[k][c * 9 + 6] = input234[k][c * 9 + 7];
-                    input234[k][c * 9 + 7] = input234[k][c * 9 + 8];
-                }
-            })
-        }
-    }
-
-#undef fetch3
-#undef fetch2
 #undef index1
 }
 } // namespace NS
