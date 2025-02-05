@@ -137,47 +137,50 @@ class SIMDPolicy {
         Ref::SpatialCacheUpdate(params, inters, rays, cache_data, radiance, depth_normals, img_w, entries, voxels_curr);
     }
 
+    template <int InChannels, int OutChannels, int OutPxPitch = OutChannels, ePostOp PostOp = ePostOp::None,
+              eActivation Activation = eActivation::ReLU>
+    static force_inline void Convolution3x3(const float data[], const rect_t &rect, const int w, const int h,
+                                            const int stride, const float weights[], const float biases[],
+                                            float output[], const int output_stride) {
+        Ref::Convolution3x3<InChannels, OutChannels, OutPxPitch, PostOp, Activation>(data, rect, w, h, stride, weights,
+                                                                                     biases, output, output_stride);
+    }
+
     template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels,
               ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
               ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
-    static force_inline void Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[],
-                                                 const rect_t &rect, int in_w, int in_h, int w, int h, int stride,
-                                                 const float weights[], const float biases[], float output[],
-                                                 int output_stride) {
-        Ref::Convolution3x3_GEMM<InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3,
-                                 PostOp, Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights,
-                                                     biases, output, output_stride);
-    }
-
-    template <int InChannels, int OutChannels, int OutPxPitch = OutChannels, ePostOp PostOp = ePostOp::None,
-              eActivation Activation = eActivation::ReLU>
-    static force_inline void Convolution3x3_Direct(const float data[], const rect_t &rect, int w, int h, int stride,
-                                                   const float weights[], const float biases[], float output[],
-                                                   int output_stride) {
-        Ref::Convolution3x3_Direct<InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            data, rect, w, h, stride, weights, biases, output, output_stride);
+    static force_inline void Convolution3x3(const float data1[], const float data2[], const float data3[],
+                                            const rect_t &rect, const int in_w, const int in_h, const int w,
+                                            const int h, const int stride, const float weights[], const float biases[],
+                                            float output[], const int output_stride,
+                                            aligned_vector<float, 64> &temp_data) {
+        Ref::Convolution3x3<InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3, PostOp,
+                            Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights, biases, output,
+                                        output_stride, temp_data);
     }
 
     template <int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1 = ePreOp::None,
               ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
-    static force_inline void ConvolutionConcat3x3_Direct(const float data1[], const float data2[], const rect_t &rect,
-                                                         int w, int h, int stride1, int stride2, const float weights[],
-                                                         const float biases[], float output[], int output_stride) {
-        Ref::ConvolutionConcat3x3_Direct<InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
+    static force_inline void ConvolutionConcat3x3(const float data1[], const float data2[], const rect_t &rect,
+                                                  const int w, const int h, const int stride1, const int stride2,
+                                                  const float weights[], const float biases[], float output[],
+                                                  const int output_stride) {
+        Ref::ConvolutionConcat3x3<InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
             data1, data2, rect, w, h, stride1, stride2, weights, biases, output, output_stride);
     }
 
     template <int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
               ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
               ePreOp PreOp4 = ePreOp::None, ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
-    static force_inline void
-    ConvolutionConcat3x3_1Direct_2GEMM(const float data1[], const float data2[], const float data3[],
-                                       const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
-                                       int stride1, int stride2, const float weights[], const float biases[],
-                                       float output[], int output_stride) {
-        Ref::ConvolutionConcat3x3_1Direct_2GEMM<InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2,
-                                                OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp, Activation>(
-            data1, data2, data3, data4, rect, w, h, w2, h2, stride1, stride2, weights, biases, output, output_stride);
+    static force_inline void ConvolutionConcat3x3(const float data1[], const float data2[], const float data3[],
+                                                  const float data4[], const rect_t &rect, const int w, const int h,
+                                                  const int w2, const int h2, const int stride1, const int stride2,
+                                                  const float weights[], const float biases[], float output[],
+                                                  const int output_stride, aligned_vector<float, 64> &temp_data) {
+        Ref::ConvolutionConcat3x3<InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2, OutChannels, PreOp1,
+                                  PreOp2, PreOp3, PreOp4, PostOp, Activation>(data1, data2, data3, data4, rect, w, h,
+                                                                              w2, h2, stride1, stride2, weights, biases,
+                                                                              output, output_stride, temp_data);
     }
 
     static force_inline void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_channels,
@@ -333,6 +336,7 @@ template <typename SIMDPolicy> struct PassData {
     aligned_vector<color_rgba_t, 16> variance_buf;
     aligned_vector<color_rgba_t, 16> filtered_variance_buf;
     aligned_vector<color_rgba_t, 16> feature_buf1, feature_buf2;
+    aligned_vector<float, 64> temp_data;
 
     aligned_vector<typename SIMDPolicy::RayHashType> hash_values;
     std::vector<int> head_flags;
@@ -786,30 +790,32 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
     using namespace std::chrono;
     const auto denoise_start = high_resolution_clock::now();
 
-    const int w_rounded = 16 * ((w_ + 15) / 16);
-    const int h_rounded = 16 * ((h_ + 15) / 16);
+    const int w_rounded = round_up(w_, 16);
+    const int h_rounded = round_up(h_, 16);
 
     rect_t r = region.rect();
     if (pass < 15) {
-        r.w = 16 * ((r.w + 15) / 16);
-        r.h = 16 * ((r.h + 15) / 16);
+        r.w = round_up(r.w, 16);
+        r.h = round_up(r.h, 16);
     }
+
+    PassData<SIMDPolicy> &p = get_per_thread_pass_data<SIMDPolicy>();
 
     const float *weights = unet_weights_.data();
     const unet_weight_offsets_t *offsets = &unet_offsets_;
 
     switch (pass) {
     case 0: {
-        SIMDPolicy::template Convolution3x3_GEMM<3, 3, 3, 4, 32, ePreOp::HDRTransfer, ePreOp::None,
-                                                 ePreOp::PositiveNormalize>(
+        SIMDPolicy::template Convolution3x3<3, 3, 3, 4, 32, ePreOp::HDRTransfer, ePreOp::None,
+                                            ePreOp::PositiveNormalize>(
             &full_buf_[0].v[0], &base_color_buf_[0].v[0], &depth_normals_buf_[0].v[0], r, w_, h_, w_rounded, h_rounded,
             w_, &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
-            unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
+            unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2, p.temp_data);
         SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 32, unet_tensors_.encConv0);
         break;
     }
     case 1: {
-        SIMDPolicy::template Convolution3x3_Direct<32, 32, 32, Ray::ePostOp::Downscale>(
+        SIMDPolicy::template Convolution3x3<32, 32, 32, Ray::ePostOp::Downsample>(
             unet_tensors_.encConv0 + (w_rounded + 3) * 32, r, w_rounded, h_rounded, w_rounded + 2,
             &weights[offsets->enc_conv1_weight], &weights[offsets->enc_conv1_bias],
             unet_tensors_.pool1 + (w_rounded / 2 + 3) * 32, w_rounded / 2 + 2);
@@ -821,7 +827,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 2;
         r.w = (r.w + 1) / 2;
         r.h = (r.h + 1) / 2;
-        SIMDPolicy::template Convolution3x3_Direct<32, 48, 48, Ray::ePostOp::Downscale>(
+        SIMDPolicy::template Convolution3x3<32, 48, 48, Ray::ePostOp::Downsample>(
             unet_tensors_.pool1 + (w_rounded / 2 + 3) * 32, r, w_rounded / 2, h_rounded / 2, w_rounded / 2 + 2,
             &weights[offsets->enc_conv2_weight], &weights[offsets->enc_conv2_bias],
             unet_tensors_.pool2 + (w_rounded / 4 + 3) * 48, w_rounded / 4 + 2);
@@ -833,7 +839,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 4;
         r.w = (r.w + 3) / 4;
         r.h = (r.h + 3) / 4;
-        SIMDPolicy::template Convolution3x3_Direct<48, 64, 64, Ray::ePostOp::Downscale>(
+        SIMDPolicy::template Convolution3x3<48, 64, 64, Ray::ePostOp::Downsample>(
             unet_tensors_.pool2 + (w_rounded / 4 + 3) * 48, r, w_rounded / 4, h_rounded / 4, w_rounded / 4 + 2,
             &weights[offsets->enc_conv3_weight], &weights[offsets->enc_conv3_bias],
             unet_tensors_.pool3 + (w_rounded / 8 + 3) * 64, w_rounded / 8 + 2);
@@ -845,7 +851,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 8;
         r.w = (r.w + 7) / 8;
         r.h = (r.h + 7) / 8;
-        SIMDPolicy::template Convolution3x3_Direct<64, 80, 80, Ray::ePostOp::Downscale>(
+        SIMDPolicy::template Convolution3x3<64, 80, 80, Ray::ePostOp::Downsample>(
             unet_tensors_.pool3 + (w_rounded / 8 + 3) * 64, r, w_rounded / 8, h_rounded / 8, w_rounded / 8 + 2,
             &weights[offsets->enc_conv4_weight], &weights[offsets->enc_conv4_bias],
             unet_tensors_.pool4 + (w_rounded / 16 + 3) * 80, w_rounded / 16 + 2);
@@ -857,7 +863,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 16;
         r.w = (r.w + 15) / 16;
         r.h = (r.h + 15) / 16;
-        SIMDPolicy::template Convolution3x3_Direct<80, 96>(
+        SIMDPolicy::template Convolution3x3<80, 96>(
             unet_tensors_.pool4 + (w_rounded / 16 + 3) * 80, r, w_rounded / 16, h_rounded / 16, w_rounded / 16 + 2,
             &weights[offsets->enc_conv5a_weight], &weights[offsets->enc_conv5a_bias],
             unet_tensors_.enc_conv5a + (w_rounded / 16 + 3) * 96, w_rounded / 16 + 2);
@@ -869,7 +875,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 16;
         r.w = (r.w + 15) / 16;
         r.h = (r.h + 15) / 16;
-        SIMDPolicy::template Convolution3x3_Direct<96, 96>(
+        SIMDPolicy::template Convolution3x3<96, 96>(
             unet_tensors_.enc_conv5a + (w_rounded / 16 + 3) * 96, r, w_rounded / 16, h_rounded / 16, w_rounded / 16 + 2,
             &weights[offsets->enc_conv5b_weight], &weights[offsets->enc_conv5b_bias],
             unet_tensors_.upsample4 + (w_rounded / 16 + 3) * 96, w_rounded / 16 + 2);
@@ -881,7 +887,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 8;
         r.w = (r.w + 7) / 8;
         r.h = (r.h + 7) / 8;
-        SIMDPolicy::template ConvolutionConcat3x3_Direct<96, 64, 112, Ray::ePreOp::Upscale>(
+        SIMDPolicy::template ConvolutionConcat3x3<96, 64, 112, Ray::ePreOp::Upsample>(
             unet_tensors_.upsample4 + (w_rounded / 16 + 3) * 96, unet_tensors_.pool3 + (w_rounded / 8 + 3) * 64, r,
             w_rounded / 8, h_rounded / 8, w_rounded / 16 + 2, w_rounded / 8 + 2, &weights[offsets->dec_conv4a_weight],
             &weights[offsets->dec_conv4a_bias], unet_tensors_.dec_conv4a + (w_rounded / 8 + 3) * 112,
@@ -894,7 +900,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 8;
         r.w = (r.w + 7) / 8;
         r.h = (r.h + 7) / 8;
-        SIMDPolicy::template Convolution3x3_Direct<112, 112>(
+        SIMDPolicy::template Convolution3x3<112, 112>(
             unet_tensors_.dec_conv4a + (w_rounded / 8 + 3) * 112, r, w_rounded / 8, h_rounded / 8, w_rounded / 8 + 2,
             &weights[offsets->dec_conv4b_weight], &weights[offsets->dec_conv4b_bias],
             unet_tensors_.upsample3 + (w_rounded / 8 + 3) * 112, w_rounded / 8 + 2);
@@ -906,7 +912,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 4;
         r.w = (r.w + 3) / 4;
         r.h = (r.h + 3) / 4;
-        SIMDPolicy::template ConvolutionConcat3x3_Direct<112, 48, 96, Ray::ePreOp::Upscale>(
+        SIMDPolicy::template ConvolutionConcat3x3<112, 48, 96, Ray::ePreOp::Upsample>(
             unet_tensors_.upsample3 + (w_rounded / 8 + 3) * 112, unet_tensors_.pool2 + (w_rounded / 4 + 3) * 48, r,
             w_rounded / 4, h_rounded / 4, w_rounded / 8 + 2, w_rounded / 4 + 2, &weights[offsets->dec_conv3a_weight],
             &weights[offsets->dec_conv3a_bias], unet_tensors_.dec_conv3a + (w_rounded / 4 + 3) * 96, w_rounded / 4 + 2);
@@ -918,7 +924,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 4;
         r.w = (r.w + 3) / 4;
         r.h = (r.h + 3) / 4;
-        SIMDPolicy::template Convolution3x3_Direct<96, 96>(
+        SIMDPolicy::template Convolution3x3<96, 96>(
             unet_tensors_.dec_conv3a + (w_rounded / 4 + 3) * 96, r, w_rounded / 4, h_rounded / 4, w_rounded / 4 + 2,
             &weights[offsets->dec_conv3b_weight], &weights[offsets->dec_conv3b_bias],
             unet_tensors_.upsample2 + (w_rounded / 4 + 3) * 96, w_rounded / 4 + 2);
@@ -930,7 +936,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 2;
         r.w = (r.w + 1) / 2;
         r.h = (r.h + 1) / 2;
-        SIMDPolicy::template ConvolutionConcat3x3_Direct<96, 32, 64, Ray::ePreOp::Upscale>(
+        SIMDPolicy::template ConvolutionConcat3x3<96, 32, 64, Ray::ePreOp::Upsample>(
             unet_tensors_.upsample2 + (w_rounded / 4 + 3) * 96, unet_tensors_.pool1 + (w_rounded / 2 + 3) * 32, r,
             w_rounded / 2, h_rounded / 2, w_rounded / 4 + 2, w_rounded / 2 + 2, &weights[offsets->dec_conv2a_weight],
             &weights[offsets->dec_conv2a_bias], unet_tensors_.dec_conv2a + (w_rounded / 2 + 3) * 64, w_rounded / 2 + 2);
@@ -942,7 +948,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         r.y = r.y / 2;
         r.w = (r.w + 1) / 2;
         r.h = (r.h + 1) / 2;
-        SIMDPolicy::template Convolution3x3_Direct<64, 64>(
+        SIMDPolicy::template Convolution3x3<64, 64>(
             unet_tensors_.dec_conv2a + (w_rounded / 2 + 3) * 64, r, w_rounded / 2, h_rounded / 2, w_rounded / 2 + 2,
             &weights[offsets->dec_conv2b_weight], &weights[offsets->dec_conv2b_bias],
             unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, w_rounded / 2 + 2);
@@ -950,28 +956,27 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         break;
     }
     case 13: {
-        SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upscale,
-                                                                Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
-                                                                Ray::ePreOp::PositiveNormalize>(
+        SIMDPolicy::template ConvolutionConcat3x3<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upsample, Ray::ePreOp::HDRTransfer,
+                                                  Ray::ePreOp::None, Ray::ePreOp::PositiveNormalize>(
             unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &full_buf_[0].v[0], &base_color_buf_[0].v[0],
             &depth_normals_buf_[0].v[0], r, w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_,
             &weights[offsets->dec_conv1a_weight], &weights[offsets->dec_conv1a_bias],
-            unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
+            unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2, p.temp_data);
         SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 64, unet_tensors_.dec_conv1a);
         break;
     }
     case 14: {
-        SIMDPolicy::template Convolution3x3_Direct<64, 32>(
-            unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, r, w_rounded, h_rounded, w_rounded + 2,
-            &weights[offsets->dec_conv1b_weight], &weights[offsets->dec_conv1b_bias],
-            unet_tensors_.dec_conv1b + (w_rounded + 3) * 32, w_rounded + 2);
+        SIMDPolicy::template Convolution3x3<64, 32>(unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, r, w_rounded,
+                                                    h_rounded, w_rounded + 2, &weights[offsets->dec_conv1b_weight],
+                                                    &weights[offsets->dec_conv1b_bias],
+                                                    unet_tensors_.dec_conv1b + (w_rounded + 3) * 32, w_rounded + 2);
         SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 32, unet_tensors_.dec_conv1b);
         break;
     }
     case 15: {
-        SIMDPolicy::template Convolution3x3_Direct<32, 3, 4, ePostOp::HDRTransfer>(
+        SIMDPolicy::template Convolution3x3<32, 3, 4, ePostOp::HDRTransfer>(
             unet_tensors_.dec_conv1b + (w_rounded + 3) * 32, r, w_, h_, w_rounded + 2,
-            &weights[offsets->dec_conv0_weight], &weights[offsets->dec_conv0_bias], &raw_filtered_buf_[0].v[0], 0);
+            &weights[offsets->dec_conv0_weight], &weights[offsets->dec_conv0_bias], &raw_filtered_buf_[0].v[0], w_);
 
         Ref::tonemap_params_t tonemap_params;
 
@@ -1254,9 +1259,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateFilterTable(ePixelFilter filter, floa
 template <typename SIMDPolicy>
 Ray::unet_filter_properties_t Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(
     const bool alias_memory, const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
-    const int total_count = SetupUNetWeights<float>(true, 1, nullptr, nullptr);
+    const int total_count = SetupUNetWeights<float>(8, nullptr, nullptr);
     unet_weights_.resize(total_count);
-    SetupUNetWeights(true, 1, &unet_offsets_, unet_weights_.data());
+    SetupUNetWeights(8, &unet_offsets_, unet_weights_.data());
 
     unet_alias_memory_ = alias_memory;
     UpdateUNetFilterMemory();

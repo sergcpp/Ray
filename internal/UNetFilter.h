@@ -45,6 +45,5 @@ struct unet_weight_offsets_t {
 int SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_filter_tensors_t &out_tensors,
                     SmallVector<int, 2> alias_dependencies[]);
 
-template <typename T>
-int SetupUNetWeights(bool gemm, int alignment, unet_weight_offsets_t *out_offsets, T out_weights[]);
+template <typename T> int SetupUNetWeights(int alignment, unet_weight_offsets_t *out_offsets, T out_weights[]);
 } // namespace Ray
