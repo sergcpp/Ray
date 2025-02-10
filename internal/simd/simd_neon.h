@@ -20,6 +20,7 @@ force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
     const float32x4_t q_inv1 = vmulq_f32(q_step0, q_inv0);
     return vmulq_f32(num, q_inv1);
 }
+#define vfmaq_f32 vmlaq_f32
 #endif
 
 template <int imm> force_inline int32x4_t slli(int32x4_t a) {
