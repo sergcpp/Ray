@@ -926,7 +926,7 @@ void Emit_BC1_Block_NEON(const uint8_t block[64], uint8_t *&out_data) {
 }
 
 template <bool Is_YCoCg> void Emit_BC3_Block_NEON(uint8_t block[64], uint8_t *&out_data) {
-    uint8_t min_color[4], max_color[4];
+    alignas(16) uint8_t min_color[4], max_color[4];
     GetMinMaxColorByBBox_NEON<true /* UseAlpha */, Is_YCoCg>(block, min_color, max_color);
     if (Is_YCoCg) {
         ScaleYCoCg_NEON(block, min_color, max_color);
