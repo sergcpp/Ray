@@ -1,0 +1,28 @@
+name: 'Init Repo'
+runs:
+  using: 'composite'
+  steps:
+    - run: |
+        REPO_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+        cd ../..
+        mkdir -p builds
+        cd builds
+        if [ -d "Ray/.git" ]; then
+          echo "Reset existing repository"
+          cd Ray
+          git remote set-url origin $REPO_URL
+          git fetch --all
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+            GITHUB_SHA=${{ github.event.pull_request.head.sha }}
+          fi
+          git checkout -f $GITHUB_SHA
+          #git reset --hard origin/$GITHUB_REF_NAME
+          git clean -fdx
+          git fetch --tags
+        else
+          echo "Clone new repository"
+          git clone $REPO_URL -b $GITHUB_REF_NAME
+          cd Ray
+          git fetch --tags
+        fi
+      shell: bash
