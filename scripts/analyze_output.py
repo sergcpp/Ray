@@ -33,6 +33,11 @@ def process_file(f, all_tests):
                 else:
                     test['required_samples'] = max(test['required_samples'], required_samples)
 
+def test_failed(key, value):
+    if 'psnr_tested' in value:
+        return value['psnr_tested'] < value['psnr_threshold'] or (value['psnr_tested'] - value['psnr_threshold']) > 0.5 or value['fireflies_tested'] > value['fireflies_threshold'] or (value['fireflies_tested'] - value['fireflies_threshold']) > 100
+    return True
+
 def main():
     all_tests = {}
 
@@ -49,8 +54,7 @@ def main():
                 print("Failed to process ", sys.argv[i])
 
     # Print failed tests first
-    condition = lambda key, value: value['psnr_tested'] < value['psnr_threshold'] or (value['psnr_tested'] - value['psnr_threshold']) > 0.5 or value['fireflies_tested'] > value['fireflies_threshold'] or (value['fireflies_tested'] - value['fireflies_threshold']) > 100
-    failed_tests = {key: value for key, value in all_tests.items() if condition(key, value)}
+    failed_tests = {key: value for key, value in all_tests.items() if test_failed(key, value)}
 
     print("-- Failed tests --")
     print(json.dumps(failed_tests, indent=4))
