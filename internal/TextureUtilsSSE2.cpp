@@ -1,11 +1,6 @@
 #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
 #include "TextureUtils.h"
 
-#ifdef __GNUC__
-#pragma GCC push_options
-#pragma GCC target("sse2")
-#endif
-
 #include <cstring>
 
 #include <immintrin.h>
@@ -36,7 +31,7 @@ static const __m128i RGB_to_RGBA = _mm_set_epi8(-1 /* Insert zero */, 11, 10, 9,
 
 #ifdef __GNUC__
 #pragma GCC push_options
-#pragma GCC target("avx")
+#pragma GCC target("ssse3")
 #endif
 #ifdef __clang__
 #pragma clang attribute push(__attribute__((target("ssse3"))), apply_to = function)
@@ -611,9 +606,5 @@ void EmitAlphaOnlyIndices_SSE2(const uint8_t block[16], const uint8_t min_alpha,
 } // namespace Ray
 
 #undef _ABS
-
-#ifdef __GNUC__
-#pragma GCC pop_options
-#endif
 
 #endif // defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)

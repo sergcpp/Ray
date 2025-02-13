@@ -31,23 +31,17 @@ void ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels, 
         for (int i = 0; i < 3 * in_channels; ++i) {
             out_weights[out_index++] = in_weights[j * in_channels * 9 + (i % in_channels) * 9 + (i / in_channels)];
         }
-        for (int i = 3 * in_channels; i < rounded_triple; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += rounded_triple - 3 * in_channels;
         // line 1
         for (int i = 3 * in_channels; i < 6 * in_channels; ++i) {
             out_weights[out_index++] = in_weights[j * in_channels * 9 + (i % in_channels) * 9 + (i / in_channels)];
         }
-        for (int i = rounded_triple + 3 * in_channels; i < 2 * rounded_triple; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += 2 * rounded_triple - (rounded_triple + 3 * in_channels);
         // line 2
         for (int i = 6 * in_channels; i < 9 * in_channels; ++i) {
             out_weights[out_index++] = in_weights[j * in_channels * 9 + (i % in_channels) * 9 + (i / in_channels)];
         }
-        for (int i = 2 * rounded_triple + 3 * in_channels; i < 3 * rounded_triple; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += 3 * rounded_triple - (2 * rounded_triple + 3 * in_channels);
     }
 }
 
@@ -65,75 +59,44 @@ void ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels1,
             out_weights[out_index++] =
                 in_weights[j * (in_channels1 + in_channels2) * 9 + (i % in_channels1) * 9 + (i / in_channels1)];
         }
-        for (int i = 3 * in_channels1; i < rounded_triple1; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += rounded_triple1 - 3 * in_channels1;
         // line 1
         for (int i = 3 * in_channels1; i < 6 * in_channels1; ++i) {
             out_weights[out_index++] =
                 in_weights[j * (in_channels1 + in_channels2) * 9 + (i % in_channels1) * 9 + (i / in_channels1)];
         }
-        for (int i = rounded_triple1 + 3 * in_channels1; i < 2 * rounded_triple1; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += 2 * rounded_triple1 - (rounded_triple1 + 3 * in_channels1);
         // line 2
         for (int i = 6 * in_channels1; i < 9 * in_channels1; ++i) {
             out_weights[out_index++] =
                 in_weights[j * (in_channels1 + in_channels2) * 9 + (i % in_channels1) * 9 + (i / in_channels1)];
         }
-        for (int i = 2 * rounded_triple1 + 3 * in_channels1; i < 3 * rounded_triple1; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += 3 * rounded_triple1 - (2 * rounded_triple1 + 3 * in_channels1);
         assert(out_index == j * 3 * (rounded_triple1 + rounded_triple2) + 3 * rounded_triple1);
         // line 0
         for (int i = 0; i < 3 * in_channels2; ++i) {
             out_weights[out_index++] = in_weights[j * (in_channels1 + in_channels2) * 9 +
                                                   (in_channels1 + (i % in_channels2)) * 9 + (i / in_channels2)];
         }
-        for (int i = 3 * in_channels2; i < rounded_triple2; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += rounded_triple2 - 3 * in_channels2;
         // line 1
         for (int i = 3 * in_channels2; i < 6 * in_channels2; ++i) {
             out_weights[out_index++] = in_weights[j * (in_channels1 + in_channels2) * 9 +
                                                   (in_channels1 + (i % in_channels2)) * 9 + (i / in_channels2)];
         }
-        for (int i = rounded_triple2 + 3 * in_channels2; i < 2 * rounded_triple2; ++i) {
-            out_weights[out_index++] = T(0);
-        }
+        out_index += 2 * rounded_triple2 - (rounded_triple2 + 3 * in_channels2);
         // line 2
         for (int i = 6 * in_channels2; i < 9 * in_channels2; ++i) {
             out_weights[out_index++] = in_weights[j * (in_channels1 + in_channels2) * 9 +
                                                   (in_channels1 + (i % in_channels2)) * 9 + (i / in_channels2)];
         }
-        for (int i = 2 * rounded_triple2 + 3 * in_channels2; i < 3 * rounded_triple2; ++i) {
-            out_weights[out_index++] = T(0);
-        }
-    }
-}
-
-template <typename T>
-void ReorderWeights_Conv3x3_1Direct_2GEMM(const T in_weights[], const int in_channels1, const int in_channels2,
-                                          const int out_channels, T out_weights[]) {
-    for (int j = 0; j < out_channels; ++j) {
-        for (int c = 0; c < 9; ++c) {
-            for (int i = 0; i < in_channels1; ++i) {
-                out_weights[j * (in_channels1 + in_channels2) * 9 + c * in_channels1 + i] =
-                    in_weights[j * (in_channels1 + in_channels2) * 9 + i * 9 + c];
-            }
-        }
-        for (int c = 0; c < 9; ++c) {
-            for (int i = 0; i < in_channels2; ++i) {
-                out_weights[j * (in_channels1 + in_channels2) * 9 + 9 * in_channels1 + i * 9 + c] =
-                    in_weights[j * (in_channels1 + in_channels2) * 9 + (in_channels1 + i) * 9 + c];
-            }
-        }
+        out_index += 3 * rounded_triple2 - (2 * rounded_triple2 + 3 * in_channels2);
     }
 }
 } // namespace Ray
 
-int Ray::SetupUNetFilter(int w, int h, bool alias_memory, bool round_w, unet_filter_tensors_t &out_tensors,
-                         SmallVector<int, 2> alias_dependencies[]) {
+int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, const bool round_w,
+                         unet_filter_tensors_t &out_tensors, SmallVector<int, 2> alias_dependencies[]) {
     struct resource_t {
         const char *name;
         int resolution_div;
@@ -374,7 +337,8 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
         return per_output * out_channels;
     };
 
-    const int input_channels = 9; // color(3), base color(3) and normals(3)
+    const int input_channels = 9;  // color(3), base color(3) and normals(3)
+    const int output_channels = 3; // hdr color(3)
     const int el_align = (256 / sizeof(T));
 
     const int total_count =
@@ -394,7 +358,7 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
         round_up_(dec_conv2b_bias.size(), el_align) + round_up(count2(64, input_channels, 64), el_align) +
         round_up_(dec_conv1a_bias.size(), el_align) + round_up_(dec_conv1b_weight.size(), el_align) +
         round_up_(dec_conv1b_bias.size(), el_align) + round_up_(dec_conv0_weight.size(), el_align) +
-        int(dec_conv0_bias.size());
+        round_up_(dec_conv0_bias.size(), el_align);
 
     if (out_offsets) {
         out_offsets->enc_conv0_weight = 0;
@@ -432,7 +396,6 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
         out_offsets->dec_conv0_weight = out_offsets->dec_conv1b_bias + round_up_(dec_conv1b_bias.size(), el_align);
         out_offsets->dec_conv0_bias = out_offsets->dec_conv0_weight + round_up_(dec_conv0_weight.size(), el_align);
 
-        assert(out_offsets->dec_conv0_bias + dec_conv0_bias.size() == total_count);
         assert((out_offsets->enc_conv0_weight % el_align) == 0 && (out_offsets->enc_conv0_bias % el_align) == 0);
         assert((out_offsets->enc_conv1_weight % el_align) == 0 && (out_offsets->enc_conv1_bias % el_align) == 0);
         assert((out_offsets->enc_conv2_weight % el_align) == 0 && (out_offsets->enc_conv2_bias % el_align) == 0);
@@ -449,11 +412,14 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
         assert((out_offsets->dec_conv1a_weight % el_align) == 0 && (out_offsets->dec_conv1a_bias % el_align) == 0);
         assert((out_offsets->dec_conv1b_weight % el_align) == 0 && (out_offsets->dec_conv1b_bias % el_align) == 0);
         assert((out_offsets->dec_conv0_weight % el_align) == 0 && (out_offsets->dec_conv0_bias % el_align) == 0);
+        assert(out_offsets->dec_conv0_bias + round_up_(dec_conv0_bias.size(), el_align) == total_count);
     }
 
     if (out_weights) {
-        std::vector<T> temp;
+        // Zero out everything to avoid invalid values
+        std::fill(out_weights, out_weights + total_count, T(0));
 
+        std::vector<T> temp;
         temp.resize(enc_conv0_weight.size());
         for (int i = 0; i < enc_conv0_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv0_weight[i]);
@@ -597,7 +563,8 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
         for (int i = 0; i < dec_conv0_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv0_weight[i]);
         }
-        ReorderWeights_Conv3x3_Direct(temp.data(), 32, 3, alignment, &out_weights[out_offsets->dec_conv0_weight]);
+        ReorderWeights_Conv3x3_Direct(temp.data(), 32, output_channels, alignment,
+                                      &out_weights[out_offsets->dec_conv0_weight]);
         for (int i = 0; i < dec_conv0_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv0_bias + i] = convert_weight<T>(dec_conv0_bias[i]);
         }
