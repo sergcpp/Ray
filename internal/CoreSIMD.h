@@ -7050,7 +7050,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         fvec<S> new_p[3];
         offset_ray(surf.P, surf.plane_N, new_p);
 
-        where(sample_spec_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
+        where(sample_coat_lobe, new_ray.depth) = pack_ray_type(RAY_TYPE_SPECULAR);
         where(sample_coat_lobe, new_ray.depth) |=
             mask_ray_depth(ray.depth) + pack_depth(ivec<S>{0}, ivec<S>{1}, ivec<S>{0}, ivec<S>{0});
 
