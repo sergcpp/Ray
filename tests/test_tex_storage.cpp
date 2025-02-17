@@ -6,15 +6,17 @@
 #include <random>
 
 void test_tex_storage() {
+    using namespace Ray;
+
     printf("Test tex_storage        | ");
 
     { // Test three uncompressed storage layouts
-        Ray::Cpu::TexStorageLinear<uint8_t, 4> storage_linear;
-        Ray::Cpu::TexStorageTiled<uint8_t, 4> storage_tiled;
-        Ray::Cpu::TexStorageSwizzled<uint8_t, 4> storage_swizzled;
+        Cpu::TexStorageLinear<uint8_t, 4> storage_linear;
+        Cpu::TexStorageTiled<uint8_t, 4> storage_tiled;
+        Cpu::TexStorageSwizzled<uint8_t, 4> storage_swizzled;
 
         const int TextureRes = 4093;
-        std::vector<Ray::color_t<uint8_t, 4>> test_pixels(TextureRes * TextureRes);
+        std::vector<color_t<uint8_t, 4>> test_pixels(TextureRes * TextureRes);
 
         { // Fill test pixels
             std::uniform_int_distribution<int> dist(0, 255);
@@ -37,11 +39,11 @@ void test_tex_storage() {
 
         for (int y = 0; y < TextureRes; ++y) {
             for (int x = 0; x < TextureRes; ++x) {
-                const Ray::color_t<uint8_t, 4> sampled_color1 = storage_linear.Get(0, x, y, 0),
-                                               sampled_color2 = storage_tiled.Get(0, x, y, 0),
-                                               sampled_color3 = storage_swizzled.Get(0, x, y, 0);
+                const color_t<uint8_t, 4> sampled_color1 = storage_linear.Get(0, x, y, 0),
+                                          sampled_color2 = storage_tiled.Get(0, x, y, 0),
+                                          sampled_color3 = storage_swizzled.Get(0, x, y, 0);
 
-                const Ray::color_t<uint8_t, 4> &test_color = test_pixels[y * TextureRes + x];
+                const color_t<uint8_t, 4> &test_color = test_pixels[y * TextureRes + x];
                 require_fatal(sampled_color1.v[0] == test_color.v[0]);
                 require_fatal(sampled_color1.v[1] == test_color.v[1]);
                 require_fatal(sampled_color1.v[2] == test_color.v[2]);
@@ -61,12 +63,12 @@ void test_tex_storage() {
     }
 
     { // Test compressed storages
-        Ray::Cpu::TexStorageBCn<1> storage_bc4;
-        Ray::Cpu::TexStorageBCn<2> storage_bc5;
+        Cpu::TexStorageBCn<1> storage_bc4;
+        Cpu::TexStorageBCn<2> storage_bc5;
 
         const int TextureRes = 4093;
-        std::vector<Ray::color_t<uint8_t, 1>> test_pixels_r(TextureRes * TextureRes);
-        std::vector<Ray::color_t<uint8_t, 2>> test_pixels_rg(TextureRes * TextureRes);
+        std::vector<color_t<uint8_t, 1>> test_pixels_r(TextureRes * TextureRes);
+        std::vector<color_t<uint8_t, 2>> test_pixels_rg(TextureRes * TextureRes);
 
         // Fill test pixels
         for (int j = 0; j < TextureRes; j++) {
@@ -84,12 +86,12 @@ void test_tex_storage() {
 
         for (int y = 0; y < TextureRes; ++y) {
             for (int x = 0; x < TextureRes; ++x) {
-                const Ray::color_t<uint8_t, 1> sampled_color1 = storage_bc4.Get(0, x, y, 0);
-                const Ray::color_t<uint8_t, 2> sampled_color2 = storage_bc5.Get(0, x, y, 0);
+                const color_t<uint8_t, 1> sampled_color1 = storage_bc4.Get(0, x, y, 0);
+                const color_t<uint8_t, 2> sampled_color2 = storage_bc5.Get(0, x, y, 0);
 
-                const Ray::color_t<uint8_t, 1> &test_color1 = test_pixels_r[y * TextureRes + x];
-                const Ray::color_t<uint8_t, 2> &test_color2 = test_pixels_rg[y * TextureRes + x];
-                
+                const color_t<uint8_t, 1> &test_color1 = test_pixels_r[y * TextureRes + x];
+                const color_t<uint8_t, 2> &test_color2 = test_pixels_rg[y * TextureRes + x];
+
                 require_fatal(std::abs(int(sampled_color1.v[0]) - test_color1.v[0]) < 8);
 
                 require_fatal(std::abs(int(sampled_color2.v[0]) - test_color2.v[0]) < 8);

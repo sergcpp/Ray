@@ -17,10 +17,12 @@ std::vector<int> GenTestData(int size) {
 } // namespace
 
 void test_sparse_storage() {
+    using namespace Ray;
+
     printf("Test sparse_storage     | ");
 
     { // reserve method
-        Ray::Cpu::SparseStorage<int> s1;
+        Cpu::SparseStorage<int> s1;
         require(s1.size() == 0);
         s1.reserve(128);
         require(s1.size() == 0);
@@ -29,7 +31,7 @@ void test_sparse_storage() {
     }
 
     { // pushing elements
-        Ray::Cpu::SparseStorage<int> s1;
+        Cpu::SparseStorage<int> s1;
         const std::pair<uint32_t, uint32_t> i1 = s1.emplace(1);
         require(s1.IntegrityCheck());
         const std::pair<uint32_t, uint32_t> i2 = s1.push(12);
@@ -77,7 +79,7 @@ void test_sparse_storage() {
     }
 
     { // range allocations
-        Ray::Cpu::SparseStorage<int> s1;
+        Cpu::SparseStorage<int> s1;
 
         const std::pair<uint32_t, uint32_t> i1 = s1.Allocate(100, 42);
         require(i1.first == 0);
@@ -110,7 +112,7 @@ void test_sparse_storage() {
         std::vector<int> data = GenTestData(1000);
         std::vector<std::pair<uint32_t, uint32_t>> allocs;
 
-        Ray::Cpu::SparseStorage<int> s1;
+        Cpu::SparseStorage<int> s1;
         for (int v : data) {
             allocs.push_back(s1.push(v));
             require(s1.IntegrityCheck());

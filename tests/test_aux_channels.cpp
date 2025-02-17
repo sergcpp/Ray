@@ -18,6 +18,7 @@ extern int g_validation_level;
 
 void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     using namespace std::chrono;
+    using namespace Ray;
 
     const char TestName[] = "aux_channels";
 
@@ -43,21 +44,21 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     // Setup scene
     //
 
-    Ray::principled_mat_desc_t mat_desc;
-    mat_desc.base_texture = Ray::TextureHandle{0};
+    principled_mat_desc_t mat_desc;
+    mat_desc.base_texture = TextureHandle{0};
     mat_desc.roughness = 1.0f;
-    mat_desc.roughness_texture = Ray::TextureHandle{2};
+    mat_desc.roughness_texture = TextureHandle{2};
     mat_desc.metallic = 1.0f;
-    mat_desc.metallic_texture = Ray::TextureHandle{3};
-    mat_desc.normal_map = Ray::TextureHandle{1};
-    mat_desc.alpha_texture = Ray::TextureHandle{4};
+    mat_desc.metallic_texture = TextureHandle{3};
+    mat_desc.normal_map = TextureHandle{1};
+    mat_desc.alpha_texture = TextureHandle{4};
 
     const char *textures[] = {
         "test_data/textures/Fence007A_2K_Color.tga", "test_data/textures/Fence007A_2K_NormalGL.tga",
         "test_data/textures/Fence007A_2K_Roughness.tga", "test_data/textures/Fence007A_2K_Metalness.tga",
         "test_data/textures/Fence007A_2K_Opacity.tga"};
 
-    Ray::settings_t s;
+    settings_t s;
     s.w = test_img_w;
     s.h = test_img_h;
     s.preferred_device = preferred_device;
@@ -69,7 +70,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     const double BaseColor_MinPSNR = 28.44, Normals_MinPSNR = 38.34, Depth_MinPSNR = 43.3;
 
     for (const char **arch = arch_list; *arch; ++arch) {
-        const auto rt = Ray::RendererTypeFromName(*arch);
+        const auto rt = RendererTypeFromName(*arch);
 
         for (const bool use_hwrt : {false, true}) {
             if (use_hwrt && g_nohwrt) {
@@ -81,24 +82,23 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             const auto start_time = high_resolution_clock::now();
 
             using namespace std::placeholders;
-            auto parallel_for =
-                std::bind(&ThreadPool::ParallelFor<Ray::ParallelForFunction>, std::ref(threads), _1, _2, _3);
+            auto parallel_for = std::bind(&ThreadPool::ParallelFor<ParallelForFunction>, std::ref(threads), _1, _2, _3);
 
-            auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, parallel_for, rt));
+            auto renderer = std::unique_ptr<RendererBase>(CreateRenderer(s, &g_log_err, parallel_for, rt));
             if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
                 // skip unsupported (we fell back to some other renderer)
                 continue;
             }
             if (preferred_device) {
                 // make sure we use requested device
-                if (!require(Ray::MatchDeviceNames(renderer->device_name(), preferred_device))) {
+                if (!require(MatchDeviceNames(renderer->device_name(), preferred_device))) {
                     std::lock_guard<std::mutex> _(g_stdout_mtx);
                     printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
                     return;
                 }
             }
 
-            auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
+            auto scene = std::unique_ptr<SceneBase>(renderer->CreateScene());
 
             setup_test_scene(threads, *scene, -1, 0.0f, mat_desc, textures, eTestScene::Standard);
 
@@ -107,8 +107,8 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             schedule_render_jobs(threads, *renderer, scene.get(), s, SampleCount, eDenoiseMethod::None, false,
                                  name_buf);
 
-            const auto base_color_pixels = renderer->get_aux_pixels_ref(Ray::eAUXBuffer::BaseColor);
-            const auto depth_normals_pixels = renderer->get_aux_pixels_ref(Ray::eAUXBuffer::DepthNormals);
+            const auto base_color_pixels = renderer->get_aux_pixels_ref(eAUXBuffer::BaseColor);
+            const auto depth_normals_pixels = renderer->get_aux_pixels_ref(eAUXBuffer::DepthNormals);
 
             std::unique_ptr<uint8_t[]> base_color_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
             std::unique_ptr<uint8_t[]> normals_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
@@ -119,7 +119,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             for (int j = 0; j < test_img_h; j++) {
                 for (int i = 0; i < test_img_w; i++) {
                     { // check base color
-                        Ray::color_rgba_t c = base_color_pixels.ptr[j * base_color_pixels.pitch + i];
+                        color_rgba_t c = base_color_pixels.ptr[j * base_color_pixels.pitch + i];
 
                         for (int k = 0; k < 3; ++k) {
                             if (c.v[k] < 0.0031308f) {
@@ -146,7 +146,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                         base_color_mse += diff_b * diff_b;
                     }
                     { // check normals
-                        const Ray::color_rgba_t &n = depth_normals_pixels.ptr[j * depth_normals_pixels.pitch + i];
+                        const color_rgba_t &n = depth_normals_pixels.ptr[j * depth_normals_pixels.pitch + i];
 
                         const auto r = uint8_t((n.v[0] * 0.5f + 0.5f) * 255);
                         const auto g = uint8_t((n.v[1] * 0.5f + 0.5f) * 255);
@@ -165,7 +165,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                         normals_mse += diff_b * diff_b;
                     }
                     { // check depth
-                        const Ray::color_rgba_t &n = depth_normals_pixels.ptr[j * depth_normals_pixels.pitch + i];
+                        const color_rgba_t &n = depth_normals_pixels.ptr[j * depth_normals_pixels.pitch + i];
 
                         const auto u8 = uint8_t(n.v[3] * 255);
 
@@ -197,7 +197,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             {
                 std::lock_guard<std::mutex> _(g_stdout_mtx);
                 if (g_minimal_output) {
-                    printf("\r%s (%6s, %s): %.1f%% ", name_buf, Ray::RendererTypeName(rt), s.use_hwrt ? "HWRT" : "SWRT",
+                    printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt), s.use_hwrt ? "HWRT" : "SWRT",
                            100.0);
                 }
                 printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB, Time: %.2fm)\n", base_color_psnr,
@@ -205,17 +205,17 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                 fflush(stdout);
             }
 
-            std::string type_name = Ray::RendererTypeName(rt);
+            std::string type_name = RendererTypeName(rt);
             if (use_hwrt) {
                 type_name += "_HWRT";
             }
 
             snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_base_color_out.tga", TestName, type_name.c_str());
-            Ray::WriteTGA(&base_color_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+            WriteTGA(&base_color_data_u8[0], test_img_w, test_img_h, 3, name_buf);
             snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_normals_out.tga", TestName, type_name.c_str());
-            Ray::WriteTGA(&normals_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+            WriteTGA(&normals_data_u8[0], test_img_w, test_img_h, 3, name_buf);
             snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_depth_out.tga", TestName, type_name.c_str());
-            Ray::WriteTGA(&depth_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+            WriteTGA(&depth_data_u8[0], test_img_w, test_img_h, 3, name_buf);
 
             require(base_color_psnr >= BaseColor_MinPSNR);
             require(normals_psnr >= Normals_MinPSNR);

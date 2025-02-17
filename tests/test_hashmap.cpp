@@ -5,10 +5,12 @@
 #include "../internal/HashMap32.h"
 
 void test_hashmap() {
+    using namespace Ray;
+
     printf("Test hashmap            | ");
 
     { // Basic test
-        Ray::HashMap32<int, double> cont;
+        HashMap32<int, double> cont;
 
         for (int i = 0; i < 100; i++) {
             require(cont.Insert(12, 12.0));
@@ -62,9 +64,8 @@ void test_hashmap() {
             require(cont.Erase(144));
         }
     }
-
     { // Test with reallocation
-        Ray::HashMap32<std::string, int> cont(16);
+        HashMap32<std::string, int> cont(16);
 
         for (int i = 0; i < 100000; i++) {
             std::string key = std::to_string(i);
@@ -81,9 +82,8 @@ void test_hashmap() {
 
         require(cont.size() == 0);
     }
-
     { // Test iteration
-        Ray::HashMap32<std::string, int> cont(16);
+        HashMap32<std::string, int> cont(16);
 
         for (int i = 0; i < 100000; i++) {
             std::string key = std::to_string(i);

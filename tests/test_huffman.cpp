@@ -22,6 +22,8 @@ void traverse(Ray::Span<const Ray::huff_node_t> nodes, uint32_t i, int level, st
 }
 
 void test_huffman() {
+    using namespace Ray;
+
     printf("Test huffman            | ");
 
     const char test_str[] = "aaaaaaaaaaaaaaaaaaaaaaaaaabbdcccsdfasdfasdfwcsddddccccd";
@@ -31,8 +33,8 @@ void test_huffman() {
         freq[uint8_t(test_str[i])]++;
     }
 
-    std::vector<Ray::huff_node_t> nodes;
-    const uint32_t root = Ray::huff_build_tree(test_str, freq, nodes);
+    std::vector<huff_node_t> nodes;
+    const uint32_t root = huff_build_tree(test_str, freq, nodes);
     require(nodes[root].freq == 55);
 
     char temp_code[8];
