@@ -116,10 +116,12 @@ static const unsigned char uncompressed_data[592] = {
     0x00, 0x01, 0x00};
 
 void test_inflate() {
+    using namespace Ray;
+
     printf("Test inflate            | ");
 
     { // uncompressed deflate block
-        Ray::Inflater inflater;
+        Inflater inflater;
         inflater.Feed(uncompressed_deflate_block);
 
         std::vector<uint8_t> decompressed_data(256 * 1024);
@@ -128,9 +130,8 @@ void test_inflate() {
         decompressed_data.resize(decompressed_size);
         require(memcmp(decompressed_data.data(), uncompressed_data, sizeof(uncompressed_data)) == 0);
     }
-
     { // fixed Huffman block
-        Ray::Inflater inflater;
+        Inflater inflater;
         inflater.Feed(fixed_deflate_block);
 
         std::vector<uint8_t> decompressed_data(256 * 1024);
@@ -139,9 +140,8 @@ void test_inflate() {
         decompressed_data.resize(decompressed_size);
         require(memcmp(decompressed_data.data(), uncompressed_data, sizeof(uncompressed_data)) == 0);
     }
-
     { // dynamic Huffman block
-        Ray::Inflater inflater;
+        Inflater inflater;
         inflater.Feed(dynamic_deflate_block);
 
         std::vector<uint8_t> decompressed_data(256 * 1024);

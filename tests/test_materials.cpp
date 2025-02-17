@@ -37,6 +37,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                        const bool caching = false, const char *textures[] = nullptr,
                        const eTestScene test_scene = eTestScene::Standard) {
     using namespace std::chrono;
+    using namespace Ray;
 
     char name_buf[1024];
     snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_name);
@@ -45,7 +46,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
     const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
     require_return(!test_img.empty());
 
-    Ray::settings_t s;
+    settings_t s;
     s.w = test_img_w;
     s.h = test_img_h;
     s.preferred_device = preferred_device;
@@ -57,7 +58,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
     const int DiffThres = 32;
 
     for (const char **arch = arch_list; *arch; ++arch) {
-        const auto rt = Ray::RendererTypeFromName(*arch);
+        const auto rt = RendererTypeFromName(*arch);
 
         for (const bool use_hwrt : {false, true}) {
             if (use_hwrt && g_nohwrt) {
@@ -74,10 +75,10 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
                 using namespace std::placeholders;
                 auto parallel_for =
-                    std::bind(&ThreadPool::ParallelFor<Ray::ParallelForFunction>, std::ref(threads), _1, _2, _3);
+                    std::bind(&ThreadPool::ParallelFor<ParallelForFunction>, std::ref(threads), _1, _2, _3);
 
                 auto renderer =
-                    std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, parallel_for, rt));
+                    std::unique_ptr<RendererBase>(CreateRenderer(s, &g_log_err, parallel_for, rt));
                 if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt ||
                     renderer->is_spatial_caching_enabled() != caching) {
                     // skip unsupported (we fell back to some other renderer)
@@ -85,14 +86,14 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 }
                 if (preferred_device) {
                     // make sure we use requested device
-                    if (!require(Ray::MatchDeviceNames(renderer->device_name(), preferred_device))) {
+                    if (!require(MatchDeviceNames(renderer->device_name(), preferred_device))) {
                         std::lock_guard<std::mutex> _(g_stdout_mtx);
                         printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
                         return;
                     }
                 }
 
-                auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
+                auto scene = std::unique_ptr<SceneBase>(renderer->CreateScene());
 
                 setup_test_scene(threads, *scene, min_sample_count, variance_threshold, mat_desc, textures, test_scene);
 
@@ -105,7 +106,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 schedule_render_jobs(threads, *renderer, scene.get(), s, current_sample_count, denoise, partial,
                                      name_buf);
 
-                const Ray::color_data_rgba_t pixels = renderer->get_pixels_ref();
+                const color_data_rgba_t pixels = renderer->get_pixels_ref();
 
                 std::unique_ptr<uint8_t[]> img_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
                 std::unique_ptr<uint8_t[]> diff_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
@@ -117,7 +118,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 int error_pixels = 0;
                 for (int j = 0; j < test_img_h; j++) {
                     for (int i = 0; i < test_img_w; i++) {
-                        const Ray::color_rgba_t &p = pixels.ptr[j * pixels.pitch + i];
+                        const color_rgba_t &p = pixels.ptr[j * pixels.pitch + i];
 
                         const auto r = uint8_t(p.v[0] * 255);
                         const auto g = uint8_t(p.v[1] * 255);
@@ -158,7 +159,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 {
                     std::lock_guard<std::mutex> _(g_stdout_mtx);
                     if (g_minimal_output) {
-                        printf("\r%s (%6s, %s): %.1f%% ", name_buf, Ray::RendererTypeName(rt),
+                        printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt),
                                s.use_hwrt ? "HWRT" : "SWRT", 100.0);
                     }
                     printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i, Time: %.2fm)\n", psnr, min_psnr, error_pixels,
@@ -166,17 +167,17 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     fflush(stdout);
                 }
 
-                std::string type = Ray::RendererTypeName(rt);
+                std::string type = RendererTypeName(rt);
                 if (use_hwrt) {
                     type += "_HWRT";
                 }
 
                 snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_name, type.c_str());
-                Ray::WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                 snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_diff.tga", test_name, type.c_str());
-                Ray::WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                 snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_name, type.c_str());
-                Ray::WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                 images_match = (psnr >= min_psnr) && (error_pixels <= pix_thres);
                 require(images_match || searching);
 
@@ -207,6 +208,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 }
 
 void assemble_material_test_images(const char *arch_list[]) {
+    using namespace Ray;
+
     static const int ImgCountW = 5;
     static const char *test_names[][ImgCountW] = {
         {"oren_mat0", "oren_mat1", "oren_mat2", "diff_mat0", "diff_mat1"},
@@ -269,9 +272,9 @@ void assemble_material_test_images(const char *arch_list[]) {
     for (const char **arch = arch_list; *arch; ++arch) {
         std::string type = *arch;
         for (const bool hwrt : {false, true}) {
-            const auto rt = Ray::RendererTypeFromName(type.c_str());
+            const auto rt = RendererTypeFromName(type.c_str());
             if (hwrt) {
-                if (!Ray::RendererSupportsHWRT(rt)) {
+                if (!RendererSupportsHWRT(rt)) {
                     continue;
                 }
                 type += "_HWRT";
@@ -331,14 +334,14 @@ void assemble_material_test_images(const char *arch_list[]) {
 
             if (found_at_least_one_image) {
                 snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_imgs.tga", type.c_str());
-                Ray::WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, name_buf);
+                WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, name_buf);
                 snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_masks.tga", type.c_str());
-                Ray::WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, name_buf);
+                WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, name_buf);
             }
         }
     }
 
-    Ray::WriteTGA(material_refs.get(), OutImageW, OutImageH, 4, "test_data/material_refs.tga");
+    WriteTGA(material_refs.get(), OutImageW, OutImageH, 4, "test_data/material_refs.tga");
 }
 
 const double DefaultMinPSNR = 30.0;

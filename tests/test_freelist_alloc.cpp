@@ -3,17 +3,19 @@
 #include "../internal/FreelistAlloc.h"
 
 void test_freelist_alloc() {
+    using namespace Ray;
+
     printf("Test freelist_alloc     | ");
 
     { // basic usage
-        Ray::FreelistAlloc alloc;
+        FreelistAlloc alloc;
         require(alloc.IntegrityCheck());
 
         const uint16_t pool = alloc.AddPool(2048);
         require(pool == 0);
         require(alloc.IntegrityCheck());
 
-        const Ray::FreelistAlloc::Allocation a = alloc.Alloc(128);
+        const FreelistAlloc::Allocation a = alloc.Alloc(128);
         require(a.offset == 0);
         require(a.pool == 0);
         require(alloc.IntegrityCheck());
@@ -21,9 +23,8 @@ void test_freelist_alloc() {
         alloc.Free(a.block);
         require(alloc.IntegrityCheck());
     }
-
     { // block merging 1
-        Ray::FreelistAlloc alloc(2048);
+        FreelistAlloc alloc(2048);
         require(alloc.IntegrityCheck());
 
         const auto a = alloc.Alloc(1);
@@ -51,9 +52,8 @@ void test_freelist_alloc() {
         alloc.Free(d.block);
         require(alloc.IntegrityCheck());
     }
-
     { // block merging 2
-        Ray::FreelistAlloc alloc(2048);
+        FreelistAlloc alloc(2048);
         require(alloc.IntegrityCheck());
 
         const auto a = alloc.Alloc(123);
@@ -74,9 +74,8 @@ void test_freelist_alloc() {
         alloc.Free(d.block);
         require(alloc.IntegrityCheck());
     }
-
     { // reuse 1
-        Ray::FreelistAlloc alloc(8192);
+        FreelistAlloc alloc(8192);
         require(alloc.IntegrityCheck());
 
         const auto a = alloc.Alloc(1024);
@@ -105,9 +104,8 @@ void test_freelist_alloc() {
         alloc.Free(d.block);
         require(alloc.IntegrityCheck());
     }
-
     { // reuse 2
-        Ray::FreelistAlloc alloc(8192);
+        FreelistAlloc alloc(8192);
         require(alloc.IntegrityCheck());
 
         const auto a = alloc.Alloc(1024);
@@ -146,9 +144,8 @@ void test_freelist_alloc() {
         require(f.offset == 0);
         alloc.Free(f.block);
     }
-
     { // multiple pools
-        Ray::FreelistAlloc alloc;
+        FreelistAlloc alloc;
 
         const uint16_t pool1 = alloc.AddPool(1024);
         require(pool1 == 0);
@@ -183,11 +180,10 @@ void test_freelist_alloc() {
         alloc.Free(d.block);
         require(alloc.IntegrityCheck());
     }
-
     { // fragmentation
-        Ray::FreelistAlloc alloc(256 * 1024 * 1024);
+        FreelistAlloc alloc(256 * 1024 * 1024);
 
-        Ray::FreelistAlloc::Allocation allocations[256];
+        FreelistAlloc::Allocation allocations[256];
         for (int i = 0; i < 256; ++i) {
             allocations[i] = alloc.Alloc(1 * 1024 * 1024);
             require(allocations[i].offset == i * 1024 * 1024);
@@ -233,11 +229,10 @@ void test_freelist_alloc() {
         alloc.Free(a.block);
         require(alloc.IntegrityCheck());
     }
-
     { // resize pool
-        Ray::FreelistAlloc alloc(256 * 1024);
+        FreelistAlloc alloc(256 * 1024);
 
-        Ray::FreelistAlloc::Allocation allocations[512];
+        FreelistAlloc::Allocation allocations[512];
         for (int i = 0; i < 256; ++i) {
             allocations[i] = alloc.Alloc(1 * 1024);
             require(allocations[i].offset == i * 1024);
@@ -256,11 +251,10 @@ void test_freelist_alloc() {
             require(alloc.IntegrityCheck());
         }
     }
-
     { // block iteration
-        Ray::FreelistAlloc alloc(256 * 1024);
+        FreelistAlloc alloc(256 * 1024);
 
-        Ray::FreelistAlloc::Allocation allocations[256];
+        FreelistAlloc::Allocation allocations[256];
         for (int i = 0; i < 256; ++i) {
             allocations[i] = alloc.Alloc(1 * 1024);
             require(allocations[i].offset == i * 1024);
@@ -272,7 +266,7 @@ void test_freelist_alloc() {
             require(alloc.IntegrityCheck());
         }
 
-        Ray::FreelistAlloc::Range r = alloc.GetFirstOccupiedBlock(0);
+        FreelistAlloc::Range r = alloc.GetFirstOccupiedBlock(0);
         int i = 1;
         require(r.offset == allocations[i].offset);
         while (r.size) {
