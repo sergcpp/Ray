@@ -142,7 +142,7 @@ bool Ray::MatchDeviceNames(const char *name, const char *pattern) {
     return std::regex_search(name, match_name) || strcmp(name, pattern) == 0;
 }
 
-const char *Ray::Version() { return "v0.3.0-unknown-commit"; }
+const char *Ray::Version() { return "v0.4.0-unknown-commit"; }
 
 // Workaround for identical template instantiations merging causing illegal instruction error with Windows Clang
 template class std::vector<float, Ray::aligned_allocator<float, 64>>;
