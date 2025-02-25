@@ -10,6 +10,41 @@
 
 ### Removed
 
+## [0.4.0] - 2025-02-25
+
+### Added
+
+- Spatial radiance caching
+- Ray visibility flags for lights
+- Clouds fluttering
+- Multi-threaded pipeline initialization
+- Direct loading of YCoCg textures
+- AgX tonemapping
+- Extended API to pass device/instance/command buffer
+
+### Fixed
+
+- Unnormalized emissive base color
+- AMD artifacts with DirectX
+- Incorrect handling of Vulkan initialization failure
+- Missing UNet filter memory reallocation on resize
+- Sun importance sampling issue
+- Clouds CPU/GPU mismatch
+- Envmap sampling seam
+- Glowing corners with radiance caching enabled
+- Unsynchronized access to cpu features struct
+- Custom HLSL cross-compiler is used for DirectX backend
+- Denoising artifacts with coop matrix enabled
+
+### Changed
+
+- Procedural sky is made pixel-perfect
+- Skymap generation is moved to GPU
+- Light BVH is quantized
+- Matrix multiplication uses tiled/blocked approach
+- SPIRV reflection data is extracted manually
+- Cross-platform cooperative matrix is used insted of NV-specific
+- Cornel box is used in samples
 
 ## [0.3.0] - 2023-12-03
 
@@ -138,7 +173,8 @@
 
 
 
-[Unreleased]: https://github.com/sergcpp/Ray/compare/v0.3.0...master
+[Unreleased]: https://github.com/sergcpp/Ray/compare/v0.4.0...master
+[0.4.0]: https://github.com/sergcpp/Ray/releases/v0.4.0
 [0.3.0]: https://github.com/sergcpp/Ray/releases/v0.3.0
 [0.2.0]: https://github.com/sergcpp/Ray/releases/v0.2.0
 [0.1.0]: https://github.com/sergcpp/Ray/releases/v0.1.0
