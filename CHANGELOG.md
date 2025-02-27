@@ -33,7 +33,6 @@
 - Envmap sampling seam
 - Glowing corners with radiance caching enabled
 - Unsynchronized access to cpu features struct
-- Custom HLSL cross-compiler is used for DirectX backend
 - Denoising artifacts with coop matrix enabled
 
 ### Changed
@@ -45,6 +44,7 @@
 - SPIRV reflection data is extracted manually
 - Cross-platform cooperative matrix is used insted of NV-specific
 - Cornel box is used in samples
+- Custom HLSL cross-compiler is used for DirectX backend
 
 ## [0.3.0] - 2023-12-03
 
