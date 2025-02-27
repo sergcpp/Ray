@@ -853,7 +853,7 @@ vec4 Evaluate_GGXRefraction_BSDF(const vec3 view_dir_ts, const vec3 sampled_norm
     const float G1o = G1(refr_dir_ts, alpha), G1i = G1(view_dir_ts, alpha);
 
     const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
-    const float jacobian = saturate(-dot(refr_dir_ts, sampled_normal_ts)) / (denom * denom);
+    const float jacobian = saturate(-dot(refr_dir_ts, sampled_normal_ts)) / max(denom * denom, FLT_EPS);
 
     const float F = D * G1i * G1o * saturate(dot(view_dir_ts, sampled_normal_ts)) * jacobian /
               (/*-refr_dir_ts[2] */ view_dir_ts[2]);

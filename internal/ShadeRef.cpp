@@ -535,12 +535,12 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const fvec4 &view_dir_ts, 
     const float G1o = G1(refr_dir_ts, alpha), G1i = G1(view_dir_ts, alpha);
 
     const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
-    const float jacobian = denom != 0.0f ? fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
+    const float jacobian = safe_div_pos(fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f), denom * denom);
 
-    float F = D * G1i * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
-              (/*-refr_dir_ts.get<2>() */ view_dir_ts.get<2>());
+    const float F = D * G1i * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
+                    (/*-refr_dir_ts.get<2>() */ view_dir_ts.get<2>());
 
-    float pdf = D * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian / view_dir_ts.get<2>();
+    const float pdf = D * G1o * fmaxf(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian / view_dir_ts.get<2>();
 
     // const float pdf = D * fmaxf(sampled_normal_ts.get<2>(), 0.0f) * jacobian;
     // const float pdf = D * sampled_normal_ts.get<2>() * fmaxf(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / denom;
