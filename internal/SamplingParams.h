@@ -7,23 +7,23 @@
 namespace Ray {
 using Fixed8 = Fixed<int8_t, 3>;
 
-#define DECORATE(X, Y, Z, W) X,
+#define X(_0, _1, _2, _3) _0,
 enum class eTexFilter : uint8_t {
 #include "TextureFilter.inl"
 };
-#undef DECORATE
+#undef X
 
-#define DECORATE(X, Y, Z) X,
+#define X(_0, _1, _2) _0,
 enum class eTexWrap : uint8_t {
 #include "TextureWrap.inl"
 };
-#undef DECORATE
+#undef X
 
-#define DECORATE(X, Y, Z) X,
+#define X(_0, _1, _2) _0,
 enum class eTexCompare : uint8_t {
 #include "TextureCompare.inl"
 };
-#undef DECORATE
+#undef X
 
 struct SamplingParams {
     eTexFilter filter = eTexFilter::Nearest;

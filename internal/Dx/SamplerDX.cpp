@@ -13,23 +13,23 @@
 
 namespace Ray {
 namespace Dx {
-#define DECORATE(X, Y, Z, W) W,
+#define X(_0, _1, _2, _3) _3,
 extern const D3D12_FILTER g_dx_filter[] = {
 #include "../TextureFilter.inl"
 };
-#undef DECORATE
+#undef X
 
-#define DECORATE(X, Y, Z) Z,
+#define X(_0, _1, _2) _2,
 extern const D3D12_TEXTURE_ADDRESS_MODE g_dx_wrap_mode[] = {
 #include "../TextureWrap.inl"
 };
-#undef DECORATE
+#undef X
 
-#define DECORATE(X, Y, Z) Z,
+#define X(_0, _1, _2) _2,
 extern const D3D12_COMPARISON_FUNC g_dx_compare_func[] = {
 #include "../TextureCompare.inl"
 };
-#undef DECORATE
+#undef X
 
 extern const float AnisotropyLevel = 4.0f;
 } // namespace Dx

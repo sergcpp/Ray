@@ -25,11 +25,11 @@ extern const VkCompareOp g_vk_compare_ops[];
 
 extern const float AnisotropyLevel;
 
-#define DECORATE(X, Y, Z, W, XX, YY, ZZ) YY,
+#define X(_0, _1, _2, _3, _4, _5, _6) _5,
 extern const VkFormat g_vk_formats[] = {
 #include "../TextureFormat.inl"
 };
-#undef DECORATE
+#undef X
 
 uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
