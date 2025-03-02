@@ -5,7 +5,7 @@
 #include <algorithm>
 
 namespace Ray {
-#define DECORATE(X, Y, Z, W, XX, YY, ZZ) {Y, Z, W, XX},
+#define X(_0, _1, _2, _3, _4, _5, _6) {_1, _2, _3, _4},
 struct {
     int channel_count;
     int pp_data_len;
@@ -14,7 +14,7 @@ struct {
 } g_tex_format_info[] = {
 #include "TextureFormat.inl"
 };
-#undef DECORATE
+#undef X
 } // namespace Ray
 
 int Ray::GetChannelCount(const eTexFormat format) { return g_tex_format_info[int(format)].channel_count; }

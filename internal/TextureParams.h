@@ -6,12 +6,12 @@
 #include "SamplingParams.h"
 
 namespace Ray {
-#define DECORATE(X, Y, Z, W, XX, YY, ZZ) X,
+#define X(_0, ...) _0,
 enum class eTexFormat : uint8_t {
 #include "TextureFormat.inl"
     _Count
 };
-#undef DECORATE
+#undef X
 
 inline bool IsDepthFormat(const eTexFormat format) {
     static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");

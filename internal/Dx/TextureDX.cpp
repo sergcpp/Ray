@@ -32,12 +32,12 @@ extern const D3D12_COMPARISON_FUNC g_dx_compare_func[];
 
 extern const float AnisotropyLevel;
 
-#define DECORATE(X, Y, Z, W, XX, YY, ZZ) ZZ,
+#define X(_0, _1, _2, _3, _4, _5, _6) _6,
 extern const DXGI_FORMAT g_dx_formats[] = {
 #include "../TextureFormat.inl"
 };
 static_assert(sizeof(g_dx_formats) / sizeof(g_dx_formats[0]) == size_t(eTexFormat::_Count), "!");
-#undef DECORATE
+#undef X
 
 uint32_t TextureHandleCounter = 0;
 
