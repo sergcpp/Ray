@@ -320,7 +320,7 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const eStageBits
         dst_stages &= ctx->supported_stages_mask();
 
         ctx->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                        dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                                        uint32_t(img_barriers.size()), img_barriers.cdata());
+                                        dst_stages, 0, 0, nullptr, buf_barriers.size(), buf_barriers.cdata(),
+                                        img_barriers.size(), img_barriers.cdata());
     }
 }

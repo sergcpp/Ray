@@ -74,7 +74,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
     depth_rt = {};
 
     if (_depth_rt) {
-        const auto att_index = uint32_t(pass_attachments.size());
+        const uint32_t att_index = pass_attachments.size();
 
         auto &att_desc = pass_attachments.emplace_back();
         att_desc.format = Ray::Vk::VKFormatFromTexFormat(_depth_rt.format);
@@ -97,7 +97,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
             continue;
         }
 
-        const auto att_index = uint32_t(pass_attachments.size());
+        const uint32_t att_index = pass_attachments.size();
 
         auto &att_desc = pass_attachments.emplace_back();
         att_desc.format = VKFormatFromTexFormat(_color_rts[i].format);
@@ -132,7 +132,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
     }
 
     VkRenderPassCreateInfo render_pass_create_info = {VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-    render_pass_create_info.attachmentCount = uint32_t(pass_attachments.size());
+    render_pass_create_info.attachmentCount = pass_attachments.size();
     render_pass_create_info.pAttachments = pass_attachments.data();
     render_pass_create_info.subpassCount = 1;
     render_pass_create_info.pSubpasses = &subpass;

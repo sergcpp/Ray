@@ -435,7 +435,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
 
             if (!barriers.empty()) {
                 ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                 dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(barriers.size()),
+                                                 dst_stages, 0, 0, nullptr, 0, nullptr, barriers.size(),
                                                  barriers.cdata());
             }
 
@@ -640,8 +640,8 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
 
         if (!buf_barriers.empty() || !img_barriers.empty()) {
             ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                             dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()),
-                                             buf_barriers.cdata(), uint32_t(img_barriers.size()), img_barriers.cdata());
+                                             dst_stages, 0, 0, nullptr, buf_barriers.size(), buf_barriers.cdata(),
+                                             img_barriers.size(), img_barriers.cdata());
         }
 
         sbuf->resource_state = eResState::CopySrc;
@@ -744,8 +744,8 @@ void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const i
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                                         uint32_t(img_barriers.size()), img_barriers.cdata());
+                                         dst_stages, 0, 0, nullptr, buf_barriers.size(), buf_barriers.cdata(),
+                                         img_barriers.size(), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -882,9 +882,9 @@ void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
     dst_stages &= src_tex.ctx()->supported_stages_mask();
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        src_tex.ctx()->api().vkCmdPipelineBarrier(
-            cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0, nullptr,
-            uint32_t(buf_barriers.size()), buf_barriers.cdata(), uint32_t(img_barriers.size()), img_barriers.cdata());
+        src_tex.ctx()->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                  dst_stages, 0, 0, nullptr, buf_barriers.size(), buf_barriers.cdata(),
+                                                  img_barriers.size(), img_barriers.cdata());
     }
 
     src_tex.resource_state = eResState::CopySrc;
@@ -1163,8 +1163,8 @@ void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                                         uint32_t(img_barriers.size()), img_barriers.cdata());
+                                         dst_stages, 0, 0, nullptr, buf_barriers.size(), buf_barriers.cdata(),
+                                         img_barriers.size(), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;

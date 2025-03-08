@@ -59,7 +59,7 @@ bool Ray::Vk::DescrPool::Init(const DescrSizes &sizes, const uint32_t sets_count
     }
 
     VkDescriptorPoolCreateInfo pool_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    pool_info.poolSizeCount = uint32_t(pool_sizes.size());
+    pool_info.poolSizeCount = pool_sizes.size();
     pool_info.pPoolSizes = pool_sizes.cdata();
     pool_info.maxSets = sets_count;
 

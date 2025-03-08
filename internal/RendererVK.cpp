@@ -1705,7 +1705,7 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) con
 
         VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
 
-        submit_info.waitSemaphoreCount = uint32_t(wait_semaphores.size());
+        submit_info.waitSemaphoreCount = wait_semaphores.size();
         submit_info.pWaitSemaphores = wait_semaphores.data();
         submit_info.pWaitDstStageMask = wait_stages.data();
 
@@ -1769,7 +1769,7 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
 
         VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
 
-        submit_info.waitSemaphoreCount = uint32_t(wait_semaphores.size());
+        submit_info.waitSemaphoreCount = wait_semaphores.size();
         submit_info.pWaitSemaphores = wait_semaphores.data();
         submit_info.pWaitDstStageMask = wait_stages.data();
 

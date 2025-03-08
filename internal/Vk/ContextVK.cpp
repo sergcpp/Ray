@@ -364,7 +364,7 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
     }
 
     const uint32_t number_required_extensions = 0;
-    const uint32_t number_optional_extensions = uint32_t(desired_extensions.size()) - number_required_extensions;
+    const uint32_t number_optional_extensions = desired_extensions.size() - number_required_extensions;
 
     { // Find required extensions
         uint32_t ext_count = 0;
@@ -711,7 +711,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
         device_extensions.push_back(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
     }
 
-    device_info.enabledExtensionCount = uint32_t(device_extensions.size());
+    device_info.enabledExtensionCount = device_extensions.size();
     device_info.ppEnabledExtensionNames = device_extensions.cdata();
 
     VkPhysicalDeviceFeatures features = {};

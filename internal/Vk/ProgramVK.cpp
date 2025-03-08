@@ -165,7 +165,7 @@ bool Ray::Vk::Program::InitDescrSetLayouts(ILog *log) {
         }
 
         VkDescriptorSetLayoutCreateInfo layout_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        layout_info.bindingCount = uint32_t(layout_bindings[i].size());
+        layout_info.bindingCount = layout_bindings[i].size();
         layout_info.pBindings = layout_bindings[i].cdata();
 
         VkDescriptorBindingFlagsEXT bind_flag = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT;

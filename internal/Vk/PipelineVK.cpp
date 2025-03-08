@@ -160,9 +160,9 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
 
         VkPipelineVertexInputStateCreateInfo vtx_input_state_create_info = {
             VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-        vtx_input_state_create_info.vertexBindingDescriptionCount = uint32_t(bindings.size());
+        vtx_input_state_create_info.vertexBindingDescriptionCount = bindings.size();
         vtx_input_state_create_info.pVertexBindingDescriptions = bindings.cdata();
-        vtx_input_state_create_info.vertexAttributeDescriptionCount = uint32_t(attribs.size());
+        vtx_input_state_create_info.vertexAttributeDescriptionCount = attribs.size();
         vtx_input_state_create_info.pVertexAttributeDescriptions = attribs.cdata();
 
         VkPipelineInputAssemblyStateCreateInfo input_assembly_state_create_info = {
@@ -264,11 +264,11 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
         }
 
         VkPipelineDynamicStateCreateInfo dynamic_state_ci = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-        dynamic_state_ci.dynamicStateCount = uint32_t(dynamic_states.size());
+        dynamic_state_ci.dynamicStateCount = dynamic_states.size();
         dynamic_state_ci.pDynamicStates = dynamic_states.cdata();
 
         VkGraphicsPipelineCreateInfo pipeline_create_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-        pipeline_create_info.stageCount = uint32_t(shader_stage_create_info.size());
+        pipeline_create_info.stageCount = shader_stage_create_info.size();
         pipeline_create_info.pStages = shader_stage_create_info.cdata();
         pipeline_create_info.pVertexInputState = &vtx_input_state_create_info;
         pipeline_create_info.pInputAssemblyState = &input_assembly_state_create_info;
@@ -365,7 +365,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             auto &new_group = rt_shader_groups_.emplace_back();
             new_group = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
             new_group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-            new_group.generalShader = uint32_t(shader_stage_create_info.size());
+            new_group.generalShader = shader_stage_create_info.size();
             new_group.anyHitShader = VK_SHADER_UNUSED_KHR;
             new_group.closestHitShader = VK_SHADER_UNUSED_KHR;
             new_group.intersectionShader = VK_SHADER_UNUSED_KHR;
@@ -373,7 +373,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             auto &new_group = rt_shader_groups_.emplace_back();
             new_group = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
             new_group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-            new_group.generalShader = uint32_t(shader_stage_create_info.size());
+            new_group.generalShader = shader_stage_create_info.size();
             new_group.anyHitShader = VK_SHADER_UNUSED_KHR;
             new_group.closestHitShader = VK_SHADER_UNUSED_KHR;
             new_group.intersectionShader = VK_SHADER_UNUSED_KHR;
@@ -391,7 +391,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             } else {
                 hit_group = &rt_shader_groups_[hit_group_index];
             }
-            hit_group->closestHitShader = uint32_t(shader_stage_create_info.size());
+            hit_group->closestHitShader = shader_stage_create_info.size();
         } else if (eShaderType(i) == eShaderType::AnyHit) {
             VkRayTracingShaderGroupCreateInfoKHR *hit_group = nullptr;
             if (hit_group_index == -1) {
@@ -406,7 +406,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             } else {
                 hit_group = &rt_shader_groups_[hit_group_index];
             }
-            hit_group->anyHitShader = uint32_t(shader_stage_create_info.size());
+            hit_group->anyHitShader = shader_stage_create_info.size();
         }
 
         auto &stage_info = shader_stage_create_info.emplace_back();
@@ -453,10 +453,10 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
     } else /* if (type == ePipelineType::Raytracing) */ {
         VkRayTracingPipelineCreateInfoKHR info = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
         info.pStages = shader_stage_create_info.cdata();
-        info.stageCount = uint32_t(shader_stage_create_info.size());
+        info.stageCount = shader_stage_create_info.size();
         info.layout = layout_;
         info.maxPipelineRayRecursionDepth = 1;
-        info.groupCount = uint32_t(rt_shader_groups_.size());
+        info.groupCount = rt_shader_groups_.size();
         info.pGroups = rt_shader_groups_.cdata();
 
         const VkResult res = ctx->api().vkCreateRayTracingPipelinesKHR(ctx->device(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1,

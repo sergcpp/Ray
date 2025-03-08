@@ -133,7 +133,7 @@ void Ray::Vk::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size
     dst_stages &= ctx_->supported_stages_mask();
 
     if (!barriers.empty()) {
-        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, barriers.size(),
                                          barriers.cdata(), 0, nullptr);
     }
 
@@ -337,8 +337,7 @@ void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
 
     if (!barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                         dst_stages, 0, 0, nullptr, uint32_t(barriers.size()), barriers.cdata(), 0,
-                                         nullptr);
+                                         dst_stages, 0, 0, nullptr, barriers.size(), barriers.cdata(), 0, nullptr);
     }
 
     ctx_->api().vkCmdFillBuffer(cmd_buf, handle_.buf, VkDeviceSize{dst_offset}, VkDeviceSize{size}, data);
@@ -346,7 +345,7 @@ void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
     resource_state = eResState::CopyDst;
 }
 
-void Ray::Vk::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, VkCommandBuffer cmd_buf) {
+void Ray::Vk::Buffer::UpdateImmediate(const uint32_t dst_offset, const uint32_t size, const void *data, VkCommandBuffer cmd_buf) {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> barriers;
 
@@ -370,8 +369,7 @@ void Ray::Vk::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const 
 
     if (!barriers.empty()) {
         ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                         dst_stages, 0, 0, nullptr, uint32_t(barriers.size()), barriers.cdata(), 0,
-                                         nullptr);
+                                         dst_stages, 0, 0, nullptr, barriers.size(), barriers.cdata(), 0, nullptr);
     }
 
     ctx_->api().vkCmdUpdateBuffer(cmd_buf, handle_.buf, VkDeviceSize{dst_offset}, VkDeviceSize{size}, data);
