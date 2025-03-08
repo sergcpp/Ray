@@ -68,8 +68,7 @@ void Ray::Vk::VertexInput::BindBuffers(VkCommandBuffer cmd_buf, const uint32_t i
         }
     }
 
-    api_->vkCmdBindVertexBuffers(cmd_buf, 0, uint32_t(buffers_to_bind.size()), buffers_to_bind.cdata(),
-                                 buffer_offsets.cdata());
+    api_->vkCmdBindVertexBuffers(cmd_buf, 0, buffers_to_bind.size(), buffers_to_bind.cdata(), buffer_offsets.cdata());
     if (elem_buf) {
         api_->vkCmdBindIndexBuffer(cmd_buf, elem_buf.buf, VkDeviceSize(index_offset), index_type);
     }
@@ -91,7 +90,7 @@ void Ray::Vk::VertexInput::FillVKDescriptions(SmallVectorImpl<VkVertexInputBindi
         }
         vk_attr.binding = 0xffffffff;
 
-        for (uint32_t i = 0; i < uint32_t(bound_buffers.size()); ++i) {
+        for (uint32_t i = 0; i < bound_buffers.size(); ++i) {
             if (bound_buffers[i].first == attr_descr.buf &&
                 (attr_descr.offset <= MaxVertexInputAttributeOffset || bound_buffers[i].second == attr_descr.offset)) {
                 vk_attr.binding = i;
@@ -100,11 +99,11 @@ void Ray::Vk::VertexInput::FillVKDescriptions(SmallVectorImpl<VkVertexInputBindi
         }
 
         if (vk_attr.binding == 0xffffffff) {
-            vk_attr.binding = uint32_t(bound_buffers.size());
+            vk_attr.binding = bound_buffers.size();
 
             auto &vk_binding = out_bindings.emplace_back();
 
-            vk_binding.binding = uint32_t(bound_buffers.size());
+            vk_binding.binding = bound_buffers.size();
             if (attr_descr.stride) {
                 vk_binding.stride = uint32_t(attr_descr.stride);
             } else {

@@ -66,7 +66,7 @@ Ray::Dx::VertexInput &Ray::Dx::VertexInput::operator=(VertexInput &&rhs) noexcep
         }
     }
 
-    vkCmdBindVertexBuffers(cmd_buf, 0, uint32_t(buffers_to_bind.size()), buffers_to_bind.cdata(),
+    vkCmdBindVertexBuffers(cmd_buf, 0, buffers_to_bind.size(), buffers_to_bind.cdata(),
                            buffer_offsets.cdata());
     if (elem_buf) {
         vkCmdBindIndexBuffer(cmd_buf, elem_buf.buf, VkDeviceSize(index_offset), index_type);

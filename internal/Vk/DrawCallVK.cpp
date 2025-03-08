@@ -173,7 +173,7 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
         d.dstSet = descr_set;
     }
 
-    ctx->api().vkUpdateDescriptorSets(ctx->device(), uint32_t(descr_writes.size()), descr_writes.data(), 0, nullptr);
+    ctx->api().vkUpdateDescriptorSets(ctx->device(), descr_writes.size(), descr_writes.data(), 0, nullptr);
 
     return descr_set;
 }
