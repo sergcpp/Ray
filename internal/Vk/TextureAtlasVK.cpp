@@ -20,7 +20,7 @@ template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::R8; }
 uint32_t FindMemoryType(uint32_t start_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
 
-extern const VkFormat g_vk_formats[];
+extern const VkFormat g_formats_vk[];
 } // namespace Vk
 } // namespace Ray
 
@@ -235,7 +235,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         img_info.extent.depth = 1;
         img_info.mipLevels = 1;
         img_info.arrayLayers = uint32_t(std::max(pages_count, 1));
-        img_info.format = g_vk_formats[size_t(real_format_)];
+        img_info.format = g_formats_vk[size_t(real_format_)];
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         img_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -311,7 +311,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         view_info.image = new_img;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        view_info.format = g_vk_formats[size_t(real_format_)];
+        view_info.format = g_formats_vk[size_t(real_format_)];
         view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         view_info.subresourceRange.baseMipLevel = 0;
         view_info.subresourceRange.levelCount = 1;

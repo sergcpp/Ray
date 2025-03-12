@@ -14,19 +14,19 @@
 namespace Ray {
 namespace Dx {
 #define X(_0, _1, _2, _3) _3,
-extern const D3D12_FILTER g_dx_filter[] = {
+extern const D3D12_FILTER g_filter_dx[] = {
 #include "../TextureFilter.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _2,
-extern const D3D12_TEXTURE_ADDRESS_MODE g_dx_wrap_mode[] = {
+extern const D3D12_TEXTURE_ADDRESS_MODE g_wrap_mode_dx[] = {
 #include "../TextureWrap.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _2,
-extern const D3D12_COMPARISON_FUNC g_dx_compare_func[] = {
+extern const D3D12_COMPARISON_FUNC g_compare_func_dx[] = {
 #include "../TextureCompare.inl"
 };
 #undef X
@@ -62,16 +62,16 @@ void Ray::Dx::Sampler::Init(Context *ctx, const SamplingParams params) {
     Free();
 
     D3D12_SAMPLER_DESC sampler_desc = {};
-    sampler_desc.Filter = g_dx_filter[size_t(params.filter)];
-    sampler_desc.AddressU = g_dx_wrap_mode[size_t(params.wrap)];
-    sampler_desc.AddressV = g_dx_wrap_mode[size_t(params.wrap)];
-    sampler_desc.AddressW = g_dx_wrap_mode[size_t(params.wrap)];
+    sampler_desc.Filter = g_filter_dx[size_t(params.filter)];
+    sampler_desc.AddressU = g_wrap_mode_dx[size_t(params.wrap)];
+    sampler_desc.AddressV = g_wrap_mode_dx[size_t(params.wrap)];
+    sampler_desc.AddressW = g_wrap_mode_dx[size_t(params.wrap)];
     sampler_desc.MipLODBias = params.lod_bias.to_float();
     sampler_desc.MinLOD = params.min_lod.to_float();
     sampler_desc.MaxLOD = params.max_lod.to_float();
     sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
     if (params.compare != eTexCompare::None) {
-        sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(params.compare)];
+        sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(params.compare)];
     }
 
     ref_ = ctx->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);

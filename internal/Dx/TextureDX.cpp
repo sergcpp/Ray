@@ -26,17 +26,17 @@
 
 namespace Ray {
 namespace Dx {
-extern const D3D12_FILTER g_dx_filter[];
-extern const D3D12_TEXTURE_ADDRESS_MODE g_dx_wrap_mode[];
-extern const D3D12_COMPARISON_FUNC g_dx_compare_func[];
+extern const D3D12_FILTER g_filter_dx[];
+extern const D3D12_TEXTURE_ADDRESS_MODE g_wrap_mode_dx[];
+extern const D3D12_COMPARISON_FUNC g_compare_func_dx[];
 
 extern const float AnisotropyLevel;
 
 #define X(_0, _1, _2, _3, _4, _5, _6) _6,
-extern const DXGI_FORMAT g_dx_formats[] = {
+extern const DXGI_FORMAT g_formats_dx[] = {
 #include "../TextureFormat.inl"
 };
-static_assert(sizeof(g_dx_formats) / sizeof(g_dx_formats[0]) == size_t(eTexFormat::_Count), "!");
+static_assert(sizeof(g_formats_dx) / sizeof(g_formats_dx[0]) == size_t(eTexFormat::_Count), "!");
 #undef X
 
 uint32_t TextureHandleCounter = 0;
@@ -135,8 +135,6 @@ Ray::Dx::Texture2D &Ray::Dx::Texture2D::operator=(Texture2D &&rhs) noexcept {
     handle_ = std::exchange(rhs.handle_, {});
     alloc_ = std::exchange(rhs.alloc_, {});
     params = std::exchange(rhs.params, {});
-    ready_ = std::exchange(rhs.ready_, false);
-    cubemap_ready_ = std::exchange(rhs.cubemap_ready_, 0);
     name_ = std::move(rhs.name_);
 
     resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
@@ -146,39 +144,19 @@ Ray::Dx::Texture2D &Ray::Dx::Texture2D::operator=(Texture2D &&rhs) noexcept {
 
 void Ray::Dx::Texture2D::Init(const Tex2DParams &p, MemAllocators *mem_allocs, ILog *log) {
     InitFromRAWData(nullptr, 0, nullptr, mem_allocs, p, log);
-    ready_ = true;
 }
 
 void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf,
                               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
                               eTexLoadStatus *load_status, ILog *log) {
-    if (!data) {
-        uint8_t *stage_data = sbuf.Map();
-        memcpy(stage_data, p.fallback_color, 4);
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(4));
-        sbuf.Unmap();
+    uint8_t *stage_data = sbuf.Map();
+    memcpy(stage_data, data, size);
+    sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(size));
+    sbuf.Unmap();
 
-        Tex2DParams _p = p;
-        _p.w = _p.h = 1;
-        _p.mip_count = 1;
-        _p.format = eTexFormat::RGBA8;
-        _p.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
+    InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, p, log);
 
-        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, _p, log);
-        // mark it as not ready
-        ready_ = false;
-        (*load_status) = eTexLoadStatus::CreatedDefault;
-    } else {
-        uint8_t *stage_data = sbuf.Map();
-        memcpy(stage_data, data, size);
-        sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(size));
-        sbuf.Unmap();
-
-        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, p, log);
-
-        ready_ = true;
-        (*load_status) = eTexLoadStatus::CreatedFromData;
-    }
+    (*load_status) = eTexLoadStatus::CreatedFromData;
 }
 
 void Ray::Dx::Texture2D::Free() {
@@ -208,7 +186,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         image_desc.Height = h;
         image_desc.DepthOrArraySize = 1;
         image_desc.MipLevels = mip_count;
-        image_desc.Format = g_dx_formats[int(format)];
+        image_desc.Format = g_formats_dx[int(format)];
         if (is_srgb) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
         }
@@ -269,7 +247,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         view_info.image = new_image;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_info.format = g_vk_formats[size_t(format)];
+        view_info.format = g_formats_vk[size_t(format)];
         if (is_srgb) {
             view_info.format = ToSRGBFormat(view_info.format);
         }
@@ -444,7 +422,6 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
 
     handle_.generation = TextureHandleCounter++;
     params = p;
-    initialized_mips_ = 0;
 
     { // create image
         D3D12_RESOURCE_DESC image_desc = {};
@@ -453,7 +430,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
         image_desc.Height = p.h;
         image_desc.DepthOrArraySize = 1;
         image_desc.MipLevels = params.mip_count;
-        image_desc.Format = g_dx_formats[int(p.format)];
+        image_desc.Format = g_formats_dx[int(p.format)];
         if (p.flags & eTexFlags::SRGB) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
         }
@@ -494,7 +471,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
 
     { // create default SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Format = g_dx_formats[int(p.format)];
+        srv_desc.Format = g_formats_dx[int(p.format)];
         if (p.flags & eTexFlags::SRGB) {
             srv_desc.Format = ToSRGBFormat(srv_desc.Format);
         }
@@ -515,7 +492,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
     }
     if (requires_uav) {
         D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-        uav_desc.Format = g_dx_formats[int(p.format)];
+        uav_desc.Format = g_formats_dx[int(p.format)];
         uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         uav_desc.Texture2D.PlaneSlice = 0;
         uav_desc.Texture2D.MipSlice = 0;
@@ -629,16 +606,16 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
 
     { // create new sampler
         D3D12_SAMPLER_DESC sampler_desc = {};
-        sampler_desc.Filter = g_dx_filter[size_t(p.sampling.filter)];
-        sampler_desc.AddressU = g_dx_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_desc.AddressV = g_dx_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_desc.AddressW = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.Filter = g_filter_dx[size_t(p.sampling.filter)];
+        sampler_desc.AddressU = g_wrap_mode_dx[size_t(p.sampling.wrap)];
+        sampler_desc.AddressV = g_wrap_mode_dx[size_t(p.sampling.wrap)];
+        sampler_desc.AddressW = g_wrap_mode_dx[size_t(p.sampling.wrap)];
         sampler_desc.MipLODBias = p.sampling.lod_bias.to_float();
         sampler_desc.MinLOD = p.sampling.min_lod.to_float();
         sampler_desc.MaxLOD = p.sampling.max_lod.to_float();
         sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
         if (p.sampling.compare != eTexCompare::None) {
-            sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(p.sampling.compare)];
+            sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(p.sampling.compare)];
         }
 
         handle_.sampler_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
@@ -693,7 +670,7 @@ void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const i
     src_loc.PlacedFootprint.Footprint.Width = sizex;
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = 1;
-    src_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(params.format)];
+    src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(params.format)];
     if (params.flags & eTexFlags::SRGB) {
         src_loc.PlacedFootprint.Footprint.Format = ToSRGBFormat(src_loc.PlacedFootprint.Footprint.Format);
     }
@@ -711,12 +688,6 @@ void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const i
     dst_loc.SubresourceIndex = D3D12CalcSubresource(level, 0, 0, params.mip_count, 1);
 
     cmd_buf->CopyTextureRegion(&dst_loc, offsetx, offsety, 0, &src_loc, nullptr);
-
-    if (offsetx == 0 && offsety == 0 && sizex == std::max(params.w >> level, 1) &&
-        sizey == std::max(params.h >> level, 1)) {
-        // consider this level initialized
-        initialized_mips_ |= (1u << level);
-    }
 }
 
 void Ray::Dx::Texture2D::SetSampling(const SamplingParams s) {
@@ -725,16 +696,16 @@ void Ray::Dx::Texture2D::SetSampling(const SamplingParams s) {
     }
 
     D3D12_SAMPLER_DESC sampler_desc = {};
-    sampler_desc.Filter = g_dx_filter[size_t(s.filter)];
-    sampler_desc.AddressU = g_dx_wrap_mode[size_t(s.wrap)];
-    sampler_desc.AddressV = g_dx_wrap_mode[size_t(s.wrap)];
-    sampler_desc.AddressW = g_dx_wrap_mode[size_t(s.wrap)];
+    sampler_desc.Filter = g_filter_dx[size_t(s.filter)];
+    sampler_desc.AddressU = g_wrap_mode_dx[size_t(s.wrap)];
+    sampler_desc.AddressV = g_wrap_mode_dx[size_t(s.wrap)];
+    sampler_desc.AddressW = g_wrap_mode_dx[size_t(s.wrap)];
     sampler_desc.MipLODBias = s.lod_bias.to_float();
     sampler_desc.MinLOD = s.min_lod.to_float();
     sampler_desc.MaxLOD = s.max_lod.to_float();
     sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
     if (s.compare != eTexCompare::None) {
-        sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(s.compare)];
+        sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(s.compare)];
     }
 
     handle_.sampler_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
@@ -819,7 +790,7 @@ void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
     dst_loc.PlacedFootprint.Footprint.Width = src_tex.params.w;
     dst_loc.PlacedFootprint.Footprint.Height = src_tex.params.h;
     dst_loc.PlacedFootprint.Footprint.Depth = 1;
-    dst_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(src_tex.params.format)];
+    dst_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(src_tex.params.format)];
     if (IsCompressedFormat(src_tex.params.format)) {
         dst_loc.PlacedFootprint.Footprint.RowPitch = round_up(
             GetBlockCount(src_tex.params.w, 1, src_tex.params.format) * GetBlockLenBytes(src_tex.params.format),
@@ -875,7 +846,7 @@ void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, ID3D12GraphicsC
         temp_cpu_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC buffer_UAV_desc = {};
-    buffer_UAV_desc.Format = g_dx_formats[int(tex.params.format)];
+    buffer_UAV_desc.Format = g_formats_dx[int(tex.params.format)];
     buffer_UAV_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     buffer_UAV_desc.Texture2D.PlaneSlice = 0;
     buffer_UAV_desc.Texture2D.MipSlice = 0;
@@ -942,7 +913,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
         image_desc.Height = p.h;
         image_desc.DepthOrArraySize = p.d;
         image_desc.MipLevels = 1;
-        image_desc.Format = g_dx_formats[int(p.format)];
+        image_desc.Format = g_formats_dx[int(p.format)];
         if (p.flags & eTexFlags::SRGB) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
         }
@@ -984,7 +955,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
 
     { // create default SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Format = g_dx_formats[int(p.format)];
+        srv_desc.Format = g_formats_dx[int(p.format)];
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
         srv_desc.Texture2D.MipLevels = 1;
         srv_desc.Texture2D.MostDetailedMip = 0;
@@ -1003,16 +974,16 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
 
     { // create new sampler
         D3D12_SAMPLER_DESC sampler_desc = {};
-        sampler_desc.Filter = g_dx_filter[size_t(p.sampling.filter)];
-        sampler_desc.AddressU = g_dx_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_desc.AddressV = g_dx_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_desc.AddressW = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.Filter = g_filter_dx[size_t(p.sampling.filter)];
+        sampler_desc.AddressU = g_wrap_mode_dx[size_t(p.sampling.wrap)];
+        sampler_desc.AddressV = g_wrap_mode_dx[size_t(p.sampling.wrap)];
+        sampler_desc.AddressW = g_wrap_mode_dx[size_t(p.sampling.wrap)];
         sampler_desc.MipLODBias = p.sampling.lod_bias.to_float();
         sampler_desc.MinLOD = p.sampling.min_lod.to_float();
         sampler_desc.MaxLOD = p.sampling.max_lod.to_float();
         sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
         if (p.sampling.compare != eTexCompare::None) {
-            sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(p.sampling.compare)];
+            sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(p.sampling.compare)];
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
@@ -1076,7 +1047,7 @@ void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
     src_loc.PlacedFootprint.Footprint.Width = sizex;
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = sizez;
-    src_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(params.format)];
+    src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(params.format)];
     if (IsCompressedFormat(params.format)) {
         assert(false);
     } else {
@@ -1092,10 +1063,10 @@ void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
     cmd_buf->CopyTextureRegion(&dst_loc, offsetx, offsety, offsetz, &src_loc, nullptr);
 }
 
-DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(eTexFormat format) { return g_dx_formats[size_t(format)]; }
+DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(const eTexFormat format) { return g_formats_dx[size_t(format)]; }
 
 bool Ray::Dx::RequiresManualSRGBConversion(const eTexFormat format) {
-    const DXGI_FORMAT dxgi_format = g_dx_formats[size_t(format)];
+    const DXGI_FORMAT dxgi_format = g_formats_dx[size_t(format)];
     return dxgi_format == ToSRGBFormat(dxgi_format);
 }
 

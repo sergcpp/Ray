@@ -63,9 +63,6 @@ class Texture2D {
     Context *ctx_ = nullptr;
     TexHandle handle_;
     MemAllocation alloc_;
-    uint16_t initialized_mips_ = 0;
-    bool ready_ = false;
-    uint32_t cubemap_ready_ = 0;
     std::string name_;
 
     void Free();
@@ -83,7 +80,7 @@ class Texture2D {
     Texture2D(const char *name, Context *ctx, const Tex2DParams &params, MemAllocators *mem_allocs, ILog *log);
     Texture2D(const char *name, Context *ctx, const VkImage img, const VkImageView view, const VkSampler sampler,
               const Tex2DParams &_params, ILog *log)
-        : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, ready_(true), name_(name), params(_params) {}
+        : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, name_(name), params(_params) {}
     Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
               VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const Texture2D &rhs) = delete;
@@ -93,12 +90,13 @@ class Texture2D {
     Texture2D &operator=(const Texture2D &rhs) = delete;
     Texture2D &operator=(Texture2D &&rhs) noexcept;
 
+    operator bool() const { return (handle_.img != VK_NULL_HANDLE); }
+
     void Init(const Tex2DParams &params, MemAllocators *mem_allocs, ILog *log);
     void Init(const VkImage img, const VkImageView view, const VkSampler sampler, const Tex2DParams &_params,
               ILog *log) {
         handle_ = {img, view, VK_NULL_HANDLE, sampler, 0};
         params = _params;
-        ready_ = true;
     }
     void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf,
               MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
@@ -112,7 +110,6 @@ class Texture2D {
     const TexHandle &handle() const { return handle_; }
     TexHandle &handle() { return handle_; }
     VkSampler vk_sampler() const { return handle_.sampler; }
-    uint16_t initialized_mips() const { return initialized_mips_; }
 
     VkDescriptorImageInfo
     vk_desc_image_info(const int view_index = 0,
@@ -125,8 +122,6 @@ class Texture2D {
     }
 
     const SamplingParams &sampling() const { return params.sampling; }
-
-    bool ready() const { return ready_; }
     const std::string &name() const { return name_; }
 
     void SetSampling(SamplingParams sampling);

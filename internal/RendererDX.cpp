@@ -1840,11 +1840,10 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
         bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_ENTRIES_BUF_SLOT, sc_data.spatial_cache_entries);
         bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_VOXELS_BUF_SLOT, sc_data.spatial_cache_voxels);
     }
-
-    if (out_base_color.ready()) {
+    if (out_base_color) {
         bindings.emplace_back(eBindTarget::Image, Shade::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
     }
-    if (out_depth_normals.ready()) {
+    if (out_depth_normals) {
         bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     }
 

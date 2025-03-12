@@ -18,15 +18,15 @@
 
 namespace Ray {
 namespace Vk {
-extern const VkFilter g_vk_min_mag_filter[];
-extern const VkSamplerAddressMode g_vk_wrap_mode[];
-extern const VkSamplerMipmapMode g_vk_mipmap_mode[];
-extern const VkCompareOp g_vk_compare_ops[];
+extern const VkFilter g_min_mag_filter_vk[];
+extern const VkSamplerAddressMode g_wrap_mode_vk[];
+extern const VkSamplerMipmapMode g_mipmap_mode_vk[];
+extern const VkCompareOp g_compare_ops_vk[];
 
 extern const float AnisotropyLevel;
 
 #define X(_0, _1, _2, _3, _4, _5, _6) _5,
-extern const VkFormat g_vk_formats[] = {
+extern const VkFormat g_formats_vk[] = {
 #include "../TextureFormat.inl"
 };
 #undef X
@@ -169,8 +169,6 @@ Ray::Vk::Texture2D &Ray::Vk::Texture2D::operator=(Texture2D &&rhs) noexcept {
     handle_ = std::exchange(rhs.handle_, {});
     alloc_ = std::exchange(rhs.alloc_, {});
     params = std::exchange(rhs.params, {});
-    ready_ = std::exchange(rhs.ready_, false);
-    cubemap_ready_ = std::exchange(rhs.cubemap_ready_, 0);
     name_ = std::move(rhs.name_);
 
     resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
@@ -180,37 +178,18 @@ Ray::Vk::Texture2D &Ray::Vk::Texture2D::operator=(Texture2D &&rhs) noexcept {
 
 void Ray::Vk::Texture2D::Init(const Tex2DParams &p, MemAllocators *mem_allocs, ILog *log) {
     InitFromRAWData(nullptr, 0, nullptr, mem_allocs, p, log);
-    ready_ = true;
 }
 
 void Ray::Vk::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf,
                               VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status,
                               ILog *log) {
-    if (!data) {
-        uint8_t *stage_data = sbuf.Map();
-        memcpy(stage_data, p.fallback_color, 4);
-        sbuf.Unmap();
+    uint8_t *stage_data = sbuf.Map();
+    memcpy(stage_data, data, size);
+    sbuf.Unmap();
 
-        Tex2DParams _p = p;
-        _p.w = _p.h = 1;
-        _p.mip_count = 1;
-        _p.format = eTexFormat::RGBA8;
-        _p.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
+    InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, p, log);
 
-        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, _p, log);
-        // mark it as not ready
-        ready_ = false;
-        (*load_status) = eTexLoadStatus::CreatedDefault;
-    } else {
-        uint8_t *stage_data = sbuf.Map();
-        memcpy(stage_data, data, size);
-        sbuf.Unmap();
-
-        InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, p, log);
-
-        ready_ = true;
-        (*load_status) = eTexLoadStatus::CreatedFromData;
-    }
+    (*load_status) = eTexLoadStatus::CreatedFromData;
 }
 
 void Ray::Vk::Texture2D::Free() {
@@ -244,7 +223,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         img_info.extent.depth = 1;
         img_info.mipLevels = mip_count;
         img_info.arrayLayers = 1;
-        img_info.format = g_vk_formats[size_t(format)];
+        img_info.format = g_formats_vk[size_t(format)];
         if (is_srgb) {
             img_info.format = ToSRGBFormat(img_info.format);
         }
@@ -299,7 +278,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         view_info.image = new_image;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_info.format = g_vk_formats[size_t(format)];
+        view_info.format = g_formats_vk[size_t(format)];
         if (is_srgb) {
             view_info.format = ToSRGBFormat(view_info.format);
         }
@@ -342,7 +321,6 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
 
     const TexHandle new_handle = {new_image, new_image_view, VK_NULL_HANDLE, std::exchange(handle_.sampler, {}),
                                   TextureHandleCounter++};
-    uint16_t new_initialized_mips = 0;
 
     // copy data from old texture
     if (params.format == format) {
@@ -361,27 +339,23 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         uint32_t copy_regions_count = 0;
 
         for (; src_mip < int(params.mip_count) && dst_mip < mip_count; ++src_mip, ++dst_mip) {
-            if (initialized_mips_ & (1u << src_mip)) {
-                VkImageCopy &reg = copy_regions[copy_regions_count++];
+            VkImageCopy &reg = copy_regions[copy_regions_count++];
 
-                reg.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                reg.srcSubresource.baseArrayLayer = 0;
-                reg.srcSubresource.layerCount = 1;
-                reg.srcSubresource.mipLevel = src_mip;
-                reg.srcOffset = {0, 0, 0};
-                reg.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                reg.dstSubresource.baseArrayLayer = 0;
-                reg.dstSubresource.layerCount = 1;
-                reg.dstSubresource.mipLevel = dst_mip;
-                reg.dstOffset = {0, 0, 0};
-                reg.extent = {uint32_t(std::max(w >> dst_mip, 1)), uint32_t(std::max(h >> dst_mip, 1)), 1};
+            reg.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            reg.srcSubresource.baseArrayLayer = 0;
+            reg.srcSubresource.layerCount = 1;
+            reg.srcSubresource.mipLevel = src_mip;
+            reg.srcOffset = {0, 0, 0};
+            reg.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            reg.dstSubresource.baseArrayLayer = 0;
+            reg.dstSubresource.layerCount = 1;
+            reg.dstSubresource.mipLevel = dst_mip;
+            reg.dstOffset = {0, 0, 0};
+            reg.extent = {uint32_t(std::max(w >> dst_mip, 1)), uint32_t(std::max(h >> dst_mip, 1)), 1};
 
 #ifdef TEX_VERBOSE_LOGGING
-                log->Info("Copying data mip %i [old] -> mip %i [new]", src_mip, dst_mip);
+            log->Info("Copying data mip %i [old] -> mip %i [new]", src_mip, dst_mip);
 #endif
-
-                new_initialized_mips |= (1u << dst_mip);
-            }
         }
 
         if (copy_regions_count) {
@@ -460,7 +434,6 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     params.mip_count = mip_count;
     params.samples = samples;
     params.format = format;
-    initialized_mips_ = new_initialized_mips;
 
     this->resource_state = new_resource_state;
 
@@ -473,7 +446,6 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
 
     handle_.generation = TextureHandleCounter++;
     params = p;
-    initialized_mips_ = 0;
 
     { // create image
         VkImageCreateInfo img_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
@@ -483,7 +455,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
         img_info.extent.depth = 1;
         img_info.mipLevels = params.mip_count;
         img_info.arrayLayers = 1;
-        img_info.format = g_vk_formats[size_t(p.format)];
+        img_info.format = g_formats_vk[size_t(p.format)];
         if (p.flags & eTexFlags::SRGB) {
             img_info.format = ToSRGBFormat(img_info.format);
         }
@@ -538,7 +510,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
         VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         view_info.image = handle_.img;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_info.format = g_vk_formats[size_t(p.format)];
+        view_info.format = g_formats_vk[size_t(p.format)];
         if (p.flags & eTexFlags::SRGB) {
             view_info.format = ToSRGBFormat(view_info.format);
         }
@@ -662,24 +634,22 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBu
 
         ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf->vk_handle(), handle_.img,
                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-        initialized_mips_ |= (1u << 0);
     }
 
     { // create new sampler
         VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-        sampler_info.magFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.minFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.addressModeU = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeV = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeW = g_vk_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_info.magFilter = g_min_mag_filter_vk[size_t(p.sampling.filter)];
+        sampler_info.minFilter = g_min_mag_filter_vk[size_t(p.sampling.filter)];
+        sampler_info.addressModeU = g_wrap_mode_vk[size_t(p.sampling.wrap)];
+        sampler_info.addressModeV = g_wrap_mode_vk[size_t(p.sampling.wrap)];
+        sampler_info.addressModeW = g_wrap_mode_vk[size_t(p.sampling.wrap)];
         sampler_info.anisotropyEnable = VK_TRUE;
         sampler_info.maxAnisotropy = AnisotropyLevel;
         sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
         sampler_info.unnormalizedCoordinates = VK_FALSE;
         sampler_info.compareEnable = p.sampling.compare != eTexCompare::None ? VK_TRUE : VK_FALSE;
-        sampler_info.compareOp = g_vk_compare_ops[size_t(p.sampling.compare)];
-        sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(p.sampling.filter)];
+        sampler_info.compareOp = g_compare_ops_vk[size_t(p.sampling.compare)];
+        sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(p.sampling.filter)];
         sampler_info.mipLodBias = p.sampling.lod_bias.to_float();
         sampler_info.minLod = p.sampling.min_lod.to_float();
         sampler_info.maxLod = p.sampling.max_lod.to_float();
@@ -767,12 +737,6 @@ void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const i
 
     ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                                        &region);
-
-    if (offsetx == 0 && offsety == 0 && sizex == std::max(params.w >> level, 1) &&
-        sizey == std::max(params.h >> level, 1)) {
-        // consider this level initialized
-        initialized_mips_ |= (1u << level);
-    }
 }
 
 void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
@@ -781,18 +745,18 @@ void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
     }
 
     VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-    sampler_info.magFilter = g_vk_min_mag_filter[size_t(s.filter)];
-    sampler_info.minFilter = g_vk_min_mag_filter[size_t(s.filter)];
-    sampler_info.addressModeU = g_vk_wrap_mode[size_t(s.wrap)];
-    sampler_info.addressModeV = g_vk_wrap_mode[size_t(s.wrap)];
-    sampler_info.addressModeW = g_vk_wrap_mode[size_t(s.wrap)];
+    sampler_info.magFilter = g_min_mag_filter_vk[size_t(s.filter)];
+    sampler_info.minFilter = g_min_mag_filter_vk[size_t(s.filter)];
+    sampler_info.addressModeU = g_wrap_mode_vk[size_t(s.wrap)];
+    sampler_info.addressModeV = g_wrap_mode_vk[size_t(s.wrap)];
+    sampler_info.addressModeW = g_wrap_mode_vk[size_t(s.wrap)];
     sampler_info.anisotropyEnable = VK_TRUE;
     sampler_info.maxAnisotropy = AnisotropyLevel;
     sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     sampler_info.unnormalizedCoordinates = VK_FALSE;
     sampler_info.compareEnable = s.compare != eTexCompare::None ? VK_TRUE : VK_FALSE;
-    sampler_info.compareOp = g_vk_compare_ops[size_t(s.compare)];
-    sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(s.filter)];
+    sampler_info.compareOp = g_compare_ops_vk[size_t(s.compare)];
+    sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(s.filter)];
     sampler_info.mipLodBias = s.lod_bias.to_float();
     sampler_info.minLod = s.min_lod.to_float();
     sampler_info.maxLod = s.max_lod.to_float();
@@ -980,7 +944,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
         img_info.extent.depth = uint32_t(p.d);
         img_info.mipLevels = 1;
         img_info.arrayLayers = 1;
-        img_info.format = g_vk_formats[size_t(p.format)];
+        img_info.format = g_formats_vk[size_t(p.format)];
         if (p.flags & eTexFlags::SRGB) {
             img_info.format = ToSRGBFormat(img_info.format);
         }
@@ -1035,7 +999,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
         VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         view_info.image = handle_.img;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_3D;
-        view_info.format = g_vk_formats[size_t(p.format)];
+        view_info.format = g_formats_vk[size_t(p.format)];
         view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
         view_info.subresourceRange.baseMipLevel = 0;
@@ -1071,18 +1035,18 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, I
 
     { // create new sampler
         VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-        sampler_info.magFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.minFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.addressModeU = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeV = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeW = g_vk_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_info.magFilter = g_min_mag_filter_vk[size_t(p.sampling.filter)];
+        sampler_info.minFilter = g_min_mag_filter_vk[size_t(p.sampling.filter)];
+        sampler_info.addressModeU = g_wrap_mode_vk[size_t(p.sampling.wrap)];
+        sampler_info.addressModeV = g_wrap_mode_vk[size_t(p.sampling.wrap)];
+        sampler_info.addressModeW = g_wrap_mode_vk[size_t(p.sampling.wrap)];
         sampler_info.anisotropyEnable = VK_FALSE;
         sampler_info.maxAnisotropy = AnisotropyLevel;
         sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
         sampler_info.unnormalizedCoordinates = VK_FALSE;
         sampler_info.compareEnable = VK_FALSE;
-        sampler_info.compareOp = g_vk_compare_ops[size_t(p.sampling.compare)];
-        sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(p.sampling.filter)];
+        sampler_info.compareOp = g_compare_ops_vk[size_t(p.sampling.compare)];
+        sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(p.sampling.filter)];
         sampler_info.mipLodBias = p.sampling.lod_bias.to_float();
         sampler_info.minLod = p.sampling.min_lod.to_float();
         sampler_info.maxLod = p.sampling.max_lod.to_float();
@@ -1188,10 +1152,10 @@ void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
                                        &region);
 }
 
-VkFormat Ray::Vk::VKFormatFromTexFormat(eTexFormat format) { return g_vk_formats[size_t(format)]; }
+VkFormat Ray::Vk::VKFormatFromTexFormat(const eTexFormat format) { return g_formats_vk[size_t(format)]; }
 
 bool Ray::Vk::RequiresManualSRGBConversion(const eTexFormat format) {
-    const VkFormat vk_format = g_vk_formats[size_t(format)];
+    const VkFormat vk_format = g_formats_vk[size_t(format)];
     return vk_format == ToSRGBFormat(vk_format);
 }
 

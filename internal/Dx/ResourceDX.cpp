@@ -55,7 +55,7 @@ void Ray::Dx::TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, const
     SmallVector<D3D12_RESOURCE_BARRIER, 64> barriers;
 
     for (const TransitionInfo &transition : transitions) {
-        if (transition.p_tex && transition.p_tex->ready()) {
+        if (transition.p_tex && *transition.p_tex) {
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself

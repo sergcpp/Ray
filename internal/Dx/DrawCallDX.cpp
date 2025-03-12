@@ -19,7 +19,7 @@
 
 namespace Ray {
 namespace Dx {
-extern const DXGI_FORMAT g_dx_formats[];
+extern const DXGI_FORMAT g_formats_dx[];
 }
 } // namespace Ray
 
