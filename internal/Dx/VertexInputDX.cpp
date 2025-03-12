@@ -2,7 +2,7 @@
 
 namespace Ray {
 namespace Dx {
-/*const VkFormat g_vk_attrib_formats[][4] = {
+/*const VkFormat g_attrib_formats_vk[][4] = {
     {}, // Undefined
     {VK_FORMAT_R16_SFLOAT, VK_FORMAT_R16G16_SFLOAT, VK_FORMAT_R16G16B16_SFLOAT,
      VK_FORMAT_R16G16B16A16_SFLOAT}, // Float16
@@ -17,7 +17,7 @@ namespace Dx {
     {VK_FORMAT_R8_UNORM, VK_FORMAT_R8G8_UNORM, VK_FORMAT_R8G8B8_UNORM, VK_FORMAT_R8G8B8A8_UNORM},       // Uint8UNorm
     {VK_FORMAT_R32_SINT, VK_FORMAT_R32G32_SINT, VK_FORMAT_R32G32B32_SINT, VK_FORMAT_R32G32B32A32_SINT}, // Int32
 };
-static_assert(COUNT_OF(g_vk_attrib_formats) == int(eType::_Count), "!");*/
+static_assert(COUNT_OF(g_attrib_formats_vk) == int(eType::_Count), "!");*/
 
 /*const int g_type_sizes[] = {
     -1,               // Undefined
@@ -80,7 +80,7 @@ void Ray::Dx::VertexInput::FillVKDescriptions(SmallVectorImpl<VkVertexInputBindi
         auto &vk_attr = out_attribs.emplace_back();
 
         vk_attr.location = uint32_t(attr_descr.loc);
-        vk_attr.format = g_vk_attrib_formats[int(attr_descr.type)][attr_descr.size - 1];
+        vk_attr.format = g_attrib_formats_vk[int(attr_descr.type)][attr_descr.size - 1];
         if (attr_descr.offset > MaxVertexInputAttributeOffset) {
             // binding offset will be used instead
             vk_attr.offset = 0;

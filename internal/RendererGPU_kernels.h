@@ -118,11 +118,11 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
                                          {eBindTarget::Image, MixIncremental::IN_REQ_SAMPLES_SLOT, req_samples},
                                          {eBindTarget::Image, MixIncremental::OUT_FULL_IMG_SLOT, out_full_img},
                                          {eBindTarget::Image, MixIncremental::OUT_HALF_IMG_SLOT, out_half_img}};
-    if (out_base_color.ready()) {
+    if (out_base_color) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_BASE_COLOR_SLOT, temp_base_color);
         bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
     }
-    if (out_depth_normals.ready()) {
+    if (out_depth_normals) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_DEPTH_NORMALS_SLOT, temp_depth_normals);
         bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     }
@@ -234,9 +234,9 @@ void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
                                          {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
 
-    assert(base_color_img.ready());
+    assert(base_color_img);
     bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img);
-    assert(depth_normals_img.ready());
+    assert(depth_normals_img);
     bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img);
 
     const uint32_t grp_count[3] = {
@@ -286,13 +286,13 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
         {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
 
-    if (img_buf2.ready()) {
+    if (img_buf2) {
         bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG2_SLOT, img_buf2);
     }
-    if (img_buf3.ready()) {
+    if (img_buf3) {
         bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG3_SLOT, img_buf3);
     }
-    if (out_debug_img.ready()) {
+    if (out_debug_img) {
         bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
     }
 
@@ -315,7 +315,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
 
     Pipeline *pi = nullptr;
     if (in_channels == 9 && out_channels == 32) {
-        assert(img_buf2.ready() && img_buf3.ready());
+        assert(img_buf2 && img_buf3);
         pi = &pi_.convolution_Img_9_32;
     }
 
@@ -343,8 +343,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
         {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
         {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
-
-    if (out_debug_img.ready()) {
+    if (out_debug_img) {
         bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
     }
 
@@ -464,8 +463,7 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
         {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
         {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
-
-    if (out_debug_img.ready()) {
+    if (out_debug_img) {
         bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
     }
 
@@ -525,14 +523,13 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
         {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
         {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
-
-    if (img_buf2.ready()) {
+    if (img_buf2) {
         bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG3_SLOT, img_buf2);
     }
-    if (img_buf3.ready()) {
+    if (img_buf3) {
         bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG4_SLOT, img_buf3);
     }
-    if (out_debug_img.ready()) {
+    if (out_debug_img) {
         bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
     }
 
@@ -556,7 +553,7 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
 
     Pipeline *pi = nullptr;
     if (in_channels1 == 64 && in_channels2 == 9 && out_channels == 64 && upscale1) {
-        assert(img_buf2.ready() && img_buf3.ready());
+        assert(img_buf2 && img_buf3);
         pi = &pi_.convolution_concat_64_9_64;
     } else {
         assert(false);

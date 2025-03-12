@@ -64,17 +64,15 @@ struct Tex2DParams {
     uint8_t mip_count = 1;
     Bitmask<eTexUsage> usage;
     uint8_t samples = 1;
-    uint8_t fallback_color[4] = {0, 255, 255, 255};
     eTexFormat format = eTexFormat::Undefined;
     SamplingParams sampling;
 };
-static_assert(sizeof(Tex2DParams) == 20, "!");
+static_assert(sizeof(Tex2DParams) == 16, "!");
 
 inline bool operator==(const Tex2DParams &lhs, const Tex2DParams &rhs) {
     return lhs.w == rhs.w && lhs.h == rhs.h && lhs.flags == rhs.flags && lhs.mip_count == rhs.mip_count &&
-           lhs.usage == rhs.usage && lhs.samples == rhs.samples && lhs.fallback_color[0] == rhs.fallback_color[0] &&
-           lhs.fallback_color[1] == rhs.fallback_color[1] && lhs.fallback_color[2] == rhs.fallback_color[2] &&
-           lhs.fallback_color[3] == rhs.fallback_color[3] && lhs.format == rhs.format && lhs.sampling == rhs.sampling;
+           lhs.usage == rhs.usage && lhs.samples == rhs.samples && lhs.format == rhs.format &&
+           lhs.sampling == rhs.sampling;
 }
 inline bool operator!=(const Tex2DParams &lhs, const Tex2DParams &rhs) { return !operator==(lhs, rhs); }
 

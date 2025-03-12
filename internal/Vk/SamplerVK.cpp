@@ -6,25 +6,25 @@
 namespace Ray {
 namespace Vk {
 #define X(_0, _1, _2, _3) _1,
-extern const VkFilter g_vk_min_mag_filter[] = {
+extern const VkFilter g_min_mag_filter_vk[] = {
 #include "../TextureFilter.inl"
 };
 #undef X
 
 #define X(_0, _1, _2, _3) _2,
-extern const VkSamplerMipmapMode g_vk_mipmap_mode[] = {
+extern const VkSamplerMipmapMode g_mipmap_mode_vk[] = {
 #include "../TextureFilter.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _1,
-extern const VkSamplerAddressMode g_vk_wrap_mode[] = {
+extern const VkSamplerAddressMode g_wrap_mode_vk[] = {
 #include "../TextureWrap.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _1,
-extern const VkCompareOp g_vk_compare_ops[] = {
+extern const VkCompareOp g_compare_ops_vk[] = {
 #include "../TextureCompare.inl"
 };
 #undef X
@@ -65,18 +65,18 @@ void Ray::Vk::Sampler::Init(Context *ctx, const SamplingParams params) {
     Free();
 
     VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-    sampler_info.magFilter = g_vk_min_mag_filter[size_t(params.filter)];
-    sampler_info.minFilter = g_vk_min_mag_filter[size_t(params.filter)];
-    sampler_info.addressModeU = g_vk_wrap_mode[size_t(params.wrap)];
-    sampler_info.addressModeV = g_vk_wrap_mode[size_t(params.wrap)];
-    sampler_info.addressModeW = g_vk_wrap_mode[size_t(params.wrap)];
+    sampler_info.magFilter = g_min_mag_filter_vk[size_t(params.filter)];
+    sampler_info.minFilter = g_min_mag_filter_vk[size_t(params.filter)];
+    sampler_info.addressModeU = g_wrap_mode_vk[size_t(params.wrap)];
+    sampler_info.addressModeV = g_wrap_mode_vk[size_t(params.wrap)];
+    sampler_info.addressModeW = g_wrap_mode_vk[size_t(params.wrap)];
     sampler_info.anisotropyEnable = (params.filter == eTexFilter::Nearest) ? VK_FALSE : VK_TRUE;
     sampler_info.maxAnisotropy = AnisotropyLevel;
     sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     sampler_info.unnormalizedCoordinates = VK_FALSE;
     sampler_info.compareEnable = (params.compare != eTexCompare::None) ? VK_TRUE : VK_FALSE;
-    sampler_info.compareOp = g_vk_compare_ops[size_t(params.compare)];
-    sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(params.filter)];
+    sampler_info.compareOp = g_compare_ops_vk[size_t(params.compare)];
+    sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(params.filter)];
     sampler_info.mipLodBias = params.lod_bias.to_float();
     sampler_info.minLod = params.min_lod.to_float();
     sampler_info.maxLod = params.max_lod.to_float();

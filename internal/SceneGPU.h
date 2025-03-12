@@ -1781,7 +1781,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     //     return;
     // }
 
-    if (!sky_moon_tex_.ready()) {
+    if (!sky_moon_tex_) {
         Tex2DParams params;
         params.w = MOON_TEX_W;
         params.h = MOON_TEX_H;
@@ -1811,7 +1811,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.FreeImmediate();
     }
 
-    if (!sky_weather_tex_.ready()) {
+    if (!sky_weather_tex_) {
         Tex2DParams params;
         params.w = params.h = WEATHER_TEX_RES;
         params.format = eTexFormat::RGBA8;
@@ -1839,7 +1839,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.FreeImmediate();
     }
 
-    if (!sky_cirrus_tex_.ready()) {
+    if (!sky_cirrus_tex_) {
         Tex2DParams params;
         params.w = params.h = CIRRUS_TEX_RES;
         params.format = eTexFormat::RG8;
@@ -1862,7 +1862,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.FreeImmediate();
     }
 
-    if (!sky_curl_tex_.ready()) {
+    if (!sky_curl_tex_) {
         Tex2DParams params;
         params.w = params.h = CURL_TEX_RES;
         params.format = eTexFormat::RGBA8;
@@ -2514,7 +2514,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
 inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
     SceneCommon::SetEnvironment(env);
 
-    if (!sky_transmittance_lut_tex_.ready()) {
+    if (!sky_transmittance_lut_tex_) {
         Tex2DParams params;
         params.w = SKY_TRANSMITTANCE_LUT_W;
         params.h = SKY_TRANSMITTANCE_LUT_H;
@@ -2525,7 +2525,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
 
         sky_transmittance_lut_tex_ = Texture2D{"Sky Transmittance LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
     }
-    if (!sky_multiscatter_lut_tex_.ready()) {
+    if (!sky_multiscatter_lut_tex_) {
         Tex2DParams params;
         params.w = params.h = SKY_MULTISCATTER_LUT_RES;
         params.format = eTexFormat::RGBA32F;

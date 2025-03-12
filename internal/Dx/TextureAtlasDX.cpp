@@ -27,7 +27,7 @@ template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RGB8; }
 template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RG8; }
 template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::R8; }
 
-extern const DXGI_FORMAT g_dx_formats[];
+extern const DXGI_FORMAT g_formats_dx[];
 
 uint32_t D3D12CalcSubresource(uint32_t MipSlice, uint32_t ArraySlice, uint32_t PlaneSlice, uint32_t MipLevels,
                               uint32_t ArraySize);
@@ -240,7 +240,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
         image_desc.Height = pages_count ? uint32_t(res_[1]) : 4;
         image_desc.DepthOrArraySize = std::max(pages_count, 1);
         image_desc.MipLevels = 1;
-        image_desc.Format = g_dx_formats[int(real_format_)];
+        image_desc.Format = g_formats_dx[int(real_format_)];
         image_desc.SampleDesc.Count = 1;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -289,7 +289,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
         } else {
             srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         }
-        srv_desc.Format = g_dx_formats[int(real_format_)];
+        srv_desc.Format = g_formats_dx[int(real_format_)];
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
         srv_desc.Texture2DArray.FirstArraySlice = 0;
         srv_desc.Texture2DArray.ArraySize = std::max(pages_count, 1);
@@ -484,7 +484,7 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
     src_loc.PlacedFootprint.Footprint.Width = sizex;
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = 1;
-    src_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(real_format_)];
+    src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(real_format_)];
     src_loc.PlacedFootprint.Footprint.RowPitch = round_up(pitch, TextureDataPitchAlignment);
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc = {};
@@ -541,7 +541,7 @@ void Ray::Dx::TextureAtlas::CopyRegionTo(const int page, const int x, const int 
     dst_loc.PlacedFootprint.Footprint.Width = w;
     dst_loc.PlacedFootprint.Footprint.Height = h;
     dst_loc.PlacedFootprint.Footprint.Depth = 1;
-    dst_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(real_format_)];
+    dst_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(real_format_)];
     if (IsCompressedFormat(real_format_)) {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
             round_up(GetBlockCount(w, 1, real_format_) * GetBlockLenBytes(real_format_), TextureDataPitchAlignment);

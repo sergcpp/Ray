@@ -164,7 +164,7 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const eStageBits
     const Context *ctx = nullptr;
 
     for (const TransitionInfo &transition : transitions) {
-        if (transition.p_tex && transition.p_tex->ready()) {
+        if (transition.p_tex && *transition.p_tex) {
             ctx = transition.p_tex->ctx();
 
             eResState old_state = transition.old_state;
