@@ -698,7 +698,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
     temp_stage_buf.Unmap();
 
-    Tex2DParams p = {};
+    TexParams p = {};
     p.w = _t.w;
     p.h = _t.h;
     if (_t.is_srgb && !is_YCoCg && !RequiresManualSRGBConversion(fmt)) {
@@ -1514,7 +1514,7 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
             PrepareEnvMapQTree_nolock();
         } else {
             // Dummy
-            Tex2DParams p;
+            TexParams p;
             p.w = p.h = 1;
             p.format = eTexFormat::RGBA32F;
             p.mip_count = 1;
@@ -1539,7 +1539,7 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
         }
     } else {
         // Dummy
-        Tex2DParams p;
+        TexParams p;
         p.w = p.h = 1;
         p.format = eTexFormat::RGBA32F;
         p.mip_count = 1;
@@ -1640,7 +1640,7 @@ int SaveEXR(const float *data, int width, int height, int components, const int 
 inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const atmosphere_params_t &params,
                                                                          const int res[2], const light_t lights[],
                                                                          Span<const uint32_t> dir_lights) {
-    Tex2DParams p;
+    TexParams p;
     p.w = res[0];
     p.h = res[1];
     p.format = eTexFormat::RGBA32F;
@@ -1782,7 +1782,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     // }
 
     if (!sky_moon_tex_) {
-        Tex2DParams params;
+        TexParams params;
         params.w = MOON_TEX_W;
         params.h = MOON_TEX_H;
         params.format = eTexFormat::RGBA8;
@@ -1812,7 +1812,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     }
 
     if (!sky_weather_tex_) {
-        Tex2DParams params;
+        TexParams params;
         params.w = params.h = WEATHER_TEX_RES;
         params.format = eTexFormat::RGBA8;
         params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
@@ -1840,7 +1840,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     }
 
     if (!sky_cirrus_tex_) {
-        Tex2DParams params;
+        TexParams params;
         params.w = params.h = CIRRUS_TEX_RES;
         params.format = eTexFormat::RG8;
         params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
@@ -1863,7 +1863,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     }
 
     if (!sky_curl_tex_) {
-        Tex2DParams params;
+        TexParams params;
         params.w = params.h = CURL_TEX_RES;
         params.format = eTexFormat::RGBA8;
         params.flags = eTexFlags::SRGB;
@@ -1892,7 +1892,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     }
 
     if (!sky_noise3d_tex_.handle()) {
-        Tex3DParams params;
+        TexParams params;
         params.w = params.h = params.d = NOISE_3D_RES;
         params.format = eTexFormat::R8;
         params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
@@ -2177,7 +2177,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     }
     temp_stage_buf.Unmap();
 
-    Tex2DParams p;
+    TexParams p;
     p.w = p.h = (env_map_qtree_.res / 2);
     p.format = eTexFormat::RGBA32F;
     p.mip_count = env_.qtree_levels;
@@ -2515,7 +2515,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
     SceneCommon::SetEnvironment(env);
 
     if (!sky_transmittance_lut_tex_) {
-        Tex2DParams params;
+        TexParams params;
         params.w = SKY_TRANSMITTANCE_LUT_W;
         params.h = SKY_TRANSMITTANCE_LUT_H;
         params.format = eTexFormat::RGBA32F;
@@ -2526,7 +2526,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
         sky_transmittance_lut_tex_ = Texture2D{"Sky Transmittance LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
     }
     if (!sky_multiscatter_lut_tex_) {
-        Tex2DParams params;
+        TexParams params;
         params.w = params.h = SKY_MULTISCATTER_LUT_RES;
         params.format = eTexFormat::RGBA32F;
         params.sampling.wrap = eTexWrap::ClampToEdge;

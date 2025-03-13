@@ -71,21 +71,21 @@ class Texture2D {
     void Free();
 
     void InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
-                         const Tex2DParams &p, ILog *log);
+                         const TexParams &p, ILog *log);
 
   public:
-    Tex2DParams params;
+    TexParams params;
 
     uint32_t first_user = 0xffffffff;
     mutable eResState resource_state = eResState::Undefined;
 
     Texture2D() = default;
-    Texture2D(const char *name, Context *ctx, const Tex2DParams &params, MemAllocators *mem_allocs, ILog *log);
+    Texture2D(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs, ILog *log);
     Texture2D(const char *name, Context *ctx,
               ID3D12Resource *img, // const VkImageView view, const VkSampler sampler,
-              const Tex2DParams &_params, ILog *log)
+              const TexParams &_params, ILog *log)
         : handle_{img, /*view, VK_NULL_HANDLE, sampler,*/ 0}, name_(name), params(_params) {}
-    Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
+    Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const TexParams &p, Buffer &stage_buf,
               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const Texture2D &rhs) = delete;
     Texture2D(Texture2D &&rhs) noexcept { (*this) = std::move(rhs); }
@@ -96,13 +96,13 @@ class Texture2D {
 
     operator bool() const { return (handle_.img != nullptr); }
 
-    void Init(const Tex2DParams &params, MemAllocators *mem_allocs, ILog *log);
-    void Init(ID3D12Resource *img, /*const VkImageView view, const VkSampler sampler,*/ const Tex2DParams &_params,
+    void Init(const TexParams &params, MemAllocators *mem_allocs, ILog *log);
+    void Init(ID3D12Resource *img, /*const VkImageView view, const VkSampler sampler,*/ const TexParams &_params,
               ILog *log) {
         handle_ = {img, /*view, VK_NULL_HANDLE, sampler,*/ 0};
         params = _params;
     }
-    void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
+    void Init(const void *data, uint32_t size, const TexParams &p, Buffer &stage_buf,
               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
 
     bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, bool is_srgb,
@@ -158,11 +158,11 @@ class Texture3D {
     void Free();
 
   public:
-    Tex3DParams params;
+    TexParams params;
     mutable eResState resource_state = eResState::Undefined;
 
     Texture3D() = default;
-    Texture3D(const char *name, Context *ctx, const Tex3DParams &params, MemAllocators *mem_allocs, ILog *log);
+    Texture3D(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs, ILog *log);
     Texture3D(const Texture3D &rhs) = delete;
     Texture3D(Texture3D &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Texture3D();
@@ -176,7 +176,7 @@ class Texture3D {
     ID3D12Resource *dx_resource() const { return handle_.img; }
     PoolRef sampler_ref() const { return handle_.sampler_ref; }
 
-    void Init(const Tex3DParams &params, MemAllocators *mem_allocs, ILog *log);
+    void Init(const TexParams &params, MemAllocators *mem_allocs, ILog *log);
 
     void SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez, eTexFormat format,
                      const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf, int data_off, int data_len);

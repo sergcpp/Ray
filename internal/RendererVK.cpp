@@ -283,7 +283,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log,
     }
 
     { // create tonemap LUT texture
-        Tex3DParams params = {};
+        TexParams params = {};
         params.w = params.h = params.d = LUT_DIMS;
         params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
         params.format = eTexFormat::RGB10_A2;

@@ -109,15 +109,14 @@ bool EndsWith(const std::string &str1, const char *str2);
 
 Ray::eTexUsage Ray::Dx::TexUsageFromState(const eResState state) { return g_tex_usage_per_state[int(state)]; }
 
-Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const Tex2DParams &p, MemAllocators *mem_allocs,
-                              ILog *log)
+Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(p, mem_allocs, log);
 }
 
-Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size,
-                              const Tex2DParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf,
-                              MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log)
+Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size, const TexParams &p,
+                              Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
+                              eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
@@ -142,11 +141,11 @@ Ray::Dx::Texture2D &Ray::Dx::Texture2D::operator=(Texture2D &&rhs) noexcept {
     return (*this);
 }
 
-void Ray::Dx::Texture2D::Init(const Tex2DParams &p, MemAllocators *mem_allocs, ILog *log) {
+void Ray::Dx::Texture2D::Init(const TexParams &p, MemAllocators *mem_allocs, ILog *log) {
     InitFromRAWData(nullptr, 0, nullptr, mem_allocs, p, log);
 }
 
-void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &sbuf,
+void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const TexParams &p, Buffer &sbuf,
                               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
                               eTexLoadStatus *load_status, ILog *log) {
     uint8_t *stage_data = sbuf.Map();
@@ -417,7 +416,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
 }
 
 void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf,
-                                         MemAllocators *mem_allocs, const Tex2DParams &p, ILog *log) {
+                                         MemAllocators *mem_allocs, const TexParams &p, ILog *log) {
     Free();
 
     handle_.generation = TextureHandleCounter++;
@@ -874,7 +873,7 @@ void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, ID3D12GraphicsC
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-Ray::Dx::Texture3D::Texture3D(const char *name, Context *ctx, const Tex3DParams &params, MemAllocators *mem_allocs,
+Ray::Dx::Texture3D::Texture3D(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs,
                               ILog *log)
     : name_(name), ctx_(ctx) {
     Init(params, mem_allocs, log);
@@ -900,7 +899,7 @@ Ray::Dx::Texture3D &Ray::Dx::Texture3D::operator=(Texture3D &&rhs) noexcept {
     return (*this);
 }
 
-void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemAllocators *mem_allocs, ILog *log) {
+void Ray::Dx::Texture3D::Init(const TexParams &p, MemAllocators *mem_allocs, ILog *log) {
     Free();
 
     handle_.generation = TextureHandleCounter++;
