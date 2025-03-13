@@ -58,33 +58,29 @@ struct Texture1DParams {
 };
 static_assert(sizeof(Texture1DParams) == 6, "!");
 
-struct Tex2DParams {
-    uint16_t w = 0, h = 0;
-    Bitmask<eTexFlags> flags;
-    uint8_t mip_count = 1;
-    Bitmask<eTexUsage> usage;
-    uint8_t samples = 1;
-    eTexFormat format = eTexFormat::Undefined;
-    SamplingParams sampling;
-};
-static_assert(sizeof(Tex2DParams) == 16, "!");
-
-inline bool operator==(const Tex2DParams &lhs, const Tex2DParams &rhs) {
-    return lhs.w == rhs.w && lhs.h == rhs.h && lhs.flags == rhs.flags && lhs.mip_count == rhs.mip_count &&
-           lhs.usage == rhs.usage && lhs.samples == rhs.samples && lhs.format == rhs.format &&
-           lhs.sampling == rhs.sampling;
-}
-inline bool operator!=(const Tex2DParams &lhs, const Tex2DParams &rhs) { return !operator==(lhs, rhs); }
-
-struct Tex3DParams {
+struct TexParams {
     uint16_t w = 0, h = 0;
     uint8_t d = 0;
+    uint8_t mip_count : 5;
+    uint8_t samples : 3;
     Bitmask<eTexFlags> flags;
     Bitmask<eTexUsage> usage;
     eTexFormat format = eTexFormat::Undefined;
     SamplingParams sampling;
+
+    TexParams() {
+        mip_count = 1;
+        samples = 1;
+    }
 };
-static_assert(sizeof(Tex3DParams) == 14, "!");
+static_assert(sizeof(TexParams) == 16, "!");
+
+inline bool operator==(const TexParams &lhs, const TexParams &rhs) {
+    return lhs.w == rhs.w && lhs.h == rhs.h && lhs.d == rhs.d && lhs.mip_count == rhs.mip_count &&
+           lhs.samples == rhs.samples && lhs.flags == rhs.flags && lhs.usage == rhs.usage && lhs.format == rhs.format &&
+           lhs.sampling == rhs.sampling;
+}
+inline bool operator!=(const TexParams &lhs, const TexParams &rhs) { return !operator==(lhs, rhs); }
 
 enum class eTexLoadStatus { Found, Reinitialized, CreatedDefault, CreatedFromData };
 
@@ -97,7 +93,7 @@ int GetBlockCount(int w, int h, eTexFormat format);
 inline int GetMipDataLenBytes(const int w, const int h, const eTexFormat format) {
     return GetBlockCount(w, h, format) * GetBlockLenBytes(format);
 }
-uint32_t EstimateMemory(const Tex2DParams &params);
+uint32_t EstimateMemory(const TexParams &params);
 
 eTexFormat FormatFromGLInternalFormat(uint32_t gl_internal_format, bool *is_srgb);
 int BlockLenFromGLInternalFormat(uint32_t gl_internal_format);

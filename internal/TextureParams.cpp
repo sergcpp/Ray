@@ -44,20 +44,22 @@ int Ray::GetBlockCount(const int w, const int h, const eTexFormat format) {
            ((h + g_tex_format_info[i].block_y - 1) / g_tex_format_info[i].block_y);
 }
 
-uint32_t Ray::EstimateMemory(const Tex2DParams &params) {
+uint32_t Ray::EstimateMemory(const TexParams &params) {
     uint32_t total_len = 0;
     for (int i = 0; i < params.mip_count; i++) {
         const int w = std::max(params.w >> i, 1);
         const int h = std::max(params.h >> i, 1);
+        const int d = std::max(params.d >> i, 1);
 
         if (IsCompressedFormat(params.format)) {
             const int block_len = GetBlockLenBytes(params.format);
             const int block_cnt = GetBlockCount(w, h, params.format);
 
+            assert(params.d == 0);
             total_len += uint32_t(block_len) * block_cnt;
         } else {
             assert(g_tex_format_info[int(params.format)].pp_data_len != 0);
-            total_len += w * h * g_tex_format_info[int(params.format)].pp_data_len;
+            total_len += w * h * d * g_tex_format_info[int(params.format)].pp_data_len;
         }
     }
     return total_len;

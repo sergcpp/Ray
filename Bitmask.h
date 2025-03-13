@@ -1,12 +1,17 @@
 #pragma once
 
+#include <cassert>
+#include <limits>
 #include <type_traits>
 
 namespace Ray {
 template <class enum_type, typename = typename std::enable_if<std::is_enum<enum_type>::value>::type> class Bitmask {
     using underlying_type = typename std::underlying_type<enum_type>::type;
 
-    static underlying_type to_mask(const enum_type e) { return 1 << static_cast<underlying_type>(e); }
+    static underlying_type to_mask(const enum_type e) {
+      assert(1ull << static_cast<underlying_type>(e) <= std::numeric_limits<underlying_type>::max());
+      return 1 << static_cast<underlying_type>(e);
+    }
 
     explicit Bitmask(const underlying_type mask) : mask_(mask) {}
 
