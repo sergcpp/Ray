@@ -51,13 +51,6 @@ enum class eTexFlags : uint8_t { NoOwnership, SRGB };
 
 enum class eTexUsage : uint8_t { Transfer, Sampled, Storage, RenderTarget };
 
-struct Texture1DParams {
-    uint16_t offset = 0, size = 0;
-    eTexFormat format = eTexFormat::Undefined;
-    uint8_t _padding = 0;
-};
-static_assert(sizeof(Texture1DParams) == 6, "!");
-
 struct TexParams {
     uint16_t w = 0, h = 0;
     uint8_t d = 0;

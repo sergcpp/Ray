@@ -109,21 +109,21 @@ bool EndsWith(const std::string &str1, const char *str2);
 
 Ray::eTexUsage Ray::Dx::TexUsageFromState(const eResState state) { return g_tex_usage_per_state[int(state)]; }
 
-Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
+Ray::Dx::Texture::Texture(const char *name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(p, mem_allocs, log);
 }
 
-Ray::Dx::Texture2D::Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size, const TexParams &p,
-                              Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
-                              eTexLoadStatus *load_status, ILog *log)
+Ray::Dx::Texture::Texture(const char *name, Context *ctx, const void *data, const uint32_t size, const TexParams &p,
+                          Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
+                          eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
 
-Ray::Dx::Texture2D::~Texture2D() { Free(); }
+Ray::Dx::Texture::~Texture() { Free(); }
 
-Ray::Dx::Texture2D &Ray::Dx::Texture2D::operator=(Texture2D &&rhs) noexcept {
+Ray::Dx::Texture &Ray::Dx::Texture::operator=(Texture &&rhs) noexcept {
     if (this == &rhs) {
         return (*this);
     }
@@ -141,13 +141,13 @@ Ray::Dx::Texture2D &Ray::Dx::Texture2D::operator=(Texture2D &&rhs) noexcept {
     return (*this);
 }
 
-void Ray::Dx::Texture2D::Init(const TexParams &p, MemAllocators *mem_allocs, ILog *log) {
+void Ray::Dx::Texture::Init(const TexParams &p, MemAllocators *mem_allocs, ILog *log) {
     InitFromRAWData(nullptr, 0, nullptr, mem_allocs, p, log);
 }
 
-void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const TexParams &p, Buffer &sbuf,
-                              ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
-                              eTexLoadStatus *load_status, ILog *log) {
+void Ray::Dx::Texture::Init(const void *data, const uint32_t size, const TexParams &p, Buffer &sbuf,
+                            ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status,
+                            ILog *log) {
     uint8_t *stage_data = sbuf.Map();
     memcpy(stage_data, data, size);
     sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(size));
@@ -158,7 +158,7 @@ void Ray::Dx::Texture2D::Init(const void *data, const uint32_t size, const TexPa
     (*load_status) = eTexLoadStatus::CreatedFromData;
 }
 
-void Ray::Dx::Texture2D::Free() {
+void Ray::Dx::Texture::Free() {
     if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
         ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
@@ -170,9 +170,9 @@ void Ray::Dx::Texture2D::Free() {
     }
 }
 
-bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                                 const bool is_srgb, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
-                                 ILog *log) {
+bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
+                               const bool is_srgb, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
+                               ILog *log) {
     ID3D12Resource *new_image = nullptr;
     // VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
@@ -415,8 +415,8 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
     return true;
 }
 
-void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf,
-                                         MemAllocators *mem_allocs, const TexParams &p, ILog *log) {
+void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf,
+                                       MemAllocators *mem_allocs, const TexParams &p, ILog *log) {
     Free();
 
     handle_.generation = TextureHandleCounter++;
@@ -424,10 +424,10 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
 
     { // create image
         D3D12_RESOURCE_DESC image_desc = {};
-        image_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        image_desc.Dimension = (p.d ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D);
         image_desc.Width = p.w;
         image_desc.Height = p.h;
-        image_desc.DepthOrArraySize = 1;
+        image_desc.DepthOrArraySize = (p.d ? p.d : 1);
         image_desc.MipLevels = params.mip_count;
         image_desc.Format = g_formats_dx[int(p.format)];
         if (p.flags & eTexFlags::SRGB) {
@@ -474,11 +474,18 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
         if (p.flags & eTexFlags::SRGB) {
             srv_desc.Format = ToSRGBFormat(srv_desc.Format);
         }
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.Texture2D.MipLevels = p.mip_count;
-        srv_desc.Texture2D.MostDetailedMip = 0;
-        srv_desc.Texture2D.PlaneSlice = 0;
-        srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+        if (p.d == 0) {
+            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srv_desc.Texture2D.MipLevels = p.mip_count;
+            srv_desc.Texture2D.MostDetailedMip = 0;
+            srv_desc.Texture2D.PlaneSlice = 0;
+            srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+        } else {
+            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+            srv_desc.Texture3D.MipLevels = p.mip_count;
+            srv_desc.Texture3D.MostDetailedMip = 0;
+            srv_desc.Texture3D.ResourceMinLODClamp = 0.0f;
+        }
 
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         if (GetChannelCount(p.format) == 1 && !bool(p.usage & eTexUsage::Storage)) {
@@ -492,7 +499,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
     if (requires_uav) {
         D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
         uav_desc.Format = g_formats_dx[int(p.format)];
-        uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        uav_desc.ViewDimension = (p.d ? D3D12_UAV_DIMENSION_TEXTURE3D : D3D12_UAV_DIMENSION_TEXTURE2D);
         uav_desc.Texture2D.PlaneSlice = 0;
         uav_desc.Texture2D.MipSlice = 0;
 
@@ -626,13 +633,15 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graph
     }
 }
 
-void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const int offsety, const int sizex,
-                                     const int sizey, const eTexFormat format, const Buffer &sbuf,
-                                     ID3D12GraphicsCommandList *cmd_buf, const int data_off, const int data_len) {
+void Ray::Dx::Texture::SetSubImage(const int level, const int offsetx, const int offsety, const int offsetz,
+                                   const int sizex, const int sizey, const int sizez, const eTexFormat format,
+                                   const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf, const int data_off,
+                                   const int data_len) {
     assert(format == params.format);
     assert(params.samples == 1);
     assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
     assert(offsety >= 0 && offsety + sizey <= std::max(params.h >> level, 1));
+    assert(offsetz >= 0 && offsetz + sizez <= std::max(params.d >> level, 1));
     assert(sbuf.type() == eBufType::Upload);
 
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
@@ -668,7 +677,7 @@ void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const i
     src_loc.PlacedFootprint.Offset = data_off;
     src_loc.PlacedFootprint.Footprint.Width = sizex;
     src_loc.PlacedFootprint.Footprint.Height = sizey;
-    src_loc.PlacedFootprint.Footprint.Depth = 1;
+    src_loc.PlacedFootprint.Footprint.Depth = sizez;
     src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(params.format)];
     if (params.flags & eTexFlags::SRGB) {
         src_loc.PlacedFootprint.Footprint.Format = ToSRGBFormat(src_loc.PlacedFootprint.Footprint.Format);
@@ -686,10 +695,10 @@ void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const i
     dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     dst_loc.SubresourceIndex = D3D12CalcSubresource(level, 0, 0, params.mip_count, 1);
 
-    cmd_buf->CopyTextureRegion(&dst_loc, offsetx, offsety, 0, &src_loc, nullptr);
+    cmd_buf->CopyTextureRegion(&dst_loc, offsetx, offsety, offsetz, &src_loc, nullptr);
 }
 
-void Ray::Dx::Texture2D::SetSampling(const SamplingParams s) {
+void Ray::Dx::Texture::SetSampling(const SamplingParams s) {
     if (handle_.sampler_ref) {
         ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
     }
@@ -719,8 +728,8 @@ void Ray::Dx::Texture2D::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture2D &src_tex, const uint32_t src_level,
-                               const uint32_t src_x, const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level,
+void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture &src_tex, const uint32_t src_level,
+                               const uint32_t src_x, const uint32_t src_y, Texture &dst_tex, const uint32_t dst_level,
                                const uint32_t dst_x, const uint32_t dst_y, const uint32_t width,
                                const uint32_t height) {
     assert(src_tex.resource_state == eResState::CopySrc);
@@ -747,7 +756,7 @@ void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture2D &sr
     cmd_buf->CopyTextureRegion(&dst_loc, dst_x, dst_y, 0, &src_loc, &src_region);
 }
 
-void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const int x, const int y, const int w,
+void Ray::Dx::CopyImageToBuffer(const Texture &src_tex, const int level, const int x, const int y, const int w,
                                 const int h, const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf,
                                 const int data_off) {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
@@ -810,7 +819,7 @@ void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
     cmd_buf->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, &src_region);
 }
 
-void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, ID3D12GraphicsCommandList *cmd_buf) {
+void Ray::Dx::_ClearColorImage(Texture &tex, const void *rgba, ID3D12GraphicsCommandList *cmd_buf) {
     assert(tex.resource_state == eResState::UnorderedAccess);
 
     Context *ctx = tex.ctx();
@@ -872,195 +881,6 @@ void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, ID3D12GraphicsC
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-
-Ray::Dx::Texture3D::Texture3D(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs,
-                              ILog *log)
-    : name_(name), ctx_(ctx) {
-    Init(params, mem_allocs, log);
-}
-
-Ray::Dx::Texture3D::~Texture3D() { Free(); }
-
-Ray::Dx::Texture3D &Ray::Dx::Texture3D::operator=(Texture3D &&rhs) noexcept {
-    if (this == &rhs) {
-        return (*this);
-    }
-
-    Free();
-
-    ctx_ = std::exchange(rhs.ctx_, nullptr);
-    handle_ = std::exchange(rhs.handle_, {});
-    alloc_ = std::exchange(rhs.alloc_, {});
-    params = std::exchange(rhs.params, {});
-    name_ = std::move(rhs.name_);
-
-    resource_state = std::exchange(rhs.resource_state, eResState::Undefined);
-
-    return (*this);
-}
-
-void Ray::Dx::Texture3D::Init(const TexParams &p, MemAllocators *mem_allocs, ILog *log) {
-    Free();
-
-    handle_.generation = TextureHandleCounter++;
-    params = p;
-
-    { // create image
-        D3D12_RESOURCE_DESC image_desc = {};
-        image_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
-        image_desc.Width = p.w;
-        image_desc.Height = p.h;
-        image_desc.DepthOrArraySize = p.d;
-        image_desc.MipLevels = 1;
-        image_desc.Format = g_formats_dx[int(p.format)];
-        if (p.flags & eTexFlags::SRGB) {
-            image_desc.Format = ToSRGBFormat(image_desc.Format);
-        }
-        image_desc.SampleDesc.Count = 1;
-        image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        image_desc.Flags = to_dx_image_flags(params.usage, p.format);
-
-        const D3D12_RESOURCE_ALLOCATION_INFO alloc_info = ctx_->device()->GetResourceAllocationInfo(0, 1, &image_desc);
-
-        alloc_ = mem_allocs->Allocate(uint32_t(alloc_info.Alignment), uint32_t(alloc_info.SizeInBytes),
-                                      D3D12_HEAP_TYPE_DEFAULT);
-        if (!alloc_) {
-            log->Error("Failed to allocate memory!");
-            return;
-        }
-
-        HRESULT hr =
-            ctx_->device()->CreatePlacedResource(alloc_.owner->heap(alloc_.pool), UINT64(alloc_.offset), &image_desc,
-                                                 D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&handle_.img));
-        if (FAILED(hr)) {
-            log->Error("Failed to create image!");
-            return;
-        }
-
-#ifdef ENABLE_GPU_DEBUG
-        std::wstring temp_str(name_.begin(), name_.end());
-        handle_.img->SetName(temp_str.c_str());
-#endif
-    }
-
-    this->resource_state = eResState::Undefined;
-
-    const UINT CBV_SRV_UAV_INCR =
-        ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    const UINT SAMPLER_INCR = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-
-    handle_.views_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, 1);
-    handle_.sampler_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
-
-    { // create default SRV
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Format = g_formats_dx[int(p.format)];
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-        srv_desc.Texture2D.MipLevels = 1;
-        srv_desc.Texture2D.MostDetailedMip = 0;
-        srv_desc.Texture2D.PlaneSlice = 0;
-        srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
-
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        if (GetChannelCount(p.format) == 1) {
-            srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
-        }
-
-        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.views_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        dest_handle.ptr += CBV_SRV_UAV_INCR * handle_.views_ref.offset;
-        ctx_->device()->CreateShaderResourceView(handle_.img, &srv_desc, dest_handle);
-    }
-
-    { // create new sampler
-        D3D12_SAMPLER_DESC sampler_desc = {};
-        sampler_desc.Filter = g_filter_dx[size_t(p.sampling.filter)];
-        sampler_desc.AddressU = g_wrap_mode_dx[size_t(p.sampling.wrap)];
-        sampler_desc.AddressV = g_wrap_mode_dx[size_t(p.sampling.wrap)];
-        sampler_desc.AddressW = g_wrap_mode_dx[size_t(p.sampling.wrap)];
-        sampler_desc.MipLODBias = p.sampling.lod_bias.to_float();
-        sampler_desc.MinLOD = p.sampling.min_lod.to_float();
-        sampler_desc.MaxLOD = p.sampling.max_lod.to_float();
-        sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
-        if (p.sampling.compare != eTexCompare::None) {
-            sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(p.sampling.compare)];
-        }
-
-        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        dest_handle.ptr += SAMPLER_INCR * handle_.sampler_ref.offset;
-        ctx_->device()->CreateSampler(&sampler_desc, dest_handle);
-    }
-}
-
-void Ray::Dx::Texture3D::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
-        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
-        ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
-        ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
-        ctx_->allocs_to_free[ctx_->backend_frame].emplace_back(std::move(alloc_));
-
-        handle_ = {};
-        params.format = eTexFormat::Undefined;
-    }
-}
-
-void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez,
-                                     eTexFormat format, const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf,
-                                     int data_off, int data_len) {
-    assert(format == params.format);
-    assert(offsetx >= 0 && offsetx + sizex <= params.w);
-    assert(offsety >= 0 && offsety + sizey <= params.h);
-    assert(offsetz >= 0 && offsetz + sizez <= params.d);
-    assert(sbuf.type() == eBufType::Upload);
-
-    SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
-
-    if (/*sbuf.resource_state != eResState::Undefined &&*/ sbuf.resource_state != eResState::CopySrc) {
-        auto &new_barrier = barriers.emplace_back();
-        new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        new_barrier.Transition.pResource = sbuf.dx_resource();
-        new_barrier.Transition.StateBefore = DXResourceState(sbuf.resource_state);
-        new_barrier.Transition.StateAfter = DXResourceState(eResState::CopySrc);
-        new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    }
-
-    if (this->resource_state != eResState::CopyDst) {
-        auto &new_barrier = barriers.emplace_back();
-        new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        new_barrier.Transition.pResource = this->handle_.img;
-        new_barrier.Transition.StateBefore = DXResourceState(this->resource_state);
-        new_barrier.Transition.StateAfter = DXResourceState(eResState::CopyDst);
-        new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    }
-
-    if (!barriers.empty()) {
-        cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
-    }
-
-    sbuf.resource_state = eResState::CopySrc;
-    this->resource_state = eResState::CopyDst;
-
-    D3D12_TEXTURE_COPY_LOCATION src_loc = {};
-    src_loc.pResource = sbuf.dx_resource();
-    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    src_loc.PlacedFootprint.Offset = data_off;
-    src_loc.PlacedFootprint.Footprint.Width = sizex;
-    src_loc.PlacedFootprint.Footprint.Height = sizey;
-    src_loc.PlacedFootprint.Footprint.Depth = sizez;
-    src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(params.format)];
-    if (IsCompressedFormat(params.format)) {
-        assert(false);
-    } else {
-        src_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(sizex * GetPerPixelDataLen(params.format), TextureDataPitchAlignment);
-    }
-
-    D3D12_TEXTURE_COPY_LOCATION dst_loc = {};
-    dst_loc.pResource = dx_resource();
-    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst_loc.SubresourceIndex = D3D12CalcSubresource(0, 0, 0, 1, 1);
-
-    cmd_buf->CopyTextureRegion(&dst_loc, offsetx, offsety, offsetz, &src_loc, nullptr);
-}
 
 DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(const eTexFormat format) { return g_formats_dx[size_t(format)]; }
 

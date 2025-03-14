@@ -59,7 +59,7 @@ inline bool operator<(const TexHandle &lhs, const TexHandle &rhs) {
 
 class TextureStageBuf;
 
-class Texture2D {
+class Texture {
     Context *ctx_ = nullptr;
     TexHandle handle_;
     MemAllocation alloc_;
@@ -76,19 +76,19 @@ class Texture2D {
     uint32_t first_user = 0xffffffff;
     mutable eResState resource_state = eResState::Undefined;
 
-    Texture2D() = default;
-    Texture2D(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs, ILog *log);
-    Texture2D(const char *name, Context *ctx, const VkImage img, const VkImageView view, const VkSampler sampler,
-              const TexParams &_params, ILog *log)
+    Texture() = default;
+    Texture(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs, ILog *log);
+    Texture(const char *name, Context *ctx, const VkImage img, const VkImageView view, const VkSampler sampler,
+            const TexParams &_params, ILog *log)
         : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, name_(name), params(_params) {}
-    Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const TexParams &p, Buffer &stage_buf,
-              VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
-    Texture2D(const Texture2D &rhs) = delete;
-    Texture2D(Texture2D &&rhs) noexcept { (*this) = std::move(rhs); }
-    ~Texture2D();
+    Texture(const char *name, Context *ctx, const void *data, uint32_t size, const TexParams &p, Buffer &stage_buf,
+            VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
+    Texture(const Texture &rhs) = delete;
+    Texture(Texture &&rhs) noexcept { (*this) = std::move(rhs); }
+    ~Texture();
 
-    Texture2D &operator=(const Texture2D &rhs) = delete;
-    Texture2D &operator=(Texture2D &&rhs) noexcept;
+    Texture &operator=(const Texture &rhs) = delete;
+    Texture &operator=(Texture &&rhs) noexcept;
 
     operator bool() const { return (handle_.img != VK_NULL_HANDLE); }
 
@@ -126,52 +126,19 @@ class Texture2D {
     void SetSampling(SamplingParams sampling);
     void ApplySampling(const SamplingParams sampling, ILog *log) { SetSampling(sampling); }
 
-    void SetSubImage(int level, int offsetx, int offsety, int sizex, int sizey, eTexFormat format, const Buffer &sbuf,
-                     VkCommandBuffer cmd_buf, int data_off, int data_len);
+    void SetSubImage(int level, int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez,
+                     eTexFormat format, const Buffer &sbuf, VkCommandBuffer cmd_buf, int data_off, int data_len);
 };
 
-void CopyImageToImage(VkCommandBuffer cmd_buf, Texture2D &src_tex, uint32_t src_level, uint32_t src_x, uint32_t src_y,
-                      Texture2D &dst_tex, uint32_t dst_level, uint32_t dst_x, uint32_t dst_y, uint32_t width,
+void CopyImageToImage(VkCommandBuffer cmd_buf, Texture &src_tex, uint32_t src_level, uint32_t src_x, uint32_t src_y,
+                      Texture &dst_tex, uint32_t dst_level, uint32_t dst_x, uint32_t dst_y, uint32_t width,
                       uint32_t height);
 
-void CopyImageToBuffer(const Texture2D &src_tex, int level, int x, int y, int w, int h, const Buffer &dst_buf,
+void CopyImageToBuffer(const Texture &src_tex, int level, int x, int y, int w, int h, const Buffer &dst_buf,
                        VkCommandBuffer cmd_buf, int data_off);
 
-void ClearColorImage(Texture2D &tex, const float rgba[4], VkCommandBuffer cmd_buf);
-void ClearColorImage(Texture2D &tex, const uint32_t rgba[4], VkCommandBuffer cmd_buf);
-
-class Texture3D {
-    std::string name_;
-    Context *ctx_ = nullptr;
-    TexHandle handle_;
-    MemAllocation alloc_;
-
-    void Free();
-
-  public:
-    TexParams params;
-    mutable eResState resource_state = eResState::Undefined;
-
-    Texture3D() = default;
-    Texture3D(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs, ILog *log);
-    Texture3D(const Texture3D &rhs) = delete;
-    Texture3D(Texture3D &&rhs) noexcept { (*this) = std::move(rhs); }
-    ~Texture3D();
-
-    Texture3D &operator=(const Texture3D &rhs) = delete;
-    Texture3D &operator=(Texture3D &&rhs) noexcept;
-
-    const std::string &name() const { return name_; }
-    Context *ctx() const { return ctx_; }
-    const TexHandle &handle() const { return handle_; }
-    TexHandle &handle() { return handle_; }
-    VkSampler vk_sampler() const { return handle_.sampler; }
-
-    void Init(const TexParams &params, MemAllocators *mem_allocs, ILog *log);
-
-    void SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez, eTexFormat format,
-                     const Buffer &sbuf, VkCommandBuffer cmd_buf, int data_off, int data_len);
-};
+void ClearColorImage(Texture &tex, const float rgba[4], VkCommandBuffer cmd_buf);
+void ClearColorImage(Texture &tex, const uint32_t rgba[4], VkCommandBuffer cmd_buf);
 
 VkFormat VKFormatFromTexFormat(eTexFormat format);
 

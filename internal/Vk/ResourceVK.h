@@ -75,13 +75,11 @@ uint32_t VKPipelineStagesForState(eResState state);
 eStageBits StageBitsForState(eResState state);
 
 class Buffer;
-class Texture2D;
-class Texture3D;
+class Texture;
 class TextureAtlas;
 
 struct TransitionInfo {
-    const Texture2D *p_tex = nullptr;
-    const Texture3D *p_3dtex = nullptr;
+    const Texture *p_tex = nullptr;
     const TextureAtlas *p_tex_arr = nullptr;
     const Buffer *p_buf = nullptr;
 
@@ -91,10 +89,8 @@ struct TransitionInfo {
     bool update_internal_state = false;
 
     TransitionInfo() = default;
-    TransitionInfo(const Texture2D *_p_tex, eResState _new_state)
+    TransitionInfo(const Texture *_p_tex, eResState _new_state)
         : p_tex(_p_tex), new_state(_new_state), update_internal_state(true) {}
-    TransitionInfo(const Texture3D *_p_tex, eResState _new_state)
-        : p_3dtex(_p_tex), new_state(_new_state), update_internal_state(true) {}
     TransitionInfo(const TextureAtlas *_p_tex_arr, eResState _new_state)
         : p_tex_arr(_p_tex_arr), new_state(_new_state), update_internal_state(true) {}
     TransitionInfo(const Buffer *_p_buf, eResState _new_state)
