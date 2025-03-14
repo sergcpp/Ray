@@ -27,19 +27,19 @@ struct scene_data_t {
     const uint32_t blocker_lights_count;
     const Buffer &light_cwnodes;
     const AccStructure &rt_tlas;
-    const Texture2D &env_qtree;
+    const Texture &env_qtree;
     int env_qtree_levels;
     const cache_grid_params_t &spatial_cache_grid;
     const Buffer &spatial_cache_entries;
     const Buffer &spatial_cache_voxels;
     const Buffer &atmosphere_params;
-    const Texture2D &transmittance_lut;
-    const Texture2D &multiscatter_lut;
-    const Texture2D &moon_tex;
-    const Texture2D &weather_tex;
-    const Texture2D &cirrus_tex;
-    const Texture2D &curl_tex;
-    const Texture3D &noise3d_tex;
+    const Texture &transmittance_lut;
+    const Texture &multiscatter_lut;
+    const Texture &moon_tex;
+    const Texture &weather_tex;
+    const Texture &cirrus_tex;
+    const Texture &curl_tex;
+    const Texture &noise3d_tex;
 };
 
 class Renderer : public RendererBase {
@@ -115,14 +115,14 @@ class Renderer : public RendererBase {
     void UpdateFilterTable(CommandBuffer cmd_buf, ePixelFilter filter, float filter_width);
 
     // TODO: Optimize these!
-    Texture2D temp_buf0_, full_buf_, half_buf_, final_buf_, raw_filtered_buf_;
-    Texture2D temp_buf1_, base_color_buf_;
-    Texture2D temp_depth_normals_buf_, depth_normals_buf_;
-    Texture2D required_samples_buf_;
+    Texture temp_buf0_, full_buf_, half_buf_, final_buf_, raw_filtered_buf_;
+    Texture temp_buf1_, base_color_buf_;
+    Texture temp_depth_normals_buf_, depth_normals_buf_;
+    Texture required_samples_buf_;
 
     Sampler zero_border_sampler_;
 
-    Texture3D tonemap_lut_;
+    Texture tonemap_lut_;
     eViewTransform loaded_view_transform_ = eViewTransform::Standard;
 
     Buffer random_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2],
@@ -171,7 +171,7 @@ class Renderer : public RendererBase {
 
     void kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, uint32_t rand_seed, const rect_t &rect,
                                     int img_w, int img_h, const Buffer &rand_seq, const Buffer &filter_table,
-                                    int iteration, bool adaptive, const Texture2D &req_samples_img,
+                                    int iteration, bool adaptive, const Texture &req_samples_img,
                                     const Buffer &inout_counters, const Buffer &out_rays);
     void kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &ps, const scene_data_t &sc_data,
                                const Buffer &rand_seq, uint32_t rand_seed, int iteration, const rect_t &rect,
@@ -198,7 +198,7 @@ class Renderer : public RendererBase {
                                      const Buffer &rand_seq, uint32_t rand_seed, int iteration, uint32_t node_index,
                                      float clamp_val, Span<const TextureAtlas> tex_atlases,
                                      const BindlessTexData &bindless_tex, const Buffer &sh_rays,
-                                     const Texture2D &out_img);
+                                     const Texture &out_img);
     void kernel_IntersectAreaLights(CommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(CommandBuffer cmd_buf, const pass_settings_t &ps, eSpatialCacheMode cache,
@@ -206,74 +206,72 @@ class Renderer : public RendererBase {
                                  const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
                                  const Buffer &rand_seq, uint32_t rand_seed, int iteration, const rect_t &rect,
                                  Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                 const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+                                 const Texture &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                  const Buffer &out_sky_rays, const Buffer &inout_counters,
-                                 const Texture2D &out_base_color, const Texture2D &out_depth_normals);
+                                 const Texture &out_base_color, const Texture &out_depth_normals);
     void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &ps, eSpatialCacheMode cache_usage,
                                    float clamp_direct, const environment_t &env, const Buffer &indir_args,
                                    int indir_args_index, const Buffer &hits, const Buffer &rays,
                                    const scene_data_t &sc_data, const Buffer &rand_seq, uint32_t rand_seed,
                                    int iteration, Span<const TextureAtlas> tex_atlases,
-                                   const BindlessTexData &bindless_tex, const Texture2D &out_img,
-                                   const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
-                                   const Buffer &inout_counters, const Texture2D &out_depth_normals);
+                                   const BindlessTexData &bindless_tex, const Texture &out_img, const Buffer &out_rays,
+                                   const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
+                                   const Texture &out_depth_normals);
     void kernel_ShadeSky(CommandBuffer cmd_buf, const pass_settings_t &ps, float limit, const environment_t &env,
                          const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays,
                          const Buffer &ray_indices, const Buffer &counters, const scene_data_t &sc_data, int iteration,
-                         const Texture2D &out_img);
+                         const Texture &out_img);
     void kernel_ShadeSkyPrimary(CommandBuffer cmd_buf, const pass_settings_t &ps, const environment_t &env,
                                 const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays,
                                 const Buffer &ray_indices, const Buffer &counters, const scene_data_t &sc_data,
-                                int iteration, const Texture2D &out_img);
+                                int iteration, const Texture &out_img);
     void kernel_ShadeSkySecondary(CommandBuffer cmd_buf, const pass_settings_t &ps, float clamp_direct,
                                   const environment_t &env, const Buffer &indir_args, int indir_args_index,
                                   const Buffer &hits, const Buffer &rays, const Buffer &ray_indices,
                                   const Buffer &counters, const scene_data_t &sc_data, int iteration,
-                                  const Texture2D &out_img);
+                                  const Texture &out_img);
     void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(CommandBuffer cmd_buf, float mix_factor, float half_mix_factor, const rect_t &rect,
-                               int iteration, float exposure, const Texture2D &temp_img,
-                               const Texture2D &temp_base_color, const Texture2D &temp_depth_normals,
-                               const Texture2D &req_samples, const Texture2D &out_full_img,
-                               const Texture2D &out_half_img, const Texture2D &out_base_color,
-                               const Texture2D &out_depth_normals);
-    void kernel_Postprocess(CommandBuffer cmd_buf, const Texture2D &full_buf, const Texture2D &half_buf,
-                            float inv_gamma, const rect_t &rect, float variance_threshold, int iteration,
-                            const Texture2D &out_pixels, const Texture2D &out_variance,
-                            const Texture2D &out_req_samples) const;
-    void kernel_FilterVariance(CommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
-                               float variance_threshold, int iteration, const Texture2D &out_variance,
-                               const Texture2D &out_req_samples);
-    void kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
-                          float damping, const Texture2D &base_color_img, float base_color_weight,
-                          const Texture2D &depth_normals_img, float depth_normals_weight, const Texture2D &out_raw_img,
-                          eViewTransform view_transform, float inv_gamma, const rect_t &rect, const Texture2D &out_img);
-    void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Texture2D &img_buf1,
-                            const Texture2D &img_buf2, const Texture2D &img_buf3, const Sampler &sampler,
+                               int iteration, float exposure, const Texture &temp_img, const Texture &temp_base_color,
+                               const Texture &temp_depth_normals, const Texture &req_samples,
+                               const Texture &out_full_img, const Texture &out_half_img, const Texture &out_base_color,
+                               const Texture &out_depth_normals);
+    void kernel_Postprocess(CommandBuffer cmd_buf, const Texture &full_buf, const Texture &half_buf, float inv_gamma,
+                            const rect_t &rect, float variance_threshold, int iteration, const Texture &out_pixels,
+                            const Texture &out_variance, const Texture &out_req_samples) const;
+    void kernel_FilterVariance(CommandBuffer cmd_buf, const Texture &img_buf, const rect_t &rect,
+                               float variance_threshold, int iteration, const Texture &out_variance,
+                               const Texture &out_req_samples);
+    void kernel_NLMFilter(CommandBuffer cmd_buf, const Texture &img_buf, const Texture &var_buf, float alpha,
+                          float damping, const Texture &base_color_img, float base_color_weight,
+                          const Texture &depth_normals_img, float depth_normals_weight, const Texture &out_raw_img,
+                          eViewTransform view_transform, float inv_gamma, const rect_t &rect, const Texture &out_img);
+    void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Texture &img_buf1,
+                            const Texture &img_buf2, const Texture &img_buf3, const Sampler &sampler,
                             const rect_t &rect, int w, int h, const Buffer &weights, uint32_t weights_offset,
                             uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset, int output_stride,
-                            const Texture2D &out_debug_img = {});
+                            const Texture &out_debug_img = {});
     void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Buffer &input_buf,
                             uint32_t input_offset, int input_stride, const rect_t &rect, int w, int h,
                             const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
                             const Buffer &out_buf, uint32_t output_offset, int output_stride, bool downsample,
-                            const Texture2D &out_debug_img = {});
+                            const Texture &out_debug_img = {});
     void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Buffer &input_buf,
                             uint32_t input_offset, int input_stride, float inv_gamma, const rect_t &rect, int w, int h,
                             const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
-                            const Texture2D &out_img, const Texture2D &out_tonemapped_img);
+                            const Texture &out_img, const Texture &out_tonemapped_img);
     void kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2, int out_channels,
                                   const Buffer &input_buf1, uint32_t input_offset1, int input_stride1, bool upscale1,
                                   const Buffer &input_buf2, uint32_t input_offset2, int input_stride2,
                                   const rect_t &rect, int w, int h, const Buffer &weights, uint32_t weights_offset,
                                   uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset,
-                                  int output_stride, const Texture2D &out_debug_img = {});
+                                  int output_stride, const Texture &out_debug_img = {});
     void kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2, int out_channels,
                                   const Buffer &input_buf1, uint32_t input_offset1, int input_stride1, bool upscale1,
-                                  const Texture2D &img_buf1, const Texture2D &img_buf2, const Texture2D &img_buf3,
+                                  const Texture &img_buf1, const Texture &img_buf2, const Texture &img_buf3,
                                   const Sampler &sampler, const rect_t &rect, int w, int h, const Buffer &weights,
                                   uint32_t weights_offset, uint32_t biases_offset, const Buffer &out_buf,
-                                  uint32_t output_offset, int output_stride, const Texture2D &out_debug_img = {});
+                                  uint32_t output_offset, int output_stride, const Texture &out_debug_img = {});
     void kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
                              const Buffer &counters, const float root_min[3], const float cell_size[3],
                              const Buffer &out_hashes);
@@ -294,11 +292,11 @@ class Renderer : public RendererBase {
                                 const Buffer &in_rays, const Buffer &indices, const Buffer &counters, int counter_index,
                                 const Buffer &out_rays);
     void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
-                        const Texture2D &out_pixels);
+                        const Texture &out_pixels);
     void kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const cache_grid_params_t &params, const Buffer &indir_args,
                                    const int indir_args_index, const Buffer &counters, const int counter_index,
                                    const Buffer &inters, const Buffer &rays, const Buffer &cache_data,
-                                   const Texture2D &radiance_img, const Texture2D &depth_normals_img,
+                                   const Texture &radiance_img, const Texture &depth_normals_img,
                                    const Buffer &inout_entries, const Buffer &inout_voxels_curr,
                                    const Buffer &inout_lock_buf);
     void kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const cache_grid_params_t &params,
@@ -396,22 +394,22 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
     params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Storage | eTexUsage::Transfer;
     params.sampling.wrap = eTexWrap::ClampToEdge;
 
-    temp_buf0_ = Texture2D{"Temp Image 0", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    temp_buf1_ = Texture2D{"Temp Image 1", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    full_buf_ = Texture2D{"Full Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    half_buf_ = Texture2D{"Half Image [1]", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    base_color_buf_ = Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    temp_buf0_ = Texture{"Temp Image 0", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    temp_buf1_ = Texture{"Temp Image 1", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    full_buf_ = Texture{"Full Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    half_buf_ = Texture{"Half Image [1]", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    base_color_buf_ = Texture{"Base Color Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     temp_depth_normals_buf_ =
-        Texture2D{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    depth_normals_buf_ = Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        Texture{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    depth_normals_buf_ = Texture{"Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    final_buf_ = Texture{"Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     raw_filtered_buf_ =
-        Texture2D{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        Texture{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     { // Texture that holds required sample count per pixel
         TexParams uparams = params;
         uparams.format = eTexFormat::R16UI;
         required_samples_buf_ =
-            Texture2D{"Required samples Image", ctx_.get(), uparams, ctx_->default_mem_allocs(), ctx_->log()};
+            Texture{"Required samples Image", ctx_.get(), uparams, ctx_->default_mem_allocs(), ctx_->log()};
     }
 
     { // Sampler with black border

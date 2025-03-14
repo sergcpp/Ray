@@ -25,9 +25,7 @@ class Buffer;
 class DescrMultiPoolAlloc;
 class Pipeline;
 class TextureAtlas;
-class Texture1D;
-class Texture2D;
-class Texture3D;
+class Texture;
 class Sampler;
 
 enum class eBindTarget : uint16_t {
@@ -50,20 +48,16 @@ enum class eBindTarget : uint16_t {
 
 struct OpaqueHandle {
     union {
-        const Texture2D *tex;
-        const Texture3D *tex3d;
+        const Texture *tex;
         const Buffer *buf;
-        const Texture1D *tex_buf;
         const TextureAtlas *tex_arr;
         const Sampler *sampler;
         const AccStructure *acc_struct;
     };
     int count = 0;
     OpaqueHandle() = default;
-    OpaqueHandle(const Texture2D &_tex) : tex(&_tex), count(1) {}
-    OpaqueHandle(const Texture3D &_tex) : tex3d(&_tex), count(1) {}
+    OpaqueHandle(const Texture &_tex) : tex(&_tex), count(1) {}
     OpaqueHandle(const Buffer &_buf) : buf(&_buf), count(1) {}
-    OpaqueHandle(const Texture1D &_tex) : tex_buf(&_tex), count(1) {}
     OpaqueHandle(const TextureAtlas &_tex_arr) : tex_arr(&_tex_arr), count(1) {}
     OpaqueHandle(const TextureAtlas *_tex_arr, int _count = 1) : tex_arr(_tex_arr), count(_count) {}
     OpaqueHandle(Span<const TextureAtlas> tex_arrs) : tex_arr(tex_arrs.data()), count(int(tex_arrs.size())) {}

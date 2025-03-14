@@ -251,7 +251,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
 
     for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        const Texture2D &tex = bindless_textures_[it.index()];
+        const Texture &tex = bindless_textures_[it.index()];
 
         { // Update descriptor
             VkDescriptorImageInfo img_info = tex.vk_desc_image_info();

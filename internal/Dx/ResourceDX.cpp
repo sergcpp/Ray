@@ -81,33 +81,6 @@ void Ray::Dx::TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, const
             if (transition.update_internal_state) {
                 transition.p_tex->resource_state = transition.new_state;
             }
-        } else if (transition.p_3dtex) {
-            eResState old_state = transition.old_state;
-            if (old_state == eResState::Undefined) {
-                // take state from resource itself
-                old_state = transition.p_3dtex->resource_state;
-                if (old_state != eResState::Undefined && old_state == transition.new_state &&
-                    old_state != eResState::UnorderedAccess) {
-                    // transition is not needed
-                    continue;
-                }
-            }
-
-            auto &new_barrier = barriers.emplace_back();
-            if (old_state != transition.new_state) {
-                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                new_barrier.Transition.pResource = transition.p_3dtex->handle().img;
-                new_barrier.Transition.StateBefore = DXResourceState(old_state);
-                new_barrier.Transition.StateAfter = DXResourceState(transition.new_state);
-                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            } else {
-                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                new_barrier.UAV.pResource = transition.p_3dtex->handle().img;
-            }
-
-            if (transition.update_internal_state) {
-                transition.p_3dtex->resource_state = transition.new_state;
-            }
         } else
             if (transition.p_buf && *transition.p_buf) {
                 eResState old_state = transition.old_state;

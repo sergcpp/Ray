@@ -110,7 +110,7 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
     memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
 
     for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        const Texture2D &tex = bindless_textures_[it.index()];
+        const Texture &tex = bindless_textures_[it.index()];
 
         { // copy srv
             D3D12_CPU_DESCRIPTOR_HANDLE src_handle = tex.handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
