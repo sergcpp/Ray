@@ -11,7 +11,7 @@ class Context;
 class Sampler {
     Context *ctx_ = nullptr;
     PoolRef ref_;
-    SamplingParams params_;
+    SamplingParamsPacked params_;
 
   public:
     Sampler() = default;

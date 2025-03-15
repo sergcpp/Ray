@@ -78,7 +78,7 @@ struct RenderTargetInfo {
         if (rt.ref) {
             format = rt.ref->params.format;
             samples = rt.ref->params.samples;
-            flags = rt.ref->params.flags;
+            flags = Bitmask<eTexFlags>{rt.ref->params.flags};
             layout = eImageLayout(VKImageLayoutForState(rt.ref->resource_state));
             load = rt.load;
             store = rt.store;

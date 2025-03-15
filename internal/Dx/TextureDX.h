@@ -74,9 +74,8 @@ class Texture {
                          const TexParams &p, ILog *log);
 
   public:
-    TexParams params;
+    TexParamsPacked params;
 
-    uint32_t first_user = 0xffffffff;
     mutable eResState resource_state = eResState::Undefined;
 
     Texture() = default;
@@ -124,7 +123,6 @@ class Texture {
         return ret;
     }*/
 
-    const SamplingParams &sampling() const { return params.sampling; }
     const std::string &name() const { return name_; }
 
     void SetSampling(SamplingParams sampling);
