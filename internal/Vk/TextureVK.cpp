@@ -192,7 +192,7 @@ void Ray::Vk::Texture::Init(const void *data, const uint32_t size, const TexPara
 }
 
 void Ray::Vk::Texture::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
+    if (params.format != eTexFormat::Undefined && !bool(Bitmask<eTexFlags>{params.flags} & eTexFlags::NoOwnership)) {
         for (VkImageView view : handle_.views) {
             if (view) {
                 ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
@@ -228,7 +228,7 @@ bool Ray::Vk::Texture::Realloc(const int w, const int h, int mip_count, const in
         }
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        img_info.usage = to_vk_image_usage(params.usage, format);
+        img_info.usage = to_vk_image_usage(Bitmask<eTexUsage>{params.usage}, format);
 
         img_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         img_info.samples = VkSampleCountFlagBits(samples);
@@ -425,11 +425,15 @@ bool Ray::Vk::Texture::Realloc(const int w, const int h, int mip_count, const in
     alloc_ = std::move(new_alloc);
     params.w = w;
     params.h = h;
+
+    auto flags = Bitmask<eTexFlags>{params.flags};
     if (is_srgb) {
-        params.flags |= eTexFlags::SRGB;
+        flags |= eTexFlags::SRGB;
     } else {
-        params.flags &= ~Bitmask<eTexFlags>(eTexFlags::SRGB);
+        flags &= ~Bitmask<eTexFlags>(eTexFlags::SRGB);
     }
+    params.flags = flags;
+
     params.mip_count = mip_count;
     params.samples = samples;
     params.format = format;

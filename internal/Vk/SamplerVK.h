@@ -12,7 +12,7 @@ class Context;
 class Sampler {
     Context *ctx_ = nullptr;
     VkSampler handle_ = VK_NULL_HANDLE;
-    SamplingParams params_;
+    SamplingParamsPacked params_;
 
   public:
     Sampler() = default;

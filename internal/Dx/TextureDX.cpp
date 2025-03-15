@@ -159,7 +159,7 @@ void Ray::Dx::Texture::Init(const void *data, const uint32_t size, const TexPara
 }
 
 void Ray::Dx::Texture::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlags::NoOwnership)) {
+    if (params.format != eTexFormat::Undefined && !bool(Bitmask<eTexFlags>{params.flags} & eTexFlags::NoOwnership)) {
         ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
         ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
@@ -191,7 +191,7 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
         }
         image_desc.SampleDesc.Count = samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        image_desc.Flags = to_dx_image_flags(params.usage, format);
+        image_desc.Flags = to_dx_image_flags(Bitmask<eTexUsage>{params.usage}, format);
 
         (void)new_image;
 #if 0
@@ -435,7 +435,7 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
         }
         image_desc.SampleDesc.Count = p.samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        image_desc.Flags = to_dx_image_flags(params.usage, p.format);
+        image_desc.Flags = to_dx_image_flags(Bitmask<eTexUsage>{params.usage}, p.format);
 
         const D3D12_RESOURCE_ALLOCATION_INFO alloc_info = ctx_->device()->GetResourceAllocationInfo(0, 1, &image_desc);
 
@@ -679,7 +679,7 @@ void Ray::Dx::Texture::SetSubImage(const int level, const int offsetx, const int
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = sizez;
     src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(params.format)];
-    if (params.flags & eTexFlags::SRGB) {
+    if (Bitmask<eTexFlags>{params.flags} & eTexFlags::SRGB) {
         src_loc.PlacedFootprint.Footprint.Format = ToSRGBFormat(src_loc.PlacedFootprint.Footprint.Format);
     }
     if (IsCompressedFormat(params.format)) {
