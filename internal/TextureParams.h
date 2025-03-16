@@ -66,7 +66,7 @@ struct TexParams {
         samples = 1;
     }
 };
-static_assert(sizeof(TexParams) == 16, "!");
+static_assert(sizeof(TexParams) == 14, "!");
 
 inline bool operator==(const TexParams &lhs, const TexParams &rhs) {
     return lhs.w == rhs.w && lhs.h == rhs.h && lhs.d == rhs.d && lhs.mip_count == rhs.mip_count &&

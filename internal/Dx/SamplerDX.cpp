@@ -67,8 +67,8 @@ void Ray::Dx::Sampler::Init(Context *ctx, const SamplingParams params) {
     sampler_desc.AddressV = g_wrap_mode_dx[size_t(params.wrap)];
     sampler_desc.AddressW = g_wrap_mode_dx[size_t(params.wrap)];
     sampler_desc.MipLODBias = params.lod_bias.to_float();
-    sampler_desc.MinLOD = params.min_lod.to_float();
-    sampler_desc.MaxLOD = params.max_lod.to_float();
+    sampler_desc.MinLOD = 0.0f;
+    sampler_desc.MaxLOD = 1000.0f;
     sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
     if (params.compare != eTexCompare::None) {
         sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(params.compare)];
