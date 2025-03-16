@@ -22,12 +22,15 @@ int Ray::GetChannelCount(const eTexFormat format) { return g_tex_format_info[int
 int Ray::GetPerPixelDataLen(const eTexFormat format) { return g_tex_format_info[int(format)].pp_data_len; }
 
 int Ray::GetBlockLenBytes(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 37, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
+    case eTexFormat::BC1_srgb:
         return 8;
     case eTexFormat::BC2:
+    case eTexFormat::BC2_srgb:
     case eTexFormat::BC3:
+    case eTexFormat::BC3_srgb:
     case eTexFormat::BC5:
         return 16;
     case eTexFormat::BC4:

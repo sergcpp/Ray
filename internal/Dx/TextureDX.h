@@ -104,8 +104,8 @@ class Texture {
     void Init(const void *data, uint32_t size, const TexParams &p, Buffer &stage_buf,
               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
 
-    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, bool is_srgb,
-                 ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, ILog *log);
+    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, ID3D12GraphicsCommandList *cmd_buf,
+                 MemAllocators *mem_allocs, ILog *log);
 
     Context *ctx() { return ctx_; }
     const TexHandle &handle() const { return handle_; }
@@ -149,9 +149,7 @@ inline void ClearColorImage(Texture &tex, const uint32_t rgba[4], ID3D12Graphics
 }
 
 DXGI_FORMAT DXFormatFromTexFormat(eTexFormat format);
-DXGI_FORMAT ToSRGBFormat(DXGI_FORMAT format);
 
-bool RequiresManualSRGBConversion(eTexFormat format);
 bool CanBeBlockCompressed(int w, int h, int mip_count);
 
 } // namespace Dx

@@ -42,58 +42,6 @@ static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_2_BIT == 2, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_4_BIT == 4, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_8_BIT == 8, "!");
 
-VkFormat ToSRGBFormat(const VkFormat format) {
-    switch (format) {
-    case VK_FORMAT_R8_UNORM:
-        return VK_FORMAT_R8_SRGB;
-    case VK_FORMAT_R8G8_UNORM:
-        return VK_FORMAT_R8G8_SRGB;
-    case VK_FORMAT_R8G8B8_UNORM:
-        return VK_FORMAT_R8G8B8_SRGB;
-    case VK_FORMAT_R8G8B8A8_UNORM:
-        return VK_FORMAT_R8G8B8A8_SRGB;
-    case VK_FORMAT_B8G8R8A8_UNORM:
-        return VK_FORMAT_B8G8R8A8_SRGB;
-    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
-        return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
-    case VK_FORMAT_BC2_UNORM_BLOCK:
-        return VK_FORMAT_BC2_SRGB_BLOCK;
-    case VK_FORMAT_BC3_UNORM_BLOCK:
-        return VK_FORMAT_BC3_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_4x4_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_5x4_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_5x5_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_6x5_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_6x6_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_8x5_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_8x6_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_8x8_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_10x5_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_10x6_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_10x8_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_10x10_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_12x10_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
-    case VK_FORMAT_ASTC_12x12_UNORM_BLOCK:
-        return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
-    default:
-        return format;
-    }
-    return VK_FORMAT_UNDEFINED;
-}
-
 VkImageUsageFlags to_vk_image_usage(const Bitmask<eTexUsage> usage, const eTexFormat format) {
     VkImageUsageFlags ret = 0;
     if (usage & eTexUsage::Transfer) {
@@ -208,7 +156,7 @@ void Ray::Vk::Texture::Free() {
 }
 
 bool Ray::Vk::Texture::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                               const bool is_srgb, VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, ILog *log) {
+                               VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, ILog *log) {
     VkImage new_image = VK_NULL_HANDLE;
     VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
@@ -223,9 +171,6 @@ bool Ray::Vk::Texture::Realloc(const int w, const int h, int mip_count, const in
         img_info.mipLevels = mip_count;
         img_info.arrayLayers = 1;
         img_info.format = g_formats_vk[size_t(format)];
-        if (is_srgb) {
-            img_info.format = ToSRGBFormat(img_info.format);
-        }
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         img_info.usage = to_vk_image_usage(Bitmask<eTexUsage>{params.usage}, format);
@@ -278,9 +223,6 @@ bool Ray::Vk::Texture::Realloc(const int w, const int h, int mip_count, const in
         view_info.image = new_image;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         view_info.format = g_formats_vk[size_t(format)];
-        if (is_srgb) {
-            view_info.format = ToSRGBFormat(view_info.format);
-        }
         view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         view_info.subresourceRange.baseMipLevel = 0;
         view_info.subresourceRange.levelCount = mip_count;
@@ -425,15 +367,6 @@ bool Ray::Vk::Texture::Realloc(const int w, const int h, int mip_count, const in
     alloc_ = std::move(new_alloc);
     params.w = w;
     params.h = h;
-
-    auto flags = Bitmask<eTexFlags>{params.flags};
-    if (is_srgb) {
-        flags |= eTexFlags::SRGB;
-    } else {
-        flags &= ~Bitmask<eTexFlags>(eTexFlags::SRGB);
-    }
-    params.flags = flags;
-
     params.mip_count = mip_count;
     params.samples = samples;
     params.format = format;
@@ -459,9 +392,6 @@ void Ray::Vk::Texture::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuff
         img_info.mipLevels = params.mip_count;
         img_info.arrayLayers = 1;
         img_info.format = g_formats_vk[size_t(p.format)];
-        if (p.flags & eTexFlags::SRGB) {
-            img_info.format = ToSRGBFormat(img_info.format);
-        }
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         img_info.usage = to_vk_image_usage(p.usage, p.format);
@@ -514,9 +444,6 @@ void Ray::Vk::Texture::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuff
         view_info.image = handle_.img;
         view_info.viewType = p.d ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D;
         view_info.format = g_formats_vk[size_t(p.format)];
-        if (p.flags & eTexFlags::SRGB) {
-            view_info.format = ToSRGBFormat(view_info.format);
-        }
         if (IsDepthStencilFormat(p.format)) {
             view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
         } else if (IsDepthFormat(p.format)) {
@@ -910,11 +837,6 @@ void Ray::Vk::ClearColorImage(Texture &tex, const uint32_t rgba[4], VkCommandBuf
 ////////////////////////////////////////////////////////////////////////////////////////
 
 VkFormat Ray::Vk::VKFormatFromTexFormat(const eTexFormat format) { return g_formats_vk[size_t(format)]; }
-
-bool Ray::Vk::RequiresManualSRGBConversion(const eTexFormat format) {
-    const VkFormat vk_format = g_formats_vk[size_t(format)];
-    return vk_format == ToSRGBFormat(vk_format);
-}
 
 bool Ray::Vk::CanBeBlockCompressed(int w, int h, int mip_count) {
     // assume non-multiple of block size resolutions are supported
