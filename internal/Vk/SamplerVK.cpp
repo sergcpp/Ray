@@ -78,8 +78,8 @@ void Ray::Vk::Sampler::Init(Context *ctx, const SamplingParams params) {
     sampler_info.compareOp = g_compare_ops_vk[size_t(params.compare)];
     sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(params.filter)];
     sampler_info.mipLodBias = params.lod_bias.to_float();
-    sampler_info.minLod = params.min_lod.to_float();
-    sampler_info.maxLod = params.max_lod.to_float();
+    sampler_info.minLod = 0.0f;
+    sampler_info.maxLod = VK_LOD_CLAMP_NONE;
 
     const VkResult res = ctx->api().vkCreateSampler(ctx->device(), &sampler_info, nullptr, &handle_);
     if (res != VK_SUCCESS) {

@@ -617,8 +617,8 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
         sampler_desc.AddressV = g_wrap_mode_dx[size_t(p.sampling.wrap)];
         sampler_desc.AddressW = g_wrap_mode_dx[size_t(p.sampling.wrap)];
         sampler_desc.MipLODBias = p.sampling.lod_bias.to_float();
-        sampler_desc.MinLOD = p.sampling.min_lod.to_float();
-        sampler_desc.MaxLOD = p.sampling.max_lod.to_float();
+        sampler_desc.MinLOD = 0.0f;
+        sampler_desc.MaxLOD = 1000.0f;
         sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
         if (p.sampling.compare != eTexCompare::None) {
             sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(p.sampling.compare)];
@@ -709,8 +709,8 @@ void Ray::Dx::Texture::SetSampling(const SamplingParams s) {
     sampler_desc.AddressV = g_wrap_mode_dx[size_t(s.wrap)];
     sampler_desc.AddressW = g_wrap_mode_dx[size_t(s.wrap)];
     sampler_desc.MipLODBias = s.lod_bias.to_float();
-    sampler_desc.MinLOD = s.min_lod.to_float();
-    sampler_desc.MaxLOD = s.max_lod.to_float();
+    sampler_desc.MinLOD = 0.0f;
+    sampler_desc.MaxLOD = 1000.0f;
     sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
     if (s.compare != eTexCompare::None) {
         sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(s.compare)];

@@ -650,8 +650,8 @@ void Ray::Vk::Texture::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuff
         sampler_info.compareOp = g_compare_ops_vk[size_t(p.sampling.compare)];
         sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(p.sampling.filter)];
         sampler_info.mipLodBias = p.sampling.lod_bias.to_float();
-        sampler_info.minLod = p.sampling.min_lod.to_float();
-        sampler_info.maxLod = p.sampling.max_lod.to_float();
+        sampler_info.minLod = 0.0f;
+        sampler_info.maxLod = VK_LOD_CLAMP_NONE;
 
         const VkResult res = ctx_->api().vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
         if (res != VK_SUCCESS) {
@@ -759,8 +759,8 @@ void Ray::Vk::Texture::SetSampling(const SamplingParams s) {
     sampler_info.compareOp = g_compare_ops_vk[size_t(s.compare)];
     sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(s.filter)];
     sampler_info.mipLodBias = s.lod_bias.to_float();
-    sampler_info.minLod = s.min_lod.to_float();
-    sampler_info.maxLod = s.max_lod.to_float();
+    sampler_info.minLod = 0.0f;
+    sampler_info.maxLod = VK_LOD_CLAMP_NONE;
 
     const VkResult res = ctx_->api().vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
     if (res != VK_SUCCESS) {
