@@ -101,7 +101,7 @@ class Texture {
     void Init(const void *data[6], const int size[6], const TexParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf,
               MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
 
-    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, bool is_srgb, VkCommandBuffer cmd_buf,
+    bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, VkCommandBuffer cmd_buf,
                  MemAllocators *mem_allocs, ILog *log);
 
     Context *ctx() const { return ctx_; }
@@ -140,7 +140,6 @@ void ClearColorImage(Texture &tex, const uint32_t rgba[4], VkCommandBuffer cmd_b
 
 VkFormat VKFormatFromTexFormat(eTexFormat format);
 
-bool RequiresManualSRGBConversion(eTexFormat format);
 bool CanBeBlockCompressed(int w, int h, int mip_count);
 
 } // namespace Vk

@@ -701,12 +701,12 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     TexParams p = {};
     p.w = _t.w;
     p.h = _t.h;
+    p.format = fmt;
     if (_t.is_srgb && !is_YCoCg && !RequiresManualSRGBConversion(fmt)) {
-        p.flags |= eTexFlags::SRGB;
+        p.format = ToSRGBFormat(p.format);
     }
     p.mip_count = mip_count;
     p.usage = Bitmask<eTexUsage>(eTexUsage::Transfer) | eTexUsage::Sampled;
-    p.format = fmt;
     p.sampling.filter = eTexFilter::Nearest;
 
     std::pair<uint32_t, uint32_t> ret =
@@ -1785,8 +1785,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         TexParams params;
         params.w = MOON_TEX_W;
         params.h = MOON_TEX_H;
-        params.format = eTexFormat::RGBA8;
-        params.flags = eTexFlags::SRGB;
+        params.format = eTexFormat::RGBA8_srgb;
         params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
         params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::ClampToEdge;
@@ -1865,8 +1864,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     if (!sky_curl_tex_) {
         TexParams params;
         params.w = params.h = CURL_TEX_RES;
-        params.format = eTexFormat::RGBA8;
-        params.flags = eTexFlags::SRGB;
+        params.format = eTexFormat::RGBA8_srgb;
         params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
         params.sampling.filter = eTexFilter::Bilinear;
         params.sampling.wrap = eTexWrap::Repeat;

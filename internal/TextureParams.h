@@ -14,22 +14,25 @@ enum class eTexFormat : uint8_t {
 #undef X
 
 inline bool IsDepthFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 37, "Update the list below!");
     return format == eTexFormat::D16 || format == eTexFormat::D24_S8 || format == eTexFormat::D32_S8 ||
            format == eTexFormat::D32;
 }
 
 inline bool IsDepthStencilFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 37, "Update the list below!");
     return format == eTexFormat::D24_S8 || format == eTexFormat::D32_S8;
 }
 
 inline bool IsCompressedFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 37, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
+    case eTexFormat::BC1_srgb:
     case eTexFormat::BC2:
+    case eTexFormat::BC2_srgb:
     case eTexFormat::BC3:
+    case eTexFormat::BC3_srgb:
     case eTexFormat::BC4:
     case eTexFormat::BC5:
         return true;
@@ -40,14 +43,30 @@ inline bool IsCompressedFormat(const eTexFormat format) {
 }
 
 inline bool IsUintFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 31, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 37, "Update the list below!");
     if (format == eTexFormat::R16UI || format == eTexFormat::R32UI || format == eTexFormat::RG32UI) {
         return true;
     }
     return false;
 }
 
-enum class eTexFlags : uint8_t { NoOwnership, SRGB };
+inline eTexFormat ToSRGBFormat(const eTexFormat format) {
+    static_assert(int(eTexFormat::_Count) == 37, "Update the list below!");
+    switch (format) {
+    case eTexFormat::BC1:
+        return eTexFormat::BC1_srgb;
+    case eTexFormat::BC2:
+        return eTexFormat::BC2_srgb;
+    case eTexFormat::BC3:
+        return eTexFormat::BC3_srgb;
+    default:
+        return format;
+    }
+}
+
+inline bool RequiresManualSRGBConversion(const eTexFormat format) { return format == ToSRGBFormat(format); }
+
+enum class eTexFlags : uint8_t { NoOwnership };
 
 enum class eTexUsage : uint8_t { Transfer, Sampled, Storage, RenderTarget };
 

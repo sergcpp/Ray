@@ -41,22 +41,6 @@ static_assert(sizeof(g_formats_dx) / sizeof(g_formats_dx[0]) == size_t(eTexForma
 
 uint32_t TextureHandleCounter = 0;
 
-DXGI_FORMAT ToSRGBFormat(const DXGI_FORMAT format) {
-    switch (format) {
-    case DXGI_FORMAT_R8G8B8A8_UNORM:
-        return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    case DXGI_FORMAT_BC1_UNORM:
-        return DXGI_FORMAT_BC1_UNORM_SRGB;
-    case DXGI_FORMAT_BC2_UNORM:
-        return DXGI_FORMAT_BC2_UNORM_SRGB;
-    case DXGI_FORMAT_BC3_UNORM:
-        return DXGI_FORMAT_BC3_UNORM_SRGB;
-    default:
-        return format;
-    }
-    return DXGI_FORMAT_UNKNOWN;
-}
-
 D3D12_RESOURCE_FLAGS to_dx_image_flags(const Bitmask<eTexUsage> usage, const eTexFormat format) {
     D3D12_RESOURCE_FLAGS ret = D3D12_RESOURCE_FLAG_NONE;
     if (usage & eTexUsage::Storage) {
@@ -171,8 +155,7 @@ void Ray::Dx::Texture::Free() {
 }
 
 bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                               const bool is_srgb, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
-                               ILog *log) {
+                               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, ILog *log) {
     ID3D12Resource *new_image = nullptr;
     // VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
@@ -186,9 +169,6 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
         image_desc.DepthOrArraySize = 1;
         image_desc.MipLevels = mip_count;
         image_desc.Format = g_formats_dx[int(format)];
-        if (is_srgb) {
-            image_desc.Format = ToSRGBFormat(image_desc.Format);
-        }
         image_desc.SampleDesc.Count = samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = to_dx_image_flags(Bitmask<eTexUsage>{params.usage}, format);
@@ -247,9 +227,6 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
         view_info.image = new_image;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         view_info.format = g_formats_vk[size_t(format)];
-        if (is_srgb) {
-            view_info.format = ToSRGBFormat(view_info.format);
-        }
         view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         view_info.subresourceRange.baseMipLevel = 0;
         view_info.subresourceRange.levelCount = mip_count;
@@ -399,11 +376,6 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
     alloc_ = std::move(new_alloc);
     params.w = w;
     params.h = h;
-    if (is_srgb) {
-        params.flags |= eTexFlagBits::SRGB;
-    } else {
-        params.flags &= ~eTexFlagBits::SRGB;
-    }
     params.mip_count = mip_count;
     params.samples = samples;
     params.format = format;
@@ -430,9 +402,6 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
         image_desc.DepthOrArraySize = (p.d ? p.d : 1);
         image_desc.MipLevels = params.mip_count;
         image_desc.Format = g_formats_dx[int(p.format)];
-        if (p.flags & eTexFlags::SRGB) {
-            image_desc.Format = ToSRGBFormat(image_desc.Format);
-        }
         image_desc.SampleDesc.Count = p.samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = to_dx_image_flags(Bitmask<eTexUsage>{params.usage}, p.format);
@@ -471,9 +440,6 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
     { // create default SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.Format = g_formats_dx[int(p.format)];
-        if (p.flags & eTexFlags::SRGB) {
-            srv_desc.Format = ToSRGBFormat(srv_desc.Format);
-        }
         if (p.d == 0) {
             srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
             srv_desc.Texture2D.MipLevels = p.mip_count;
@@ -679,9 +645,6 @@ void Ray::Dx::Texture::SetSubImage(const int level, const int offsetx, const int
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = sizez;
     src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(params.format)];
-    if (Bitmask<eTexFlags>{params.flags} & eTexFlags::SRGB) {
-        src_loc.PlacedFootprint.Footprint.Format = ToSRGBFormat(src_loc.PlacedFootprint.Footprint.Format);
-    }
     if (IsCompressedFormat(params.format)) {
         src_loc.PlacedFootprint.Footprint.RowPitch = round_up(
             GetBlockCount(sizex, 1, params.format) * GetBlockLenBytes(params.format), TextureDataPitchAlignment);
@@ -883,11 +846,6 @@ void Ray::Dx::_ClearColorImage(Texture &tex, const void *rgba, ID3D12GraphicsCom
 ////////////////////////////////////////////////////////////////////////////////////////
 
 DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(const eTexFormat format) { return g_formats_dx[size_t(format)]; }
-
-bool Ray::Dx::RequiresManualSRGBConversion(const eTexFormat format) {
-    const DXGI_FORMAT dxgi_format = g_formats_dx[size_t(format)];
-    return dxgi_format == ToSRGBFormat(dxgi_format);
-}
 
 bool Ray::Dx::CanBeBlockCompressed(int w, int h, const int mip_count) {
     // NOTE: Assume only BC-formats for now

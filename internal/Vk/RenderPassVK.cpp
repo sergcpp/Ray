@@ -39,8 +39,6 @@ static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT == 1, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_2_BIT == 2, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_4_BIT == 4, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_8_BIT == 8, "!");
-
-VkFormat ToSRGBFormat(VkFormat format);
 } // namespace Vk
 } // namespace Ray
 
@@ -101,9 +99,6 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
 
         auto &att_desc = pass_attachments.emplace_back();
         att_desc.format = VKFormatFromTexFormat(_color_rts[i].format);
-        if (_color_rts[i].flags & eTexFlags::SRGB) {
-            att_desc.format = ToSRGBFormat(att_desc.format);
-        }
         att_desc.samples = VkSampleCountFlagBits(_color_rts[i].samples);
         if (VkImageLayout(_color_rts[i].layout) == VK_IMAGE_LAYOUT_UNDEFINED) {
             att_desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
