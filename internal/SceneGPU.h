@@ -718,7 +718,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         int res[2] = {_t.w, _t.h};
         uint32_t data_offset = 0;
         for (int i = 0; i < p.mip_count; ++i) {
-            bindless_textures_[ret.first].SetSubImage(i, 0, 0, 0, res[0], res[1], 1, fmt, temp_stage_buf, cmd_buf,
+            bindless_textures_[ret.first].SetSubImage(i, 0, 0, 0, res[0], res[1], 1, p.format, temp_stage_buf, cmd_buf,
                                                       data_offset, data_size[i]);
             res[0] = std::max(res[0] / 2, 1);
             res[1] = std::max(res[1] / 2, 1);
@@ -1803,7 +1803,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        sky_moon_tex_.SetSubImage(0, 0, 0, 0, MOON_TEX_W, MOON_TEX_H, 1, eTexFormat::RGBA8, stage_buf, cmd_buf, 0,
+        sky_moon_tex_.SetSubImage(0, 0, 0, 0, MOON_TEX_W, MOON_TEX_H, 1, eTexFormat::RGBA8_srgb, stage_buf, cmd_buf, 0,
                                   stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
@@ -1882,8 +1882,8 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        sky_curl_tex_.SetSubImage(0, 0, 0, 0, CURL_TEX_RES, CURL_TEX_RES, 1, eTexFormat::RGBA8, stage_buf, cmd_buf, 0,
-                                  stage_buf.size());
+        sky_curl_tex_.SetSubImage(0, 0, 0, 0, CURL_TEX_RES, CURL_TEX_RES, 1, eTexFormat::RGBA8_srgb, stage_buf, cmd_buf,
+                                  0, stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         stage_buf.FreeImmediate();
