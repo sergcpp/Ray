@@ -359,6 +359,9 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
     SmallVector<const char *, 8> desired_extensions = {VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
                                                        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
                                                        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
+#if defined(VK_USE_PLATFORM_MACOS_MVK)
+    desired_extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
     if (validation_level) {
         desired_extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
     }
@@ -413,6 +416,10 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
     instance_info.enabledExtensionCount = number_required_extensions + number_optional_extensions;
     instance_info.ppEnabledExtensionNames = desired_extensions.data();
 
+#if defined(VK_USE_PLATFORM_MACOS_MVK)
+    instance_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+    
     static const VkValidationFeatureEnableEXT enabled_validation_features[] = {
         VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
