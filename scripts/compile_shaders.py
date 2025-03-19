@@ -72,10 +72,10 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
                                                   defines +" -o internal/shaders/output/" + rewrite_name)
         rewrite_result = subprocess.run(rewrite_cmd, shell=True, capture_output=True, text=True, check=False)
 
-        compile_cmd = os.path.join(spirv_base_path(), "glslangValidator -V --target-env " + target_env + " internal/shaders/output/" + rewrite_name + " " +
+        compile_cmd = os.path.join(spirv_base_path(), "glslang -V --target-env " + target_env + " internal/shaders/output/" + rewrite_name + " " +
                                                     defines +" -o internal/shaders/output/" + spv_name)
     else:
-        compile_cmd = os.path.join(spirv_base_path(), "glslangValidator -V --target-env " + target_env + " internal/shaders/" + src_name + " " +
+        compile_cmd = os.path.join(spirv_base_path(), "glslang -V --target-env " + target_env + " internal/shaders/" + src_name + " " +
                                                     defines +" -o internal/shaders/output/" + spv_name)
     if glsl_version is not None:
         compile_cmd += " --glsl-version " + glsl_version
