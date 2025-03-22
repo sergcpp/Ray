@@ -8,15 +8,15 @@ namespace Ray {
 template <class enum_type, typename = typename std::enable_if<std::is_enum<enum_type>::value>::type> class Bitmask {
     using underlying_type = typename std::underlying_type<enum_type>::type;
 
-    static underlying_type to_mask(const enum_type e) {
+    static constexpr underlying_type to_mask(const enum_type e) {
       assert(1ull << static_cast<underlying_type>(e) <= std::numeric_limits<underlying_type>::max());
       return 1 << static_cast<underlying_type>(e);
     }
 
   public:
-    Bitmask() : mask_(0) {}
-    Bitmask(const enum_type e) : mask_(to_mask(e)) {}
-    explicit Bitmask(const underlying_type mask) : mask_(mask) {}
+    constexpr Bitmask() : mask_(0) {}
+    constexpr Bitmask(const enum_type e) : mask_(to_mask(e)) {}
+    explicit constexpr Bitmask(const underlying_type mask) : mask_(mask) {}
 
     Bitmask(const Bitmask &rhs) = default;
     Bitmask(Bitmask &&rhs) = default;
@@ -39,7 +39,7 @@ template <class enum_type, typename = typename std::enable_if<std::is_enum<enum_
     bool operator!=(const Bitmask rhs) const { return mask_ != rhs.mask_; }
 
     operator bool() const { return mask_ != 0; }
-    explicit operator underlying_type() const { return mask_; }
+    explicit constexpr operator underlying_type() const { return mask_; }
 
   private:
     underlying_type mask_;
