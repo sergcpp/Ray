@@ -35,7 +35,7 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
 
     const Binding bindings[] = {{eBindTarget::SBufRO, PrimaryRayGen::RANDOM_SEQ_BUF_SLOT, rand_seq},
                                 {eBindTarget::SBufRO, PrimaryRayGen::FILTER_TABLE_BUF_SLOT, filter_table},
-                                {eBindTarget::Tex2D, PrimaryRayGen::REQUIRED_SAMPLES_IMG_SLOT, req_samples_img},
+                                {eBindTarget::Tex, PrimaryRayGen::REQUIRED_SAMPLES_IMG_SLOT, req_samples_img},
                                 {eBindTarget::SBufRW, PrimaryRayGen::INOUT_COUNTERS_BUF_SLOT, inout_counters},
                                 {eBindTarget::SBufRW, PrimaryRayGen::OUT_RAYS_BUF_SLOT, out_rays}};
 
@@ -162,7 +162,7 @@ void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture 
 
     const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_FULL_IMG_SLOT, full_buf},
                                 {eBindTarget::Image, Postprocess::IN_HALF_IMG_SLOT, half_buf},
-                                {eBindTarget::Tex3DSampled, Postprocess::TONEMAP_LUT_SLOT, tonemap_lut_},
+                                {eBindTarget::TexSampled, Postprocess::TONEMAP_LUT_SLOT, tonemap_lut_},
                                 {eBindTarget::Image, Postprocess::OUT_IMG_SLOT, out_pixels},
                                 {eBindTarget::Image, Postprocess::OUT_VARIANCE_IMG_SLOT, out_variance},
                                 {eBindTarget::Image, Postprocess::OUT_REQ_SAMPLES_IMG_SLOT, out_req_samples}};
@@ -193,7 +193,7 @@ void Ray::NS::Renderer::kernel_FilterVariance(CommandBuffer cmd_buf, const Textu
                                               {&out_req_samples, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::Tex2DSampled, FilterVariance::IN_IMG_SLOT, img_buf},
+    const Binding bindings[] = {{eBindTarget::TexSampled, FilterVariance::IN_IMG_SLOT, img_buf},
                                 {eBindTarget::Image, FilterVariance::OUT_IMG_SLOT, out_variance},
                                 {eBindTarget::Image, FilterVariance::OUT_REQ_SAMPLES_IMG_SLOT, out_req_samples}};
 
@@ -228,16 +228,16 @@ void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture &i
         {&out_raw_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    SmallVector<Binding, 16> bindings = {{eBindTarget::Tex2DSampled, NLMFilter::IN_IMG_SLOT, img_buf},
-                                         {eBindTarget::Tex2DSampled, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
-                                         {eBindTarget::Tex3DSampled, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
+    SmallVector<Binding, 16> bindings = {{eBindTarget::TexSampled, NLMFilter::IN_IMG_SLOT, img_buf},
+                                         {eBindTarget::TexSampled, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
+                                         {eBindTarget::TexSampled, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
                                          {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
 
     assert(base_color_img);
-    bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img);
+    bindings.emplace_back(eBindTarget::TexSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img);
     assert(depth_normals_img);
-    bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img);
+    bindings.emplace_back(eBindTarget::TexSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img);
 
     const uint32_t grp_count[3] = {
         uint32_t((rect.w + NLMFilter::LOCAL_GROUP_SIZE_X - 1) / NLMFilter::LOCAL_GROUP_SIZE_X),
@@ -280,17 +280,17 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
     const uint32_t output_size = output_stride * (h + 2) * out_channels * el_sz;
 
     SmallVector<Binding, 8> bindings = {
-        {eBindTarget::Tex2D, Convolution::IN_IMG1_SLOT, img_buf1},
+        {eBindTarget::Tex, Convolution::IN_IMG1_SLOT, img_buf1},
         {eBindTarget::Sampler, Convolution::IN_SAMPLER_SLOT, sampler},
         {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
         {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
 
     if (img_buf2) {
-        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG2_SLOT, img_buf2);
+        bindings.emplace_back(eBindTarget::Tex, Convolution::IN_IMG2_SLOT, img_buf2);
     }
     if (img_buf3) {
-        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG3_SLOT, img_buf3);
+        bindings.emplace_back(eBindTarget::Tex, Convolution::IN_IMG3_SLOT, img_buf3);
     }
     if (out_debug_img) {
         bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
@@ -411,7 +411,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
         {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset, input_buf},
         {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
-        {eBindTarget::Tex3DSampled, Convolution::TONEMAP_LUT_SLOT, tonemap_lut_},
+        {eBindTarget::TexSampled, Convolution::TONEMAP_LUT_SLOT, tonemap_lut_},
         {eBindTarget::Image, Convolution::OUT_IMG_SLOT, out_img},
         {eBindTarget::Image, Convolution::OUT_TONEMAPPED_IMG_SLOT, out_tonemapped_img}};
 
@@ -518,16 +518,16 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
 
     SmallVector<Binding, 8> bindings = {
         {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset1, input_buf1},
-        {eBindTarget::Tex2D, Convolution::IN_IMG2_SLOT, img_buf1},
+        {eBindTarget::Tex, Convolution::IN_IMG2_SLOT, img_buf1},
         {eBindTarget::Sampler, Convolution::IN_SAMPLER_SLOT, sampler},
         {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
         {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
         {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
     if (img_buf2) {
-        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG3_SLOT, img_buf2);
+        bindings.emplace_back(eBindTarget::Tex, Convolution::IN_IMG3_SLOT, img_buf2);
     }
     if (img_buf3) {
-        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG4_SLOT, img_buf3);
+        bindings.emplace_back(eBindTarget::Tex, Convolution::IN_IMG4_SLOT, img_buf3);
     }
     if (out_debug_img) {
         bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
@@ -759,8 +759,8 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
         {eBindTarget::SBufRO, CacheUpdate::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRO, CacheUpdate::HITS_BUF_SLOT, inters},
         {eBindTarget::SBufRO, CacheUpdate::RAYS_BUF_SLOT, rays},
-        {eBindTarget::Tex2D, CacheUpdate::RADIANCE_TEX_SLOT, radiance_img},
-        {eBindTarget::Tex2D, CacheUpdate::DEPTH_NORMAL_TEX_SLOT, depth_normals_img},
+        {eBindTarget::Tex, CacheUpdate::RADIANCE_TEX_SLOT, radiance_img},
+        {eBindTarget::Tex, CacheUpdate::DEPTH_NORMAL_TEX_SLOT, depth_normals_img},
         {eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_DATA_BUF_SLOT, cache_data},
         {eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries},
         {eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_VOXELS_BUF_SLOT, inout_voxels_curr}};
@@ -820,21 +820,20 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
                                               {&out_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {
-        {eBindTarget::UBuf, ShadeSky::ATMOSPHERE_PARAMS_BUF_SLOT, sc_data.atmosphere_params},
-        {eBindTarget::SBufRO, ShadeSky::RAY_INDICES_BUF_SLOT, ray_indices},
-        {eBindTarget::SBufRO, ShadeSky::HITS_BUF_SLOT, hits},
-        {eBindTarget::SBufRO, ShadeSky::RAYS_BUF_SLOT, rays},
-        {eBindTarget::SBufRO, ShadeSky::COUNTERS_BUF_SLOT, counters},
-        {eBindTarget::Tex2D, ShadeSky::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
-        {eBindTarget::Tex2DSampled, ShadeSky::TRANSMITTANCE_LUT_SLOT, sc_data.transmittance_lut},
-        {eBindTarget::Tex2DSampled, ShadeSky::MULTISCATTER_LUT_SLOT, sc_data.multiscatter_lut},
-        {eBindTarget::Tex2DSampled, ShadeSky::MOON_TEX_SLOT, sc_data.moon_tex},
-        {eBindTarget::Tex2DSampled, ShadeSky::WEATHER_TEX_SLOT, sc_data.weather_tex},
-        {eBindTarget::Tex2DSampled, ShadeSky::CIRRUS_TEX_SLOT, sc_data.cirrus_tex},
-        {eBindTarget::Tex2DSampled, ShadeSky::CURL_TEX_SLOT, sc_data.curl_tex},
-        {eBindTarget::Tex3DSampled, ShadeSky::NOISE3D_TEX_SLOT, sc_data.noise3d_tex},
-        {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, out_img}};
+    const Binding bindings[] = {{eBindTarget::UBuf, ShadeSky::ATMOSPHERE_PARAMS_BUF_SLOT, sc_data.atmosphere_params},
+                                {eBindTarget::SBufRO, ShadeSky::RAY_INDICES_BUF_SLOT, ray_indices},
+                                {eBindTarget::SBufRO, ShadeSky::HITS_BUF_SLOT, hits},
+                                {eBindTarget::SBufRO, ShadeSky::RAYS_BUF_SLOT, rays},
+                                {eBindTarget::SBufRO, ShadeSky::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::Tex, ShadeSky::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+                                {eBindTarget::TexSampled, ShadeSky::TRANSMITTANCE_LUT_SLOT, sc_data.transmittance_lut},
+                                {eBindTarget::TexSampled, ShadeSky::MULTISCATTER_LUT_SLOT, sc_data.multiscatter_lut},
+                                {eBindTarget::TexSampled, ShadeSky::MOON_TEX_SLOT, sc_data.moon_tex},
+                                {eBindTarget::TexSampled, ShadeSky::WEATHER_TEX_SLOT, sc_data.weather_tex},
+                                {eBindTarget::TexSampled, ShadeSky::CIRRUS_TEX_SLOT, sc_data.cirrus_tex},
+                                {eBindTarget::TexSampled, ShadeSky::CURL_TEX_SLOT, sc_data.curl_tex},
+                                {eBindTarget::TexSampled, ShadeSky::NOISE3D_TEX_SLOT, sc_data.noise3d_tex},
+                                {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, out_img}};
 
     const uint32_t rand_seed = Ref::hash(iteration);
 

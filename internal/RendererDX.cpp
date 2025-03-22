@@ -1699,7 +1699,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         //                         &tex_descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     if (use_hwrt_) {
@@ -1768,7 +1768,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         //                         &tex_descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     if (use_hwrt_) {
@@ -1828,7 +1828,7 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                          {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
                                          {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
-                                         {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+                                         {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
                                          {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
@@ -1903,7 +1903,7 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
@@ -1937,7 +1937,7 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                          {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
                                          {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
-                                         {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+                                         {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
                                          {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
@@ -2004,7 +2004,7 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
@@ -2052,7 +2052,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(
         //                         &tex_descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     IntersectSceneShadow::Params uniform_params = {};

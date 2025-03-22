@@ -1669,13 +1669,13 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
 
         const Binding bindings[] = {
             {eBindTarget::UBuf, ShadeSky::ATMOSPHERE_PARAMS_BUF_SLOT, atmosphere_params_buf_},
-            {eBindTarget::Tex2DSampled, ShadeSky::TRANSMITTANCE_LUT_SLOT, sky_transmittance_lut_tex_},
-            {eBindTarget::Tex2DSampled, ShadeSky::MULTISCATTER_LUT_SLOT, sky_multiscatter_lut_tex_},
-            {eBindTarget::Tex2DSampled, ShadeSky::MOON_TEX_SLOT, sky_moon_tex_},
-            {eBindTarget::Tex2DSampled, ShadeSky::WEATHER_TEX_SLOT, sky_weather_tex_},
-            {eBindTarget::Tex2DSampled, ShadeSky::CIRRUS_TEX_SLOT, sky_cirrus_tex_},
-            {eBindTarget::Tex2DSampled, ShadeSky::CURL_TEX_SLOT, sky_curl_tex_},
-            {eBindTarget::Tex3DSampled, ShadeSky::NOISE3D_TEX_SLOT, sky_noise3d_tex_},
+            {eBindTarget::TexSampled, ShadeSky::TRANSMITTANCE_LUT_SLOT, sky_transmittance_lut_tex_},
+            {eBindTarget::TexSampled, ShadeSky::MULTISCATTER_LUT_SLOT, sky_multiscatter_lut_tex_},
+            {eBindTarget::TexSampled, ShadeSky::MOON_TEX_SLOT, sky_moon_tex_},
+            {eBindTarget::TexSampled, ShadeSky::WEATHER_TEX_SLOT, sky_weather_tex_},
+            {eBindTarget::TexSampled, ShadeSky::CIRRUS_TEX_SLOT, sky_cirrus_tex_},
+            {eBindTarget::TexSampled, ShadeSky::CURL_TEX_SLOT, sky_curl_tex_},
+            {eBindTarget::TexSampled, ShadeSky::NOISE3D_TEX_SLOT, sky_noise3d_tex_},
             {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, temp_img}};
 
         ShadeSky::Params uniform_params = {};
