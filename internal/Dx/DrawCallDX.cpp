@@ -30,13 +30,12 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
     DescrSizes descr_sizes;
     for (const auto &b : bindings) {
-        if (b.trg == eBindTarget::Tex2DSampled || b.trg == eBindTarget::Tex3DSampled ||
-            b.trg == eBindTarget::Tex2DArraySampled) {
+        if (b.trg == eBindTarget::TexSampled || b.trg == eBindTarget::TexArraySampled) {
             descr_sizes.cbv_srv_uav_count += b.handle.count;
             descr_sizes.sampler_count += b.handle.count;
-        } else if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex2DArray || b.trg == eBindTarget::Tex3D ||
-                   b.trg == eBindTarget::UBuf || b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO ||
-                   b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image || b.trg == eBindTarget::AccStruct) {
+        } else if (b.trg == eBindTarget::Tex || b.trg == eBindTarget::TexArray || b.trg == eBindTarget::UBuf ||
+                   b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO || b.trg == eBindTarget::SBufRW ||
+                   b.trg == eBindTarget::Image || b.trg == eBindTarget::AccStruct) {
             descr_sizes.cbv_srv_uav_count += b.handle.count;
         } else if (b.trg == eBindTarget::Sampler) {
             descr_sizes.sampler_count += b.handle.count;
@@ -94,8 +93,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             continue;
         }
 
-        if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex2DSampled || b.trg == eBindTarget::Tex3D ||
-            b.trg == eBindTarget::Tex3DSampled) {
+        if (b.trg == eBindTarget::Tex || b.trg == eBindTarget::TexSampled) {
             D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
                 b.handle.tex->handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
             src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.tex->handle().views_ref.offset;
@@ -105,7 +103,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-            if (b.trg == eBindTarget::Tex2DSampled || b.trg == eBindTarget::Tex3DSampled) {
+            if (b.trg == eBindTarget::TexSampled) {
                 const short descr_index = prog->descr_index(1, b.loc);
 
                 D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
@@ -117,7 +115,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
                 device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
             }
-        } else if (b.trg == eBindTarget::Tex2DArray || b.trg == eBindTarget::Tex2DArraySampled) {
+        } else if (b.trg == eBindTarget::TexArray || b.trg == eBindTarget::TexArraySampled) {
             for (int i = 0; i < b.handle.count; ++i) {
                 D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
                     b.handle.tex_arr[i].srv_ref().heap->GetCPUDescriptorHandleForHeapStart();
@@ -128,7 +126,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
                 device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-                if (b.trg == eBindTarget::Tex2DArraySampled) {
+                if (b.trg == eBindTarget::TexArraySampled) {
                     const short descr_index = prog->descr_index(1, b.loc);
 
                     D3D12_CPU_DESCRIPTOR_HANDLE src_handle =

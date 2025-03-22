@@ -23,14 +23,11 @@ struct DescrTable;
 class Sampler;
 
 enum class eBindTarget : uint16_t {
-    Tex2D,
-    Tex2DSampled,
-    Tex2DMs,
-    Tex2DArray,
-    Tex2DArraySampled,
-    TexCubeArray,
-    Tex3D,
-    Tex3DSampled,
+    Tex,
+    TexSampled,
+    // TODO: remove these two!
+    TexArray,
+    TexArraySampled,
     TBuf,
     UBuf,
     SBufRO,

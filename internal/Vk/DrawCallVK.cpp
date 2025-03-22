@@ -22,10 +22,9 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
     SmallVector<VkWriteDescriptorSet, 48> descr_writes;
 
     for (const auto &b : bindings) {
-        if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex2DSampled || b.trg == eBindTarget::Tex3D ||
-            b.trg == eBindTarget::Tex3DSampled) {
+        if (b.trg == eBindTarget::Tex || b.trg == eBindTarget::TexSampled) {
             auto &info = img_sampler_infos[descr_sizes.img_sampler_count++];
-            if (b.trg == eBindTarget::Tex2DSampled || b.trg == eBindTarget::Tex3DSampled) {
+            if (b.trg == eBindTarget::TexSampled) {
                 info.sampler = b.handle.tex->handle().sampler;
             }
             if (IsDepthStencilFormat(b.handle.tex->params.format)) {
@@ -40,16 +39,15 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
             new_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             new_write.dstBinding = b.loc;
             new_write.dstArrayElement = b.offset;
-            new_write.descriptorType = (b.trg == eBindTarget::Tex2DSampled || b.trg == eBindTarget::Tex3DSampled)
-                                           ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-                                           : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            new_write.descriptorType = (b.trg == eBindTarget::TexSampled) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                                                                          : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             new_write.descriptorCount = 1;
             new_write.pImageInfo = &info;
-        } else if (b.trg == eBindTarget::Tex2DArray || b.trg == eBindTarget::Tex2DArraySampled) {
+        } else if (b.trg == eBindTarget::TexArray || b.trg == eBindTarget::TexArraySampled) {
             const uint32_t start_pos = descr_sizes.img_sampler_count;
             for (int i = 0; i < b.handle.count; ++i) {
                 auto &info = img_sampler_infos[descr_sizes.img_sampler_count++];
-                if (b.trg == eBindTarget::Tex2DArraySampled) {
+                if (b.trg == eBindTarget::TexArraySampled) {
                     info.sampler = b.handle.tex_arr[i].vk_sampler();
                 }
                 info.imageView = b.handle.tex_arr[i].vk_imgage_view();
@@ -60,7 +58,7 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
             new_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             new_write.dstBinding = b.loc;
             new_write.dstArrayElement = b.offset;
-            new_write.descriptorType = (b.trg == eBindTarget::Tex2DArraySampled)
+            new_write.descriptorType = (b.trg == eBindTarget::TexArraySampled)
                                            ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
                                            : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             new_write.descriptorCount = uint32_t(b.handle.count);
@@ -91,19 +89,6 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
             new_write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             new_write.descriptorCount = 1;
             new_write.pBufferInfo = &sbuf;
-            /*} else if (b.trg == eBindTarget::TexCubeArray) {
-                auto &info = img_sampler_infos[descr_sizes.img_sampler_count++];
-                info.sampler = b.handle.cube_arr->handle().sampler;
-                info.imageView = b.handle.cube_arr->handle().views[0];
-                info.imageLayout = VKImageLayoutForState(b.handle.cube_arr->resource_state);
-
-                auto &new_write = descr_writes.emplace_back();
-                new_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-                new_write.dstBinding = b.loc;
-                new_write.dstArrayElement = 0;
-                new_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                new_write.descriptorCount = 1;
-                new_write.pImageInfo = &info;*/
         } else if (b.trg == eBindTarget::Image) {
             auto &info = img_storage_infos[descr_sizes.store_img_count++];
             info.sampler = b.handle.tex->handle().sampler;
