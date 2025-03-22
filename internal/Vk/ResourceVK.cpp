@@ -6,29 +6,26 @@
 
 namespace Ray {
 namespace Vk {
-const eStageBits g_stage_bits_per_state[] = {
-    {},                        // Undefined
-    eStageBits::VertexInput,   // VertexBuffer
-    eStageBits::VertexShader | /* eStageBits::TessCtrlShader | eStageBits::TessEvalShader | eStageBits::GeometryShader
-                                  |*/
-        eStageBits::FragmentShader | eStageBits::ComputeShader | eStageBits::RayTracingShader, // UniformBuffer
-    eStageBits::VertexInput,                                                                   // IndexBuffer
-    eStageBits::ColorAttachment,                                                               // RenderTarget
-    eStageBits::VertexShader | /* eStageBits::TessCtrlShader | eStageBits::TessEvalShader | eStageBits::GeometryShader
-                                  |*/
-        eStageBits::FragmentShader | eStageBits::ComputeShader | eStageBits::RayTracingShader, // UnorderedAccess
-    eStageBits::DepthAttachment,                                                               // DepthRead
-    eStageBits::DepthAttachment,                                                               // DepthWrite
-    eStageBits::DepthAttachment | eStageBits::FragmentShader,                                  // StencilTestDepthFetch
-    eStageBits::VertexShader | /* eStageBits::TessCtrlShader | eStageBits::TessEvalShader | eStageBits::GeometryShader
-                                  |*/
-        eStageBits::FragmentShader | eStageBits::ComputeShader | eStageBits::RayTracingShader, // ShaderResource
-    eStageBits::DrawIndirect,                                                                  // IndirectArgument
-    eStageBits::Transfer,                                                                      // CopyDst
-    eStageBits::Transfer,                                                                      // CopySrc
-    eStageBits::AccStructureBuild,                                                             // BuildASRead
-    eStageBits::AccStructureBuild,                                                             // BuildASWrite
-    eStageBits::RayTracingShader                                                               // RayTracing
+const Bitmask<eStage> g_stage_bits_per_state[] = {
+    {},                  // Undefined
+    eStage::VertexInput, // VertexBuffer
+    Bitmask<eStage>{eStage::VertexShader} | eStage::FragmentShader | eStage::ComputeShader |
+        eStage::RayTracingShader, // UniformBuffer
+    eStage::VertexInput,          // IndexBuffer
+    eStage::ColorAttachment,      // RenderTarget
+    Bitmask<eStage>{eStage::VertexShader} | eStage::FragmentShader | eStage::ComputeShader |
+        eStage::RayTracingShader,                                      // UnorderedAccess
+    eStage::DepthAttachment,                                           // DepthRead
+    eStage::DepthAttachment,                                           // DepthWrite
+    Bitmask<eStage>{eStage::DepthAttachment} | eStage::FragmentShader, // StencilTestDepthFetch
+    Bitmask<eStage>{eStage::VertexShader} | eStage::FragmentShader | eStage::ComputeShader |
+        eStage::RayTracingShader, // ShaderResource
+    eStage::DrawIndirect,         // IndirectArgument
+    eStage::Transfer,             // CopyDst
+    eStage::Transfer,             // CopySrc
+    eStage::AccStructureBuild,    // BuildASRead
+    eStage::AccStructureBuild,    // BuildASWrite
+    eStage::RayTracingShader      // RayTracing
 };
 static_assert(sizeof(g_stage_bits_per_state) / sizeof(g_stage_bits_per_state[0]) == int(eResState::_Count), "!");
 
@@ -48,21 +45,21 @@ const VkPipelineStageFlags g_stage_flags_vk[] = {
     VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR                                  // AccStructureBuild
 };
 
-static_assert(uint16_t(eStageBits::VertexInput) == 0b0000000000001u, "!");
-static_assert(uint16_t(eStageBits::VertexShader) == 0b0000000000010u, "!");
-static_assert(uint16_t(eStageBits::TessCtrlShader) == 0b0000000000100u, "!");
-static_assert(uint16_t(eStageBits::TessEvalShader) == 0b0000000001000u, "!");
-static_assert(uint16_t(eStageBits::GeometryShader) == 0b0000000010000u, "!");
-static_assert(uint16_t(eStageBits::FragmentShader) == 0b0000000100000u, "!");
-static_assert(uint16_t(eStageBits::ComputeShader) == 0b0000001000000u, "!");
-static_assert(uint16_t(eStageBits::RayTracingShader) == 0b0000010000000u, "!");
-static_assert(uint16_t(eStageBits::ColorAttachment) == 0b0000100000000u, "!");
-static_assert(uint16_t(eStageBits::DepthAttachment) == 0b0001000000000u, "!");
-static_assert(uint16_t(eStageBits::DrawIndirect) == 0b0010000000000u, "!");
-static_assert(uint16_t(eStageBits::Transfer) == 0b0100000000000u, "!");
-static_assert(uint16_t(eStageBits::AccStructureBuild) == 0b1000000000000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::VertexInput}) == 0b0000000000001u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::VertexShader}) == 0b0000000000010u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::TessCtrlShader}) == 0b0000000000100u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::TessEvalShader}) == 0b0000000001000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::GeometryShader}) == 0b0000000010000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::FragmentShader}) == 0b0000000100000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::ComputeShader}) == 0b0000001000000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::RayTracingShader}) == 0b0000010000000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::ColorAttachment}) == 0b0000100000000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::DepthAttachment}) == 0b0001000000000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::DrawIndirect}) == 0b0010000000000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::Transfer}) == 0b0100000000000u, "!");
+static_assert(uint16_t(Bitmask<eStage>{eStage::AccStructureBuild}) == 0b1000000000000u, "!");
 
-VkPipelineStageFlags to_pipeline_stage_flags_vk(const eStageBits stage_mask) {
+VkPipelineStageFlags to_pipeline_stage_flags_vk(const Bitmask<eStage> stage_mask) {
     uint16_t mask_u16 = uint16_t(stage_mask);
 
     VkPipelineStageFlags ret = 0;
@@ -116,25 +113,19 @@ const VkAccessFlags g_access_flags_per_state_vk[] = {
 static_assert(COUNT_OF(g_access_flags_per_state_vk) == int(eResState::_Count), "!");
 
 const VkPipelineStageFlags g_pipeline_stages_per_state_vk[] = {
-    {},                                   // Undefined
-    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,   // VertexBuffer
-    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | /*VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT |
-        VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT |*/
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+    {},                                 // Undefined
+    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, // VertexBuffer
+    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
         VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, // UniformBuffer
     VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,               // IndexBuffer
     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,    // RenderTarget
-    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |             /*VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT |
-                    VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT |*/
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
         VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,                                       // UnorderedAccess
     VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, // DepthRead
     VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, // DepthWrite
     VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT |
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, // StencilTestDepthFetch
-    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |      /*VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT |
-             VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT |*/
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
         VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,       // ShaderResource
     VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,                    // IndirectArgument
     VK_PIPELINE_STAGE_TRANSFER_BIT,                         // CopyDst
@@ -147,7 +138,9 @@ static_assert(COUNT_OF(g_pipeline_stages_per_state_vk) == int(eResState::_Count)
 } // namespace Vk
 } // namespace Ray
 
-Ray::Vk::eStageBits Ray::Vk::StageBitsForState(const eResState state) { return g_stage_bits_per_state[int(state)]; }
+Ray::Bitmask<Ray::Vk::eStage> Ray::Vk::StagesForState(const eResState state) {
+    return g_stage_bits_per_state[int(state)];
+}
 
 VkImageLayout Ray::Vk::VKImageLayoutForState(const eResState state) { return g_image_layout_per_state_vk[int(state)]; }
 
@@ -155,8 +148,8 @@ uint32_t Ray::Vk::VKAccessFlagsForState(const eResState state) { return g_access
 
 uint32_t Ray::Vk::VKPipelineStagesForState(const eResState state) { return g_pipeline_stages_per_state_vk[int(state)]; }
 
-void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const eStageBits src_stages_mask,
-                                       const eStageBits dst_stages_mask, Span<const TransitionInfo> transitions) {
+void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eStage> src_stages_mask,
+                                       const Bitmask<eStage> dst_stages_mask, Span<const TransitionInfo> transitions) {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 32> buf_barriers;
     SmallVector<VkImageMemoryBarrier, 32> img_barriers;
