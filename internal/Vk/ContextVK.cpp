@@ -50,14 +50,15 @@ void Ray::Vk::Context::Destroy() {
         api_.vkDeviceWaitIdle(device_);
 
         for (int i = 0; i < MaxFramesInFlight; ++i) {
-            backend_frame = i; // default_descr_alloc_'s destructors rely on this
-            default_descr_alloc_[i] = {};
-            DestroyDeferredResources(i);
+            backend_frame = (backend_frame + 1) % MaxFramesInFlight;
 
-            api_.vkDestroyFence(device_, in_flight_fences_[i], nullptr);
-            api_.vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
+            default_descr_alloc_[backend_frame] = {};
+            DestroyDeferredResources(backend_frame);
 
-            api_.vkDestroyQueryPool(device_, query_pools_[i], nullptr);
+            api_.vkDestroyFence(device_, in_flight_fences_[backend_frame], nullptr);
+            api_.vkDestroySemaphore(device_, render_finished_semaphores_[backend_frame], nullptr);
+
+            api_.vkDestroyQueryPool(device_, query_pools_[backend_frame], nullptr);
         }
 
         default_mem_allocs_ = {};

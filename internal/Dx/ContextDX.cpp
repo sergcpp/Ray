@@ -58,20 +58,20 @@ void Ray::Dx::Context::Destroy() {
     }
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
-        SAFE_RELEASE(command_allocators_[i]);
-        SAFE_RELEASE(in_flight_fences_[i]);
-        SAFE_RELEASE(query_heaps_[i]);
+        backend_frame = (backend_frame + 1) % MaxFramesInFlight;
 
-        backend_frame = i; // default_descr_alloc_'s destructors rely on this
+        SAFE_RELEASE(command_allocators_[backend_frame]);
+        SAFE_RELEASE(in_flight_fences_[backend_frame]);
+        SAFE_RELEASE(query_heaps_[backend_frame]);
 
-        if (uniform_data_bufs[i]) {
-            uniform_data_bufs[i].Unmap();
-            uniform_data_bufs[i].Free();
+        if (uniform_data_bufs[backend_frame]) {
+            uniform_data_bufs[backend_frame].Unmap();
+            uniform_data_bufs[backend_frame].Free();
         }
 
-        default_descr_alloc_[i] = {};
-        query_readback_buf_[i] = {};
-        DestroyDeferredResources(i);
+        default_descr_alloc_[backend_frame] = {};
+        query_readback_buf_[backend_frame] = {};
+        DestroyDeferredResources(backend_frame);
     }
 
     default_mem_allocs_ = {};
