@@ -107,7 +107,7 @@ Ray::Vk::MemAllocation Ray::Vk::MemAllocators::Allocate(const uint32_t alignment
 
     int alloc_index = -1;
     for (int i = 0; i < int(allocators_.size()); ++i) {
-        if (allocators_[i].mem_type_index() == mem_type_index) {
+        if (allocators_[i]->mem_type_index() == mem_type_index) {
             alloc_index = i;
             break;
         }
@@ -117,11 +117,11 @@ Ray::Vk::MemAllocation Ray::Vk::MemAllocators::Allocate(const uint32_t alignment
         std::string name = name_;
         name += " (type " + std::to_string(mem_type_index) + ")";
         alloc_index = int(allocators_.size());
-        allocators_.emplace_back(name.c_str(), ctx_, initial_pool_size_, mem_type_index, growth_factor_,
-                                 max_pool_size_);
+        allocators_.emplace_back(std::make_unique<MemAllocator>(name.c_str(), ctx_, initial_pool_size_, mem_type_index,
+                                                                growth_factor_, max_pool_size_));
     }
 
-    return allocators_[alloc_index].Allocate(alignment, size);
+    return allocators_[alloc_index]->Allocate(alignment, size);
 }
 
 Ray::Vk::MemAllocation Ray::Vk::MemAllocators::Allocate(const VkMemoryRequirements &mem_req,
