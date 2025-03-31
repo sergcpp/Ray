@@ -268,7 +268,7 @@ struct atmosphere_params_t {
     vec4 mie_scattering;
     vec4 mie_extinction;
     vec4 mie_absorption;
-    vec4 ozone_absorbtion;
+    vec4 ozone_absorption;
     vec4 ground_albedo;
 };
 

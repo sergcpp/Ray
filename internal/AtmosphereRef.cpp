@@ -180,7 +180,7 @@ force_inline atmosphere_medium_t SampleAtmosphereMedium(const atmosphere_params_
     s.extinction_ray = s.scattering_ray + s.absorption_ray;
 
     s.scattering_ozo = 0.0;
-    s.absorption_ozo = local_density.get<2>() * fvec4{params.ozone_absorbtion, vector_aligned};
+    s.absorption_ozo = local_density.get<2>() * fvec4{params.ozone_absorption, vector_aligned};
     s.extinction_ozo = s.scattering_ozo + s.absorption_ozo;
 
     s.scattering = s.scattering_mie + s.scattering_ray + s.scattering_ozo;
