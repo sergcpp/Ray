@@ -93,7 +93,7 @@ class MemAllocators {
     uint32_t initial_pool_size_;
     float growth_factor_;
     uint32_t max_pool_size_;
-    SmallVector<std::unique_ptr<MemAllocator>, 4> allocators_;
+    std::unique_ptr<MemAllocator> allocators_[8];
 
   public:
     MemAllocators(const char *name, Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
@@ -102,23 +102,13 @@ class MemAllocators {
           max_pool_size_(max_pool_size) {}
 
     MemAllocation Allocate(const uint32_t alignment, const uint32_t size, const D3D12_HEAP_TYPE heap_type) {
-        int alloc_index = -1;
-        for (int i = 0; i < int(allocators_.size()); ++i) {
-            if (allocators_[i]->heap_type() == heap_type) {
-                alloc_index = i;
-                break;
-            }
-        }
-
-        if (alloc_index == -1) {
+        if (!allocators_[heap_type]) {
             std::string name = name_;
             name += " (type " + std::to_string(heap_type) + ")";
-            alloc_index = int(allocators_.size());
-            allocators_.emplace_back(std::make_unique<MemAllocator>(name.c_str(), ctx_, initial_pool_size_, heap_type,
-                                                                    growth_factor_, max_pool_size_));
+            allocators_[heap_type] = std::make_unique<MemAllocator>(name.c_str(), ctx_, initial_pool_size_, heap_type,
+                                                                    growth_factor_, max_pool_size_);
         }
-
-        return allocators_[alloc_index]->Allocate(alignment, size);
+        return allocators_[heap_type]->Allocate(alignment, size);
     }
 };
 } // namespace Dx
