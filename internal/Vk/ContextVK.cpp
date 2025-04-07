@@ -211,7 +211,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
 
     CheckVkPhysicalDeviceFeatures(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
                                   raytracing_supported_, ray_query_supported_, fp16_supported_, int64_supported_,
-                                  int64_atomics_supported_, coop_matrix_supported_);
+                                  int64_atomics_supported_, coop_matrix_supported_, pageable_memory_supported_);
 
     if (!raytracing_supported_) {
         // mask out unsupported stage
@@ -220,7 +220,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
 
     if (!external_ && !InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
                                     ray_query_supported_, fp16_supported_, int64_supported_, int64_atomics_supported_,
-                                    coop_matrix_supported_, log)) {
+                                    coop_matrix_supported_, pageable_memory_supported_, log)) {
         return false;
     }
 
@@ -420,7 +420,7 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
     instance_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
-    
+
     static const VkValidationFeatureEnableEXT enabled_validation_features[] = {
         VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
@@ -543,11 +543,14 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
     return true;
 }
 
-void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
-    const Api &api, VkPhysicalDevice &physical_device, VkPhysicalDeviceProperties &out_device_properties,
-    VkPhysicalDeviceMemoryProperties &out_mem_properties, uint32_t &out_graphics_family_index,
-    bool &out_raytracing_supported, bool &out_ray_query_supported, bool &out_shader_fp16_supported,
-    bool &out_shader_int64_supported, bool &out_int64_atomics_supported, bool &out_coop_matrix_supported) {
+void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalDevice &physical_device,
+                                                     VkPhysicalDeviceProperties &out_device_properties,
+                                                     VkPhysicalDeviceMemoryProperties &out_mem_properties,
+                                                     uint32_t &out_graphics_family_index,
+                                                     bool &out_raytracing_supported, bool &out_ray_query_supported,
+                                                     bool &out_shader_fp16_supported, bool &out_shader_int64_supported,
+                                                     bool &out_int64_atomics_supported, bool &out_coop_matrix_supported,
+                                                     bool &out_pageable_memory_supported) {
     api.vkGetPhysicalDeviceProperties(physical_device, &out_device_properties);
     api.vkGetPhysicalDeviceMemoryProperties(physical_device, &out_mem_properties);
 
@@ -572,7 +575,8 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
 
     bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
          shader_fp16_supported = false, shader_int64_supported = false, storage_fp16_supported = false,
-         coop_matrix_supported = false, shader_buf_int64_atomics_supported = false;
+         coop_matrix_supported = false, shader_buf_int64_atomics_supported = false, memory_priority_supported = false,
+         pageable_memory_supported = false;
 
     { // check for features support
         uint32_t extension_count;
@@ -598,6 +602,10 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
                 coop_matrix_supported = true;
             } else if (strcmp(ext.extensionName, VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME) == 0) {
                 shader_buf_int64_atomics_supported = true;
+            } else if (strcmp(ext.extensionName, VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME) == 0) {
+                memory_priority_supported = true;
+            } else if (strcmp(ext.extensionName, VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME) == 0) {
+                pageable_memory_supported = true;
             }
         }
 
@@ -662,12 +670,13 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
     out_shader_int64_supported = shader_int64_supported;
     out_int64_atomics_supported = shader_buf_int64_atomics_supported;
     out_coop_matrix_supported = coop_matrix_supported;
+    out_pageable_memory_supported = (memory_priority_supported && pageable_memory_supported);
 }
 
 bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                                     uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
                                     bool enable_fp16, bool enable_int64, bool enable_int64_atomics,
-                                    bool enable_coop_matrix, ILog *log) {
+                                    bool enable_coop_matrix, bool enable_pageable_memory, ILog *log) {
     VkDeviceQueueCreateInfo queue_create_infos[2] = {{}, {}};
     const float queue_priorities[] = {1.0f};
 
@@ -717,6 +726,11 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
 
     if (enable_int64_atomics) {
         device_extensions.push_back(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
+    }
+
+    if (enable_pageable_memory) {
+        device_extensions.push_back(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+        device_extensions.push_back(VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME);
     }
 
     device_info.enabledExtensionCount = device_extensions.size();
@@ -811,6 +825,15 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
     if (enable_int64_atomics) {
         (*pp_next) = &atomic_int64_features;
         pp_next = &atomic_int64_features.pNext;
+    }
+
+    VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT pageable_mem_features = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT};
+    pageable_mem_features.pageableDeviceLocalMemory = VK_TRUE;
+
+    if (enable_pageable_memory) {
+        (*pp_next) = &pageable_mem_features;
+        pp_next = &pageable_mem_features.pNext;
     }
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
