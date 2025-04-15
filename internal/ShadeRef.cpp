@@ -1077,10 +1077,14 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_d
         if (l.type == LIGHT_TYPE_SPHERE) {
             const fvec4 light_pos = make_fvec3(l.sph.pos);
 
-            const fvec4 disk_normal = normalize(ro - light_pos);
-            const float disk_dist = dot(ro, disk_normal) - dot(light_pos, disk_normal);
+            const fvec4 surface_to_center = light_pos - ro;
+            const float d = length(surface_to_center);
 
-            const float light_pdf = (disk_dist * disk_dist) / (PI * l.sph.radius * l.sph.radius * pdf_factor);
+            const float temp = sqrtf(d * d - l.sph.radius * l.sph.radius);
+            const float disk_radius = (temp * l.sph.radius) / d;
+            const float disk_dist = (temp * disk_radius) / l.sph.radius;
+
+            const float light_pdf = (disk_dist * disk_dist) / (PI * disk_radius * disk_radius * pdf_factor);
             const float bsdf_pdf = ray.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);

@@ -3212,8 +3212,14 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
 
         const fvec4 center = make_fvec3(l.sph.pos);
         const fvec4 surface_to_center = center - P;
+        const float d = length(surface_to_center);
+
+        const float temp = sqrtf(d * d - l.sph.radius * l.sph.radius);
+        const float disk_radius = (temp * l.sph.radius) / d;
+        const float k = l.sph.radius > 0.0f ? ((temp * disk_radius) / (l.sph.radius * d)) : 1.0f;
+
         float disk_dist;
-        const fvec4 sampled_dir = normalize_len(map_to_cone(r1, r2, surface_to_center, l.sph.radius), disk_dist);
+        const fvec4 sampled_dir = normalize_len(map_to_cone(r1, r2, k * surface_to_center, disk_radius), disk_dist);
 
         if (l.sph.radius > 0.0f) {
             const float ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
@@ -3222,7 +3228,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
             const fvec4 light_forward = normalize(light_surf_pos - center);
 
             ls.lp = offset_ray(light_surf_pos, light_forward);
-            ls.pdf = (disk_dist * disk_dist) / (PI * l.sph.radius * l.sph.radius);
+            ls.pdf = (disk_dist * disk_dist) / (PI * disk_radius * disk_radius);
         } else {
             ls.lp = center;
             ls.pdf = (disk_dist * disk_dist) / PI;

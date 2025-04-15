@@ -1016,8 +1016,14 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
         const vec3 surface_to_center = l.SPH_POS - P;
+        const float d = length(surface_to_center);
+
+        const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
+        const float disk_radius = (temp * l.SPH_RADIUS) / d;
+        const float k = l.SPH_RADIUS > 0.0 ? ((temp * disk_radius) / (l.SPH_RADIUS * d)) : 1.0;
+
         float disk_dist;
-        const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, surface_to_center, l.SPH_RADIUS), disk_dist);
+        const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, k * surface_to_center, disk_radius), disk_dist);
 
         if (l.SPH_RADIUS > 0.0) {
             const float ls_dist = sphere_intersection(l.SPH_POS, l.SPH_RADIUS, P, sampled_dir);
@@ -1026,7 +1032,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
             const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
 
             ls.lp = offset_ray(light_surf_pos, light_forward);
-            ls.pdf = (disk_dist * disk_dist) / (PI * l.SPH_RADIUS * l.SPH_RADIUS);
+            ls.pdf = (disk_dist * disk_dist) / (PI * disk_radius * disk_radius);
         } else {
             ls.lp = l.SPH_POS;
             ls.pdf = (disk_dist * disk_dist) / PI;
@@ -1412,10 +1418,14 @@ vec3 Evaluate_LightColor(const ray_data_t ray, const hit_data_t inter, const vec
 
     const uint l_type = LIGHT_TYPE(l);
     if (l_type == LIGHT_TYPE_SPHERE) {
-        const vec3 disk_normal = normalize(ro - l.SPH_POS);
-        const float disk_dist = dot(ro, disk_normal) - dot(l.SPH_POS, disk_normal);
+        const vec3 surface_to_center = l.SPH_POS - ro;
+        const float d = length(surface_to_center);
 
-        const float light_pdf = (disk_dist * disk_dist) / (PI * l.SPH_RADIUS * l.SPH_RADIUS * pdf_factor);
+        const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
+        const float disk_radius = (temp * l.SPH_RADIUS) / d;
+        const float disk_dist = (temp * disk_radius) / l.SPH_RADIUS;
+
+        const float light_pdf = (disk_dist * disk_dist) / (PI * disk_radius * disk_radius * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);

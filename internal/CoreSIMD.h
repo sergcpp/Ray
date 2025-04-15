@@ -2430,7 +2430,7 @@ template <int S> void create_tbn(const fvec<S> N[3], fvec<S> out_T[3], fvec<S> o
 }
 
 template <int S>
-void map_to_cone(const fvec<S> &r1, const fvec<S> &r2, const fvec<S> N[3], float radius, fvec<S> out_V[3]) {
+void map_to_cone(const fvec<S> &r1, const fvec<S> &r2, const fvec<S> N[3], const fvec<S> &radius, fvec<S> out_V[3]) {
     const fvec<S> offset[2] = {2.0f * r1 - 1.0f, 2.0f * r2 - 1.0f};
 
     UNROLLED_FOR(i, 3, { out_V[i] = N[i]; })
@@ -2460,7 +2460,7 @@ force_inline fvec<S> sphere_intersection(const float center[3], const float radi
     const fvec<S> b = 2 * dot3(oc, rd);
     const fvec<S> c = dot3(oc, oc) - radius * radius;
     const fvec<S> discriminant = b * b - 4 * a * c;
-    return (-b - sqrt(max(discriminant, 0.0f))) / (2 * a);
+    return safe_div_pos(-b - safe_sqrt(discriminant), 2 * a);
 }
 
 template <int S> force_inline fvec<S> schlick_weight(const fvec<S> &u) {
@@ -5521,9 +5521,16 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             const fvec<S> r1 = rand_light_uv[0], r2 = rand_light_uv[1];
 
             const float *center = l.sph.pos;
-            const fvec<S> surface_to_center[3] = {center[0] - P[0], center[1] - P[1], center[2] - P[2]};
+            fvec<S> surface_to_center[3] = {center[0] - P[0], center[1] - P[1], center[2] - P[2]};
+            const fvec<S> d = length(surface_to_center);
+
+            const fvec<S> temp = safe_sqrt(d * d - l.sph.radius * l.sph.radius);
+            const fvec<S> disk_radius = (temp * l.sph.radius) / d;
+            const fvec<S> k = l.sph.radius > 0.0f ? ((temp * disk_radius) / (l.sph.radius * d)) : 1.0f;
+            UNROLLED_FOR(i, 3, { surface_to_center[i] *= k; })
+
             fvec<S> sampled_dir[3];
-            map_to_cone(r1, r2, surface_to_center, l.sph.radius, sampled_dir);
+            map_to_cone(r1, r2, surface_to_center, disk_radius, sampled_dir);
             const fvec<S> disk_dist = normalize(sampled_dir);
 
             if (l.sph.radius > 0.0f) {
@@ -5539,7 +5546,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 offset_ray(light_surf_pos, light_forward, lp_biased);
 
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
-                where(ray_queue[index], ls.pdf) = safe_div_pos(disk_dist * disk_dist, PI * l.sph.radius * l.sph.radius);
+                where(ray_queue[index], ls.pdf) = safe_div_pos(disk_dist * disk_dist, PI * disk_radius * disk_radius);
             } else {
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = center[i]; })
                 where(ray_queue[index], ls.pdf) = (disk_dist * disk_dist) / PI;
@@ -5577,7 +5584,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 const float radius = tanf(l.dir.angle);
 
                 fvec<S> V[3];
-                map_to_cone(rand_light_uv[0], rand_light_uv[1], ls.L, radius, V);
+                map_to_cone(rand_light_uv[0], rand_light_uv[1], ls.L, fvec<S>{radius}, V);
                 safe_normalize(V);
 
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = V[i]; })
@@ -6559,11 +6566,15 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
         }
 
         if (l.type == LIGHT_TYPE_SPHERE) {
-            fvec<S> disk_normal[3] = {ray.o[0] - l.sph.pos[0], ray.o[1] - l.sph.pos[1], ray.o[2] - l.sph.pos[2]};
-            normalize(disk_normal);
-            const fvec<S> disk_dist = dot3(ray.o, disk_normal) - dot3(l.sph.pos, disk_normal);
+            const float *light_pos = l.sph.pos;
+            fvec<S> surface_to_center[3] = {light_pos[0] - ray.o[0], light_pos[1] - ray.o[1], light_pos[2] - ray.o[2]};
+            const fvec<S> d = length(surface_to_center);
 
-            const fvec<S> light_pdf = safe_div(disk_dist * disk_dist, PI * l.sph.radius * l.sph.radius * pdf_factor);
+            const fvec<S> temp = safe_sqrt(d * d - l.sph.radius * l.sph.radius);
+            const fvec<S> disk_radius = (temp * l.sph.radius) / d;
+            const fvec<S> disk_dist = (temp * disk_radius) / l.sph.radius;
+
+            const fvec<S> light_pdf = safe_div(disk_dist * disk_dist, PI * disk_radius * disk_radius * pdf_factor);
             const fvec<S> bsdf_pdf = ray.pdf;
 
             const fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
