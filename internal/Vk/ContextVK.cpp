@@ -88,6 +88,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
     instance_ = vk_device.instance;
     physical_device_ = vk_device.physical_device;
     device_ = vk_device.device;
+    pipeline_cache_ = vk_device.pipeline_cache;
     static_cast<VulkanFunctions &>(api_) = vk_functions;
 
     external_ = (instance_ != VK_NULL_HANDLE);

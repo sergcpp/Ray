@@ -32,6 +32,7 @@ class Context {
     uint32_t graphics_family_index_ = 0;
 
     VkDevice device_ = {};
+    VkPipelineCache pipeline_cache_ = {};
 
     bool raytracing_supported_ = false, ray_query_supported_ = false;
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props_ = {
@@ -79,6 +80,7 @@ class Context {
 
     VkDevice device() const { return device_; }
     VkPhysicalDevice physical_device() const { return physical_device_; }
+    VkPipelineCache pipeline_cache() const { return pipeline_cache_; }
 
     ILog *log() const { return log_; }
     const Api &api() const { return api_; }
