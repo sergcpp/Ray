@@ -305,7 +305,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
             pipeline_create_info.pNext = &pipeline_rendering_create_info;
         }
 
-        const VkResult res = ctx->api().vkCreateGraphicsPipelines(ctx->device(), VK_NULL_HANDLE, 1,
+        const VkResult res = ctx->api().vkCreateGraphicsPipelines(ctx->device(), ctx->pipeline_cache(), 1,
                                                                   &pipeline_create_info, nullptr, &handle_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create graphics pipeline!");
@@ -445,7 +445,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
         info.layout = layout_;
 
         const VkResult res =
-            ctx->api().vkCreateComputePipelines(ctx->device(), VK_NULL_HANDLE, 1, &info, nullptr, &handle_);
+            ctx->api().vkCreateComputePipelines(ctx->device(), ctx->pipeline_cache(), 1, &info, nullptr, &handle_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create pipeline!");
             return false;
@@ -459,8 +459,8 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
         info.groupCount = rt_shader_groups_.size();
         info.pGroups = rt_shader_groups_.cdata();
 
-        const VkResult res = ctx->api().vkCreateRayTracingPipelinesKHR(ctx->device(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1,
-                                                                       &info, nullptr, &handle_);
+        const VkResult res = ctx->api().vkCreateRayTracingPipelinesKHR(
+            ctx->device(), VK_NULL_HANDLE, ctx->pipeline_cache(), 1, &info, nullptr, &handle_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create pipeline!");
             return false;

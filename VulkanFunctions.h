@@ -283,9 +283,10 @@ typedef void(VKAPI_PTR *PFN_vkCmdWriteTimestamp)(VkCommandBuffer commandBuffer, 
                                                  VkQueryPool queryPool, uint32_t query);
 
 struct VulkanDevice {
-    VkInstance instance;
-    VkPhysicalDevice physical_device;
-    VkDevice device;
+    VkInstance instance = {};
+    VkPhysicalDevice physical_device = {};
+    VkDevice device = {};
+    VkPipelineCache pipeline_cache = {};
 };
 struct VulkanFunctions {
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
