@@ -1015,15 +1015,14 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
-        const vec3 surface_to_center = l.SPH_POS - P;
-        const float d = length(surface_to_center);
+        vec3 light_normal = l.SPH_POS - P;
+        float d;
+        light_normal = normalize_len(light_normal, d);
 
         const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
         const float disk_radius = (temp * l.SPH_RADIUS) / d;
-        const float k = l.SPH_RADIUS > 0.0 ? ((temp * disk_radius) / (l.SPH_RADIUS * d)) : 1.0;
-
-        float disk_dist;
-        const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, k * surface_to_center, disk_radius), disk_dist);
+        float disk_dist = l.SPH_RADIUS > 0.0 ? ((temp * disk_radius) / l.SPH_RADIUS) : d;
+        const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, disk_dist * light_normal, disk_radius), disk_dist);
 
         if (l.SPH_RADIUS > 0.0) {
             const float ls_dist = sphere_intersection(l.SPH_POS, l.SPH_RADIUS, P, sampled_dir);
@@ -1031,15 +1030,18 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
             const vec3 light_surf_pos = P + sampled_dir * ls_dist;
             const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
 
+            const float sampled_area = PI * disk_radius * disk_radius;
+            const float cos_theta = dot(sampled_dir, light_normal);
+
             ls.lp = offset_ray(light_surf_pos, light_forward);
-            ls.pdf = (disk_dist * disk_dist) / (PI * disk_radius * disk_radius);
+            ls.pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta);
         } else {
             ls.lp = l.SPH_POS;
             ls.pdf = (disk_dist * disk_dist) / PI;
         }
 
         ls.L = sampled_dir;
-        ls.area = l.SPH_AREA;
+        ls.area = PI * disk_radius * disk_radius;
         ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
 
         if (!LIGHT_VISIBLE(l)) {
@@ -1418,14 +1420,18 @@ vec3 Evaluate_LightColor(const ray_data_t ray, const hit_data_t inter, const vec
 
     const uint l_type = LIGHT_TYPE(l);
     if (l_type == LIGHT_TYPE_SPHERE) {
-        const vec3 surface_to_center = l.SPH_POS - ro;
-        const float d = length(surface_to_center);
+        float d;
+        const vec3 disk_normal = normalize_len(l.SPH_POS - ro, d);
 
         const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
         const float disk_radius = (temp * l.SPH_RADIUS) / d;
-        const float disk_dist = (temp * disk_radius) / l.SPH_RADIUS;
+        float disk_dist = dot(ro, disk_normal) - dot(l.SPH_POS, disk_normal);
 
-        const float light_pdf = (disk_dist * disk_dist) / (PI * disk_radius * disk_radius * pdf_factor);
+        const float sampled_area = PI * disk_radius * disk_radius;
+        const float cos_theta = dot(rd, disk_normal);
+        disk_dist /= cos_theta;
+
+        const float light_pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);

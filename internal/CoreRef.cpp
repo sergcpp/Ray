@@ -3211,30 +3211,32 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
         const fvec4 center = make_fvec3(l.sph.pos);
-        const fvec4 surface_to_center = center - P;
-        const float d = length(surface_to_center);
+        float d;
+        const fvec4 light_normal = normalize_len(center - P, d);
 
         const float temp = sqrtf(d * d - l.sph.radius * l.sph.radius);
         const float disk_radius = (temp * l.sph.radius) / d;
-        const float k = l.sph.radius > 0.0f ? ((temp * disk_radius) / (l.sph.radius * d)) : 1.0f;
-
-        float disk_dist;
-        const fvec4 sampled_dir = normalize_len(map_to_cone(r1, r2, k * surface_to_center, disk_radius), disk_dist);
+        float disk_dist = l.sph.radius > 0.0f ? ((temp * disk_radius) / l.sph.radius) : d;
+        const fvec4 sampled_dir = normalize_len(map_to_cone(r1, r2, disk_dist * light_normal, disk_radius), disk_dist);
 
         if (l.sph.radius > 0.0f) {
+            // TODO: Find better way to do this
             const float ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
 
             const fvec4 light_surf_pos = P + sampled_dir * ls_dist;
             const fvec4 light_forward = normalize(light_surf_pos - center);
 
+            const float sampled_area = PI * disk_radius * disk_radius;
+            const float cos_theta = dot(sampled_dir, light_normal);
+
             ls.lp = offset_ray(light_surf_pos, light_forward);
-            ls.pdf = (disk_dist * disk_dist) / (PI * disk_radius * disk_radius);
+            ls.pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta);
         } else {
             ls.lp = center;
             ls.pdf = (disk_dist * disk_dist) / PI;
         }
         ls.L = sampled_dir;
-        ls.area = l.sph.area;
+        ls.area = PI * disk_radius * disk_radius;
         ls.ray_flags = l.ray_visibility;
 
         if (!l.visible) {

@@ -5521,17 +5521,19 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             const fvec<S> r1 = rand_light_uv[0], r2 = rand_light_uv[1];
 
             const float *center = l.sph.pos;
-            fvec<S> surface_to_center[3] = {center[0] - P[0], center[1] - P[1], center[2] - P[2]};
-            const fvec<S> d = length(surface_to_center);
+            fvec<S> light_normal[3] = {center[0] - P[0], center[1] - P[1], center[2] - P[2]};
+            const fvec<S> d = normalize(light_normal);
 
             const fvec<S> temp = safe_sqrt(d * d - l.sph.radius * l.sph.radius);
             const fvec<S> disk_radius = (temp * l.sph.radius) / d;
-            const fvec<S> k = l.sph.radius > 0.0f ? ((temp * disk_radius) / (l.sph.radius * d)) : 1.0f;
-            UNROLLED_FOR(i, 3, { surface_to_center[i] *= k; })
+            fvec<S> disk_dist = l.sph.radius > 0.0f ? ((temp * disk_radius) / l.sph.radius) : d;
+
+            fvec<S> surf_to_disk[3];
+            UNROLLED_FOR(i, 3, { surf_to_disk[i] = disk_dist * light_normal[i]; })
 
             fvec<S> sampled_dir[3];
-            map_to_cone(r1, r2, surface_to_center, disk_radius, sampled_dir);
-            const fvec<S> disk_dist = normalize(sampled_dir);
+            map_to_cone(r1, r2, surf_to_disk, disk_radius, sampled_dir);
+            disk_dist = normalize(sampled_dir);
 
             if (l.sph.radius > 0.0f) {
                 const fvec<S> ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
@@ -5545,15 +5547,18 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 fvec<S> lp_biased[3];
                 offset_ray(light_surf_pos, light_forward, lp_biased);
 
+                const fvec<S> sampled_area = PI * disk_radius * disk_radius;
+                const fvec<S> cos_theta = dot3(sampled_dir, light_normal);
+
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
-                where(ray_queue[index], ls.pdf) = safe_div_pos(disk_dist * disk_dist, PI * disk_radius * disk_radius);
+                where(ray_queue[index], ls.pdf) = safe_div_pos(disk_dist * disk_dist, sampled_area * cos_theta);
             } else {
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = center[i]; })
                 where(ray_queue[index], ls.pdf) = (disk_dist * disk_dist) / PI;
             }
 
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = sampled_dir[i]; })
-            where(ray_queue[index], ls.area) = l.sph.area;
+            where(ray_queue[index], ls.area) = PI * disk_radius * disk_radius;
             where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             if (!l.visible) {
@@ -6567,14 +6572,18 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
 
         if (l.type == LIGHT_TYPE_SPHERE) {
             const float *light_pos = l.sph.pos;
-            fvec<S> surface_to_center[3] = {light_pos[0] - ray.o[0], light_pos[1] - ray.o[1], light_pos[2] - ray.o[2]};
-            const fvec<S> d = length(surface_to_center);
+            fvec<S> disk_normal[3] = {light_pos[0] - ray.o[0], light_pos[1] - ray.o[1], light_pos[2] - ray.o[2]};
+            const fvec<S> d = normalize(disk_normal);
 
             const fvec<S> temp = safe_sqrt(d * d - l.sph.radius * l.sph.radius);
             const fvec<S> disk_radius = (temp * l.sph.radius) / d;
-            const fvec<S> disk_dist = (temp * disk_radius) / l.sph.radius;
+            fvec<S> disk_dist = dot3(ray.o, disk_normal) - dot3(light_pos, disk_normal);
 
-            const fvec<S> light_pdf = safe_div(disk_dist * disk_dist, PI * disk_radius * disk_radius * pdf_factor);
+            const fvec<S> sampled_area = PI * disk_radius * disk_radius;
+            const fvec<S> cos_theta = dot3(ray.d, disk_normal);
+            disk_dist = safe_div_pos(disk_dist, cos_theta);
+
+            const fvec<S> light_pdf = safe_div(disk_dist * disk_dist, sampled_area * cos_theta * pdf_factor);
             const fvec<S> bsdf_pdf = ray.pdf;
 
             const fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
