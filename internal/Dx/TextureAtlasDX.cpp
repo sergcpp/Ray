@@ -147,8 +147,8 @@ void Ray::Dx::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _r
                 const color_t<T, N> c01 = src_data[_MIN(y + 1, src_res[1] - 1) * src_res[0] + (x + 0)];
 
                 color_t<T, N> res;
-                for (int i = 0; i < N; ++i) {
-                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                for (int j = 0; j < N; ++j) {
+                    res.v[j] = (c00.v[j] + c10.v[j] + c11.v[j] + c01.v[j]) / 4;
                 }
 
                 dst_data.push_back(res);

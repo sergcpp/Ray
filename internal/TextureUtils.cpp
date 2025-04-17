@@ -235,7 +235,8 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
             if (channels == 3) {
                 val = Ref::fvec4{image_data[3 * (y * w + x) + 0], image_data[3 * (y * w + x) + 1],
                                       image_data[3 * (y * w + x) + 2], 0.0f};
-            } else if (channels == 4) {
+            } else /*if (channels == 4)*/ {
+                assert(channels == 4);
                 val = Ref::fvec4{image_data[4 * (y * w + x) + 0], image_data[4 * (y * w + x) + 1],
                                       image_data[4 * (y * w + x) + 2], 0.0f};
             }
@@ -1521,8 +1522,8 @@ int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int ti
                             static const int _6step_mapping[] = {1, 0, 7, 6, 5, 4, 3, 2};
                             static const int _4step_mapping[] = {1, 0, 5, 4, 3, 2, 6, 7};
 
-                            for (int i = 0; i < 16; ++i) {
-                                int next_bit = i * 3;
+                            for (int k = 0; k < 16; ++k) {
+                                int next_bit = k * 3;
 
                                 int idx = 0, bit;
                                 bit = (dst.ndx[next_bit >> 3] >> (next_bit & 7)) & 1;

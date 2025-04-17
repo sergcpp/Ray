@@ -140,8 +140,8 @@ void Ray::Vk::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _r
                 const color_t<T, N> c01 = src_data[_MIN(y + 1, src_res[1] - 1) * src_res[0] + (x + 0)];
 
                 color_t<T, N> res;
-                for (int i = 0; i < N; ++i) {
-                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                for (int j = 0; j < N; ++j) {
+                    res.v[j] = (c00.v[j] + c10.v[j] + c11.v[j] + c01.v[j]) / 4;
                 }
 
                 dst_data.push_back(res);
@@ -753,7 +753,7 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
 
 void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const int posy, const int sizex,
                                           const int sizey, const void *data) {
-    uint32_t data_size;
+    uint32_t data_size = 0;
     if (!IsCompressedFormat(format_)) {
         data_size = sizex * sizey * GetPerPixelDataLen(format_);
     } else {

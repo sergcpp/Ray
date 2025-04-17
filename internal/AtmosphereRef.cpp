@@ -520,17 +520,17 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
                 LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
             const fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
-            const fvec2 planet_intersection = PlanetIntersection(params, local_position, light_dir);
-            const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
+            const fvec2 _planet_intersection = PlanetIntersection(params, local_position, light_dir);
+            const float planet_shadow = _planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
 
             fvec4 multiscattered_lum = 0.0f;
             if (!multiscatter_lut.empty()) {
-                fvec2 uv =
+                fvec2 _uv =
                     saturate(fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
-                uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
-                           from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
+                _uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
+                            from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
 
-                multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+                multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, _uv);
             }
 
             const fvec4 phase_times_scattering =
@@ -548,12 +548,12 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
 
             fvec4 multiscattered_lum = 0.0f;
             if (!multiscatter_lut.empty()) {
-                fvec2 uv =
+                fvec2 _uv =
                     saturate(fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
-                uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
-                           from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
+                _uv = fvec2(from_unit_to_sub_uvs(_uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
+                            from_unit_to_sub_uvs(_uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
 
-                multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+                multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, _uv);
             }
 
             const fvec4 phase_times_scattering =
@@ -686,12 +686,12 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
                     light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
                     if (!multiscatter_lut.empty()) {
-                        fvec2 uv = saturate(
+                        fvec2 _uv = saturate(
                             fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
-                        uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
-                                   from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
+                        _uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
+                                    from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
 
-                        multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+                        multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, _uv);
                     }
                 }
                 {
@@ -701,12 +701,12 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
                     moon_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
                     if (!multiscatter_lut.empty()) {
-                        fvec2 uv = saturate(
+                        fvec2 _uv = saturate(
                             fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
-                        uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
-                                   from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
+                        _uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
+                                    from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
 
-                        moon_multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, uv);
+                        moon_multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, _uv);
                     }
                 }
             }
@@ -724,8 +724,8 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
 
                     if (light_dir.get<1>() > -0.025f) {
                         // main light contribution
-                        const fvec2 planet_intersection = PlanetIntersection(params, local_position, light_dir);
-                        const float planet_shadow = planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
+                        const fvec2 _planet_intersection = PlanetIntersection(params, local_position, light_dir);
+                        const float planet_shadow = _planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
                         const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, light_dir);
 
                         clouds += total_transmittance *
@@ -970,8 +970,7 @@ void Ray::Ref::ShadeSky(const pass_settings_t &ps, const float limit, Span<const
             }
         } else if (sc.env.atmosphere.stars_brightness > 0.0f) {
             // Use fake lightsource (to light up the moon)
-            const fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
-                        light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
+            const fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f}, light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
 
             color += IntegrateScattering(sc.env.atmosphere, fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f},
                                          I, MAX_DIST, light_dir, 0.0f, light_col, sc.sky_transmittance_lut,

@@ -5,7 +5,7 @@
 #include <algorithm> // for std::max
 
 template <typename T, int N>
-int Ray::Cpu::TexStorageLinear<T, N>::Allocate(Span<const ColorType> data, const int res[2], const bool mips) {
+int Ray::Cpu::TexStorageLinear<T, N>::Allocate(Span<const ColorType> data, const int resolution[2], const bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -18,10 +18,10 @@ int Ray::Cpu::TexStorageLinear<T, N>::Allocate(Span<const ColorType> data, const
     ImgData &p = images_[index];
 
     p.lod_offsets[0] = 0;
-    p.res[0][0] = res[0];
-    p.res[0][1] = res[1];
+    p.res[0][0] = resolution[0];
+    p.res[0][1] = resolution[1];
 
-    int total_size = (res[0] * res[1]);
+    int total_size = (resolution[0] * resolution[1]);
 
     for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
         if (mips && (p.res[i - 1][0] > 1 || p.res[i - 1][1] > 1)) {
@@ -40,8 +40,8 @@ int Ray::Cpu::TexStorageLinear<T, N>::Allocate(Span<const ColorType> data, const
     memcpy(p.pixels.get(), data.data(), total_size * sizeof(ColorType));
 
     p.lod_offsets[0] = 0;
-    p.res[0][0] = res[0];
-    p.res[0][1] = res[1];
+    p.res[0][0] = resolution[0];
+    p.res[0][1] = resolution[1];
 
     for (int i = 1; i < NUM_MIP_LEVELS && mips; ++i) {
         ColorType *out_pixels = &p.pixels[p.lod_offsets[i]];
@@ -104,7 +104,7 @@ template class Ray::Cpu::TexStorageLinear<uint8_t, 1>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-int Ray::Cpu::TexStorageTiled<T, N>::Allocate(Span<const ColorType> data, const int res[2], bool mips) {
+int Ray::Cpu::TexStorageTiled<T, N>::Allocate(Span<const ColorType> data, const int resolution[2], bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -117,8 +117,8 @@ int Ray::Cpu::TexStorageTiled<T, N>::Allocate(Span<const ColorType> data, const 
     ImgData &p = images_[index];
 
     p.lod_offsets[0] = 0;
-    p.res[0][0] = res[0];
-    p.res[0][1] = res[1];
+    p.res[0][0] = resolution[0];
+    p.res[0][1] = resolution[1];
     p.res_in_tiles[0][0] = (p.res[0][0] + TileSize - 1) / TileSize;
     p.res_in_tiles[0][1] = (p.res[0][1] + TileSize - 1) / TileSize;
 
@@ -146,14 +146,14 @@ int Ray::Cpu::TexStorageTiled<T, N>::Allocate(Span<const ColorType> data, const 
 
     p.pixels = std::make_unique<ColorType[]>(total_size);
 
-    for (int y = 0; y < res[1]; ++y) {
+    for (int y = 0; y < resolution[1]; ++y) {
         const int tiley = y / TileSize, in_tiley = y % TileSize;
 
-        for (int x = 0; x < res[0]; ++x) {
+        for (int x = 0; x < resolution[0]; ++x) {
             const int tilex = x / TileSize, in_tilex = x % TileSize;
 
             p.pixels[(tiley * p.res_in_tiles[0][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
-                data[y * res[0] + x];
+                data[y * resolution[0] + x];
         }
     }
 
@@ -170,8 +170,8 @@ int Ray::Cpu::TexStorageTiled<T, N>::Allocate(Span<const ColorType> data, const 
                 const ColorType c01 = Get(index, x + 0, y + 1, i - 1);
 
                 ColorType res;
-                for (int i = 0; i < N; ++i) {
-                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                for (int j = 0; j < N; ++j) {
+                    res.v[j] = (c00.v[j] + c10.v[j] + c11.v[j] + c01.v[j]) / 4;
                 }
 
                 const int tilex = (x / 2) / TileSize, in_tilex = (x / 2) % TileSize;
@@ -210,7 +210,7 @@ template class Ray::Cpu::TexStorageTiled<uint8_t, 1>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-int Ray::Cpu::TexStorageSwizzled<T, N>::Allocate(Span<const ColorType> data, const int res[2], bool mips) {
+int Ray::Cpu::TexStorageSwizzled<T, N>::Allocate(Span<const ColorType> data, const int resolution[2], bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -223,8 +223,8 @@ int Ray::Cpu::TexStorageSwizzled<T, N>::Allocate(Span<const ColorType> data, con
     ImgData &p = images_[index];
 
     p.lod_offsets[0] = 0;
-    p.res[0][0] = res[0];
-    p.res[0][1] = res[1];
+    p.res[0][0] = resolution[0];
+    p.res[0][1] = resolution[1];
     p.tile_y_stride[0] = swizzle_x_tile(OuterTileW * ((p.res[0][0] + OuterTileW - 1) / OuterTileW));
 
     int total_size = p.tile_y_stride[0] * ((p.res[0][1] + OuterTileH - 1) / OuterTileH);
@@ -251,11 +251,11 @@ int Ray::Cpu::TexStorageSwizzled<T, N>::Allocate(Span<const ColorType> data, con
 
     p.pixels = std::make_unique<ColorType[]>(total_size);
 
-    for (int y = 0; y < res[1]; ++y) {
+    for (int y = 0; y < resolution[1]; ++y) {
         const uint32_t y_off = (y / OuterTileH) * p.tile_y_stride[0] + swizzle_y(y);
-        for (int x = 0; x < res[0]; ++x) {
+        for (int x = 0; x < resolution[0]; ++x) {
             const uint32_t x_off = swizzle_x_tile(x);
-            p.pixels[y_off + x_off] = data[y * res[0] + x];
+            p.pixels[y_off + x_off] = data[y * resolution[0] + x];
         }
     }
 
@@ -272,8 +272,8 @@ int Ray::Cpu::TexStorageSwizzled<T, N>::Allocate(Span<const ColorType> data, con
                 const ColorType c01 = Get(index, x + 0, y + 1, i - 1);
 
                 ColorType res;
-                for (int i = 0; i < N; ++i) {
-                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                for (int j = 0; j < N; ++j) {
+                    res.v[j] = (c00.v[j] + c10.v[j] + c11.v[j] + c01.v[j]) / 4;
                 }
 
                 const uint32_t x_off = swizzle_x_tile(x / 2);
@@ -311,7 +311,7 @@ template class Ray::Cpu::TexStorageSwizzled<uint8_t, 1>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <int N>
-int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType> data, const int res[2], const bool mips) {
+int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType> data, const int resolution[2], const bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -324,12 +324,12 @@ int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType> data, const int
     ImgData &p = images_[index];
 
     p.lod_offsets[0] = 0;
-    p.res[0][0] = res[0];
-    p.res[0][1] = res[1];
+    p.res[0][0] = resolution[0];
+    p.res[0][1] = resolution[1];
     p.res_in_tiles[0][0] = (p.res[0][0] + TileSize - 1) / TileSize;
     p.res_in_tiles[0][1] = (p.res[0][1] + TileSize - 1) / TileSize;
 
-    int total_size = GetRequiredMemory_BCn<N>(res[0], res[1], 1);
+    int total_size = GetRequiredMemory_BCn<N>(resolution[0], resolution[1], 1);
 
     int mip_count = 1;
     for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
@@ -358,14 +358,14 @@ int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType> data, const int
     p.pixels = std::make_unique<uint8_t[]>(total_size + 1);
     if (N == 4) {
         // TODO: get rid of this allocation
-        auto temp_YCoCg = ConvertRGB_to_CoCgxY(&data[0].v[0], res[0], res[1]);
-        CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), res[0], res[1], p.pixels.get());
+        auto temp_YCoCg = ConvertRGB_to_CoCgxY(&data[0].v[0], resolution[0], resolution[1]);
+        CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), resolution[0], resolution[1], p.pixels.get());
     } else if (N == 3) {
-        CompressImage_BC1<3>(&data[0].v[0], res[0], res[1], p.pixels.get());
+        CompressImage_BC1<3>(&data[0].v[0], resolution[0], resolution[1], p.pixels.get());
     } else if (N == 2) {
-        CompressImage_BC5(&data[0].v[0], res[0], res[1], p.pixels.get());
+        CompressImage_BC5(&data[0].v[0], resolution[0], resolution[1], p.pixels.get());
     } else if (N == 1) {
-        CompressImage_BC4(&data[0].v[0], res[0], res[1], p.pixels.get());
+        CompressImage_BC4(&data[0].v[0], resolution[0], resolution[1], p.pixels.get());
     }
 
     // TODO: try to get rid of these allocations

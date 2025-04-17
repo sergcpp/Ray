@@ -10,6 +10,9 @@
 
 #include "../../third-party/renderdoc/renderdoc_app.h"
 
+#pragma warning(push)
+#pragma warning(disable : 6294) // Ill-defined for-loop
+
 namespace Ray {
 bool MatchDeviceNames(const char *name, const char *pattern);
 
@@ -225,6 +228,10 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
         return false;
     }
 
+    if (!api_.vkGetDeviceProcAddr) {
+        return false;
+    }
+
     // Workaround for a buggy linux AMD driver, make sure vkGetBufferDeviceAddressKHR is not NULL
     auto dev_vkGetBufferDeviceAddressKHR =
         (PFN_vkGetBufferDeviceAddressKHR)api_.vkGetDeviceProcAddr(device_, "vkGetBufferDeviceAddressKHR");
@@ -240,7 +247,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
     log_->Info("============================================================================");
     log_->Info("Device info:");
 
-    log_->Info("\tVulkan version\t: %i.%i", VK_API_VERSION_MAJOR(device_properties_.apiVersion),
+    log_->Info("\tVulkan version\t: %u.%u", VK_API_VERSION_MAJOR(device_properties_.apiVersion),
                VK_API_VERSION_MINOR(device_properties_.apiVersion));
 
     auto it = find_if(KnownGPUVendors, KnownGPUVendors + KnownGPUVendorsCount,
@@ -254,11 +261,15 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
     for (uint32_t i = 0; i < mem_properties_.memoryHeapCount; ++i) {
         const VkMemoryHeap &heap = mem_properties_.memoryHeaps[i];
         const bool is_device_local = (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0;
-        log_->Info("\tHeap %i, size %.2f MB %s", i, double(heap.size) / (1024 * 1024),
+        log_->Info("\tHeap %u, size %.2f MB %s", i, double(heap.size) / (1024 * 1024),
                    is_device_local ? "(device local)" : "");
     }
 
     log_->Info("============================================================================");
+
+    if (!api_.vkGetPhysicalDeviceProperties) {
+        return false;
+    }
 
     VkPhysicalDeviceProperties device_properties = {};
     api_.vkGetPhysicalDeviceProperties(physical_device_, &device_properties);
@@ -1100,3 +1111,5 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
 
     return out_device_count;
 }
+
+#pragma warning(pop)

@@ -269,6 +269,10 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
         }
     }
 
+    if (!ctx) {
+        return;
+    }
+
     src_stages &= to_pipeline_stage_flags_vk(src_stages_mask);
     dst_stages &= to_pipeline_stage_flags_vk(dst_stages_mask);
 

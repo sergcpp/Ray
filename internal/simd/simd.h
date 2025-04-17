@@ -7,6 +7,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4789) // buffer overrun
 #pragma warning(disable : 4127) // conditional expression is constant
+#pragma warning(disable : 6326) // potential comparison of a constant with another constant
 
 // Used to force loop unroll and make index compile-time constant
 // clang-format off

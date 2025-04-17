@@ -152,14 +152,14 @@ uint32_t Ray::Vk::parse_type_size(spirv_parser_state_t &ps, const uint32_t id) {
         ret += parse_type_size(ps, component_type) * component_count;
     } break;
     case eSPIRVOp::TypePointer: {
-        const uint32_t id = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
-        ret += parse_type_size(ps, id);
+        const uint32_t _id = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
+        ret += parse_type_size(ps, _id);
     } break;
     case eSPIRVOp::TypeStruct: {
         // const uint32_t result_id = fix_endianness(ps.header.instructions[offset + 1], ps.endianness);
         for (uint32_t i = 2; i < length; ++i) {
-            const uint32_t id = fix_endianness(ps.header.instructions[offset + i], ps.endianness);
-            ret += parse_type_size(ps, id);
+            const uint32_t _id = fix_endianness(ps.header.instructions[offset + i], ps.endianness);
+            ret += parse_type_size(ps, _id);
         }
     } break;
     default:
@@ -185,8 +185,8 @@ Ray::Vk::spirv_buffer_props_t Ray::Vk::parse_buffer_props(spirv_parser_state_t &
 
     switch (opcode) {
     case eSPIRVOp::TypePointer: {
-        const uint32_t id = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
-        ret = parse_buffer_props(ps, id);
+        const uint32_t _id = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
+        ret = parse_buffer_props(ps, _id);
     } break;
     case eSPIRVOp::TypeArray: {
         const uint32_t len = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
@@ -195,8 +195,8 @@ Ray::Vk::spirv_buffer_props_t Ray::Vk::parse_buffer_props(spirv_parser_state_t &
     case eSPIRVOp::TypeStruct: {
         // const uint32_t result_id = fix_endianness(ps.header.instructions[offset + 1], ps.endianness);
         for (uint32_t i = 2; i < length; ++i) {
-            const uint32_t id = fix_endianness(ps.header.instructions[offset + i], ps.endianness);
-            ret.runtime_array |= parse_buffer_props(ps, id).runtime_array;
+            const uint32_t _id = fix_endianness(ps.header.instructions[offset + i], ps.endianness);
+            ret.runtime_array |= parse_buffer_props(ps, _id).runtime_array;
         }
     } break;
     default:
@@ -222,18 +222,18 @@ Ray::Vk::spirv_uniform_props_t Ray::Vk::parse_uniform_props(spirv_parser_state_t
 
     switch (opcode) {
     case eSPIRVOp::TypePointer: {
-        const uint32_t id = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
-        ret = parse_uniform_props(ps, id);
+        const uint32_t _id = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
+        ret = parse_uniform_props(ps, _id);
     } break;
     case eSPIRVOp::TypeArray: {
-        const uint32_t id = fix_endianness(ps.header.instructions[offset + 2], ps.endianness);
+        const uint32_t _id = fix_endianness(ps.header.instructions[offset + 2], ps.endianness);
         const uint32_t len_id = fix_endianness(ps.header.instructions[offset + 3], ps.endianness);
-        ret = parse_uniform_props(ps, id);
+        ret = parse_uniform_props(ps, _id);
         ret.count = parse_constant(ps, len_id).u32;
     } break;
     case eSPIRVOp::TypeRuntimeArray: {
-        const uint32_t id = fix_endianness(ps.header.instructions[offset + 2], ps.endianness);
-        ret = parse_uniform_props(ps, id);
+        const uint32_t _id = fix_endianness(ps.header.instructions[offset + 2], ps.endianness);
+        ret = parse_uniform_props(ps, _id);
         ret.runtime_array = true;
     } break;
     case eSPIRVOp::TypeImage: {

@@ -16,6 +16,8 @@
 
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant
+#pragma warning(disable : 6326) // potential comparison of a constant with another constant
+#pragma warning(disable : 6262) // function uses a lot of stack
 
 namespace Ray {
 //
@@ -860,8 +862,8 @@ force_inline bool IntersectTri(const float o[3], const float d[3], int i, const 
 template <int S>
 bool IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri, const uint32_t prim_index,
                   int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v) {
-    ivec<S> _mask = 0, _prim_index;
-    fvec<S> _t = inter_t, _u, _v;
+    ivec<S> _mask = 0, _prim_index = 0;
+    fvec<S> _t = inter_t, _u = 0.0f, _v = 0.0f;
 
     for (int i = 0; i < 8; i += S) {
         const fvec<S> det = rd[0] * fvec<S>{&tri.n_plane[0][i], vector_aligned} +
@@ -948,8 +950,8 @@ bool IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri,
 template <>
 bool IntersectTri<16>(const float ro[3], const float rd[3], const mtri_accel_t &tri, const uint32_t prim_index,
                       int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v) {
-    ivec<8> _mask = 0, _prim_index;
-    fvec<8> _t = inter_t, _u, _v;
+    ivec<8> _mask = 0, _prim_index = 0;
+    fvec<8> _t = inter_t, _u = 0.0f, _v = 0.0f;
 
     { // intersect 8 triangles
         const fvec<8> det = rd[0] * fvec<8>{&tri.n_plane[0][0], vector_aligned} +
@@ -2181,7 +2183,7 @@ template <int S> void EnsureValidReflection(const fvec<S> Ng[3], const fvec<S> I
     ivec<S> valid1 = simd_cast((N1_z2 > 1e-5f) & (N1_z2 <= (1.0f + 1e-5f)));
     ivec<S> valid2 = simd_cast((N2_z2 > 1e-5f) & (N2_z2 <= (1.0f + 1e-5f)));
 
-    fvec<S> N_new[2];
+    fvec<S> N_new[2] = {};
 
     if ((valid1 & valid2).not_all_zeros()) {
         // If both are possible, do the expensive reflection-based check.
@@ -2840,7 +2842,7 @@ template <int S> uvec<S> calc_grid_level(const fvec<S> p[3], const cache_grid_pa
 } // namespace Ray
 
 template <int DimX, int DimY>
-void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const uint32_t rand_seq[],
+void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &rect, int w, int h, const uint32_t rand_seq[],
                                   const uint32_t rand_seed, const float filter_table[], const int iteration,
                                   const uint16_t required_samples[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                                   aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
@@ -2855,14 +2857,14 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
     const auto off_x = ivec<S>{rays_layout_x, vector_aligned}, off_y = ivec<S>{rays_layout_y, vector_aligned};
 
-    const int x_res = (r.w + DimX - 1) / DimX, y_res = (r.h + DimY - 1) / DimY;
+    const int x_res = (rect.w + DimX - 1) / DimX, y_res = (rect.h + DimY - 1) / DimY;
 
     size_t i = 0;
     out_rays.resize(x_res * y_res);
     out_inters.resize(x_res * y_res);
 
-    for (int y = r.y; y < r.y + r.h; y += DimY) {
-        for (int x = r.x; x < r.x + r.w; x += DimX) {
+    for (int y = rect.y; y < rect.y + rect.h; y += DimY) {
+        for (int x = rect.x; x < rect.x + rect.w; x += DimX) {
             ray_data_t<S> &out_r = out_rays[i];
 
             const ivec<S> ixx = x + off_x, iyy = y + off_y;
@@ -2870,9 +2872,9 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
             ivec<S> req_samples = INT_MAX;
             if (required_samples) {
-                UNROLLED_FOR_S(i, S, {
-                    req_samples.template set<i>(
-                        required_samples[iyy_clamped.template get<i>() * w + ixx_clamped.template get<i>()]);
+                UNROLLED_FOR_S(j, S, {
+                    req_samples.template set<j>(
+                        required_samples[iyy_clamped.template get<j>() * w + ixx_clamped.template get<j>()]);
                 })
             }
 
@@ -3530,15 +3532,15 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec
 
                 const mesh_instance_t &mi = mesh_instances[prim_index];
 
-                const ivec<S> ray_mask = ivec<S>((mi.ray_visibility & ray_flags) != 0u) & st.queue[st.index].mask;
-                if (ray_mask.all_zeros()) {
+                const ivec<S> _ray_mask = ivec<S>((mi.ray_visibility & ray_flags) != 0u) & st.queue[st.index].mask;
+                if (_ray_mask.all_zeros()) {
                     continue;
                 }
 
                 fvec<S> _ro[3], _rd[3];
                 TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
-                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, ray_mask, nodes, mi.node_index, tris, tri_indices,
+                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _ray_mask, nodes, mi.node_index, tris, tri_indices,
                                                           int(prim_index), inter);
             }
         }
@@ -3759,12 +3761,12 @@ Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], co
                     continue;
                 }
 
-                const ivec<S> ray_mask = st.queue[st.index].mask;
+                const ivec<S> _ray_mask = st.queue[st.index].mask;
 
                 fvec<S> _ro[3], _rd[3];
                 TransformRay(ro, rd, mi.inv_xform, _ro, _rd);
 
-                solid_hit_mask |= Traverse_BLAS_WithStack_AnyHit(_ro, _rd, ray_mask, nodes, mi.node_index, tris,
+                solid_hit_mask |= Traverse_BLAS_WithStack_AnyHit(_ro, _rd, _ray_mask, nodes, mi.node_index, tris,
                                                                  materials, tri_indices, int(prim_index), inter);
             }
         }
@@ -4597,7 +4599,7 @@ Ray::NS::fvec<S> Ray::NS::Evaluate_EnvQTree(const float y_rotation, const fvec4 
         const ivec<S> qx = x / 2;
         const ivec<S> qy = y / 2;
 
-        fvec<S> quad[4];
+        fvec<S> quad[4] = {};
         UNROLLED_FOR_S(i, S, {
             const fvec4 q = qtree_mips[lod][qy.template get<i>() * res / 2 + qx.template get<i>()];
 
@@ -4639,7 +4641,7 @@ void Ray::NS::Sample_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, 
         const ivec<S> qx = ivec<S>(origin[0] * float(res)) / 2;
         const ivec<S> qy = ivec<S>(origin[1] * float(res)) / 2;
 
-        fvec<S> quad[4];
+        fvec<S> quad[4] = {};
         UNROLLED_FOR_S(i, S, {
             const fvec4 q = qtree_mips[lod][qy.template get<i>() * res / 2 + qx.template get<i>()];
 
@@ -5253,11 +5255,11 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
         const uvec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
         // TODO: match layouts!
-        UNROLLED_FOR_S(i, S, {
-            if (sh_r.mask.template get<i>()) {
-                auto old_val = fvec4(out_color[y.template get<i>() * img_w + x.template get<i>()].v, vector_aligned);
-                old_val += fvec4(rc[0].template get<i>(), rc[1].template get<i>(), rc[2].template get<i>(), 0.0f);
-                old_val.store_to(out_color[y.template get<i>() * img_w + x.template get<i>()].v, vector_aligned);
+        UNROLLED_FOR_S(j, S, {
+            if (sh_r.mask.template get<j>()) {
+                auto old_val = fvec4(out_color[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
+                old_val += fvec4(rc[0].template get<j>(), rc[1].template get<j>(), rc[2].template get<j>(), 0.0f);
+                old_val.store_to(out_color[y.template get<j>() * img_w + x.template get<j>()].v, vector_aligned);
             }
         })
     }
@@ -5288,6 +5290,8 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
                                                        sc.mesh_instances, sc.meshes, sc.mtris, sc.tri_materials,
                                                        sc.tri_indices, inter);
         } else {
+            assert(false);
+            solid_hit = 0;
             // solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.nodes, node_index,
             //                                            sc.mesh_instances, sc.meshes, sc.tris,
             //                                            sc.tri_materials, sc.tri_indices, inter);
@@ -5501,8 +5505,8 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
 
     int index = 0, num = 1;
     while (index != num) {
-        const long mask = ray_queue[index].movemask();
-        const uint32_t first_li = light_index[GetFirstBit(mask)];
+        const long _mask = ray_queue[index].movemask();
+        const uint32_t first_li = light_index[GetFirstBit(_mask)];
 
         const ivec<S> same_li = (light_index == first_li);
         const ivec<S> diff_li = and_not(same_li, ray_queue[index]);
@@ -6172,8 +6176,8 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     float light_v[3];
                     cross(l.line.u, light_dir, light_v);
 
-                    fvec<S> _ro[3] = {r.o[0] - l.line.pos[0], r.o[1] - l.line.pos[1], r.o[2] - l.line.pos[2]};
-                    const fvec<S> ro[3] = {dot3(_ro, light_dir), dot3(_ro, l.line.u), dot3(_ro, light_v)};
+                    fvec<S> _ro1[3] = {r.o[0] - l.line.pos[0], r.o[1] - l.line.pos[1], r.o[2] - l.line.pos[2]};
+                    const fvec<S> ro[3] = {dot3(_ro1, light_dir), dot3(_ro1, l.line.u), dot3(_ro1, light_v)};
                     const fvec<S> rd[3] = {dot3(r.d, light_dir), dot3(r.d, l.line.u), dot3(r.d, light_v)};
 
                     const fvec<S> A = rd[2] * rd[2] + rd[1] * rd[1];
@@ -6398,7 +6402,7 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
 }
 
 template <int S>
-Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &mask,
+Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &_mask,
                                              const ivec<S> &tri_index, Span<const light_t> lights,
                                              Span<const light_cwbvh_node_t> nodes) {
     const int SS = S <= 8 ? S : 8;
@@ -6406,7 +6410,7 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
     fvec<S> ret = 1.0f;
 
     for (int ri = 0; ri < S; ri++) {
-        if (!mask[ri]) {
+        if (!_mask[ri]) {
             continue;
         }
 
@@ -6531,7 +6535,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const ivec<S> &mask, c
 }
 
 template <int S>
-void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, const ivec<S> &mask,
+void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, const ivec<S> &_mask,
                                   const hit_data_t<S> &inter, const environment_t &env, Span<const light_t> lights,
                                   const uint32_t lights_count, const Cpu::TexStorageRGBA &tex_storage,
                                   const fvec<S> rand[2], fvec<S> light_col[3]) {
@@ -6542,7 +6546,7 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
 #endif
 
     ivec<S> ray_queue[S];
-    ray_queue[0] = mask;
+    ray_queue[0] = _mask;
 
     int index = 0, num = 1;
     while (index != num) {

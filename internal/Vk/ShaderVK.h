@@ -54,7 +54,7 @@ class Shader {
     bool InitFromSPIRV(Span<const uint32_t> shader_code, eShaderType type, ILog *log);
 
   public:
-    SmallVector<Descr, 16> attr_bindings, unif_bindings;
+    SmallVector<Descr, 1> attr_bindings, unif_bindings;
     SmallVector<Range, 4> pc_ranges;
 
     Shader() = default;

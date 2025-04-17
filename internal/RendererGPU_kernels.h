@@ -314,7 +314,8 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
     uniform_params.out_dims[1] = h;
 
     Pipeline *pi = nullptr;
-    if (in_channels == 9 && out_channels == 32) {
+    /*if (in_channels == 9 && out_channels == 32)*/ {
+        assert(in_channels == 9 && out_channels == 32);
         assert(img_buf2 && img_buf3);
         pi = &pi_.convolution_Img_9_32;
     }
@@ -385,7 +386,8 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
         pi = &pi_.convolution_80_96;
     } else if (in_channels == 96 && out_channels == 96) {
         pi = &pi_.convolution_96_96;
-    } else if (in_channels == 112 && out_channels == 112) {
+    } else /*if (in_channels == 112 && out_channels == 112)*/ {
+        assert(in_channels == 112 && out_channels == 112);
         pi = &pi_.convolution_112_112;
     }
 
@@ -433,7 +435,8 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
     uniform_params.out_dims[1] = h;
 
     Pipeline *pi = nullptr;
-    if (in_channels == 32 && out_channels == 3) {
+    /*if (in_channels == 32 && out_channels == 3)*/ {
+        assert(in_channels == 32 && out_channels == 3);
         pi = &pi_.convolution_32_3_img;
     }
 
@@ -489,7 +492,8 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
         pi = &pi_.convolution_concat_96_64_112;
     } else if (in_channels1 == 112 && in_channels2 == 48 && out_channels == 96 && upscale1) {
         pi = &pi_.convolution_concat_112_48_96;
-    } else if (in_channels1 == 96 && in_channels2 == 32 && out_channels == 64 && upscale1) {
+    } else /*if (in_channels1 == 96 && in_channels2 == 32 && out_channels == 64 && upscale1)*/ {
+        assert(in_channels1 == 96 && in_channels2 == 32 && out_channels == 64 && upscale1);
         pi = &pi_.convolution_concat_96_32_64;
     }
 

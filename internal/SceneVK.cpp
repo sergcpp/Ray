@@ -59,7 +59,8 @@ Ray::Vk::Scene::~Scene() {
 }
 
 bool Ray::Vk::Scene::InitPipelines() {
-    sh_bake_sky_ = Shader{"Bake Sky", ctx_, Inflate(internal_shaders_output_bake_sky_comp_spv), eShaderType::Comp, log_};
+    sh_bake_sky_ =
+        Shader{"Bake Sky", ctx_, Inflate(internal_shaders_output_bake_sky_comp_spv), eShaderType::Comp, log_};
     prog_bake_sky_ = Program{"Bake Sky", ctx_, &sh_bake_sky_, log_};
     return pi_bake_sky_.Init(ctx_, &prog_bake_sky_, log_);
 }
@@ -385,9 +386,9 @@ std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint3
         acc_create_info.size = size_info.accelerationStructureSize;
 
         VkAccelerationStructureKHR acc_struct;
-        VkResult res =
+        const VkResult _res =
             ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr, &acc_struct);
-        if (res != VK_SUCCESS) {
+        if (_res != VK_SUCCESS) {
             log_->Error("Failed to create acceleration structure!");
             return {0xffffffff, 0xffffffff};
         }
@@ -455,9 +456,9 @@ std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint3
         acc_create_info.size = compact_size;
 
         VkAccelerationStructureKHR compact_acc_struct;
-        const VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr,
-                                                                          &compact_acc_struct);
-        if (res != VK_SUCCESS) {
+        const VkResult _res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr,
+                                                                           &compact_acc_struct);
+        if (_res != VK_SUCCESS) {
             log_->Error("Failed to create acceleration structure!");
         }
 
