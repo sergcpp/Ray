@@ -6,6 +6,9 @@
 
 // Taken from https://github.com/Artexety/inflatecpp
 
+#pragma warning(push)
+#pragma warning(disable : 6262) // Function uses a lot of stack
+
 namespace Ray {
 const int HuffMatchLenSyms = 29;
 const int HuffOffsetSyms = 32;
@@ -486,3 +489,5 @@ int Ray::Inflater::ReadLength(const uint32_t *tables_rev_symbol_table, const int
     }
     return 0;
 }
+
+#pragma warning(pop)

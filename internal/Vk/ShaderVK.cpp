@@ -169,9 +169,9 @@ bool Ray::Vk::Shader::InitFromSPIRV(Span<const uint32_t> shader_code, const eSha
             if (storage_class == eSPIRVStorageClass::Input) {
             } else if (storage_class == eSPIRVStorageClass::PushConstant) {
                 // TODO: Properly initialize offset
-                const uint32_t offset = 0;
+                const uint32_t _offset = 0;
                 const uint32_t size = round_up(parse_type_size(ps, result_type), SPIRV_DATA_ALIGNMENT);
-                pc_ranges.push_back({offset, size});
+                pc_ranges.push_back({_offset, size});
             } else if (storage_class == eSPIRVStorageClass::Output) {
             } else if (storage_class == eSPIRVStorageClass::UniformConstant) {
                 const spirv_uniform_props_t props = parse_uniform_props(ps, result_type);

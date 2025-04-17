@@ -7,6 +7,10 @@
 #include "TextureSplitter.h"
 #include "TextureUtils.h"
 
+#pragma warning(push)
+#pragma warning(disable : 6294) // Ill-defined for-loop
+#pragma warning(disable : 6201) // Index is out of valid index range
+
 namespace Ray {
 namespace Cpu {
 class TexStorageBase {
@@ -614,3 +618,5 @@ extern template class TexStorageBCn<4>;
 
 } // namespace Cpu
 } // namespace Ray
+
+#pragma warning(pop)

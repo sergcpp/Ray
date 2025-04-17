@@ -5,6 +5,9 @@
 #include "RadCacheRef.h"
 #include "TextureStorageCPU.h"
 
+#pragma warning(push)
+#pragma warning(disable : 6326) // potential comparison of a constant with another constant
+
 namespace Ray {
 namespace Ref {
 force_inline fvec2 calc_alpha(const float roughness, const float anisotropy, const float regularize_alpha) {
@@ -1725,3 +1728,5 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, const float clamp_direc
         }
     }
 }
+
+#pragma warning(pop)

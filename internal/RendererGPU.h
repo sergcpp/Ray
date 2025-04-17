@@ -1,5 +1,4 @@
 
-
 namespace Ray {
 namespace NS {
 class TextureAtlas;
@@ -387,29 +386,32 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
 
     const int num_pixels = w * h;
 
-    TexParams params;
-    params.w = w;
-    params.h = h;
-    params.format = eTexFormat::RGBA32F;
-    params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Storage | eTexUsage::Transfer;
-    params.sampling.wrap = eTexWrap::ClampToEdge;
+    { // Frame images
+        TexParams params;
+        params.w = w;
+        params.h = h;
+        params.format = eTexFormat::RGBA32F;
+        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Storage | eTexUsage::Transfer;
+        params.sampling.wrap = eTexWrap::ClampToEdge;
 
-    temp_buf0_ = Texture{"Temp Image 0", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    temp_buf1_ = Texture{"Temp Image 1", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    full_buf_ = Texture{"Full Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    half_buf_ = Texture{"Half Image [1]", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    base_color_buf_ = Texture{"Base Color Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    temp_depth_normals_buf_ =
-        Texture{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    depth_normals_buf_ = Texture{"Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    final_buf_ = Texture{"Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    raw_filtered_buf_ =
-        Texture{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-    { // Texture that holds required sample count per pixel
-        TexParams uparams = params;
-        uparams.format = eTexFormat::R16UI;
-        required_samples_buf_ =
-            Texture{"Required samples Image", ctx_.get(), uparams, ctx_->default_mem_allocs(), ctx_->log()};
+        temp_buf0_ = Texture{"Temp Image 0", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        temp_buf1_ = Texture{"Temp Image 1", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        full_buf_ = Texture{"Full Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        half_buf_ = Texture{"Half Image [1]", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        base_color_buf_ = Texture{"Base Color Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        temp_depth_normals_buf_ =
+            Texture{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        depth_normals_buf_ =
+            Texture{"Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        final_buf_ = Texture{"Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        raw_filtered_buf_ =
+            Texture{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        { // Texture that holds required sample count per pixel
+            TexParams uparams = params;
+            uparams.format = eTexFormat::R16UI;
+            required_samples_buf_ =
+                Texture{"Required samples Image", ctx_.get(), uparams, ctx_->default_mem_allocs(), ctx_->log()};
+        }
     }
 
     { // Sampler with black border
@@ -755,7 +757,7 @@ inline void Ray::NS::Renderer::TransitionSceneResources(CommandBuffer cmd_buf, c
 
 inline void Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
                                          Buffer &count_table, const Buffer &counters, const Buffer &reduce_table) {
-    DebugMarker _(ctx_.get(), cmd_buf, "Radix Sort");
+    DebugMarker _0(ctx_.get(), cmd_buf, "Radix Sort");
 
     static const char *MarkerStrings[] = {"Radix Sort Iter #0 [Bits   0-4]", "Radix Sort Iter #1 [Bits   4-8]",
                                           "Radix Sort Iter #2 [Bits  8-12]", "Radix Sort Iter #3 [Bits 12-16]",
@@ -764,7 +766,7 @@ inline void Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &in
 
     Buffer *hashes[] = {&_hashes[0], &_hashes[1]};
     for (int shift = 0; shift < 32; shift += 4) {
-        DebugMarker _(ctx_.get(), cmd_buf, MarkerStrings[shift / 4]);
+        DebugMarker _1(ctx_.get(), cmd_buf, MarkerStrings[shift / 4]);
 
         kernel_SortInitCountTable(cmd_buf, shift, indir_args, 6, *hashes[0], counters, 6, count_table);
 

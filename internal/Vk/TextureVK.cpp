@@ -473,8 +473,8 @@ void Ray::Vk::Texture::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuff
             // create additional depth-only image view
             view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             VkImageView depth_only_view;
-            const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &depth_only_view);
-            if (res != VK_SUCCESS) {
+            const VkResult _res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &depth_only_view);
+            if (_res != VK_SUCCESS) {
                 log->Error("Failed to create image view!");
                 return;
             }

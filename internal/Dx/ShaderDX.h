@@ -21,7 +21,7 @@ struct Range {
 };
 
 struct Descr {
-    char name[24];
+    std::string name;
     int loc = -1;
     D3D_SHADER_INPUT_TYPE input_type;
     int space = 0, count = 0;
@@ -56,7 +56,7 @@ class Shader {
     bool InitFromCSO(Span<const uint8_t> shader_code, eShaderType type, ILog *log);
 
   public:
-    SmallVector<Descr, 16> attr_bindings, unif_bindings;
+    SmallVector<Descr, 1> attr_bindings, unif_bindings;
     SmallVector<Range, 4> pc_ranges;
 
     Shader() = default;

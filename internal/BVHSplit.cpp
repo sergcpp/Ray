@@ -7,6 +7,9 @@
 
 #include "SmallVector.h"
 
+#pragma warning(push)
+#pragma warning(disable : 6262) // Function uses a lot of stack
+
 namespace Ray {
 const int BinningThreshold = 1024;
 const int BinsCount = 256;
@@ -498,3 +501,5 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                 {res_right_bounds.min, res_right_bounds.max}};
     }
 }
+
+#pragma warning(pop)

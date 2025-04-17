@@ -2,6 +2,9 @@
 
 #include "../Types.h"
 
+#pragma warning(push)
+#pragma warning(disable : 6294) // Ill-defined for-loop
+
 namespace Ray {
 namespace NS {
 void ClearBorders(const rect_t &rect, const int w, const int h, const bool downscaled, const int out_channels,
@@ -585,3 +588,5 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
 }
 } // namespace NS
 } // namespace Ray
+
+#pragma warning(pop)

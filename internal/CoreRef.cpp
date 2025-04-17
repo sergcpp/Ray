@@ -9,6 +9,9 @@
 #include "RadCacheRef.h"
 #include "TextureStorageCPU.h"
 
+#pragma warning(push)
+#pragma warning(disable : 6326) // potential comparison of a constant with another constant
+
 namespace Ray {
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
@@ -51,8 +54,8 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const tri_a
 force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri, const uint32_t prim_index,
                                hit_data_t &inter) {
 #if VECTORIZE_TRI_INTERSECTION
-    ivec4 _mask = 0, _prim_index;
-    fvec4 _t = inter.t, _u, _v;
+    ivec4 _mask = 0, _prim_index = 0;
+    fvec4 _t = inter.t, _u = 0.0f, _v = 0.0f;
     for (int i = 0; i < 8; i += 4) {
         fvec4 det = rd[0] * fvec4{&tri.n_plane[0][i], vector_aligned} +
                     rd[1] * fvec4{&tri.n_plane[1][i], vector_aligned} +
@@ -998,21 +1001,22 @@ void calc_lnode_importance(const light_wbvh_node_t &n, const fvec4 &P, float imp
 }
 
 void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec4 &P, float importance[8]) {
-    // Unpack bounds
-    const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f, (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
-                          (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
     alignas(16) float bbox_min[3][8], bbox_max[3][8];
-    for (int i = 0; i < 8; ++i) {
-        bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
-        bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
-        if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
-            bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
-            bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
-            bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
+    { // Unpack bounds
+        const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f, (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
+                              (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
+        for (int i = 0; i < 8; ++i) {
+            bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
+            bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
+            if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
+                bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
+                bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
+                bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
 
-            bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
-            bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
-            bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+                bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
+                bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
+                bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+            }
         }
     }
 
@@ -1315,7 +1319,7 @@ Ray::Ref::fvec2 Ray::Ref::get_scrambled_2d_rand(const uint32_t dim, const uint32
                                 rand_seq[shuffled_dim * 2 * RAND_SAMPLES_COUNT + 2 * shuffled_i + 1])};
 }
 
-void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
+void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &rect, const int w, const int h,
                                    const uint32_t rand_seq[], const uint32_t rand_seed, const float filter_table[],
                                    const int iteration, const uint16_t required_samples[],
                                    aligned_vector<ray_data_t> &out_rays, aligned_vector<hit_data_t> &out_inters) {
@@ -1352,11 +1356,11 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
     };
 
     size_t i = 0;
-    out_rays.resize(size_t(r.w) * r.h);
-    out_inters.resize(size_t(r.w) * r.h);
+    out_rays.resize(size_t(rect.w) * rect.h);
+    out_inters.resize(size_t(rect.w) * rect.h);
 
-    for (int y = r.y; y < r.y + r.h; ++y) {
-        for (int x = r.x; x < r.x + r.w; ++x) {
+    for (int y = rect.y; y < rect.y + rect.h; ++y) {
+        for (int x = rect.x; x < rect.x + rect.w; ++x) {
             if (required_samples && required_samples[y * w + x] < iteration) {
                 continue;
             }
@@ -3496,9 +3500,9 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
 
 void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights,
                                    Span<const light_cwbvh_node_t> nodes, Span<hit_data_t> inout_inters) {
-    for (int i = 0; i < rays.size(); ++i) {
-        const ray_data_t &ray = rays[i];
-        hit_data_t &inout_inter = inout_inters[i];
+    for (int _i = 0; _i < rays.size(); ++_i) {
+        const ray_data_t &ray = rays[_i];
+        hit_data_t &inout_inter = inout_inters[_i];
 
         const fvec4 ro = make_fvec3(ray.o);
         const fvec4 rd = make_fvec3(ray.d);
@@ -3742,9 +3746,9 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
 void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights,
                                    Span<const light_wbvh_node_t> nodes, Span<hit_data_t> inout_inters) {
-    for (int i = 0; i < rays.size(); ++i) {
-        const ray_data_t &ray = rays[i];
-        hit_data_t &inout_inter = inout_inters[i];
+    for (int _i = 0; _i < rays.size(); ++_i) {
+        const ray_data_t &ray = rays[_i];
+        hit_data_t &inout_inter = inout_inters[_i];
 
         const fvec4 ro = make_fvec3(ray.o);
         const fvec4 rd = make_fvec3(ray.d);
@@ -4761,6 +4765,8 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
         old_val.store_to(out_color[y * img_w + x].v, vector_aligned);
     }
 }
+
+#pragma warning(pop)
 
 #undef VECTORIZE_BBOX_INTERSECTION
 #undef FORCE_TEXTURE_LOD

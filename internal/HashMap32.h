@@ -390,6 +390,9 @@ template <typename K, typename V, typename HashFunc = Hash<K>, typename KeyEqual
             mem_size += sizeof(Node) * capacity_;
 
             ctrl_ = new uint8_t[mem_size];
+            if (!ctrl_ || mem_size < capacity_) {
+                return;
+            }
             nodes_ = (Node *)&ctrl_[node_begin];
 
             memset(ctrl_, 0, capacity_);

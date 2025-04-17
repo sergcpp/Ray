@@ -347,34 +347,34 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         reconstruct_z = _t.is_normalmap && (_t.format == eTextureFormat::BC5);
 
         int read_offset = 0;
-        int res[2] = {_t.w, _t.h};
+        int _res[2] = {_t.w, _t.h};
         // TODO: Get rid of allocation
         std::vector<uint8_t> temp_data;
-        for (int i = 0; i < std::min(_t.mips_count, NUM_MIP_LEVELS) && res[0] >= 4 && res[1] >= 4; ++i) {
+        for (int i = 0; i < std::min(_t.mips_count, NUM_MIP_LEVELS) && _res[0] >= 4 && _res[1] >= 4; ++i) {
             if (_t.format == eTextureFormat::BC1) {
                 t.atlas = 4;
-                temp_data.resize(GetRequiredMemory_BCn<3>(res[0], res[1], 1));
-                Preprocess_BCn<3>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                temp_data.resize(GetRequiredMemory_BCn<3>(_res[0], _res[1], 1));
+                Preprocess_BCn<3>(&_t.data[read_offset], (_res[0] + 3) / 4, (_res[1] + 3) / 4, flip_vertical,
                                   invert_green, temp_data.data());
             } else if (_t.format == eTextureFormat::BC3) {
                 t.atlas = 5;
-                temp_data.resize(GetRequiredMemory_BCn<4>(res[0], res[1], 1));
-                Preprocess_BCn<4>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                temp_data.resize(GetRequiredMemory_BCn<4>(_res[0], _res[1], 1));
+                Preprocess_BCn<4>(&_t.data[read_offset], (_res[0] + 3) / 4, (_res[1] + 3) / 4, flip_vertical,
                                   invert_green, temp_data.data());
             } else if (_t.format == eTextureFormat::BC4) {
                 t.atlas = 6;
-                temp_data.resize(GetRequiredMemory_BCn<1>(res[0], res[1], 1));
-                Preprocess_BCn<1>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                temp_data.resize(GetRequiredMemory_BCn<1>(_res[0], _res[1], 1));
+                Preprocess_BCn<1>(&_t.data[read_offset], (_res[0] + 3) / 4, (_res[1] + 3) / 4, flip_vertical,
                                   invert_green, temp_data.data());
             } else if (_t.format == eTextureFormat::BC5) {
                 t.atlas = 7;
-                temp_data.resize(GetRequiredMemory_BCn<2>(res[0], res[1], 1));
-                Preprocess_BCn<2>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                temp_data.resize(GetRequiredMemory_BCn<2>(_res[0], _res[1], 1));
+                Preprocess_BCn<2>(&_t.data[read_offset], (_res[0] + 3) / 4, (_res[1] + 3) / 4, flip_vertical,
                                   invert_green, temp_data.data());
             }
 
             int pos[2] = {};
-            const int page = tex_atlases_[t.atlas].AllocateRaw(temp_data.data(), res, pos);
+            const int page = tex_atlases_[t.atlas].AllocateRaw(temp_data.data(), _res, pos);
 
             t.page[i] = uint8_t(page);
             t.pos[i][0] = uint16_t(pos[0]);
@@ -382,8 +382,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
 
             read_offset += int(temp_data.size());
 
-            res[0] /= 2;
-            res[1] /= 2;
+            _res[0] /= 2;
+            _res[1] /= 2;
         }
 
         // Fill remaining mip levels
