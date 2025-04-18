@@ -527,8 +527,8 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
             if (!multiscatter_lut.empty()) {
                 fvec2 _uv =
                     saturate(fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
-                _uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
-                            from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
+                _uv = fvec2(from_unit_to_sub_uvs(_uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
+                            from_unit_to_sub_uvs(_uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
 
                 multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, _uv);
             }
@@ -688,8 +688,8 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
                     if (!multiscatter_lut.empty()) {
                         fvec2 _uv = saturate(
                             fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
-                        _uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
-                                    from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
+                        _uv = fvec2(from_unit_to_sub_uvs(_uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
+                                    from_unit_to_sub_uvs(_uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
 
                         multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, _uv);
                     }
@@ -703,8 +703,8 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
                     if (!multiscatter_lut.empty()) {
                         fvec2 _uv = saturate(
                             fvec2(view_zenith_cos_angle * 0.5f + 0.5f, local_height / params.atmosphere_height));
-                        _uv = fvec2(from_unit_to_sub_uvs(uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
-                                    from_unit_to_sub_uvs(uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
+                        _uv = fvec2(from_unit_to_sub_uvs(_uv.get<0>(), SKY_MULTISCATTER_LUT_RES),
+                                    from_unit_to_sub_uvs(_uv.get<1>(), SKY_MULTISCATTER_LUT_RES));
 
                         moon_multiscattered_lum = SampleMultiscatterLUT(multiscatter_lut, _uv);
                     }
