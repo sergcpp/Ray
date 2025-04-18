@@ -21,13 +21,13 @@ struct Range {
 };
 
 struct Descr {
-    std::string name;
+    char name[24];
     int loc = -1;
     D3D_SHADER_INPUT_TYPE input_type;
     int space = 0, count = 0;
     // VkFormat format = VK_FORMAT_UNDEFINED;
 };
-inline bool operator==(const Descr &lhs, const Descr &rhs) { return lhs.loc == rhs.loc && lhs.name == rhs.name; }
+inline bool operator==(const Descr &lhs, const Descr &rhs) { return lhs.loc == rhs.loc && strcmp(lhs.name, rhs.name) == 0; }
 typedef Descr Attribute;
 typedef Descr Uniform;
 typedef Descr UniformBlock;
