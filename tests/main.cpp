@@ -17,6 +17,7 @@ void test_huffman();
 void test_inflate();
 void test_scope_exit();
 void test_freelist_alloc();
+void test_small_vector();
 void test_span();
 void test_sparse_storage();
 void test_tex_storage();
@@ -204,6 +205,7 @@ int main(int argc, char *argv[]) {
     test_huffman();
     test_inflate();
     test_scope_exit();
+    test_small_vector();
     test_span();
     test_sparse_storage();
     test_tex_storage();
