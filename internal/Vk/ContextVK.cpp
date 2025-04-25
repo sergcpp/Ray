@@ -658,7 +658,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalD
             api.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device, &props_count, nullptr);
 
             SmallVector<VkCooperativeMatrixPropertiesKHR, 16> coop_matrix_props(
-                props_count, {VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR});
+                props_count, VkCooperativeMatrixPropertiesKHR{VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR});
 
             api.vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR(physical_device, &props_count,
                                                                   coop_matrix_props.data());
