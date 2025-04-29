@@ -13,6 +13,7 @@
 
 void test_simd();
 void test_hashmap();
+void test_hashset();
 void test_huffman();
 void test_inflate();
 void test_scope_exit();
@@ -201,6 +202,7 @@ int main(int argc, char *argv[]) {
     test_simd();
     puts(" ---------------");
     test_freelist_alloc();
+    test_hashset();
     test_hashmap();
     test_huffman();
     test_inflate();
