@@ -77,8 +77,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 auto parallel_for =
                     std::bind(&ThreadPool::ParallelFor<ParallelForFunction>, std::ref(threads), _1, _2, _3);
 
-                auto renderer =
-                    std::unique_ptr<RendererBase>(CreateRenderer(s, &g_log_err, parallel_for, rt));
+                auto renderer = std::unique_ptr<RendererBase>(CreateRenderer(s, &g_log_err, parallel_for, rt));
                 if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt ||
                     renderer->is_spatial_caching_enabled() != caching) {
                     // skip unsupported (we fell back to some other renderer)
@@ -159,8 +158,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 {
                     std::lock_guard<std::mutex> _(g_stdout_mtx);
                     if (g_minimal_output) {
-                        printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt),
-                               s.use_hwrt ? "HWRT" : "SWRT", 100.0);
+                        printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt), s.use_hwrt ? "HWRT" : "SWRT",
+                               100.0);
                     }
                     printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i, Time: %.2fm)\n", psnr, min_psnr, error_pixels,
                            pix_thres, test_duration_m);
@@ -463,7 +462,7 @@ void test_sheen_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_sheen_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 145;
+    const int PixThres = 155;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
@@ -529,7 +528,7 @@ void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_glossy_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 53;
+    const int SampleCount = 54;
     const int PixThres = 350;
 
     Ray::shading_node_desc_t node_desc;
@@ -544,7 +543,7 @@ void test_glossy_mat1(const char *arch_list[], const char *preferred_device) {
 
 void test_glossy_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 125;
+    const int PixThres = 130;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::eShadingNode::Glossy;
@@ -575,7 +574,7 @@ void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_spec_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 53;
+    const int SampleCount = 54;
     const int PixThres = 350;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -590,7 +589,7 @@ void test_spec_mat1(const char *arch_list[], const char *preferred_device) {
 
 void test_spec_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 125;
+    const int PixThres = 130;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -607,7 +606,7 @@ void test_spec_mat2(const char *arch_list[], const char *preferred_device) {
 //
 
 void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 320;
+    const int SampleCount = 326;
     const int PixThres = 490;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -623,7 +622,7 @@ void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 326;
+    const int SampleCount = 330;
     const int PixThres = 465;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -639,7 +638,7 @@ void test_aniso_mat1(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat2(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 330;
+    const int SampleCount = 336;
     const int PixThres = 455;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -656,7 +655,7 @@ void test_aniso_mat2(const char *arch_list[], const char *preferred_device) {
 
 void test_aniso_mat3(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 352;
-    const int PixThres = 470;
+    const int PixThres = 475;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -671,7 +670,7 @@ void test_aniso_mat3(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat4(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 348;
+    const int SampleCount = 350;
     const int PixThres = 470;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -687,7 +686,7 @@ void test_aniso_mat4(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat5(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 304;
+    const int SampleCount = 310;
     const int PixThres = 540;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -719,7 +718,7 @@ void test_aniso_mat6(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat7(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 344;
+    const int SampleCount = 352;
     const int PixThres = 505;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -800,7 +799,7 @@ void test_plastic_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_plastic_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 18;
+    const int SampleCount = 19;
     const int PixThres = 210;
 
     Ray::principled_mat_desc_t plastic_mat_desc;
@@ -846,7 +845,7 @@ void test_tint_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_tint_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 28;
+    const int SampleCount = 27;
     const int PixThres = 1630;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -971,7 +970,7 @@ void test_coat_mat2(const char *arch_list[], const char *preferred_device) {
 //
 
 void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 8;
+    const int SampleCount = 9;
     const double MinPSNR = 30.90;
     const int PixThres = 335;
 
@@ -988,7 +987,7 @@ void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 12;
+    const int SampleCount = 13;
     const double MinPSNR = 30.65;
     const int PixThres = 265;
 
@@ -1005,7 +1004,7 @@ void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 8;
+    const int SampleCount = 10;
     const double MinPSNR = 30.60;
     const int PixThres = 225;
 
@@ -1024,7 +1023,7 @@ void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
 ///
 
 void test_refr_mat0(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 292;
+    const int SampleCount = 295;
     const int PixThres = 1140;
 
     Ray::shading_node_desc_t mat_desc;
@@ -1040,7 +1039,7 @@ void test_refr_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 362;
+    const int SampleCount = 382;
     const int PixThres = 765;
 
     Ray::shading_node_desc_t mat_desc;
@@ -1072,7 +1071,7 @@ void test_refr_mat2(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mat3(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 34;
+    const int SampleCount = 35;
     const int PixThres = 435;
 
     Ray::shading_node_desc_t mat_desc;
@@ -1092,7 +1091,7 @@ void test_refr_mat3(const char *arch_list[], const char *preferred_device) {
 //
 
 void test_trans_mat0(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 298;
+    const int SampleCount = 309;
     const int PixThres = 1125;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -1128,7 +1127,7 @@ void test_trans_mat1(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_trans_mat2(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 250;
+    const int SampleCount = 254;
     const int PixThres = 930;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -1146,7 +1145,7 @@ void test_trans_mat2(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_trans_mat3(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 210;
+    const int SampleCount = 221;
     const int PixThres = 425;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -1182,7 +1181,7 @@ void test_trans_mat4(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_trans_mat5(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 62;
+    const int SampleCount = 64;
     const int PixThres = 200;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -1260,7 +1259,7 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_alpha_mat4(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 12;
+    const int SampleCount = 13;
     const double MinPSNR = 30.50;
     const int PixThres = 405;
 
@@ -1298,7 +1297,7 @@ void test_two_sided_mat(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 11;
-    const int PixThres = 759;
+    const int PixThres = 720;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1318,7 +1317,7 @@ void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 667;
+    const int PixThres = 690;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1339,7 +1338,7 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 10;
-    const int PixThres = 641;
+    const int PixThres = 550;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1359,7 +1358,7 @@ void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 8;
-    const int PixThres = 467;
+    const int PixThres = 390;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1380,7 +1379,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 10;
-    const int PixThres = 2286;
+    const int PixThres = 2190;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1401,8 +1400,8 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 32;
-    const int PixThres = 4688;
+    const int SampleCount = 30;
+    const int PixThres = 4610;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1421,8 +1420,8 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 40;
-    const int PixThres = 5337;
+    const int SampleCount = 36;
+    const int PixThres = 5120;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1441,8 +1440,8 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
 }
 
 void test_complex_mat5_caching(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 31;
-    const int PixThres = 4681;
+    const int SampleCount = 30;
+    const int PixThres = 4610;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1463,9 +1462,9 @@ void test_complex_mat5_caching(const char *arch_list[], const char *preferred_de
 
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
     const int MinSampleCount = 8;
-    const int MaxSampleCount = 18;
+    const int MaxSampleCount = 16;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 2115;
+    const int PixThres = 2020;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1486,7 +1485,8 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
 
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 6;
-    const int PixThres = 3719;
+    const double MinPSNR = 25.50;
+    const int PixThres = 3470;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1500,13 +1500,13 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_regions", metal_mat_desc, SampleCount, VeryFastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat5_regions", metal_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, true, textures);
 }
 
 void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 18;
-    const int PixThres = 2060;
+    const int SampleCount = 16;
+    const int PixThres = 2020;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1525,8 +1525,8 @@ void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred
 }
 
 void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 24;
-    const int PixThres = 1210;
+    const int SampleCount = 22;
+    const int PixThres = 1050;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1547,7 +1547,7 @@ void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferre
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 24;
     const double MinPSNR = 21.0;
-    const int PixThres = 9813;
+    const int PixThres = 9610;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1566,8 +1566,8 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
 }
 
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 30;
-    const int PixThres = 4770;
+    const int SampleCount = 28;
+    const int PixThres = 4700;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1589,7 +1589,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 48;
     const double MinPSNR = 24.0;
-    const int PixThres = 1272;
+    const int PixThres = 1130;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1631,7 +1631,7 @@ void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred
 void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 30;
     const double MinPSNR = 23.0;
-    const int PixThres = 4949;
+    const int PixThres = 4970;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1652,7 +1652,7 @@ void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 14;
     const double MinPSNR = 24.05;
-    const int PixThres = 5219;
+    const int PixThres = 5060;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1672,7 +1672,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 
 void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 14;
-    const int PixThres = 370;
+    const int PixThres = 300;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1691,9 +1691,9 @@ void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred
 }
 
 void test_complex_mat5_hdri_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 20;
+    const int SampleCount = 18;
     const double MinPSNR = 23.0;
-    const int PixThres = 6190;
+    const int PixThres = 6240;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1712,9 +1712,9 @@ void test_complex_mat5_hdri_light(const char *arch_list[], const char *preferred
 }
 
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 40;
+    const int SampleCount = 44;
     const double MinPSNR = 23.0;
-    const int PixThres = 4421;
+    const int PixThres = 4290;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1729,7 +1729,7 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 1649;
+    const int PixThres = 1630;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1744,8 +1744,8 @@ void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred
 }
 
 void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 28;
-    const int PixThres = 932;
+    const int SampleCount = 26;
+    const int PixThres = 920;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1760,7 +1760,7 @@ void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferre
 }
 
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 24;
+    const int SampleCount = 26;
     const double MinPSNR = 22.0;
     const int PixThres = 5096;
 
@@ -1777,7 +1777,7 @@ void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device
 }
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 39;
+    const int SampleCount = 40;
     const double MinPSNR = 23.0;
     const int PixThres = 4465;
 
@@ -1796,7 +1796,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 88;
     const double MinPSNR = 23.0;
-    const int PixThres = 1207;
+    const int PixThres = 1215;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1811,8 +1811,8 @@ void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferr
 }
 
 void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 2;
-    const double MinPSNR = 29.90;
+    const int SampleCount = 4;
+    const double MinPSNR = 30.65;
     const int PixThres = 240;
 
     Ray::principled_mat_desc_t olive_mat_desc;
@@ -1828,7 +1828,7 @@ void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred
 }
 
 void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 87;
+    const int SampleCount = 90;
     const double MinPSNR = 18.0;
     const int PixThres = 9394;
 
@@ -1847,7 +1847,7 @@ void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_
 void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 62;
     const double MinPSNR = 21.0;
-    const int PixThres = 6250;
+    const int PixThres = 6050;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1864,7 +1864,7 @@ void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred
 void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 5;
     const double MinPSNR = 21.0;
-    const int PixThres = 8210;
+    const int PixThres = 7930;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR, PixThres,
@@ -1874,7 +1874,7 @@ void test_complex_mat7_refractive(const char *arch_list[], const char *preferred
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 14;
     const double MinPSNR = 21.0;
-    const int PixThres = 7844;
+    const int PixThres = 7740;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, MinPSNR, PixThres,
@@ -1883,8 +1883,8 @@ void test_complex_mat7_principled(const char *arch_list[], const char *preferred
 
 void test_ray_flags(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 48;
-    const double MinPSNR = 29.90;
-    const int PixThres = 1850;
+    const double MinPSNR = 29.50;
+    const int PixThres = 2080;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "ray_flags", unused, SampleCount, MinPSNR, PixThres,

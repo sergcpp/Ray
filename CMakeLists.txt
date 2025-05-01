@@ -81,6 +81,8 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/FreelistAlloc.cpp
                           internal/HashMap32.h
                           internal/HashSet32.h
+                          internal/PMJ.h
+                          internal/PMJ.cpp
                           internal/RadCacheRef.h
                           internal/RadCacheRef.cpp
                           internal/RastState.h

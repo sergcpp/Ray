@@ -1,6 +1,0 @@
-.DS_Store
-generate_samples
-out/*
-generate_samples.dSYM/
-bazel-**
-*.xcodeproj*

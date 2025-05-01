@@ -35,7 +35,7 @@ def process_file(f, all_tests):
 
 def test_failed(key, value):
     if 'psnr_tested' in value:
-        return value['psnr_tested'] < value['psnr_threshold'] or (value['psnr_tested'] - value['psnr_threshold']) > 0.5 or value['fireflies_tested'] > value['fireflies_threshold'] or (value['fireflies_tested'] - value['fireflies_threshold']) > 100
+        return value['psnr_tested'] < value['psnr_threshold'] or (value['psnr_tested'] - value['psnr_threshold']) > 0.5 or value['fireflies_tested'] > value['fireflies_threshold'] or (value['fireflies_threshold'] - value['fireflies_tested']) > 100
     return True
 
 def main():
