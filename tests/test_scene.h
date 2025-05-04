@@ -11,6 +11,7 @@
 enum class eTestScene {
     Standard,
     Standard_SphereLight,
+    Standard_InsideLight,
     Standard_SpotLight,
     Standard_MeshLights,
     Standard_DirLight,

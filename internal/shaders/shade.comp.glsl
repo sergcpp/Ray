@@ -936,7 +936,7 @@ vec3 map_to_cone(float r1, float r2, vec3 N, float radius) {
     const vec2 uv = vec2(radius * r * cos(theta), radius * r * sin(theta));
 
     vec3 LT, LB;
-    create_tbn(N, LT, LB);
+    create_tbn(normalize(N), LT, LB);
 
     return N + uv[0] * LT + uv[1] * LB;
 }
@@ -1019,42 +1019,44 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         float d;
         light_normal = normalize_len(light_normal, d);
 
-        const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
-        const float disk_radius = (temp * l.SPH_RADIUS) / d;
-        float disk_dist = l.SPH_RADIUS > 0.0 ? ((temp * disk_radius) / l.SPH_RADIUS) : d;
-        const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, disk_dist * light_normal, disk_radius), disk_dist);
+        if (d > l.SPH_RADIUS) {
+            const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
+            const float disk_radius = (temp * l.SPH_RADIUS) / d;
+            float disk_dist = l.SPH_RADIUS > 0.0 ? ((temp * disk_radius) / l.SPH_RADIUS) : d;
+            const vec3 sampled_dir = normalize_len(map_to_cone(r1, r2, disk_dist * light_normal, disk_radius), disk_dist);
 
-        if (l.SPH_RADIUS > 0.0) {
-            const float ls_dist = sphere_intersection(l.SPH_POS, l.SPH_RADIUS, P, sampled_dir);
+            if (l.SPH_RADIUS > 0.0) {
+                const float ls_dist = sphere_intersection(l.SPH_POS, l.SPH_RADIUS, P, sampled_dir);
 
-            const vec3 light_surf_pos = P + sampled_dir * ls_dist;
-            const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
+                const vec3 light_surf_pos = P + sampled_dir * ls_dist;
+                const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
 
-            const float sampled_area = PI * disk_radius * disk_radius;
-            const float cos_theta = dot(sampled_dir, light_normal);
+                const float sampled_area = PI * disk_radius * disk_radius;
+                const float cos_theta = dot(sampled_dir, light_normal);
 
-            ls.lp = offset_ray(light_surf_pos, light_forward);
-            ls.pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta);
-        } else {
-            ls.lp = l.SPH_POS;
-            ls.pdf = (disk_dist * disk_dist) / PI;
-        }
-
-        ls.L = sampled_dir;
-        ls.area = PI * disk_radius * disk_radius;
-        ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
-
-        if (!LIGHT_VISIBLE(l)) {
-            ls.area = 0.0;
-        }
-
-        [[dont_flatten]] if (l.SPH_SPOT > 0.0) {
-            const float _dot = -dot(ls.L, l.SPH_DIR);
-            if (_dot > 0.0) {
-                const float _angle = acos(saturate(_dot));
-                ls.col *= saturate((l.SPH_SPOT - _angle) / l.SPH_BLEND);
+                ls.lp = offset_ray(light_surf_pos, light_forward);
+                ls.pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta);
             } else {
-                ls.col *= 0.0;
+                ls.lp = l.SPH_POS;
+                ls.pdf = (disk_dist * disk_dist) / PI;
+            }
+
+            ls.L = sampled_dir;
+            ls.area = PI * disk_radius * disk_radius;
+            ls.ray_flags = LIGHT_RAY_VISIBILITY(l);
+
+            if (!LIGHT_VISIBLE(l)) {
+                ls.area = 0.0;
+            }
+
+            [[dont_flatten]] if (l.SPH_SPOT > 0.0) {
+                const float _dot = -dot(ls.L, l.SPH_DIR);
+                if (_dot > 0.0) {
+                    const float _angle = acos(saturate(_dot));
+                    ls.col *= saturate((l.SPH_SPOT - _angle) / l.SPH_BLEND);
+                } else {
+                    ls.col *= 0.0;
+                }
             }
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DIR) {
@@ -1423,25 +1425,27 @@ vec3 Evaluate_LightColor(const ray_data_t ray, const hit_data_t inter, const vec
         float d;
         const vec3 disk_normal = normalize_len(l.SPH_POS - ro, d);
 
-        const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
-        const float disk_radius = (temp * l.SPH_RADIUS) / d;
-        float disk_dist = dot(ro, disk_normal) - dot(l.SPH_POS, disk_normal);
+        if (d > l.SPH_RADIUS) {
+            const float temp = sqrt(d * d - l.SPH_RADIUS * l.SPH_RADIUS);
+            const float disk_radius = (temp * l.SPH_RADIUS) / d;
+            float disk_dist = dot(ro, disk_normal) - dot(l.SPH_POS, disk_normal);
 
-        const float sampled_area = PI * disk_radius * disk_radius;
-        const float cos_theta = dot(rd, disk_normal);
-        disk_dist /= cos_theta;
+            const float sampled_area = PI * disk_radius * disk_radius;
+            const float cos_theta = dot(rd, disk_normal);
+            disk_dist /= cos_theta;
 
-        const float light_pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta * pdf_factor);
-        const float bsdf_pdf = ray.pdf;
+            const float light_pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta * pdf_factor);
+            const float bsdf_pdf = ray.pdf;
 
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        lcol *= mis_weight;
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
 
-        [[dont_flatten]] if (l.SPH_SPOT > 0.0 && l.SPH_BLEND > 0.0) {
-            const float _dot = -dot(rd, l.SPH_DIR);
-            const float _angle = acos(saturate(_dot));
-            [[flatten]] if (l.SPH_BLEND > 0.0) {
-                lcol *= saturate((l.SPH_SPOT - _angle) / l.SPH_BLEND);
+            [[dont_flatten]] if (l.SPH_SPOT > 0.0 && l.SPH_BLEND > 0.0) {
+                const float _dot = -dot(rd, l.SPH_DIR);
+                const float _angle = acos(saturate(_dot));
+                [[flatten]] if (l.SPH_BLEND > 0.0) {
+                    lcol *= saturate((l.SPH_SPOT - _angle) / l.SPH_BLEND);
+                }
             }
         }
     } else if (l_type == LIGHT_TYPE_DIR) {

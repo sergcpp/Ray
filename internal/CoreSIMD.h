@@ -2445,8 +2445,11 @@ void map_to_cone(const fvec<S> &r1, const fvec<S> &r2, const fvec<S> N[3], const
 
     const fvec<S> uv[2] = {radius * r * cos(theta), radius * r * sin(theta)};
 
+    fvec<S> normalized_N[3] = {N[0], N[1], N[2]};
+    normalize(normalized_N);
+
     fvec<S> LT[3], LB[3];
-    create_tbn(N, LT, LB);
+    create_tbn(normalized_N, LT, LB);
 
     UNROLLED_FOR(i, 3, { out_V[i] = N[i] + uv[0] * LT[i] + uv[1] * LB[i]; })
 
@@ -5528,6 +5531,11 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             fvec<S> light_normal[3] = {center[0] - P[0], center[1] - P[1], center[2] - P[2]};
             const fvec<S> d = normalize(light_normal);
 
+            { // Discard points inside of light
+                const ivec<S> mask = simd_cast(d > l.sph.radius);
+                UNROLLED_FOR(i, 3, { where(~mask & ray_queue[index], ls.col[i]) = 0.0f; })
+            }
+
             const fvec<S> temp = safe_sqrt(d * d - l.sph.radius * l.sph.radius);
             const fvec<S> disk_radius = (temp * l.sph.radius) / d;
             fvec<S> disk_dist = l.sph.radius > 0.0f ? ((temp * disk_radius) / l.sph.radius) : d;
@@ -6578,6 +6586,7 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
             const float *light_pos = l.sph.pos;
             fvec<S> disk_normal[3] = {light_pos[0] - ray.o[0], light_pos[1] - ray.o[1], light_pos[2] - ray.o[2]};
             const fvec<S> d = normalize(disk_normal);
+            const ivec<S> mask = simd_cast(d > l.sph.radius);
 
             const fvec<S> temp = safe_sqrt(d * d - l.sph.radius * l.sph.radius);
             const fvec<S> disk_radius = (temp * l.sph.radius) / d;
@@ -6591,7 +6600,7 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
             const fvec<S> bsdf_pdf = ray.pdf;
 
             const fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; })
+            UNROLLED_FOR(i, 3, { where(mask, lcol[i]) *= mis_weight; })
 
             if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
                 const fvec<S> _dot = -(ray.d[0] * l.sph.dir[0] + ray.d[1] * l.sph.dir[1] + ray.d[2] * l.sph.dir[2]);

@@ -1083,27 +1083,29 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_d
             float d;
             const fvec4 disk_normal = normalize_len(light_pos - ro, d);
 
-            const float temp = sqrtf(d * d - l.sph.radius * l.sph.radius);
-            const float disk_radius = (temp * l.sph.radius) / d;
-            float disk_dist = dot(ro, disk_normal) - dot(light_pos, disk_normal);
+            if (d > l.sph.radius) {
+                const float temp = sqrtf(d * d - l.sph.radius * l.sph.radius);
+                const float disk_radius = (temp * l.sph.radius) / d;
+                float disk_dist = dot(ro, disk_normal) - dot(light_pos, disk_normal);
 
-            const float sampled_area = PI * disk_radius * disk_radius;
-            const float cos_theta = dot(I, disk_normal);
-            disk_dist /= cos_theta;
+                const float sampled_area = PI * disk_radius * disk_radius;
+                const float cos_theta = dot(I, disk_normal);
+                disk_dist /= cos_theta;
 
-            const float light_pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta * pdf_factor);
-            const float bsdf_pdf = ray.pdf;
+                const float light_pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta * pdf_factor);
+                const float bsdf_pdf = ray.pdf;
 
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
+                const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                lcol *= mis_weight;
 
-            if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
-                const float _dot = -dot(I, fvec4{l.sph.dir});
-                assert(_dot > 0.0f);
-                const float _angle = acosf(Ray::saturate(_dot));
-                assert(_angle <= l.sph.spot);
-                if (l.sph.blend > 0.0f) {
-                    lcol *= Ray::saturate((l.sph.spot - _angle) / l.sph.blend);
+                if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
+                    const float _dot = -dot(I, fvec4{l.sph.dir});
+                    assert(_dot > 0.0f);
+                    const float _angle = acosf(Ray::saturate(_dot));
+                    assert(_angle <= l.sph.spot);
+                    if (l.sph.blend > 0.0f) {
+                        lcol *= Ray::saturate((l.sph.spot - _angle) / l.sph.blend);
+                    }
                 }
             }
         } else if (l.type == LIGHT_TYPE_DIR) {

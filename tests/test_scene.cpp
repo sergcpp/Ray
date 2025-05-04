@@ -821,6 +821,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         }
         scene.AddMeshInstance(disc_light_mesh, identity);
     } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_SphereLight ||
+               test_scene == eTestScene::Standard_InsideLight ||
                test_scene == eTestScene::Standard_SpotLight || test_scene == eTestScene::Standard_DOF0 ||
                test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
                test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
@@ -909,6 +910,24 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.sky_portal = false;
 
                 scene.AddLight(new_light, xform);
+            }
+        } else if (test_scene == eTestScene::Standard_InsideLight) {
+            { // sphere light
+                sphere_light_desc_t new_light;
+
+                new_light.color[0] = 2.53302956f;
+                new_light.color[1] = 2.53302956f;
+                new_light.color[2] = 2.53302956f;
+
+                new_light.position[0] = 0.0f;
+                new_light.position[1] = 0.17f;
+                new_light.position[2] = 0.0f;
+
+                new_light.radius = 0.1f;
+
+                new_light.visible = true;
+
+                scene.AddLight(new_light);
             }
         } else if (test_scene == eTestScene::Standard_SpotLight) {
             { // spot light

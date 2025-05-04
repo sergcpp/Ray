@@ -707,7 +707,7 @@ fvec4 map_to_cone(float r1, float r2, fvec4 N, float radius) {
     const fvec2 uv = fvec2(radius * r * cosf(theta), radius * r * sinf(theta));
 
     fvec4 LT, LB;
-    create_tbn(N, LT, LB);
+    create_tbn(normalize(N), LT, LB);
 
     return N + uv.get<0>() * LT + uv.get<1>() * LB;
 }
@@ -3218,42 +3218,45 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         float d;
         const fvec4 light_normal = normalize_len(center - P, d);
 
-        const float temp = sqrtf(d * d - l.sph.radius * l.sph.radius);
-        const float disk_radius = (temp * l.sph.radius) / d;
-        float disk_dist = l.sph.radius > 0.0f ? ((temp * disk_radius) / l.sph.radius) : d;
-        const fvec4 sampled_dir = normalize_len(map_to_cone(r1, r2, disk_dist * light_normal, disk_radius), disk_dist);
+        if (d > l.sph.radius) {
+            const float temp = sqrtf(d * d - l.sph.radius * l.sph.radius);
+            const float disk_radius = (temp * l.sph.radius) / d;
+            float disk_dist = l.sph.radius > 0.0f ? ((temp * disk_radius) / l.sph.radius) : d;
+            const fvec4 sampled_dir =
+                normalize_len(map_to_cone(r1, r2, disk_dist * light_normal, disk_radius), disk_dist);
 
-        if (l.sph.radius > 0.0f) {
-            // TODO: Find better way to do this
-            const float ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
+            if (l.sph.radius > 0.0f) {
+                // TODO: Find better way to do this
+                const float ls_dist = sphere_intersection(center, l.sph.radius, P, sampled_dir);
 
-            const fvec4 light_surf_pos = P + sampled_dir * ls_dist;
-            const fvec4 light_forward = normalize(light_surf_pos - center);
+                const fvec4 light_surf_pos = P + sampled_dir * ls_dist;
+                const fvec4 light_forward = normalize(light_surf_pos - center);
 
-            const float sampled_area = PI * disk_radius * disk_radius;
-            const float cos_theta = dot(sampled_dir, light_normal);
+                const float sampled_area = PI * disk_radius * disk_radius;
+                const float cos_theta = dot(sampled_dir, light_normal);
 
-            ls.lp = offset_ray(light_surf_pos, light_forward);
-            ls.pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta);
-        } else {
-            ls.lp = center;
-            ls.pdf = (disk_dist * disk_dist) / PI;
-        }
-        ls.L = sampled_dir;
-        ls.area = PI * disk_radius * disk_radius;
-        ls.ray_flags = l.ray_visibility;
-
-        if (!l.visible) {
-            ls.area = 0.0f;
-        }
-
-        if (l.sph.spot > 0.0f) {
-            const float _dot = -dot(ls.L, fvec4{l.sph.dir});
-            if (_dot > 0.0f) {
-                const float _angle = acosf(saturate(_dot));
-                ls.col *= saturate((l.sph.spot - _angle) / l.sph.blend);
+                ls.lp = offset_ray(light_surf_pos, light_forward);
+                ls.pdf = (disk_dist * disk_dist) / (sampled_area * cos_theta);
             } else {
-                ls.col *= 0.0f;
+                ls.lp = center;
+                ls.pdf = (disk_dist * disk_dist) / PI;
+            }
+            ls.L = sampled_dir;
+            ls.area = PI * disk_radius * disk_radius;
+            ls.ray_flags = l.ray_visibility;
+
+            if (!l.visible) {
+                ls.area = 0.0f;
+            }
+
+            if (l.sph.spot > 0.0f) {
+                const float _dot = -dot(ls.L, fvec4{l.sph.dir});
+                if (_dot > 0.0f) {
+                    const float _angle = acosf(saturate(_dot));
+                    ls.col *= saturate((l.sph.spot - _angle) / l.sph.blend);
+                } else {
+                    ls.col *= 0.0f;
+                }
             }
         }
     } else if (l.type == LIGHT_TYPE_DIR) {
@@ -3329,8 +3332,8 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
                 theta = 0.5f * PI - 0.25f * PI * (offset.get<0>() / offset.get<1>());
             }
 
-            offset.set(0, 0.5f * r * cosf(theta));
-            offset.set(1, 0.5f * r * sinf(theta));
+            offset.set<0>(0.5f * r * cosf(theta));
+            offset.set<1>(0.5f * r * sinf(theta));
         }
 
         const fvec4 lp = light_pos + light_u * offset.get<0>() + light_v * offset.get<1>();

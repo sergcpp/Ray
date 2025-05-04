@@ -1589,7 +1589,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 48;
     const double MinPSNR = 24.0;
-    const int PixThres = 1130;
+    const int PixThres = 1210;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1607,10 +1607,31 @@ void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferr
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SphereLight);
 }
 
+void test_complex_mat5_inside_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 48;
+    const double MinPSNR = 25.0;
+    const int PixThres = 2665;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = Ray::TextureHandle{0};
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
+    metal_mat_desc.normal_map = Ray::TextureHandle{1};
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_inside_light", metal_mat_desc, SampleCount, MinPSNR,
+                      PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_InsideLight);
+}
+
 void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 2;
-    const double MinPSNR = 30.10;
-    const int PixThres = 670;
+    const int SampleCount = 4;
+    const double MinPSNR = 31.30;
+    const int PixThres = 560;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1796,7 +1817,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 88;
     const double MinPSNR = 23.0;
-    const int PixThres = 1215;
+    const int PixThres = 1235;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
