@@ -1182,7 +1182,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const directional_light_desc_t 
     light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
-    l.visible = _l.visible;
+    l.visible = _l.multiple_importance;
     l.cast_shadow = _l.cast_shadow;
     l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
     l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
@@ -1211,7 +1211,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const sphere_light_desc_t &_l) 
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
-    l.visible = _l.visible && (_l.radius > 0.0f);
+    l.visible = _l.multiple_importance && (_l.radius > 0.0f);
     l.cast_shadow = _l.cast_shadow;
     l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
     l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
@@ -1234,7 +1234,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const spot_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
-    l.visible = _l.visible;
+    l.visible = _l.multiple_importance && (_l.radius > 0.0f);
     l.cast_shadow = _l.cast_shadow;
     l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
     l.ray_visibility |= (_l.specular_visibility << RAY_TYPE_SPECULAR);
@@ -1260,7 +1260,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
 
     l.type = LIGHT_TYPE_RECT;
     l.doublesided = _l.doublesided;
-    l.visible = _l.visible;
+    l.visible = _l.multiple_importance;
     l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
     l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
@@ -1295,7 +1295,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
 
     l.type = LIGHT_TYPE_DISK;
     l.doublesided = _l.doublesided;
-    l.visible = _l.visible;
+    l.visible = _l.multiple_importance;
     l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
     l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);
@@ -1329,7 +1329,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, co
     light_t l = {};
 
     l.type = LIGHT_TYPE_LINE;
-    l.visible = _l.visible;
+    l.visible = _l.multiple_importance;
     l.cast_shadow = _l.cast_shadow;
     l.sky_portal = _l.sky_portal;
     l.ray_visibility |= (_l.diffuse_visibility << RAY_TYPE_DIFFUSE);

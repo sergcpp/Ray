@@ -848,9 +848,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.width = 0.162f;
                 new_light.height = 0.162f;
 
-                new_light.visible = true;
-                new_light.sky_portal = false;
-
                 scene.AddLight(new_light, xform);
             }
             { // disk light
@@ -868,9 +865,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.size_x = 0.1296f;
                 new_light.size_y = 0.1296f;
 
-                new_light.visible = true;
-                new_light.sky_portal = false;
-
                 scene.AddLight(new_light, xform);
             }
         } else if (test_scene == eTestScene::Standard_SphereLight) {
@@ -886,8 +880,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.position[2] = 0.204932f;
 
                 new_light.radius = 0.05f;
-
-                new_light.visible = true;
 
                 scene.AddLight(new_light);
             }
@@ -906,9 +898,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.radius = 0.005f;
                 new_light.height = 0.2592f;
 
-                new_light.visible = true;
-                new_light.sky_portal = false;
-
                 scene.AddLight(new_light, xform);
             }
         } else if (test_scene == eTestScene::Standard_InsideLight) {
@@ -924,8 +913,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.position[2] = 0.0f;
 
                 new_light.radius = 0.1f;
-
-                new_light.visible = true;
 
                 scene.AddLight(new_light);
             }
@@ -948,8 +935,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.radius = 0.05f;
                 new_light.spot_size = 45.0f;
                 new_light.spot_blend = 0.15f;
-
-                new_light.visible = true;
 
                 scene.AddLight(new_light);
             }
@@ -991,8 +976,6 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         new_light.position[2] = 0.075f;
 
         new_light.radius = 0.0f;
-
-        new_light.visible = true;
 
         scene.AddLight(new_light);
     } else if (test_scene == eTestScene::Standard_MoonLight || test_scene == eTestScene::Standard_NoLight) {

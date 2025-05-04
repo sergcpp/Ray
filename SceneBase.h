@@ -195,7 +195,7 @@ struct tex_desc_t {
 struct directional_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float direction[3] = {0.0f, -1.0f, 0.0f}, angle = 0.0f;
-    bool visible = true;
+    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -207,7 +207,7 @@ struct sphere_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float position[3] = {0.0f, 0.0f, 0.0f};
     float radius = 1.0f;
-    bool visible = true;
+    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -222,7 +222,7 @@ struct spot_light_desc_t {
     float spot_size = 45.0f;
     float spot_blend = 0.15f;
     float radius = 1.0f;
-    bool visible = true;
+    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -235,7 +235,7 @@ struct rect_light_desc_t {
     float width = 1.0f, height = 1.0f;
     bool doublesided = false;
     bool sky_portal = false;
-    bool visible = true;
+    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -248,7 +248,7 @@ struct disk_light_desc_t {
     float size_x = 1.0f, size_y = 1.0f;
     bool doublesided = false;
     bool sky_portal = false;
-    bool visible = true;
+    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -260,7 +260,7 @@ struct line_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float radius = 1.0f, height = 1.0f;
     bool sky_portal = false;
-    bool visible = true;
+    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
