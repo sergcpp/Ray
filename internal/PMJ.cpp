@@ -4,7 +4,7 @@
 #include <random>
 
 void Ray::UpdateStrata(const Ref::dvec2 &p, const int next_sample_count, const int dim,
-                       std::vector<std::vector<bool>> &strata, std::vector<const Ref::dvec2 *> &sample_grid) {
+                       std::vector<std::vector<bool>> &strata, Span<const Ref::dvec2 *> sample_grid) {
     for (int i = 0, strata_cols = next_sample_count, strata_rows = 1; strata_cols >= 1;
          strata_cols /= 2, strata_rows *= 2, ++i) {
         const int x = int(p.get<0>() * strata_cols);
@@ -92,7 +92,7 @@ Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int 
         }
     };
 
-    auto get_sample_candidate = [&](const std::vector<int> &valid_offsets_x, const std::vector<int> &valid_offsets_y) {
+    auto get_sample_candidate = [&](Span<const int> valid_offsets_x, Span<const int> valid_offsets_y) {
         std::uniform_int_distribution<int>::param_type param_x(0, int(valid_offsets_x.size() - 1)),
             param_y(0, int(valid_offsets_y.size() - 1));
 
@@ -216,7 +216,7 @@ Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int 
         std::bernoulli_distribution dist;
         const bool swap_x = dist(gen);
 
-        std::vector<Ref::ivec2> subquadrants;
+        aligned_vector<Ref::ivec2> subquadrants;
 
         for (int i = 0; i < n; ++i) {
             const Ref::dvec2 &p = all_samples[i];
@@ -228,7 +228,7 @@ Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int 
                 y ^= 1;
             }
 
-            subquadrants.emplace_back(Ref::ivec2{x, y});
+            subquadrants.emplace_back(x, y);
         }
 
         return subquadrants;
@@ -256,7 +256,7 @@ Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int 
         subdivide_strata();
 
         // Horizontally or vertically opposite samples
-        const std::vector<Ref::ivec2> subquadrants = get_subquadrants();
+        const aligned_vector<Ref::ivec2> subquadrants = get_subquadrants();
         for (int i = 0; i < n; ++i) {
             all_samples.push_back(
                 generate_new_sample(subquadrants[i].get<0>(), subquadrants[i].get<1>(), candidates_count));
