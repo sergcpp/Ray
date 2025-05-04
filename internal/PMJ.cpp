@@ -50,11 +50,11 @@ void Ray::GetValidYOffsets(const int x_pos, const int y_pos, const int strata_in
 void Ray::GetValidOffsets(const int x_pos, const int y_pos, const std::vector<std::vector<bool>> &strata,
                           std::vector<int> &x_offsets, std::vector<int> &y_offsets) {
     if (strata.size() % 2 != 0) {
-        GetValidXOffsets(x_pos, y_pos, strata.size() / 2, strata, x_offsets);
-        GetValidYOffsets(x_pos, y_pos, strata.size() / 2, strata, y_offsets);
+        GetValidXOffsets(x_pos, y_pos, int(strata.size() / 2), strata, x_offsets);
+        GetValidYOffsets(x_pos, y_pos, int(strata.size() / 2), strata, y_offsets);
     } else {
-        GetValidXOffsets(x_pos, y_pos / 2, strata.size() / 2 - 1, strata, x_offsets);
-        GetValidYOffsets(x_pos / 2, y_pos, strata.size() / 2, strata, y_offsets);
+        GetValidXOffsets(x_pos, y_pos / 2, int(strata.size() / 2 - 1), strata, x_offsets);
+        GetValidYOffsets(x_pos / 2, y_pos, int(strata.size() / 2), strata, y_offsets);
     }
 };
 
@@ -93,8 +93,8 @@ Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int 
     };
 
     auto get_sample_candidate = [&](const std::vector<int> &valid_offsets_x, const std::vector<int> &valid_offsets_y) {
-        std::uniform_int_distribution<int>::param_type param_x(0, valid_offsets_x.size() - 1),
-            param_y(0, valid_offsets_y.size() - 1);
+        std::uniform_int_distribution<int>::param_type param_x(0, int(valid_offsets_x.size() - 1)),
+            param_y(0, int(valid_offsets_y.size() - 1));
 
         const int off_x = valid_offsets_x[uniform_int(gen, param_x)];
         const int off_y = valid_offsets_y[uniform_int(gen, param_y)];
