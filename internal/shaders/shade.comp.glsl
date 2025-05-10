@@ -1086,7 +1086,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const vec3 light_forward = normalize(cross(light_u, light_v));
 
         vec3 lp;
-        float pdf;
+        float pdf = 0.0;
 
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
         pdf = SampleSphericalRectangle(P, light_pos, light_u, light_v, rand_light_uv, lp);
@@ -1104,7 +1104,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0) {
             ls.lp = offset_ray(lp, light_forward);
-            ls.pdf = (pdf > 0.0) ? pdf : (ls_dist * ls_dist) / (ls.area * cos_theta);
+            ls.pdf = (pdf > 0.0) ? pdf : (ls_dist * ls_dist) / (l.RECT_AREA * cos_theta);
             ls.area = l.RECT_AREA;
             if (!LIGHT_VISIBLE(l)) {
                 ls.area = 0.0;
