@@ -13,6 +13,7 @@
 
 extern bool g_minimal_output;
 extern bool g_nohwrt;
+extern bool g_nodx;
 extern std::mutex g_stdout_mtx;
 extern int g_validation_level;
 
@@ -71,6 +72,9 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
     for (const char **arch = arch_list; *arch; ++arch) {
         const auto rt = RendererTypeFromName(*arch);
+        if (g_nodx && rt == eRendererType::DirectX12) {
+            continue;
+        }
 
         for (const bool use_hwrt : {false, true}) {
             if (use_hwrt && g_nohwrt) {

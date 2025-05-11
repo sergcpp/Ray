@@ -123,6 +123,7 @@ bool g_catch_flt_exceptions = false;
 bool g_determine_sample_count = false;
 bool g_minimal_output = false;
 bool g_nohwrt = false;
+bool g_nodx = false;
 int g_validation_level = 1;
 
 #ifdef _WIN32
@@ -161,6 +162,8 @@ int main(int argc, char *argv[]) {
             nogpu = true;
         } else if (strcmp(argv[i], "--nocpu") == 0) {
             nocpu = true;
+        } else if (strcmp(argv[i], "--nodx") == 0) {
+            g_nodx = true;
         } else if (strcmp(argv[i], "--full") == 0) {
             full_tests = true;
         } else if ((strcmp(argv[i], "--device") == 0 || strcmp(argv[i], "-d") == 0) && (++i != argc)) {

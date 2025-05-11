@@ -17,6 +17,7 @@
 extern bool g_determine_sample_count;
 extern bool g_minimal_output;
 extern bool g_nohwrt;
+extern bool g_nodx;
 std::mutex g_stdout_mtx;
 extern int g_validation_level;
 
@@ -59,6 +60,9 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
     for (const char **arch = arch_list; *arch; ++arch) {
         const auto rt = RendererTypeFromName(*arch);
+        if (g_nodx && rt == eRendererType::DirectX12) {
+            continue;
+        }
 
         for (const bool use_hwrt : {false, true}) {
             if (use_hwrt && g_nohwrt) {
