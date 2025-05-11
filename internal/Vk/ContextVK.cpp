@@ -217,9 +217,12 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
                                   raytracing_supported_, ray_query_supported_, fp16_supported_, int64_supported_,
                                   int64_atomics_supported_, coop_matrix_supported_, pageable_memory_supported_);
 
+    // mask out unsupported stages
     if (!raytracing_supported_) {
-        // mask out unsupported stage
         supported_stages_mask_ &= ~VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+    }
+    if (!raytracing_supported_ && !ray_query_supported_) {
+        supported_stages_mask_ &= ~VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
     }
 
     if (!external_ && !InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
