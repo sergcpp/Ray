@@ -56,7 +56,7 @@ void Ray::GetValidOffsets(const int x_pos, const int y_pos, const std::vector<st
         GetValidXOffsets(x_pos, y_pos / 2, int(strata.size() / 2 - 1), strata, x_offsets);
         GetValidYOffsets(x_pos / 2, y_pos, int(strata.size() / 2), strata, y_offsets);
     }
-};
+}
 
 Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int seed, const int sample_count,
                                                              const int candidates_count) {
@@ -110,7 +110,7 @@ Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int 
         std::vector<int> valid_offsets_x, valid_offsets_y;
         GetValidOffsets(x_pos, y_pos, strata, valid_offsets_x, valid_offsets_y);
 
-        if (candidates == 1 && false) {
+        if (candidates == 1) {
             return get_sample_candidate(valid_offsets_x, valid_offsets_y);
         } else {
             Ref::dvec2 best_candidate = {};
