@@ -106,16 +106,16 @@ Ray::aligned_vector<Ray::Ref::dvec2> Ray::GeneratePMJSamples(const unsigned int 
         return Ref::dvec2{uniform_real(gen, dparam_x), uniform_real(gen, dparam_y)};
     };
 
-    auto generate_new_sample = [&](const int x_pos, const int y_pos, const int candidates) {
+    auto generate_new_sample = [&](const int sample_x_pos, const int sample_y_pos, const int candidates) {
         std::vector<int> valid_offsets_x, valid_offsets_y;
-        GetValidOffsets(x_pos, y_pos, strata, valid_offsets_x, valid_offsets_y);
+        GetValidOffsets(sample_x_pos, sample_y_pos, strata, valid_offsets_x, valid_offsets_y);
 
         if (candidates == 1) {
             return get_sample_candidate(valid_offsets_x, valid_offsets_y);
         } else {
             Ref::dvec2 best_candidate = {};
             double max_min_dist_sq = 0.0;
-            for (int i = 0; i < candidates; ++i) {
+            for (int c = 0; c < candidates; ++c) {
                 const Ref::dvec2 candidate = get_sample_candidate(valid_offsets_x, valid_offsets_y);
 
                 const int x_pos = int(candidate.get<0>() * dim), y_pos = int(candidate.get<1>() * dim);

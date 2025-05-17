@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "--arch") == 0 && (++i != argc)) {
             preferred_arch[0] = argv[i];
         } else if (strcmp(argv[i], "-j") == 0 && (++i != argc)) {
-            threads_count = atoi(argv[++i]);
+            threads_count = atoi(argv[i]);
         } else if (strncmp(argv[i], "-j", 2) == 0) {
             threads_count = atoi(&argv[i][2]);
         } else if (strcmp(argv[i], "--time_limit") == 0 && (++i != argc)) {

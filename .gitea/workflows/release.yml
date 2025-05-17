@@ -388,7 +388,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-uhd-output"
-          test-args: "--full --device UHD --nocpu --nodx"
+          test-args: "--full --device UHD --nocpu --nodx -vl 0"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()

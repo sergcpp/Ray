@@ -6586,7 +6586,7 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
             const float *light_pos = l.sph.pos;
             fvec<S> disk_normal[3] = {light_pos[0] - ray.o[0], light_pos[1] - ray.o[1], light_pos[2] - ray.o[2]};
             const fvec<S> d = normalize(disk_normal);
-            const ivec<S> mask = simd_cast(d > l.sph.radius);
+            const ivec<S> temp_mask = simd_cast(d > l.sph.radius);
 
             const fvec<S> temp = safe_sqrt(d * d - l.sph.radius * l.sph.radius);
             const fvec<S> disk_radius = (temp * l.sph.radius) / d;
@@ -6600,7 +6600,7 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
             const fvec<S> bsdf_pdf = ray.pdf;
 
             const fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { where(mask, lcol[i]) *= mis_weight; })
+            UNROLLED_FOR(i, 3, { where(temp_mask, lcol[i]) *= mis_weight; })
 
             if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
                 const fvec<S> _dot = -(ray.d[0] * l.sph.dir[0] + ray.d[1] * l.sph.dir[1] + ray.d[2] * l.sph.dir[2]);

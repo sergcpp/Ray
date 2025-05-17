@@ -1290,8 +1290,8 @@ float Ray::Ref::SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const f
 
         // Compute the s coordinate as normalized arc length from A to C_s
         const float denom = ((v * p + u * q) * sinf(alpha));
-        const float s =
-            (1.0f / b) * portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
+        const float s = safe_div(1.0f, b) *
+                        portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
 
         // Compute the third vertex of the sub - triangle
         const fvec4 C_s = slerp(A, C, s);
