@@ -348,7 +348,8 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/sort_scatter_interface.h
                     internal/shaders/texture.glsl
                     internal/shaders/traverse_bvh.glsl
-                    internal/shaders/types.h)
+                    internal/shaders/types.h
+                    internal/shaders/trig.glsl)
 
 set(INFLATE_SOURCE_FILES    internal/inflate/Huffman.h
                             internal/inflate/Huffman.cpp
