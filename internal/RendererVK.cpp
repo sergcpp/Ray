@@ -175,7 +175,7 @@ namespace Vk {
 #include "shaders/output/spatial_cache_update.comp.spv.inl"
 #include "shaders/output/spatial_cache_update_compat.comp.spv.inl"
 } // namespace Vk
-void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
+void WritePFM(std::string_view base_name, const float values[], int w, int h, int channels);
 } // namespace Ray
 
 #if 0
@@ -298,7 +298,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log,
 
 Ray::eRendererType Ray::Vk::Renderer::type() const { return eRendererType::Vulkan; }
 
-const char *Ray::Vk::Renderer::device_name() const { return ctx_->device_properties().deviceName; }
+std::string_view Ray::Vk::Renderer::device_name() const { return ctx_->device_properties().deviceName; }
 
 void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     CommandBuffer cmd_buf = {};
@@ -1808,7 +1808,8 @@ bool Ray::Vk::Renderer::InitUNetFilterPipelines(
 
 AGAIN:
 
-    SmallVector<std::tuple<Shader &, Program &, Pipeline &, const char *, Span<const uint8_t>, eShaderType, bool>, 32>
+    SmallVector<std::tuple<Shader &, Program &, Pipeline &, std::string_view, Span<const uint8_t>, eShaderType, bool>,
+                32>
         shaders_to_init = {
             {sh_.convolution_Img_9_32, prog_.convolution_Img_9_32, pi_.convolution_Img_9_32, "Convolution Img 9 32",
              select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_spv,
@@ -2446,7 +2447,7 @@ bool Ray::Vk::Renderer::InitPipelines(ILog *log,
                              : (use_subgroup_ ? atlas_subgroup_shader : atlas_shader);
     };
 
-    SmallVector<std::tuple<Shader &, const char *, Span<const uint8_t>, eShaderType, bool>, 32> shaders_to_init = {
+    SmallVector<std::tuple<Shader &, std::string_view, Span<const uint8_t>, eShaderType, bool>, 32> shaders_to_init = {
         {sh_.prim_rays_gen_simple, "Primary Raygen Simple", internal_shaders_output_primary_ray_gen_simple_comp_spv,
          eShaderType::Comp, false},
         {sh_.prim_rays_gen_adaptive, "Primary Raygen Adaptive",

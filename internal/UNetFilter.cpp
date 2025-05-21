@@ -98,7 +98,7 @@ void ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels1,
 int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, const bool round_w,
                          unet_filter_tensors_t &out_tensors, SmallVector<int, 2> alias_dependencies[]) {
     struct resource_t {
-        const char *name;
+        std::string_view name;
         int resolution_div;
         int depth;
         mutable int offset;
@@ -142,7 +142,7 @@ int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, cons
     }
 
     struct pass_t {
-        const char *used_resources[3];
+        const std::string_view used_resources[3];
         int used_resource_indices[3] = {-1, -1, -1};
     };
     pass_t passes[UNetFilterPasses] = {
@@ -167,13 +167,13 @@ int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, cons
     for (int i = 0; i < UNetFilterPasses; ++i) {
         pass_t &pass = passes[i];
         for (int r = 0; r < 3; ++r) {
-            const char *resource_name = pass.used_resources[r];
-            if (!resource_name) {
+            const std::string_view resource_name = pass.used_resources[r];
+            if (resource_name.empty()) {
                 continue;
             }
 
             for (int j = 0; j < resource_count; ++j) {
-                if (strcmp(resources[j].name, resource_name) == 0) {
+                if (resources[j].name == resource_name) {
                     pass.used_resource_indices[r] = j;
                     resources[j].lifetime[0] = std::min(resources[j].lifetime[0], i);
                     resources[j].lifetime[1] = std::max(resources[j].lifetime[1], i);

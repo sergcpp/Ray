@@ -3,7 +3,7 @@
 #include <cstring>
 
 namespace Ray {
-const char *RendererTypeName(const eRendererType rt) {
+std::string_view RendererTypeName(const eRendererType rt) {
     switch (rt) {
     case eRendererType::Reference:
         return "REF";
@@ -28,24 +28,24 @@ const char *RendererTypeName(const eRendererType rt) {
     }
 }
 
-eRendererType RendererTypeFromName(const char *name) {
-    if (strcmp(name, "REF") == 0) {
+eRendererType RendererTypeFromName(std::string_view name) {
+    if (name == "REF") {
         return eRendererType::Reference;
-    } else if (strcmp(name, "SSE2") == 0) {
+    } else if (name == "SSE2") {
         return eRendererType::SIMD_SSE2;
-    } else if (strcmp(name, "SSE41") == 0) {
+    } else if (name == "SSE41") {
         return eRendererType::SIMD_SSE41;
-    } else if (strcmp(name, "AVX") == 0) {
+    } else if (name == "AVX") {
         return eRendererType::SIMD_AVX;
-    } else if (strcmp(name, "AVX2") == 0) {
+    } else if (name == "AVX2") {
         return eRendererType::SIMD_AVX2;
-    } else if (strcmp(name, "AVX512") == 0) {
+    } else if (name == "AVX512") {
         return eRendererType::SIMD_AVX512;
-    } else if (strcmp(name, "NEON") == 0) {
+    } else if (name == "NEON") {
         return eRendererType::SIMD_NEON;
-    } else if (strcmp(name, "VK") == 0) {
+    } else if (name == "VK") {
         return eRendererType::Vulkan;
-    } else if (strcmp(name, "DX") == 0) {
+    } else if (name == "DX") {
         return eRendererType::DirectX12;
     }
     return eRendererType::Reference;

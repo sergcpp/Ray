@@ -26,7 +26,7 @@ const Bitmask<eStage> g_stage_bits_per_state[] = {
     eStage::AccStructureBuild,    // BuildASWrite
     eStage::RayTracingShader      // RayTracing
 };
-static_assert(sizeof(g_stage_bits_per_state) / sizeof(g_stage_bits_per_state[0]) == int(eResState::_Count), "!");
+static_assert(std::size(g_stage_bits_per_state) == int(eResState::_Count), "!");
 
 const VkPipelineStageFlags g_stage_flags_vk[] = {
     VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,                                                     // VertexInput

@@ -182,7 +182,8 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         return InvalidTextureHandle;
     }
 
-    log_->Info("Ray: Texture '%s' loaded (storage = %i, %ix%i)", _t.name ? _t.name : "(unknown)", storage, _t.w, _t.h);
+    log_->Info("Ray: Texture '%s' loaded (storage = %i, %ix%i)", !_t.name.empty() ? _t.name.data() : "(unknown)",
+               storage, _t.w, _t.h);
     log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC1[%i], BC3[%i], BC4[%i], BC5[%i])",
                tex_storage_rgba_.img_count(), tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(),
                tex_storage_r_.img_count(), tex_storage_bc1_.img_count(), tex_storage_bc3_.img_count(),
@@ -356,7 +357,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     PreprocessMesh(_m.vtx_positions, _m.vtx_indices, _m.base_vertex, s, temp_nodes, temp_tris, temp_tri_indices,
                    temp_mtris);
 
-    log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", _m.name ? _m.name : "(unknown)",
+    log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", !_m.name.empty() ? _m.name.data() : "(unknown)",
                (long long)(Ray::GetTimeMs() - t1));
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);

@@ -14,9 +14,9 @@
 #pragma warning(disable : 6294) // Ill-defined for-loop
 
 namespace Ray {
-bool MatchDeviceNames(const char *name, const char *pattern);
+bool MatchDeviceNames(std::string_view name, std::string_view pattern);
 
-extern const std::pair<uint32_t, const char *> KnownGPUVendors[];
+extern const std::pair<uint32_t, std::string_view> KnownGPUVendors[];
 extern const int KnownGPUVendorsCount;
 
 extern RENDERDOC_DevicePointer g_rdoc_device;
@@ -86,7 +86,7 @@ void Ray::Vk::Context::Destroy() {
 }
 
 bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const VulkanFunctions &vk_functions,
-                            const char *preferred_device, const int validation_level) {
+                            std::string_view preferred_device, const int validation_level) {
     log_ = log;
     instance_ = vk_device.instance;
     physical_device_ = vk_device.physical_device;
@@ -253,10 +253,11 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
     log_->Info("\tVulkan version\t: %u.%u", VK_API_VERSION_MAJOR(device_properties_.apiVersion),
                VK_API_VERSION_MINOR(device_properties_.apiVersion));
 
-    auto it = find_if(KnownGPUVendors, KnownGPUVendors + KnownGPUVendorsCount,
-                      [this](std::pair<uint32_t, const char *> v) { return device_properties_.vendorID == v.first; });
+    auto it =
+        find_if(KnownGPUVendors, KnownGPUVendors + KnownGPUVendorsCount,
+                [this](std::pair<uint32_t, std::string_view> v) { return device_properties_.vendorID == v.first; });
     if (it != KnownGPUVendors + KnownGPUVendorsCount) {
-        log_->Info("\tVendor\t\t: %s", it->second);
+        log_->Info("\tVendor\t\t: %s", it->second.data());
     }
     log_->Info("\tName\t\t: %s", device_properties_.deviceName);
 
@@ -460,7 +461,7 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
 }
 
 bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &out_physical_device,
-                                              const char *preferred_device, VkInstance instance, ILog *log) {
+                                              std::string_view preferred_device, VkInstance instance, ILog *log) {
     uint32_t physical_device_count = 0;
     api.vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
 
@@ -537,7 +538,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &
                 score += 100;
             }
 
-            if (preferred_device) {
+            if (!preferred_device.empty()) {
                 if (MatchDeviceNames(device_properties.deviceName, preferred_device)) {
                     // preferred device found
                     score += 100000;

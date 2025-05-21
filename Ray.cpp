@@ -46,9 +46,9 @@ LogNull g_null_log;
 LogStdout g_stdout_log;
 RENDERDOC_DevicePointer g_rdoc_device = {};
 
-extern const std::pair<uint32_t, const char *> KnownGPUVendors[] = {
+extern const std::pair<uint32_t, std::string_view> KnownGPUVendors[] = {
     {0x1002, "AMD"}, {0x10DE, "NVIDIA"}, {0x8086, "INTEL"}, {0x13B5, "ARM"}};
-extern const int KnownGPUVendorsCount = 4;
+extern const int KnownGPUVendorsCount = std::size(KnownGPUVendors);
 } // namespace Ray
 
 Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
@@ -137,9 +137,9 @@ int Ray::QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], const i
     return count;
 }
 
-bool Ray::MatchDeviceNames(const char *name, const char *pattern) {
-    std::regex match_name(pattern);
-    return std::regex_search(name, match_name) || strcmp(name, pattern) == 0;
+bool Ray::MatchDeviceNames(std::string_view name, std::string_view pattern) {
+    std::regex match_name(pattern.data());
+    return std::regex_search(name.data(), match_name) || name == pattern;
 }
 
 const char *Ray::Version() { return "v0.4.0-unknown-commit"; }

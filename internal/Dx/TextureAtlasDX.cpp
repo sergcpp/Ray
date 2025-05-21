@@ -36,8 +36,8 @@ uint32_t D3D12CalcSubresource(uint32_t MipSlice, uint32_t ArraySlice, uint32_t P
 
 #define _MIN(x, y) ((x) < (y) ? (x) : (y))
 
-Ray::Dx::TextureAtlas::TextureAtlas(Context *ctx, const char *name, const eTexFormat format, const eTexFilter filter,
-                                    const int resx, const int resy, const int pages_count)
+Ray::Dx::TextureAtlas::TextureAtlas(Context *ctx, std::string_view name, const eTexFormat format,
+                                    const eTexFilter filter, const int resx, const int resy, const int pages_count)
     : ctx_(ctx), name_(name), format_(format), filter_(filter), res_{resx, resy} {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");

@@ -1,6 +1,6 @@
 #include "DebugMarkerDX.h"
 
-#include <codecvt>
+#include <cassert>
 #include <string>
 
 #ifndef NOMINMAX
@@ -17,13 +17,19 @@
 #include <WinPixEventRuntime/pix3.h>
 #endif
 
-Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf, const char *name)
+Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf, std::string_view name)
     : cmd_buf_(_cmd_buf) {
 #ifdef ENABLE_GPU_DEBUG
 #ifdef ENABLE_PIX
     PIXBeginEvent(cmd_buf_, 0, name);
 #else
-    std::wstring wstr(name, name + strlen(name));
+    const int req_size = MultiByteToWideChar(CP_UTF8, 0, name.data(), -1, nullptr, 0);
+    assert(req_size > 0);
+
+    std::wstring wstr(req_size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, name.data(), -1, wstr.data(), req_size);
+    wstr.pop_back();
+
     cmd_buf_->BeginEvent(0, wstr.c_str(), UINT(wstr.length() * sizeof(wchar_t)));
 #endif
 #endif

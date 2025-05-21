@@ -16,8 +16,7 @@
 // #define TEX_VERBOSE_LOGGING
 #endif
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 extern const VkFilter g_min_mag_filter_vk[];
 extern const VkSamplerAddressMode g_wrap_mode_vk[];
 extern const VkSamplerMipmapMode g_mipmap_mode_vk[];
@@ -83,21 +82,18 @@ const eTexUsage g_tex_usage_per_state[] = {
     {},                      // BuildASWrite
     {}                       // RayTracing
 };
-static_assert(sizeof(g_tex_usage_per_state) / sizeof(g_tex_usage_per_state[0]) == int(eResState::_Count), "!");
-} // namespace Vk
-
-bool EndsWith(const std::string &str1, const char *str2);
-} // namespace Ray
+static_assert(std::size(g_tex_usage_per_state) == int(eResState::_Count), "!");
+} // namespace Ray::Vk
 
 Ray::eTexUsage Ray::Vk::TexUsageFromState(const eResState state) { return g_tex_usage_per_state[int(state)]; }
 
-Ray::Vk::Texture::Texture(const char *name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
+Ray::Vk::Texture::Texture(std::string_view name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(p, mem_allocs, log);
 }
 
-Ray::Vk::Texture::Texture(const char *name, Context *ctx, const void *data, const uint32_t size, const TexParams &p,
-                          Buffer &stage_buf, VkCommandBuffer cmd_buf, MemAllocators *mem_allocs,
+Ray::Vk::Texture::Texture(std::string_view name, Context *ctx, const void *data, const uint32_t size,
+                          const TexParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf, MemAllocators *mem_allocs,
                           eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);

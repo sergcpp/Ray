@@ -63,7 +63,7 @@ class MemAllocator {
     bool AllocateNewPool(uint32_t size);
 
   public:
-    MemAllocator(const char *name, Context *ctx, uint32_t initial_pool_size, uint32_t mem_type_index,
+    MemAllocator(std::string_view name, Context *ctx, uint32_t initial_pool_size, uint32_t mem_type_index,
                  float growth_factor, uint32_t max_pool_size);
     ~MemAllocator();
 
@@ -91,7 +91,7 @@ class MemAllocators {
     std::unique_ptr<MemAllocator> allocators_[32];
 
   public:
-    MemAllocators(const char *name, Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
+    MemAllocators(std::string_view name, Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
                   const uint32_t max_pool_size)
         : name_(name), ctx_(ctx), initial_pool_size_(initial_pool_size), growth_factor_(growth_factor),
           max_pool_size_(max_pool_size) {}

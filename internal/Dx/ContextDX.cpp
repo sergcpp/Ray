@@ -21,9 +21,9 @@
 #include <dxgi1_4.h>
 
 namespace Ray {
-bool MatchDeviceNames(const char *name, const char *pattern);
+bool MatchDeviceNames(std::string_view name, std::string_view pattern);
 
-extern const std::pair<uint32_t, const char *> KnownGPUVendors[];
+extern const std::pair<uint32_t, std::string_view> KnownGPUVendors[];
 extern const int KnownGPUVendorsCount;
 
 extern RENDERDOC_DevicePointer g_rdoc_device;
@@ -107,7 +107,7 @@ void Ray::Dx::Context::Destroy() {
 #undef SAFE_RELEASE
 }
 
-bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int validation_level) {
+bool Ray::Dx::Context::Init(ILog *log, std::string_view preferred_device, const int validation_level) {
     log_ = log;
     validation_level_ = validation_level;
 
@@ -149,7 +149,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
         WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, device_name.data(), utf8_len, nullptr, nullptr);
         device_name.pop_back();
 
-        if (preferred_device && MatchDeviceNames(device_name.c_str(), preferred_device)) {
+        if (!preferred_device.empty() && MatchDeviceNames(device_name, preferred_device)) {
             adapter_score += 100000;
         }
 
@@ -252,9 +252,9 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
     log_->Info("Device info:");
 
     auto it = find_if(KnownGPUVendors, KnownGPUVendors + KnownGPUVendorsCount,
-                      [&](std::pair<uint32_t, const char *> v) { return desc.VendorId == v.first; });
+                      [&](std::pair<uint32_t, std::string_view> v) { return desc.VendorId == v.first; });
     if (it != KnownGPUVendors + KnownGPUVendorsCount) {
-        log_->Info("\tVendor\t\t: %s", it->second);
+        log_->Info("\tVendor\t\t: %s", it->second.data());
     }
 
     log_->Info("\tName\t\t: %s", device_name_.c_str());

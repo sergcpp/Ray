@@ -31,7 +31,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
     static_assert(std::is_trivially_destructible<T>::value, "!");
 
   public:
-    SparseStorage(Context *ctx, const char *name, const uint32_t initial_capacity = 8) : ctx_(ctx), name_(name) {
+    SparseStorage(Context *ctx, std::string_view name, const uint32_t initial_capacity = 8) : ctx_(ctx), name_(name) {
         if (initial_capacity) {
             reserve(initial_capacity);
         }
@@ -62,7 +62,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
             if (Replicate) {
                 cpu_buf_ = std::make_unique<T[]>(new_capacity);
             }
-            gpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T))};
+            gpu_buf_ = Buffer{name_, ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T))};
         } else {
             if (Replicate) {
                 auto new_buf = std::make_unique<T[]>(new_capacity);

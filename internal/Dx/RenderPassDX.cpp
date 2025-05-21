@@ -7,8 +7,7 @@
 #define VERBOSE_LOGGING
 #endif
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 /*static_assert(int(eImageLayout::Undefined) == VK_IMAGE_LAYOUT_UNDEFINED, "!");
 static_assert(int(eImageLayout::General) == VK_IMAGE_LAYOUT_GENERAL, "!");
 static_assert(int(eImageLayout::ColorAttachmentOptimal) == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, "!");
@@ -25,22 +24,21 @@ extern const VkAttachmentLoadOp vk_load_ops[] = {
     VK_ATTACHMENT_LOAD_OP_DONT_CARE, // DontCare
     VK_ATTACHMENT_LOAD_OP_NONE_EXT   // None
 };
-static_assert((sizeof(vk_load_ops) / sizeof(vk_load_ops[0])) == int(eLoadOp::_Count), "!");
+static_assert(std::size(vk_load_ops) == int(eLoadOp::_Count), "!");
 
 extern const VkAttachmentStoreOp vk_store_ops[] = {
     VK_ATTACHMENT_STORE_OP_STORE,     // Store
     VK_ATTACHMENT_STORE_OP_DONT_CARE, // DontCare
     VK_ATTACHMENT_STORE_OP_NONE_EXT   // None
 };
-static_assert((sizeof(vk_store_ops) / sizeof(vk_store_ops[0])) == int(eStoreOp::_Count), "!");
+static_assert(std::size(vk_store_ops) == int(eStoreOp::_Count), "!");
 
 // make sure we can simply cast these
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT == 1, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_2_BIT == 2, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_4_BIT == 4, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_8_BIT == 8, "!");*/
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Dx
 
 Ray::Dx::RenderPass &Ray::Dx::RenderPass::operator=(RenderPass &&rhs) noexcept {
     if (this == &rhs) {
@@ -50,7 +48,7 @@ Ray::Dx::RenderPass &Ray::Dx::RenderPass::operator=(RenderPass &&rhs) noexcept {
     Destroy();
 
     ctx_ = std::exchange(rhs.ctx_, nullptr);
-    //handle_ = std::exchange(rhs.handle_, {});
+    // handle_ = std::exchange(rhs.handle_, {});
     color_rts = std::move(rhs.color_rts);
     depth_rt = std::exchange(rhs.depth_rt, {});
 
@@ -147,12 +145,12 @@ bool Ray::Dx::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
 }
 
 void Ray::Dx::RenderPass::Destroy() {
-    //if (handle_ != VK_NULL_HANDLE) {
-    //    ctx_->render_passes_to_destroy[ctx_->backend_frame].push_back(handle_);
-    //    handle_ = VK_NULL_HANDLE;
-    //}
-    //color_rts.clear();
-    //depth_rt = {};
+    // if (handle_ != VK_NULL_HANDLE) {
+    //     ctx_->render_passes_to_destroy[ctx_->backend_frame].push_back(handle_);
+    //     handle_ = VK_NULL_HANDLE;
+    // }
+    // color_rts.clear();
+    // depth_rt = {};
 }
 
 bool Ray::Dx::RenderPass::IsCompatibleWith(Span<const RenderTarget> _color_rts, RenderTarget _depth_rt) {

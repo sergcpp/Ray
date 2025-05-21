@@ -20,7 +20,7 @@ void Ray::Dx::MemAllocation::Release() {
     }
 }
 
-Ray::Dx::MemAllocator::MemAllocator(const char *name, Context *ctx, const uint32_t initial_pool_size,
+Ray::Dx::MemAllocator::MemAllocator(std::string_view name, Context *ctx, const uint32_t initial_pool_size,
                                     D3D12_HEAP_TYPE heap_type, const float growth_factor, const uint32_t max_pool_size)
     : name_(name), ctx_(ctx), growth_factor_(growth_factor), max_pool_size_(max_pool_size), heap_type_(heap_type) {
     assert(growth_factor_ > 1.0f);

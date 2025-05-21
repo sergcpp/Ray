@@ -10,7 +10,8 @@ template <typename T> class Vector {
     size_t size_, cap_;
 
   public:
-    explicit Vector(Context *ctx, const char *name, const size_t capacity = 16) : ctx_(ctx), size_(0), cap_(capacity) {
+    explicit Vector(Context *ctx, std::string_view name, const size_t capacity = 16)
+        : ctx_(ctx), size_(0), cap_(capacity) {
         buf_ = Buffer{name, ctx_, eBufType::Storage, uint32_t(sizeof(T) * cap_)};
     }
 

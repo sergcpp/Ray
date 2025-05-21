@@ -175,11 +175,11 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
     cam.pass_settings.regularize_alpha = c.regularize_alpha;
 }
 
-//#define DUMP_SKY_ENV
+// #define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
-int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
-            const char **err);
+int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16,
+            std::string_view outfilename, const char **err);
 }
 #endif
 
@@ -294,7 +294,7 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
     parallel_for(0, res[1], [&](const int y) {
         const float theta = PI * float(y) / float(res[1]);
         for (int x = 0; x < res[0]; ++x) {
-            const uint32_t px_hash = Ref::hash((x << 16)| y);
+            const uint32_t px_hash = Ref::hash((x << 16) | y);
 
             const float phi = 2.0f * PI * (x + 0.5f) / float(res[0]);
             auto ray_dir = Ref::fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};

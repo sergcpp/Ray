@@ -57,7 +57,7 @@ uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProper
 
 int Ray::Vk::Buffer::g_GenCounter = 0;
 
-Ray::Vk::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size)
+Ray::Vk::Buffer::Buffer(std::string_view name, Context *ctx, const eBufType type, const uint32_t initial_size)
     : ctx_(ctx), name_(name), type_(type), size_(0) {
     Resize(initial_size);
 }
@@ -345,7 +345,8 @@ void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
     resource_state = eResState::CopyDst;
 }
 
-void Ray::Vk::Buffer::UpdateImmediate(const uint32_t dst_offset, const uint32_t size, const void *data, VkCommandBuffer cmd_buf) {
+void Ray::Vk::Buffer::UpdateImmediate(const uint32_t dst_offset, const uint32_t size, const void *data,
+                                      VkCommandBuffer cmd_buf) {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> barriers;
 

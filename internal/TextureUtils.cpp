@@ -234,11 +234,11 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
 
             if (channels == 3) {
                 val = Ref::fvec4{image_data[3 * (y * w + x) + 0], image_data[3 * (y * w + x) + 1],
-                                      image_data[3 * (y * w + x) + 2], 0.0f};
+                                 image_data[3 * (y * w + x) + 2], 0.0f};
             } else /*if (channels == 4)*/ {
                 assert(channels == 4);
                 val = Ref::fvec4{image_data[4 * (y * w + x) + 0], image_data[4 * (y * w + x) + 1],
-                                      image_data[4 * (y * w + x) + 2], 0.0f};
+                                 image_data[4 * (y * w + x) + 2], 0.0f};
             }
 
             auto exp = Ref::fvec4{std::log2(val[0]), std::log2(val[1]), std::log2(val[2]), 0.0f};
@@ -1603,8 +1603,7 @@ template int Ray::Preprocess_BCn<4>(const uint8_t in_data[], const int tiles_w, 
 void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
                               Span<uint32_t> new_vtx_indices, Span<const uint32_t> indices) {
     auto cross = [](const Ref::fvec3 &v1, const Ref::fvec3 &v2) -> Ref::fvec3 {
-        return Ref::fvec3{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2],
-                               v1[0] * v2[1] - v1[1] * v2[0]};
+        return Ref::fvec3{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
     };
 
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), {0, 0, 0});
@@ -1876,14 +1875,14 @@ bool Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTex
     return true;
 }
 
-void Ray::WriteTGA(const uint8_t *data, const int w, const int h, const int bpp, const char *name) {
-    std::ofstream file(name, std::ios::binary);
+void Ray::WriteTGA(const uint8_t *data, const int w, const int h, const int bpp, std::string_view name) {
+    std::ofstream file(name.data(), std::ios::binary);
 
     unsigned char header[18] = {0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     header[12] = w & 0xFF;
     header[13] = (w >> 8) & 0xFF;
-    header[14] = (h)&0xFF;
+    header[14] = (h) & 0xFF;
     header[15] = (h >> 8) & 0xFF;
     header[16] = bpp * 8;
     header[17] |= (1 << 5); // set origin to upper left corner
@@ -1945,10 +1944,10 @@ void Ray::WriteTGA(const uint8_t *data, const int w, const int h, const int bpp,
     file.write((const char *)&footer, sizeof(footer));
 }
 
-void Ray::WritePFM(const char *base_name, const float values[], int w, int h, int channels) {
+void Ray::WritePFM(std::string_view base_name, const float values[], int w, int h, int channels) {
     for (int c = 0; c < channels; ++c) {
         // Open the file
-        const std::string filename = base_name + std::to_string(c) + ".pfm";
+        const std::string filename = std::string(base_name) + std::to_string(c) + ".pfm";
         std::ofstream file(filename, std::ios::binary);
         if (file.fail()) {
             throw std::runtime_error("cannot open image file: " + std::string(filename));
@@ -1976,4 +1975,3 @@ void Ray::WritePFM(const char *base_name, const float values[], int w, int h, in
 #undef _MAX
 #undef _ABS
 #undef _CLAMP
-

@@ -67,7 +67,7 @@ class MemAllocator {
     bool AllocateNewPool(uint32_t size);
 
   public:
-    MemAllocator(const char *name, Context *ctx, uint32_t initial_pool_size, D3D12_HEAP_TYPE heap_type,
+    MemAllocator(std::string_view name, Context *ctx, uint32_t initial_pool_size, D3D12_HEAP_TYPE heap_type,
                  float growth_factor, uint32_t max_pool_size);
     ~MemAllocator();
 
@@ -95,7 +95,7 @@ class MemAllocators {
     std::unique_ptr<MemAllocator> allocators_[8];
 
   public:
-    MemAllocators(const char *name, Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
+    MemAllocators(std::string_view name, Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
                   const uint32_t max_pool_size)
         : name_(name), ctx_(ctx), initial_pool_size_(initial_pool_size), growth_factor_(growth_factor),
           max_pool_size_(max_pool_size) {}
@@ -104,7 +104,7 @@ class MemAllocators {
         if (!allocators_[heap_type]) {
             std::string name = name_;
             name += " (type " + std::to_string(heap_type) + ")";
-            allocators_[heap_type] = std::make_unique<MemAllocator>(name.c_str(), ctx_, initial_pool_size_, heap_type,
+            allocators_[heap_type] = std::make_unique<MemAllocator>(name, ctx_, initial_pool_size_, heap_type,
                                                                     growth_factor_, max_pool_size_);
         }
         return allocators_[heap_type]->Allocate(alignment, size);

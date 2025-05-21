@@ -40,7 +40,7 @@ int QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], int capacity
     @param pattern regex pattern
     @return true if name matches pattern
 */
-bool MatchDeviceNames(const char *name, const char *pattern);
+bool MatchDeviceNames(std::string_view name, std::string_view pattern);
 
 /** @brief Get version string
     @return version string

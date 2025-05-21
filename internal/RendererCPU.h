@@ -23,7 +23,7 @@
 namespace Ray {
 int round_up(int v, int align);
 
-void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
+void WritePFM(std::string_view base_name, const float values[], int w, int h, int channels);
 
 namespace Ref {
 class SIMDPolicy {
@@ -244,7 +244,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     ILog *log() const override { return log_; }
 
-    const char *device_name() const override { return "CPU"; }
+    std::string_view device_name() const override { return "CPU"; }
 
     bool is_spatial_caching_enabled() const override { return use_spatial_cache_; }
 

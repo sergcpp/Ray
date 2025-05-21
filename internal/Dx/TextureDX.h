@@ -79,12 +79,12 @@ class Texture {
     mutable eResState resource_state = eResState::Undefined;
 
     Texture() = default;
-    Texture(const char *name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs, ILog *log);
-    Texture(const char *name, Context *ctx,
+    Texture(std::string_view name, Context *ctx, const TexParams &params, MemAllocators *mem_allocs, ILog *log);
+    Texture(std::string_view name, Context *ctx,
             ID3D12Resource *img, // const VkImageView view, const VkSampler sampler,
             const TexParams &_params, ILog *log)
         : handle_{img, /*view, VK_NULL_HANDLE, sampler,*/ 0}, name_(name), params(_params) {}
-    Texture(const char *name, Context *ctx, const void *data, uint32_t size, const TexParams &p, Buffer &stage_buf,
+    Texture(std::string_view name, Context *ctx, const void *data, uint32_t size, const TexParams &p, Buffer &stage_buf,
             ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture(const Texture &rhs) = delete;
     Texture(Texture &&rhs) noexcept { (*this) = std::move(rhs); }

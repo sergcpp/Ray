@@ -71,7 +71,7 @@ class Buffer {
 
   public:
     Buffer() = default;
-    explicit Buffer(const char *name, Context *ctx, eBufType type, uint32_t initial_size);
+    explicit Buffer(std::string_view name, Context *ctx, eBufType type, uint32_t initial_size);
     Buffer(const Buffer &rhs) = delete;
     Buffer(Buffer &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Buffer();

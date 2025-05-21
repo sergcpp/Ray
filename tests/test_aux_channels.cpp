@@ -17,7 +17,7 @@ extern bool g_nodx;
 extern std::mutex g_stdout_mtx;
 extern int g_validation_level;
 
-void test_aux_channels(const char *arch_list[], const char *preferred_device) {
+void test_aux_channels(const char *arch_list[], std::string_view preferred_device) {
     using namespace std::chrono;
     using namespace Ray;
 
@@ -93,11 +93,12 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                 // skip unsupported (we fell back to some other renderer)
                 continue;
             }
-            if (preferred_device) {
+            if (!preferred_device.empty()) {
                 // make sure we use requested device
                 if (!require(MatchDeviceNames(renderer->device_name(), preferred_device))) {
                     std::lock_guard<std::mutex> _(g_stdout_mtx);
-                    printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
+                    printf("Wrong device: %s (%s was requested)\n", renderer->device_name().data(),
+                           preferred_device.data());
                     return;
                 }
             }
@@ -201,15 +202,15 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             {
                 std::lock_guard<std::mutex> _(g_stdout_mtx);
                 if (g_minimal_output) {
-                    printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt), s.use_hwrt ? "HWRT" : "SWRT",
-                           100.0);
+                    printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt).data(),
+                           s.use_hwrt ? "HWRT" : "SWRT", 100.0);
                 }
                 printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB, Time: %.2fm)\n", base_color_psnr,
                        BaseColor_MinPSNR, normals_psnr, Normals_MinPSNR, depth_psnr, Depth_MinPSNR, test_duration_m);
                 fflush(stdout);
             }
 
-            std::string type_name = RendererTypeName(rt);
+            std::string type_name(RendererTypeName(rt));
             if (use_hwrt) {
                 type_name += "_HWRT";
             }

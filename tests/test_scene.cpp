@@ -1116,8 +1116,8 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
             if (!g_minimal_output) {
                 const float prog = 100.0f * float(i + std::min(SamplePortion, max_samples - i)) / float(max_samples);
                 std::lock_guard<std::mutex> _(g_stdout_mtx);
-                printf("\r%s (%6s, %s): %.1f%% ", log_str, RendererTypeName(rt), settings.use_hwrt ? "HWRT" : "SWRT",
-                       prog);
+                printf("\r%s (%6s, %s): %.1f%% ", log_str, RendererTypeName(rt).data(),
+                       settings.use_hwrt ? "HWRT" : "SWRT", prog);
                 fflush(stdout);
             }
         }
@@ -1151,8 +1151,8 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
                 // report progress percentage
                 const float prog = 100.0f * float(i + 1) / float(max_samples);
                 std::lock_guard<std::mutex> _(g_stdout_mtx);
-                printf("\r%s (%6s, %s): %.1f%% ", log_str, RendererTypeName(rt), settings.use_hwrt ? "HWRT" : "SWRT",
-                       prog);
+                printf("\r%s (%6s, %s): %.1f%% ", log_str, RendererTypeName(rt).data(),
+                       settings.use_hwrt ? "HWRT" : "SWRT", prog);
                 fflush(stdout);
             }
         }
