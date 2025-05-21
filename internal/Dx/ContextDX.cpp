@@ -1,7 +1,5 @@
 #include "ContextDX.h"
 
-#include <codecvt>
-
 #include "../../Log.h"
 #include "../../Types.h"
 #include "../ScopeExit.h"
@@ -120,8 +118,6 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
         }
     }
 
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> str_converter;
-
     IDXGIFactory4 *dxgi_factory = nullptr;
     HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
     if (FAILED(hr)) {
@@ -141,7 +137,19 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
             adapter_score += 1000;
         }
 
-        if (preferred_device && MatchDeviceNames(str_converter.to_bytes(desc.Description).c_str(), preferred_device)) {
+        const int utf8_len = WideCharToMultiByte(CP_UTF8,          // Code page
+                                                 0,                // Flags
+                                                 desc.Description, // Wide char string to convert
+                                                 -1,               // Null-terminated input
+                                                 nullptr,          // Output buffer
+                                                 0,                // Output buffer size (0 means we want the size)
+                                                 nullptr, nullptr);
+
+        std::string device_name(utf8_len, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, device_name.data(), utf8_len, nullptr, nullptr);
+        device_name.pop_back();
+
+        if (preferred_device && MatchDeviceNames(device_name.c_str(), preferred_device)) {
             adapter_score += 100000;
         }
 
@@ -232,7 +240,13 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device, const int v
     DXGI_ADAPTER_DESC1 desc;
     best_adapter->GetDesc1(&desc);
 
-    device_name_ = str_converter.to_bytes(desc.Description);
+    { // Get device name
+        const int utf8_len = WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, nullptr, 0, nullptr, nullptr);
+
+        device_name_.resize(utf8_len, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, device_name_.data(), utf8_len, nullptr, nullptr);
+        device_name_.pop_back();
+    }
 
     log_->Info("============================================================================");
     log_->Info("Device info:");
@@ -510,8 +524,6 @@ int Ray::Dx::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
         return 0;
     }
 
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> str_converter;
-
     IDXGIAdapter1 *adapter = nullptr;
     int adapter_index = 0;
 
@@ -525,8 +537,14 @@ int Ray::Dx::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
             continue;
         }
 
-        strncpy_s(out_devices[count].name, sizeof(out_devices[count].name),
-                  str_converter.to_bytes(desc.Description).c_str(), sizeof(out_devices[count].name) - 1);
+        const int utf8_len = WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, nullptr, 0, nullptr, nullptr);
+
+        std::string device_name(utf8_len, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, device_name.data(), utf8_len, nullptr, nullptr);
+        device_name.pop_back();
+
+        strncpy_s(out_devices[count].name, sizeof(out_devices[count].name), device_name.c_str(),
+                  sizeof(out_devices[count].name) - 1);
         ++count;
 
         ++adapter_index;
