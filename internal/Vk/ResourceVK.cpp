@@ -155,13 +155,13 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
     const Context *ctx = nullptr;
 
     for (const TransitionInfo &transition : transitions) {
-        if (transition.p_tex && *transition.p_tex) {
-            ctx = transition.p_tex->ctx();
+        if (std::holds_alternative<const Texture *>(transition.p_res) && *std::get<const Texture *>(transition.p_res)) {
+            ctx = std::get<const Texture *>(transition.p_res)->ctx();
 
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
-                old_state = transition.p_tex->resource_state;
+                old_state = std::get<const Texture *>(transition.p_res)->resource_state;
                 if (old_state != eResState::Undefined && old_state == transition.new_state &&
                     old_state != eResState::UnorderedAccess) {
                     // transition is not needed
@@ -177,10 +177,10 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
             new_barrier.newLayout = VKImageLayoutForState(transition.new_state);
             new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            new_barrier.image = transition.p_tex->handle().img;
-            if (IsDepthStencilFormat(transition.p_tex->params.format)) {
+            new_barrier.image = std::get<const Texture *>(transition.p_res)->handle().img;
+            if (IsDepthStencilFormat(std::get<const Texture *>(transition.p_res)->params.format)) {
                 new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-            } else if (IsDepthFormat(transition.p_tex->params.format)) {
+            } else if (IsDepthFormat(std::get<const Texture *>(transition.p_res)->params.format)) {
                 new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             } else {
                 new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -195,15 +195,16 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
             dst_stages |= VKPipelineStagesForState(transition.new_state);
 
             if (transition.update_internal_state) {
-                transition.p_tex->resource_state = transition.new_state;
+                std::get<const Texture *>(transition.p_res)->resource_state = transition.new_state;
             }
-        } else if (transition.p_buf && *transition.p_buf) {
-            ctx = transition.p_buf->ctx();
+        } else if (std::holds_alternative<const Buffer *>(transition.p_res) &&
+                   *std::get<const Buffer *>(transition.p_res)) {
+            ctx = std::get<const Buffer *>(transition.p_res)->ctx();
 
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
-                old_state = transition.p_buf->resource_state;
+                old_state = std::get<const Buffer *>(transition.p_res)->resource_state;
                 if (old_state == transition.new_state && old_state != eResState::UnorderedAccess) {
                     // transition is not needed
                     continue;
@@ -216,7 +217,7 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
             new_barrier.dstAccessMask = VKAccessFlagsForState(transition.new_state);
             new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            new_barrier.buffer = transition.p_buf->vk_handle();
+            new_barrier.buffer = std::get<const Buffer *>(transition.p_res)->vk_handle();
             // transition whole buffer for now
             new_barrier.offset = 0;
             new_barrier.size = VK_WHOLE_SIZE;
@@ -225,15 +226,16 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
             dst_stages |= VKPipelineStagesForState(transition.new_state);
 
             if (transition.update_internal_state) {
-                transition.p_buf->resource_state = transition.new_state;
+                std::get<const Buffer *>(transition.p_res)->resource_state = transition.new_state;
             }
-        } else if (transition.p_tex_arr && transition.p_tex_arr->page_count()) {
-            ctx = transition.p_tex_arr->ctx();
+        } else if (std::holds_alternative<const TextureAtlas *>(transition.p_res) &&
+                   std::get<const TextureAtlas *>(transition.p_res)->page_count()) {
+            ctx = std::get<const TextureAtlas *>(transition.p_res)->ctx();
 
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
-                old_state = transition.p_tex_arr->resource_state;
+                old_state = std::get<const TextureAtlas *>(transition.p_res)->resource_state;
                 if (old_state != eResState::Undefined && old_state == transition.new_state &&
                     old_state != eResState::UnorderedAccess) {
                     // transition is not needed
@@ -249,7 +251,7 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
             new_barrier.newLayout = VKImageLayoutForState(transition.new_state);
             new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            new_barrier.image = transition.p_tex_arr->vk_image();
+            new_barrier.image = std::get<const TextureAtlas *>(transition.p_res)->vk_image();
             new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
             // transition whole image for now
@@ -262,7 +264,7 @@ void Ray::Vk::TransitionResourceStates(VkCommandBuffer cmd_buf, const Bitmask<eS
             dst_stages |= VKPipelineStagesForState(transition.new_state);
 
             if (transition.update_internal_state) {
-                transition.p_tex_arr->resource_state = transition.new_state;
+                std::get<const TextureAtlas *>(transition.p_res)->resource_state = transition.new_state;
             }
         }
     }
