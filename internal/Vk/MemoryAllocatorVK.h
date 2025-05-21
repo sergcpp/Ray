@@ -12,8 +12,7 @@
 #pragma warning(disable : 4996)
 #endif
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Buffer;
 class MemAllocator;
 
@@ -104,8 +103,7 @@ class MemAllocators {
 inline VkDeviceSize AlignTo(VkDeviceSize size, VkDeviceSize alignment) {
     return alignment * ((size + alignment - 1) / alignment);
 }
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 #ifdef _MSC_VER
 #pragma warning(pop)

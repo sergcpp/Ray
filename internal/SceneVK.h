@@ -11,8 +11,7 @@
 #include "Vk/TextureVK.h"
 #include "Vk/VectorVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Context;
 class Renderer;
 
@@ -25,9 +24,7 @@ struct BindlessTexData {
 
     explicit BindlessTexData(Context *ctx) : descr_pool(ctx) {}
 };
-
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 #define NS Vk
 #include "SceneGPU.h"

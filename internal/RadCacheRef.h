@@ -6,8 +6,7 @@
 // Based on https://github.com/NVIDIAGameWorks/SHARC
 //
 
-namespace Ray {
-namespace Ref {
+namespace Ray::Ref {
 // http://burtleburtle.net/bob/hash/integer.html
 force_inline constexpr uint32_t hash_jenkins32(uint32_t a) {
     a = (a + 0x7ed55d16) + (a << 12);
@@ -36,5 +35,4 @@ void SpatialCacheUpdate(const cache_grid_params_t &params, Span<const hit_data_t
 void SpatialCacheResolve(const cache_grid_params_t &params, Span<uint64_t> entries,
                          Span<packed_cache_voxel_t> voxels_curr, Span<const packed_cache_voxel_t> voxels_prev,
                          uint32_t start, uint32_t count);
-} // namespace Ref
-} // namespace Ray
+} // namespace Ray::Ref

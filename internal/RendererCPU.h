@@ -248,7 +248,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     bool is_spatial_caching_enabled() const override { return use_spatial_cache_; }
 
-    std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
+    std::pair<int, int> size() const override { return std::pair{w_, h_}; }
 
     color_data_rgba_t get_pixels_ref() const override { return {final_buf_.data(), w_}; }
     color_data_rgba_t get_raw_pixels_ref() const override { return {raw_filtered_buf_.data(), w_}; }

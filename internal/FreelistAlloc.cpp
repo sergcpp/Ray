@@ -48,11 +48,11 @@ OffsetType Ray::tlsf_index_t<OffsetType, InPlace>::rounded_size(OffsetType size)
 template <typename OffsetType, bool InPlace>
 std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_insert(const OffsetType size) {
     if (size < SMALL_BLOCK_SIZE) {
-        return std::make_pair(0, int(size / (SMALL_BLOCK_SIZE / SL_INDEX_COUNT)));
+        return std::pair{0, int(size / (SMALL_BLOCK_SIZE / SL_INDEX_COUNT))};
     } else {
         const int fl = fls(size);
         const int sl = int(size >> (fl - SL_INDEX_COUNT_LOG2)) ^ (1 << SL_INDEX_COUNT_LOG2);
-        return std::make_pair(fl - (FL_INDEX_SHIFT - 1), sl);
+        return std::pair{fl - (FL_INDEX_SHIFT - 1), sl};
     }
 }
 

@@ -6,8 +6,7 @@
 #include "../SamplingParams.h"
 #include "Api.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Context;
 class Sampler {
     Context *ctx_ = nullptr;
@@ -33,5 +32,4 @@ class Sampler {
     void Free();
     void FreeImmediate();
 };
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk

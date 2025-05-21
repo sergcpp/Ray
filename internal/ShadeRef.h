@@ -2,8 +2,7 @@
 
 #include "CoreRef.h"
 
-namespace Ray {
-namespace Ref {
+namespace Ray::Ref {
 // BRDFs
 float BRDF_PrincipledDiffuse(const fvec4 &V, const fvec4 &N, const fvec4 &L, const fvec4 &H, float roughness);
 
@@ -121,5 +120,4 @@ void ShadeSecondary(const pass_settings_t &ps, float clamp_direct, Span<const hi
                     ray_data_t *out_secondary_rays, int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                     int *out_shadow_rays_count, uint32_t *out_def_sky, int *out_def_sky_count, int img_w,
                     color_rgba_t *out_color, color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
-} // namespace Ref
-} // namespace Ray
+} // namespace Ray::Ref

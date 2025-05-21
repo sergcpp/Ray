@@ -30,7 +30,7 @@ namespace Dx {
 //     VK_SHADER_STAGE_ANY_HIT_BIT_KHR,             // AnyHit
 //     VK_SHADER_STAGE_INTERSECTION_BIT_KHR         // Intersection
 // };
-// static_assert(COUNT_OF(g_shader_stages_vk) == int(eShaderType::_Count), "!");
+// static_assert(std::size(g_shader_stages_vk) == int(eShaderType::_Count), "!");
 
 // TODO: not rely on this order somehow
 // static_assert(int(eShaderType::RayGen) < int(eShaderType::Miss), "!");

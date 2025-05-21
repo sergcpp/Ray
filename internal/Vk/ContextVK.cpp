@@ -41,7 +41,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(const VkDebugReportFlagsEXT f
 }
 
 const char *g_enabled_layers[] = {"VK_LAYER_KHRONOS_validation"};
-const int g_enabled_layers_count = COUNT_OF(g_enabled_layers);
+const int g_enabled_layers_count = std::size(g_enabled_layers);
 } // namespace Vk
 } // namespace Ray
 
@@ -443,7 +443,7 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
         //  VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT
     };
     VkValidationFeaturesEXT validation_features = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-    validation_features.enabledValidationFeatureCount = COUNT_OF(enabled_validation_features);
+    validation_features.enabledValidationFeatureCount = std::size(enabled_validation_features);
     validation_features.pEnabledValidationFeatures = enabled_validation_features;
 
     if (validation_level > 1) {

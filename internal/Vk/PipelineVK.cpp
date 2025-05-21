@@ -16,7 +16,7 @@ const VkCullModeFlagBits g_cull_modes_vk[] = {
     VK_CULL_MODE_FRONT_BIT, // Front
     VK_CULL_MODE_BACK_BIT   // Back
 };
-static_assert(COUNT_OF(g_cull_modes_vk) == int(eCullFace::_Count), "!");
+static_assert(std::size(g_cull_modes_vk) == int(eCullFace::_Count), "!");
 
 const VkCompareOp g_compare_op_vk[] = {
     VK_COMPARE_OP_ALWAYS,          // Always
@@ -28,7 +28,7 @@ const VkCompareOp g_compare_op_vk[] = {
     VK_COMPARE_OP_NOT_EQUAL,       // NotEqual
     VK_COMPARE_OP_GREATER_OR_EQUAL // GEqual
 };
-static_assert(COUNT_OF(g_compare_op_vk) == int(eCompareOp::_Count), "!");
+static_assert(std::size(g_compare_op_vk) == int(eCompareOp::_Count), "!");
 
 const VkStencilOp g_stencil_op_vk[] = {
     VK_STENCIL_OP_KEEP,                // Keep
@@ -38,13 +38,13 @@ const VkStencilOp g_stencil_op_vk[] = {
     VK_STENCIL_OP_DECREMENT_AND_CLAMP, // Decr
     VK_STENCIL_OP_INVERT               // Invert
 };
-static_assert(COUNT_OF(g_stencil_op_vk) == int(eStencilOp::_Count), "!");
+static_assert(std::size(g_stencil_op_vk) == int(eStencilOp::_Count), "!");
 
 const VkPolygonMode g_poly_mode_vk[] = {
     VK_POLYGON_MODE_FILL, // Fill
     VK_POLYGON_MODE_LINE  // Line
 };
-static_assert(COUNT_OF(g_poly_mode_vk) == int(ePolygonMode::_Count), "!");
+static_assert(std::size(g_poly_mode_vk) == int(ePolygonMode::_Count), "!");
 
 const VkBlendFactor g_blend_factor_vk[] = {
     VK_BLEND_FACTOR_ZERO,                // Zero
@@ -58,7 +58,7 @@ const VkBlendFactor g_blend_factor_vk[] = {
     VK_BLEND_FACTOR_DST_ALPHA,           // DstAlpha
     VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA  // OneMinusDstAlpha
 };
-static_assert(COUNT_OF(g_blend_factor_vk) == int(eBlendFactor::_Count), "!");
+static_assert(std::size(g_blend_factor_vk) == int(eBlendFactor::_Count), "!");
 
 uint32_t align_up(const uint32_t size, const uint32_t alignment) { return (size + alignment - 1) & ~(alignment - 1); }
 

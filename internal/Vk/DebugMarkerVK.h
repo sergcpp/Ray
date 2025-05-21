@@ -2,8 +2,7 @@
 
 #include "../../Config.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Context;
 struct DebugMarker {
     explicit DebugMarker(Context *ctx, VkCommandBuffer cmd_buf, const char *name);
@@ -14,8 +13,7 @@ struct DebugMarker {
     const Api &api_;
     VkCommandBuffer cmd_buf_ = {};
 };
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 inline Ray::Vk::DebugMarker::DebugMarker(Context *ctx, VkCommandBuffer cmd_buf, const char *name)
     : api_(ctx->api()), cmd_buf_(cmd_buf) {

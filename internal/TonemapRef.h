@@ -2,8 +2,7 @@
 
 #include "CoreRef.h"
 
-namespace Ray {
-namespace Ref {
+namespace Ray::Ref {
 // https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
 force_inline fvec4 vectorcall reversible_tonemap(const fvec4 c) {
     return c / (fmaxf(c.get<0>(), fmaxf(c.get<1>(), c.get<2>())) + 1.0f);
@@ -44,5 +43,4 @@ force_inline fvec4 vectorcall Tonemap(const tonemap_params_t &params, fvec4 c) {
 
     return saturate(c);
 }
-}
-}
+} // namespace Ray::Ref

@@ -48,7 +48,7 @@ Ray::Dx::Program &Ray::Dx::Program::operator=(Program &&rhs) noexcept {
     shaders_ = rhs.shaders_;
     attributes_ = std::move(rhs.attributes_);
     uniforms_ = std::move(rhs.uniforms_);
-    for (int i = 0; i < COUNT_OF(descr_indices_); ++i) {
+    for (int i = 0; i < std::size(descr_indices_); ++i) {
         descr_indices_[i] = std::move(rhs.descr_indices_[i]);
     }
     pc_param_index_ = std::exchange(rhs.pc_param_index_, -1);
@@ -220,7 +220,7 @@ bool Ray::Dx::Program::InitRootSignature(ILog *log) {
     }
 
     int rp_count = 0;
-    for (int i = 0; i < COUNT_OF(root_parameters); ++i) {
+    for (int i = 0; i < std::size(root_parameters); ++i) {
         if (descriptor_ranges[i].empty()) {
             continue;
         }

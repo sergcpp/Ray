@@ -3,8 +3,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant
 
-namespace Ray {
-namespace NS {
+namespace Ray::NS {
 template <typename T> class Vector {
     Context *ctx_ = nullptr;
     mutable Buffer buf_;
@@ -191,7 +190,6 @@ template <typename T> class Vector {
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 };
-} // namespace NS
-} // namespace Ray
+} // namespace Ray::NS
 
 #pragma warning(pop)

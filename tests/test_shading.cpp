@@ -111,9 +111,9 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
                 const color_data_rgba_t pixels = renderer->get_pixels_ref();
 
-                std::unique_ptr<uint8_t[]> img_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
-                std::unique_ptr<uint8_t[]> diff_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
-                std::unique_ptr<uint8_t[]> mask_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
+                auto img_data_u8 = std::make_unique<uint8_t[]>(test_img_w * test_img_h * 3);
+                auto diff_data_u8 = std::make_unique<uint8_t[]>(test_img_w * test_img_h * 3);
+                auto mask_data_u8 = std::make_unique<uint8_t[]>(test_img_w * test_img_h * 3);
                 memset(&mask_data_u8[0], 0, test_img_w * test_img_h * 3);
 
                 double mse = 0.0;
@@ -241,9 +241,9 @@ void assemble_material_test_images(const char *arch_list[]) {
     const int OutImageW = 256 * ImgCountW;
     const int OutImageH = 256 * ImgCountH;
 
-    std::unique_ptr<uint8_t[]> material_refs(new uint8_t[OutImageH * OutImageW * 4]);
-    std::unique_ptr<uint8_t[]> material_imgs(new uint8_t[OutImageH * OutImageW * 4]);
-    std::unique_ptr<uint8_t[]> material_masks(new uint8_t[OutImageH * OutImageW * 4]);
+    auto material_refs = std::make_unique<uint8_t[]>(OutImageH * OutImageW * 4);
+    auto material_imgs = std::make_unique<uint8_t[]>(OutImageH * OutImageW * 4);
+    auto material_masks = std::make_unique<uint8_t[]>(OutImageH * OutImageW * 4);
     memset(material_refs.get(), 0, OutImageH * OutImageW * 4);
     memset(material_imgs.get(), 0, OutImageH * OutImageW * 4);
     memset(material_masks.get(), 0, OutImageH * OutImageW * 4);

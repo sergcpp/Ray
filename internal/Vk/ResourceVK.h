@@ -2,14 +2,11 @@
 
 #include <cstdint>
 
-#define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
-
 #include "../../Bitmask.h"
 #include "../../Span.h"
 #include "Api.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 enum class eStage : uint16_t {
     VertexInput,
     VertexShader,
@@ -85,5 +82,4 @@ struct TransitionInfo {
 
 void TransitionResourceStates(VkCommandBuffer cmd_buf, Bitmask<eStage> src_stages_mask, Bitmask<eStage> dst_stages_mask,
                               Span<const TransitionInfo> transitions);
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk

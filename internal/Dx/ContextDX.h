@@ -5,8 +5,6 @@
 #include "../SmallVector.h"
 #include "MemoryAllocatorDX.h"
 
-#define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
-
 struct ID3D12Device;
 struct ID3D12Device5;
 struct ID3D12CommandQueue;

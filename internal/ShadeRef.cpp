@@ -8,8 +8,7 @@
 #pragma warning(push)
 #pragma warning(disable : 6326) // potential comparison of a constant with another constant
 
-namespace Ray {
-namespace Ref {
+namespace Ray::Ref {
 force_inline fvec2 calc_alpha(const float roughness, const float anisotropy, const float regularize_alpha) {
     const float roughness2 = sqr(roughness);
     const float aspect = sqrtf(1.0f - 0.9f * anisotropy);
@@ -375,8 +374,7 @@ float peek_ior_stack(const float stack[4], bool skip_first, const float default_
     })
     return default_value;
 }
-} // namespace Ref
-} // namespace Ray
+} // namespace Ray::Ref
 
 float Ray::Ref::BRDF_PrincipledDiffuse(const fvec4 &V, const fvec4 &N, const fvec4 &L, const fvec4 &H,
                                        const float roughness) {

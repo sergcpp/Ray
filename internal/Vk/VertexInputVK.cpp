@@ -2,8 +2,7 @@
 
 #include "ContextVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 const VkFormat g_attrib_formats_vk[][4] = {
     {}, // Undefined
     {VK_FORMAT_R16_SFLOAT, VK_FORMAT_R16G16_SFLOAT, VK_FORMAT_R16G16B16_SFLOAT,
@@ -19,7 +18,7 @@ const VkFormat g_attrib_formats_vk[][4] = {
     {VK_FORMAT_R8_UNORM, VK_FORMAT_R8G8_UNORM, VK_FORMAT_R8G8B8_UNORM, VK_FORMAT_R8G8B8A8_UNORM},       // Uint8UNorm
     {VK_FORMAT_R32_SINT, VK_FORMAT_R32G32_SINT, VK_FORMAT_R32G32B32_SINT, VK_FORMAT_R32G32B32A32_SINT}, // Int32
 };
-static_assert(COUNT_OF(g_attrib_formats_vk) == int(eType::_Count), "!");
+static_assert(std::size(g_attrib_formats_vk) == int(eType::_Count), "!");
 
 const int g_type_sizes[] = {
     -1,               // Undefined
@@ -32,11 +31,10 @@ const int g_type_sizes[] = {
     sizeof(uint8_t),  // Uint8UNorm
     sizeof(int32_t),  // Int32
 };
-static_assert(COUNT_OF(g_type_sizes) == int(eType::_Count), "!");
+static_assert(std::size(g_type_sizes) == int(eType::_Count), "!");
 
 const int MaxVertexInputAttributeOffset = 16; // 16 seems to be supported by all implementations
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 Ray::Vk::VertexInput::VertexInput(Context *ctx) : api_(&ctx->api()) {}
 

@@ -3,8 +3,7 @@
 #include "../../Span.h"
 #include "TextureVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Context;
 
 const int MaxRTAttachments = 4;
@@ -125,5 +124,4 @@ class RenderPass {
     bool Setup(Context *ctx, Span<const RenderTarget> rts, RenderTarget depth_rt, ILog *log);
     bool Setup(Context *ctx, Span<const RenderTargetInfo> rts, RenderTargetInfo depth_rt, ILog *log);
 };
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk

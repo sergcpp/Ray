@@ -5,8 +5,7 @@
 #include "../SamplingParams.h"
 #include "DescriptorPoolDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 class Context;
 class Sampler {
     Context *ctx_ = nullptr;
@@ -32,5 +31,4 @@ class Sampler {
     void Free();
     void FreeImmediate();
 };
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx

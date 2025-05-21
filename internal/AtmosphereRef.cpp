@@ -591,7 +591,7 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
                     inout_transmittance * light_transmittance * light_color;
     }
 
-    return std::make_pair(radiance, multiscat_as_1);
+    return std::pair{radiance, multiscat_as_1};
 }
 
 template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain<false>(

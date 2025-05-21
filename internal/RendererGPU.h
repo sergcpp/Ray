@@ -1,6 +1,5 @@
 
-namespace Ray {
-namespace NS {
+namespace Ray::NS {
 class TextureAtlas;
 class AccStructure;
 struct BindlessTexData;
@@ -322,7 +321,7 @@ class Renderer : public RendererBase {
 
     bool is_spatial_caching_enabled() const override { return use_spatial_cache_; }
 
-    std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
+    std::pair<int, int> size() const override { return std::pair{w_, h_}; }
 
     color_data_rgba_t get_pixels_ref() const override { return get_pixels_ref(true); }
     color_data_rgba_t get_raw_pixels_ref() const override { return get_pixels_ref(false); }
@@ -362,8 +361,7 @@ class Renderer : public RendererBase {
     InitUNetFilter(bool alias_memory,
                    const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
 };
-} // namespace NS
-} // namespace Ray
+} // namespace Ray::NS
 
 inline Ray::NS::Renderer::~Renderer() {
     pixel_readback_buf_.Unmap();

@@ -13,8 +13,7 @@
 #define force_inline __forceinline
 #endif
 
-namespace Ray {
-namespace NS {
+namespace Ray::NS {
 class Context;
 
 template <typename T, bool Replicate = true> class SparseStorage {
@@ -61,7 +60,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
 
         if (!gpu_buf_.ctx()) {
             if (Replicate) {
-                cpu_buf_.reset(new T[new_capacity]);
+                cpu_buf_ = std::make_unique<T[]>(new_capacity);
             }
             gpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T))};
         } else {
@@ -102,7 +101,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
         temp_buf.FreeImmediate();
 
         ++size_;
-        return std::make_pair(al.offset, al.block);
+        return std::pair{al.offset, al.block};
     }
 
     std::pair<uint32_t, uint32_t> push(const T &el) { return emplace(el); }
@@ -147,7 +146,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
 
         size_ += count;
 
-        return std::make_pair(al.offset, al.block);
+        return std::pair{al.offset, al.block};
     }
 
     void clear() {
@@ -202,7 +201,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
     force_inline const T &operator[](const uint32_t index) const { return cpu_buf_[index]; }
     force_inline T &operator[](const uint32_t index) { return cpu_buf_[index]; }
 
-    class SparseStorageIterator : public std::iterator<std::forward_iterator_tag, T> {
+    class SparseStorageIterator {
         friend class SparseStorage<T>;
 
         SparseStorage<T> *container_;
@@ -212,6 +211,12 @@ template <typename T, bool Replicate = true> class SparseStorage {
             : container_(container), range_(range) {}
 
       public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = T *;
+        using reference = T &;
+
         T &operator*() { return container_->at(range_.offset); }
         T *operator->() { return &container_->at(range_.offset); }
         SparseStorageIterator &operator++() {
@@ -240,7 +245,7 @@ template <typename T, bool Replicate = true> class SparseStorage {
         bool operator!=(const SparseStorageIterator &rhs) const { return range_.offset != rhs.range_.offset; }
     };
 
-    class SparseStorageConstIterator : public std::iterator<std::forward_iterator_tag, T> {
+    class SparseStorageConstIterator {
         friend class SparseStorage<T>;
 
         const SparseStorage<T> *container_;
@@ -250,6 +255,12 @@ template <typename T, bool Replicate = true> class SparseStorage {
             : container_(container), range_(range) {}
 
       public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = T *;
+        using reference = T &;
+
         const T &operator*() { return container_->at(range_.offset); }
         const T *operator->() { return &container_->at(range_.offset); }
         SparseStorageConstIterator &operator++() {
@@ -308,5 +319,4 @@ template <typename T, bool Replicate = true> class SparseStorage {
 };
 
 template <typename T, bool Replicate> const uint32_t SparseStorage<T, Replicate>::InitialNonZeroCapacity;
-} // namespace NS
-} // namespace Ray
+} // namespace Ray::NS

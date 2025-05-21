@@ -3,8 +3,7 @@
 #include "../SmallVector.h"
 #include "Api.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Context;
 
 enum class eDescrType : uint8_t {
@@ -104,5 +103,4 @@ class DescrMultiPoolAlloc {
     VkDescriptorSet Alloc(const DescrSizes &sizes, VkDescriptorSetLayout layout);
     bool Reset();
 };
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk

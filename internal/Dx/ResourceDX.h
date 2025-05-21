@@ -2,16 +2,13 @@
 
 #include <cstdint>
 
-#define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
-
 #include "../../Bitmask.h"
 #include "../../Span.h"
 
 enum D3D12_RESOURCE_STATES;
 struct ID3D12GraphicsCommandList;
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 enum class eStage : uint16_t {
     VertexInput,
     VertexShader,
@@ -89,5 +86,4 @@ struct TransitionInfo {
 
 void TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, Bitmask<eStage> src_stages_mask,
                               Bitmask<eStage> dst_stages_mask, Span<const TransitionInfo> transitions);
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx

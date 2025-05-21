@@ -4,8 +4,7 @@
 
 #include "Api.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Context;
 
 enum class WaitResult { Success, Timeout, Fail };
@@ -35,5 +34,4 @@ class SyncFence {
 };
 
 SyncFence MakeFence();
-} // namespace Vk
-}
+} // namespace Ray::Vk

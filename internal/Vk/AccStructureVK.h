@@ -2,8 +2,7 @@
 
 #include "ResourceVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 class Context;
 
 class AccStructure {
@@ -32,5 +31,4 @@ class AccStructure {
 
     eResState resource_state = eResState::Undefined;
 };
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk

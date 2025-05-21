@@ -4,8 +4,7 @@
 
 #include "CoreRef.h"
 
-namespace Ray {
-namespace Ref {
+namespace Ray::Ref {
 fvec4 IntegrateOpticalDepth(const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &ray_dir);
 
 template <bool UniformPhase = false>
@@ -34,5 +33,4 @@ void ShadeSkyPrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, S
 void ShadeSkySecondary(const pass_settings_t &ps, float clamp_direct, Span<const hit_data_t> inters,
                        Span<const ray_data_t> rays, Span<const uint32_t> ray_indices, const scene_data_t &sc,
                        int iteration, int img_w, color_rgba_t *out_color);
-} // namespace Ref
-} // namespace Ray
+} // namespace Ray::Ref

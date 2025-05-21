@@ -260,7 +260,7 @@ void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h
 
     file.write((char *)&header[0], sizeof(header));
 
-    auto out_data = std::unique_ptr<uint8_t[]>{new uint8_t[size_t(w) * h * bpp]};
+    auto out_data = std::make_unique<uint8_t[]>(size_t(w) * h * bpp);
     for (int j = 0; j < h; ++j) {
         for (int i = 0; i < w; ++i) {
             out_data[(j * w + i) * bpp + 0] = float_to_byte(data[j * pitch + i].v[2]);

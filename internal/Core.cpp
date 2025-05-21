@@ -652,9 +652,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     s.min_primitives_in_leaf = 1;
 
     // Build top level hierarchy using SAH
-    const uint32_t new_nodes_count =
+    [[maybe_unused]] const uint32_t new_nodes_count =
         PreprocessPrims_SAH({&top_prims[0], top_prims.size()}, {}, s, out_nodes, top_indices);
-    unused(new_nodes_count);
 
     auto bottom_nodes_start = uint32_t(out_nodes.size());
 

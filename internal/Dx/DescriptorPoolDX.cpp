@@ -13,17 +13,15 @@
 #include "../../Log.h"
 #include "ContextDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 const D3D12_DESCRIPTOR_HEAP_TYPE g_descr_heap_types_dx[] = {
     D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, // CBV_SRV_UAV
     D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,     // Sampler
     D3D12_DESCRIPTOR_HEAP_TYPE_RTV,         // RTV
     D3D12_DESCRIPTOR_HEAP_TYPE_DSV          // DSV
 };
-static_assert(COUNT_OF(g_descr_heap_types_dx) == int(eDescrType::_Count), "!");
-} // namespace Dx
-} // namespace Ray
+static_assert(std::size(g_descr_heap_types_dx) == int(eDescrType::_Count), "!");
+} // namespace Ray::Dx
 
 template <class Allocator>
 Ray::Dx::DescrPool<Allocator> &Ray::Dx::DescrPool<Allocator>::operator=(DescrPool &&rhs) noexcept {

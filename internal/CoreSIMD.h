@@ -4068,11 +4068,10 @@ bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float 
                 goto TRAVERSE;
             }
         } else {
-            const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
-                      tri_end = int(tri_start + nodes[cur.index].child[1]);
+            [[maybe_unused]] const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
+                                       tri_end = int(tri_start + nodes[cur.index].child[1]);
             assert((tri_start % 8) == 0);
             assert((tri_end - tri_start) <= 8);
-            unused(tri_end);
             res |=
                 IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
         }
@@ -4123,9 +4122,8 @@ Ray::NS::ivec<S> Ray::NS::Traverse_BLAS_WithStack_AnyHit(const fvec<S> ro[3], co
             } else {
                 const int tri_start = nodes[cur].prim_index & PRIM_INDEX_BITS,
                           tri_end = tri_start + nodes[cur].prim_count;
-                const bool hit_found =
+                [[maybe_unused]] const bool hit_found =
                     IntersectTris_AnyHit(ro, rd, st.queue[st.index].mask, tris, tri_start, tri_end, obj_index, inter);
-                unused(hit_found);
                 /*if (hit_found) {
                     const bool is_backfacing = inter.prim_index < 0;
                     const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
@@ -4226,11 +4224,10 @@ int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3]
                 goto TRAVERSE;
             }
         } else {
-            const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
-                      tri_end = int(tri_start + nodes[cur.index].child[1]);
+            [[maybe_unused]] const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
+                                       tri_end = int(tri_start + nodes[cur.index].child[1]);
             assert((tri_start % 8) == 0);
             assert((tri_end - tri_start) <= 8);
-            unused(tri_end);
             const bool hit_found =
                 IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
             if (hit_found) {

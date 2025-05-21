@@ -16,8 +16,7 @@ struct ID3D12Heap;
 
 enum D3D12_HEAP_TYPE;
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 class Buffer;
 class MemAllocator;
 
@@ -111,8 +110,7 @@ class MemAllocators {
         return allocators_[heap_type]->Allocate(alignment, size);
     }
 };
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx
 
 #ifdef _MSC_VER
 #pragma warning(pop)

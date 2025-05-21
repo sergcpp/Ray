@@ -2,8 +2,7 @@
 
 #include "CoreRef.h"
 
-namespace Ray {
-namespace Ref {
+namespace Ray::Ref {
 template <int WINDOW_SIZE = 7, int NEIGHBORHOOD_SIZE = 3>
 void JointNLMFilter(const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
                     const color_rgba_t variance[], const color_rgba_t feature0[], float feature0_weight,
@@ -33,5 +32,4 @@ void ConvolutionConcat3x3(const float data1[], const float data2[], const float 
                           const float weights[], const float biases[], float output[], int output_stride,
                           aligned_vector<float, 64> &temp_data);
 void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_channels, float output[]);
-} // namespace Ref
-} // namespace Ray
+} // namespace Ray::Ref

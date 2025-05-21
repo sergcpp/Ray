@@ -10,8 +10,7 @@
 #include "FreelistAlloc.h"
 #include "simd/aligned_allocator.h"
 
-namespace Ray {
-namespace Cpu {
+namespace Ray::Cpu {
 template <typename T> class SparseStorage {
     std::unique_ptr<FreelistAlloc> alloc_; // TODO: merge with data allocation
     T *data_ = nullptr;
@@ -73,7 +72,7 @@ template <typename T> class SparseStorage {
         new (&data_[al.offset]) T(std::forward<Args>(args)...);
 
         ++size_;
-        return std::make_pair(al.offset, al.block);
+        return std::pair{al.offset, al.block};
     }
 
     std::pair<uint32_t, uint32_t> push(const T &el) {
@@ -85,7 +84,7 @@ template <typename T> class SparseStorage {
         new (&data_[al.offset]) T(el);
 
         ++size_;
-        return std::make_pair(al.offset, al.block);
+        return std::pair{al.offset, al.block};
     }
 
     void clear() {
@@ -138,7 +137,7 @@ template <typename T> class SparseStorage {
 
         size_ += count;
 
-        return std::make_pair(al.offset, al.block);
+        return std::pair{al.offset, al.block};
     }
 
     force_inline T &at(const uint32_t index) { return data_[index]; }
@@ -147,7 +146,7 @@ template <typename T> class SparseStorage {
     force_inline T &operator[](const uint32_t index) { return data_[index]; }
     force_inline const T &operator[](const uint32_t index) const { return data_[index]; }
 
-    class SparseStorageIterator : public std::iterator<std::forward_iterator_tag, T> {
+    class SparseStorageIterator {
         friend class SparseStorage<T>;
 
         SparseStorage<T> *container_;
@@ -157,6 +156,12 @@ template <typename T> class SparseStorage {
             : container_(container), range_(range) {}
 
       public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = T *;
+        using reference = T &;
+
         T &operator*() { return container_->at(range_.offset); }
         T *operator->() { return &container_->at(range_.offset); }
         SparseStorageIterator &operator++() {
@@ -185,7 +190,7 @@ template <typename T> class SparseStorage {
         bool operator!=(const SparseStorageIterator &rhs) const { return range_.offset != rhs.range_.offset; }
     };
 
-    class SparseStorageConstIterator : public std::iterator<std::forward_iterator_tag, T> {
+    class SparseStorageConstIterator {
         friend class SparseStorage<T>;
 
         const SparseStorage<T> *container_;
@@ -195,6 +200,12 @@ template <typename T> class SparseStorage {
             : container_(container), range_(range) {}
 
       public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = T *;
+        using reference = T &;
+
         const T &operator*() { return container_->at(range_.offset); }
         const T *operator->() { return &container_->at(range_.offset); }
         SparseStorageConstIterator &operator++() {
@@ -253,5 +264,4 @@ template <typename T> class SparseStorage {
 };
 
 template <typename T> const uint32_t SparseStorage<T>::InitialNonZeroCapacity;
-} // namespace Cpu
-} // namespace Ray
+} // namespace Ray::Cpu

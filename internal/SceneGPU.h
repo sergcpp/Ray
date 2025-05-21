@@ -1150,7 +1150,7 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
 
     meshes_.Erase(i._block);
 
-    bool rebuild_required = false;
+    [[maybe_unused]] bool rebuild_required = false;
     for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
         mesh_instance_t &mi = *it;
         if (mi.mesh_index == i._index) {
@@ -1160,7 +1160,6 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
             ++it;
         }
     }
-    unused(rebuild_required);
 
     if (use_hwrt_) {
         { // release struct memory
@@ -2146,7 +2145,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     for (int i = 0; i < env_.qtree_levels; ++i) {
         env_.qtree_mips[i] = value_ptr(env_map_qtree_.mips[i][0]);
     }
-    for (int i = env_.qtree_levels; i < countof(env_.qtree_mips); ++i) {
+    for (int i = env_.qtree_levels; i < std::size(env_.qtree_mips); ++i) {
         env_.qtree_mips[i] = nullptr;
     }
 
@@ -2456,9 +2455,8 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     }
 
     aligned_vector<light_cwbvh_node_t> temp_light_cwnodes;
-    const uint32_t root_node = FlattenLightBVH_r(temp_lnodes, 0, temp_light_cwnodes);
+    [[maybe_unused]] const uint32_t root_node = FlattenLightBVH_r(temp_lnodes, 0, temp_light_cwnodes);
     assert(root_node == 0);
-    unused(root_node);
 
     // Collapse leaf level (all leafs have only 1 light)
     if ((temp_light_cwnodes[0].child[0] & LEAF_NODE_BIT) != 0) {

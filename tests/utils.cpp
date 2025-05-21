@@ -211,7 +211,7 @@ std::vector<uint8_t> LoadHDR(const char name[], int &out_w, int &out_h) {
         throw std::runtime_error("Is not HDR file!");
     }
 
-    float exposure = 1.0f;
+    [[maybe_unused]] float exposure = 1.0f;
     std::string format;
 
     while (std::getline(in_file, line)) {
@@ -224,8 +224,6 @@ std::vector<uint8_t> LoadHDR(const char name[], int &out_w, int &out_h) {
             exposure = (float)atof(line.substr(9).c_str());
         }
     }
-
-    unused(exposure);
 
     if (format != "32-bit_rle_rgbe") {
         throw std::runtime_error("Wrong format!");

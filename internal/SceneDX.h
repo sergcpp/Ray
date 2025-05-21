@@ -11,8 +11,7 @@
 #include "Dx/TextureDX.h"
 #include "Dx/VectorDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 class Context;
 class Renderer;
 
@@ -24,9 +23,7 @@ struct BindlessTexData {
 
     explicit BindlessTexData(Context *ctx) : srv_descr_pool(ctx, eDescrType::CBV_SRV_UAV) {}
 };
-
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx
 
 #define NS Dx
 #include "SceneGPU.h"

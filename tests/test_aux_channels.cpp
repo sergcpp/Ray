@@ -114,9 +114,9 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             const auto base_color_pixels = renderer->get_aux_pixels_ref(eAUXBuffer::BaseColor);
             const auto depth_normals_pixels = renderer->get_aux_pixels_ref(eAUXBuffer::DepthNormals);
 
-            std::unique_ptr<uint8_t[]> base_color_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
-            std::unique_ptr<uint8_t[]> normals_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
-            std::unique_ptr<uint8_t[]> depth_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
+            auto base_color_data_u8 = std::make_unique<uint8_t[]>(test_img_w * test_img_h * 3);
+            auto normals_data_u8 = std::make_unique<uint8_t[]>(test_img_w * test_img_h * 3);
+            auto depth_data_u8 = std::make_unique<uint8_t[]>(test_img_w * test_img_h * 3);
 
             double base_color_mse = 0.0, normals_mse = 0.0, depth_mse = 0.0;
 

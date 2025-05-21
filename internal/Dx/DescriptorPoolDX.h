@@ -5,8 +5,7 @@
 
 struct ID3D12DescriptorHeap;
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 class Context;
 
 enum class eDescrType : uint8_t { CBV_SRV_UAV, Sampler, RTV, DSV, _Count };
@@ -31,12 +30,12 @@ class BumpAlloc {
 
     std::pair<uint32_t, uint32_t> Alloc(const uint32_t count) {
         if (next_free_ + count >= capacity_) {
-            return std::make_pair(0xffffffff, 0xffffffff);
+            return std::pair{0xffffffff, 0xffffffff};
         }
 
         const uint32_t ret = next_free_;
         next_free_ += count;
-        return std::make_pair(ret, count);
+        return std::pair{ret, count};
     }
     void Free(const uint32_t offset, const uint32_t size) {
         if (offset + size == next_free_) {
@@ -58,7 +57,7 @@ class FreelistAllocAdapted : public FreelistAlloc {
     std::pair<uint32_t, uint32_t> Alloc(const uint32_t count) {
         const auto alloc = FreelistAlloc::Alloc(count);
         assert(FreelistAlloc::IntegrityCheck());
-        return std::make_pair(alloc.offset, alloc.block);
+        return std::pair{alloc.offset, alloc.block};
     }
     void Free(const uint32_t offset, const uint32_t block) {
         FreelistAlloc::Free(block);
@@ -173,5 +172,4 @@ template <class Allocator> class DescrMultiPoolAlloc {
 extern template class DescrMultiPoolAlloc<BumpAlloc>;
 extern template class DescrMultiPoolAlloc<FreelistAllocAdapted>;
 
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx

@@ -15,8 +15,7 @@
 #include "../../Log.h"
 #include "ContextDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 D3D12_HEAP_TYPE GetDxHeapType(const eBufType type) {
     if (type == eBufType::Upload) {
         return D3D12_HEAP_TYPE_UPLOAD;
@@ -36,8 +35,7 @@ eResState GetInitialDxResourceState(const eBufType type) {
     }
     return eResState::Undefined;
 }
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx
 
 int Ray::Dx::Buffer::g_GenCounter = 0;
 

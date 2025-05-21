@@ -3,8 +3,7 @@
 #include "../../Span.h"
 #include "BufferVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 struct VtxAttribDesc {
     BufHandle buf;
     uint8_t loc;
@@ -46,5 +45,4 @@ class VertexInput {
         return Setup(_attribs, _elem_buf->handle());
     }
 };
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk

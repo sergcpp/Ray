@@ -3,8 +3,7 @@
 #include "DescriptorPoolDX.h"
 #include "ResourceDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 class Context;
 
 class AccStructure {
@@ -32,5 +31,4 @@ class AccStructure {
 
     eResState resource_state = eResState::Undefined;
 };
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx

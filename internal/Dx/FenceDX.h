@@ -2,10 +2,7 @@
 
 #include <cstdint>
 
-// #include "VK.h"
-
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 enum class WaitResult { Success, Timeout, Fail };
 
 class SyncFence {
@@ -33,5 +30,4 @@ class SyncFence {
 };
 
 SyncFence MakeFence();
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx

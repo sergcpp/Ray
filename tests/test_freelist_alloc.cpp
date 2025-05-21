@@ -10,7 +10,7 @@ void test_freelist_alloc() {
     printf("Test freelist_alloc     | ");
 
     { // basic usage
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc);
+        auto alloc = std::make_unique<FreelistAlloc>();
         require(alloc->IntegrityCheck());
 
         const uint16_t pool = alloc->AddPool(2048);
@@ -26,7 +26,7 @@ void test_freelist_alloc() {
         require(alloc->IntegrityCheck());
     }
     { // block merging 1
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc(2048));
+        auto alloc = std::make_unique<FreelistAlloc>(2048);
         require(alloc->IntegrityCheck());
 
         const auto a = alloc->Alloc(1);
@@ -55,7 +55,7 @@ void test_freelist_alloc() {
         require(alloc->IntegrityCheck());
     }
     { // block merging 2
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc(2048));
+        auto alloc = std::make_unique<FreelistAlloc>(2048);
         require(alloc->IntegrityCheck());
 
         const auto a = alloc->Alloc(123);
@@ -77,7 +77,7 @@ void test_freelist_alloc() {
         require(alloc->IntegrityCheck());
     }
     { // reuse 1
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc(8192));
+        auto alloc = std::make_unique<FreelistAlloc>(8192);
         require(alloc->IntegrityCheck());
 
         const auto a = alloc->Alloc(1024);
@@ -107,7 +107,7 @@ void test_freelist_alloc() {
         require(alloc->IntegrityCheck());
     }
     { // reuse 2
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc(8192));
+        auto alloc = std::make_unique<FreelistAlloc>(8192);
         require(alloc->IntegrityCheck());
 
         const auto a = alloc->Alloc(1024);
@@ -147,7 +147,7 @@ void test_freelist_alloc() {
         alloc->Free(f.block);
     }
     { // multiple pools
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc);
+        auto alloc = std::make_unique<FreelistAlloc>();
 
         const uint16_t pool1 = alloc->AddPool(1024);
         require(pool1 == 0);
@@ -183,7 +183,7 @@ void test_freelist_alloc() {
         require(alloc->IntegrityCheck());
     }
     { // fragmentation
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc(256 * 1024 * 1024));
+        auto alloc = std::make_unique<FreelistAlloc>(256 * 1024 * 1024);
 
         FreelistAlloc::Allocation allocations[256];
         for (int i = 0; i < 256; ++i) {
@@ -232,7 +232,7 @@ void test_freelist_alloc() {
         require(alloc->IntegrityCheck());
     }
     { // resize pool
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc(256 * 1024));
+        auto alloc = std::make_unique<FreelistAlloc>(256 * 1024);
 
         FreelistAlloc::Allocation allocations[512];
         for (int i = 0; i < 256; ++i) {
@@ -254,7 +254,7 @@ void test_freelist_alloc() {
         }
     }
     { // block iteration
-        std::unique_ptr<FreelistAlloc> alloc(new FreelistAlloc(256 * 1024));
+        auto alloc = std::make_unique<FreelistAlloc>(256 * 1024);
 
         FreelistAlloc::Allocation allocations[256];
         for (int i = 0; i < 256; ++i) {

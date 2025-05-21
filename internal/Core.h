@@ -58,9 +58,6 @@ force_inline unsigned char _BitScanForward64(unsigned long *Index, unsigned __in
 
 #endif
 
-#define unused(x) ((void)x)
-#define countof(x) (sizeof(x) / sizeof(x[0]))
-
 #include "simd/aligned_allocator.h"
 
 #define pack_unorm_16(x) uint16_t(x * 65535.0f)

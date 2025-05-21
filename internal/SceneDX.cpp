@@ -90,9 +90,8 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
         log_->Error("Failed to init descriptor pool!");
     }
 
-    const uint32_t off = bindless_tex_data_.srv_descr_pool.Alloc(bindless_textures_.capacity()).first;
+    [[maybe_unused]] const uint32_t off = bindless_tex_data_.srv_descr_pool.Alloc(bindless_textures_.capacity()).first;
     assert(off == 0);
-    unused(off);
 
     ID3D12Device *device = ctx_->device();
     ID3D12DescriptorHeap *srv_descr_heap = bindless_tex_data_.srv_descr_pool.heap();
@@ -274,9 +273,8 @@ std::pair<uint32_t, uint32_t> Ray::Dx::Scene::Build_HWRT_BLAS_nolock(const uint3
         // allocate one more buffer
         const uint32_t buf_size = std::max(next_power_of_two(compact_size), RtBLASChunkSize);
         rt_blas_buffers_.emplace_back("RT BLAS Buffer", ctx_, eBufType::AccStructure, buf_size);
-        const uint16_t pool_index = rt_blas_mem_alloc_.AddPool(buf_size);
+        [[maybe_unused]] const uint16_t pool_index = rt_blas_mem_alloc_.AddPool(buf_size);
         assert(pool_index == rt_blas_buffers_.size() - 1);
-        unused(pool_index);
         // try to allocate again
         mem_alloc = rt_blas_mem_alloc_.Alloc(AccStructAlignment, compact_size);
         assert(mem_alloc.offset != 0xffffffff);

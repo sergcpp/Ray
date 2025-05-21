@@ -187,7 +187,7 @@ uint32_t next_power_of_two(uint32_t v) {
 } // namespace Ray
 
 std::unique_ptr<float[]> Ray::ConvertRGBE_to_RGB32F(const uint8_t image_data[], const int w, const int h) {
-    std::unique_ptr<float[]> fp_data(new float[w * h * 3]);
+    auto fp_data = std::make_unique<float[]>(w * h * 3);
 
     for (int i = 0; i < w * h; i++) {
         const uint8_t r = image_data[4 * i + 0], g = image_data[4 * i + 1], b = image_data[4 * i + 2],
@@ -205,7 +205,7 @@ std::unique_ptr<float[]> Ray::ConvertRGBE_to_RGB32F(const uint8_t image_data[], 
 }
 
 std::unique_ptr<uint16_t[]> Ray::ConvertRGBE_to_RGB16F(const uint8_t image_data[], const int w, const int h) {
-    std::unique_ptr<uint16_t[]> fp16_data(new uint16_t[w * h * 3]);
+    auto fp16_data = std::make_unique<uint16_t[]>(w * h * 3);
     ConvertRGBE_to_RGB16F(image_data, w, h, fp16_data.get());
     return fp16_data;
 }
@@ -226,7 +226,7 @@ void Ray::ConvertRGBE_to_RGB16F(const uint8_t image_data[], int w, int h, uint16
 
 std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], const int w, const int h,
                                                       const int channels) {
-    std::unique_ptr<uint8_t[]> u8_data(new uint8_t[w * h * 4]);
+    auto u8_data = std::make_unique<uint8_t[]>(w * h * 4);
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
@@ -284,7 +284,7 @@ void Ray::ConvertYCoCg_to_RGB_rev(const uint8_t in_YCoCg[3], uint8_t out_RGB[3])
 }
 
 std::unique_ptr<uint8_t[]> Ray::ConvertRGB_to_CoCgxY_rev(const uint8_t image_data[], const int w, const int h) {
-    std::unique_ptr<uint8_t[]> u8_data(new uint8_t[w * h * 4]);
+    auto u8_data = std::make_unique<uint8_t[]>(w * h * 4);
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
@@ -302,7 +302,7 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB_to_CoCgxY_rev(const uint8_t image_dat
 }
 
 std::unique_ptr<uint8_t[]> Ray::ConvertCoCgxY_to_RGB_rev(const uint8_t image_data[], const int w, const int h) {
-    std::unique_ptr<uint8_t[]> u8_data(new uint8_t[w * h * 3]);
+    auto u8_data = std::make_unique<uint8_t[]>(w * h * 3);
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
@@ -319,7 +319,7 @@ void Ray::ConvertRGB_to_YCoCg(const uint8_t in_RGB[3], uint8_t out_YCoCg[3]) { R
 void Ray::ConvertYCoCg_to_RGB(const uint8_t in_YCoCg[3], uint8_t out_RGB[3]) { YCoCg_to_RGB(in_YCoCg, out_RGB); }
 
 std::unique_ptr<uint8_t[]> Ray::ConvertRGB_to_CoCgxY(const uint8_t image_data[], const int w, const int h) {
-    std::unique_ptr<uint8_t[]> u8_data(new uint8_t[w * h * 4]);
+    auto u8_data = std::make_unique<uint8_t[]>(w * h * 4);
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
@@ -337,7 +337,7 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB_to_CoCgxY(const uint8_t image_data[],
 }
 
 std::unique_ptr<uint8_t[]> Ray::ConvertCoCgxY_to_RGB(const uint8_t image_data[], const int w, const int h) {
-    std::unique_ptr<uint8_t[]> u8_data(new uint8_t[w * h * 3]);
+    auto u8_data = std::make_unique<uint8_t[]>(w * h * 3);
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
@@ -1745,7 +1745,7 @@ std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, const int data_len
     uint32_t img_size;
     ReadTGAFile(data, data_len, w, h, format, nullptr, img_size);
 
-    std::unique_ptr<uint8_t[]> image_ret(new uint8_t[img_size]);
+    auto image_ret = std::make_unique<uint8_t[]>(img_size);
     ReadTGAFile(data, data_len, w, h, format, image_ret.get(), img_size);
 
     return image_ret;

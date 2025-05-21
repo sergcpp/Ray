@@ -13,8 +13,7 @@
 #include "TextureAtlasDX.h"
 #include "TextureDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 const D3D12_RESOURCE_STATES g_resource_states[] = {
     D3D12_RESOURCE_STATE_COMMON,                            // Undefined
     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,        // VertexBuffer
@@ -33,10 +32,8 @@ const D3D12_RESOURCE_STATES g_resource_states[] = {
     D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, // BuildASWrite
     D3D12_RESOURCE_STATE_GENERIC_READ                       // RayTracing
 };
-static_assert(COUNT_OF(g_resource_states) == int(eResState::_Count), "!");
-
-} // namespace Dx
-} // namespace Ray
+static_assert(std::size(g_resource_states) == int(eResState::_Count), "!");
+} // namespace Ray::Dx
 
 D3D12_RESOURCE_STATES Ray::Dx::DXResourceState(const eResState state) { return g_resource_states[int(state)]; }
 

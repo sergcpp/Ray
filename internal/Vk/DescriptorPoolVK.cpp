@@ -3,8 +3,7 @@
 #include "../../Log.h"
 #include "ContextVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 const VkDescriptorType g_descr_types_vk[] = {
     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,    // CombinedImageSampler
     VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,             // SampledImage
@@ -15,9 +14,8 @@ const VkDescriptorType g_descr_types_vk[] = {
     VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,      // UniformTexBuffer
     VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR // AccStructure
 };
-static_assert(COUNT_OF(g_descr_types_vk) == int(eDescrType::_Count), "!");
-} // namespace Vk
-} // namespace Ray
+static_assert(std::size(g_descr_types_vk) == int(eDescrType::_Count), "!");
+} // namespace Ray::Vk
 
 Ray::Vk::DescrPool &Ray::Vk::DescrPool::operator=(DescrPool &&rhs) noexcept {
     if (this == &rhs) {

@@ -2,8 +2,7 @@
 
 struct ID3D12GraphicsCommandList;
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 class Context;
 struct DebugMarker {
     explicit DebugMarker(Context *ctx, ID3D12GraphicsCommandList *cmd_buf, const char *name);
@@ -11,5 +10,4 @@ struct DebugMarker {
 
     ID3D12GraphicsCommandList *cmd_buf_ = nullptr;
 };
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Dx

@@ -6,8 +6,6 @@
 #include "Api.h"
 #include "MemoryAllocatorVK.h"
 
-#define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
-
 namespace Ray {
 class ILog;
 struct gpu_device_t;

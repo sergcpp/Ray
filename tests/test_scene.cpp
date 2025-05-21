@@ -474,9 +474,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle base_mesh;
     {
-        std::vector<float> base_attrs;
-        std::vector<uint32_t> base_indices, base_groups;
-        std::tie(base_attrs, base_indices, base_groups) = LoadBIN("test_data/meshes/mat_test/base.bin");
+        auto [base_attrs, base_indices, base_groups] = LoadBIN("test_data/meshes/mat_test/base.bin");
 
         mesh_desc_t base_mesh_desc;
         base_mesh_desc.prim_type = ePrimType::TriangleList;
@@ -516,9 +514,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle core_mesh;
     {
-        std::vector<float> core_attrs;
-        std::vector<uint32_t> core_indices, core_groups;
-        std::tie(core_attrs, core_indices, core_groups) = LoadBIN("test_data/meshes/mat_test/core.bin");
+        auto [core_attrs, core_indices, core_groups] = LoadBIN("test_data/meshes/mat_test/core.bin");
 
         mesh_desc_t core_mesh_desc;
         core_mesh_desc.prim_type = ePrimType::TriangleList;
@@ -535,9 +531,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle subsurf_bar_mesh;
     {
-        std::vector<float> subsurf_bar_attrs;
-        std::vector<uint32_t> subsurf_bar_indices, subsurf_bar_groups;
-        std::tie(subsurf_bar_attrs, subsurf_bar_indices, subsurf_bar_groups) =
+        auto [subsurf_bar_attrs, subsurf_bar_indices, subsurf_bar_groups] =
             LoadBIN("test_data/meshes/mat_test/subsurf_bar.bin");
 
         mesh_desc_t subsurf_bar_mesh_desc;
@@ -556,9 +550,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle text_mesh;
     {
-        std::vector<float> text_attrs;
-        std::vector<uint32_t> text_indices, text_groups;
-        std::tie(text_attrs, text_indices, text_groups) = LoadBIN("test_data/meshes/mat_test/text.bin");
+        auto [text_attrs, text_indices, text_groups] = LoadBIN("test_data/meshes/mat_test/text.bin");
 
         mesh_desc_t text_mesh_desc;
         text_mesh_desc.prim_type = ePrimType::TriangleList;
@@ -579,9 +571,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle two_sided_mesh;
     {
-        std::vector<float> text_attrs;
-        std::vector<uint32_t> text_indices, text_groups;
-        std::tie(text_attrs, text_indices, text_groups) = LoadBIN("test_data/meshes/mat_test/two_sided.bin");
+        auto [text_attrs, text_indices, text_groups] = LoadBIN("test_data/meshes/mat_test/two_sided.bin");
 
         mesh_desc_t mesh_desc;
         mesh_desc.prim_type = ePrimType::TriangleList;
@@ -638,9 +628,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle square_light_mesh;
     {
-        std::vector<float> square_light_attrs;
-        std::vector<uint32_t> square_light_indices, square_light_groups;
-        std::tie(square_light_attrs, square_light_indices, square_light_groups) =
+        auto [square_light_attrs, square_light_indices, square_light_groups] =
             LoadBIN("test_data/meshes/mat_test/square_light.bin");
 
         mesh_desc_t square_light_mesh_desc;
@@ -663,9 +651,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle disc_light_mesh;
     {
-        std::vector<float> disc_light_attrs;
-        std::vector<uint32_t> disc_light_indices, disc_light_groups;
-        std::tie(disc_light_attrs, disc_light_indices, disc_light_groups) =
+        auto [disc_light_attrs, disc_light_indices, disc_light_groups] =
             LoadBIN("test_data/meshes/mat_test/disc_light.bin");
 
         mesh_desc_t disc_light_mesh_desc;
@@ -684,9 +670,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle glassball_mesh;
     {
-        std::vector<float> glassball_attrs;
-        std::vector<uint32_t> glassball_indices, glassball_groups;
-        std::tie(glassball_attrs, glassball_indices, glassball_groups) =
+        auto [glassball_attrs, glassball_indices, glassball_groups] =
             LoadBIN("test_data/meshes/mat_test/glassball.bin");
 
         mesh_desc_t glassball_mesh_desc;
@@ -705,9 +689,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
 
     MeshHandle box_mesh, box2_mesh, box3_mesh;
     {
-        std::vector<float> box_attrs;
-        std::vector<uint32_t> box_indices, box_groups;
-        std::tie(box_attrs, box_indices, box_groups) = LoadBIN("test_data/meshes/mat_test/box.bin");
+        auto [box_attrs, box_indices, box_groups] = LoadBIN("test_data/meshes/mat_test/box.bin");
 
         mesh_desc_t box_mesh_desc;
         box_mesh_desc.prim_type = ePrimType::TriangleList;
@@ -821,11 +803,10 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         }
         scene.AddMeshInstance(disc_light_mesh, identity);
     } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_SphereLight ||
-               test_scene == eTestScene::Standard_InsideLight ||
-               test_scene == eTestScene::Standard_SpotLight || test_scene == eTestScene::Standard_DOF0 ||
-               test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped ||
-               test_scene == eTestScene::Two_Sided) {
+               test_scene == eTestScene::Standard_InsideLight || test_scene == eTestScene::Standard_SpotLight ||
+               test_scene == eTestScene::Standard_DOF0 || test_scene == eTestScene::Standard_DOF1 ||
+               test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1 ||
+               test_scene == eTestScene::Standard_Clipped || test_scene == eTestScene::Two_Sided) {
         //
         // Use explicit lights sources
         //
