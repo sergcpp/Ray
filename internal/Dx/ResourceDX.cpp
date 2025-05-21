@@ -52,11 +52,11 @@ void Ray::Dx::TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, const
     SmallVector<D3D12_RESOURCE_BARRIER, 64> barriers;
 
     for (const TransitionInfo &transition : transitions) {
-        if (transition.p_tex && *transition.p_tex) {
+        if (std::holds_alternative<const Texture *>(transition.p_res) && *std::get<const Texture *>(transition.p_res)) {
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
-                old_state = transition.p_tex->resource_state;
+                old_state = std::get<const Texture *>(transition.p_res)->resource_state;
                 if (old_state == transition.new_state && old_state != eResState::UnorderedAccess) {
                     // transition is not needed
                     continue;
@@ -66,23 +66,24 @@ void Ray::Dx::TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, const
             auto &new_barrier = barriers.emplace_back();
             if (old_state != transition.new_state) {
                 new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                new_barrier.Transition.pResource = transition.p_tex->handle().img;
+                new_barrier.Transition.pResource = std::get<const Texture *>(transition.p_res)->handle().img;
                 new_barrier.Transition.StateBefore = DXResourceState(old_state);
                 new_barrier.Transition.StateAfter = DXResourceState(transition.new_state);
                 new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             } else {
                 new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                new_barrier.UAV.pResource = transition.p_tex->handle().img;
+                new_barrier.UAV.pResource = std::get<const Texture *>(transition.p_res)->handle().img;
             }
 
             if (transition.update_internal_state) {
-                transition.p_tex->resource_state = transition.new_state;
+                std::get<const Texture *>(transition.p_res)->resource_state = transition.new_state;
             }
-        } else if (transition.p_buf && *transition.p_buf) {
+        } else if (std::holds_alternative<const Buffer *>(transition.p_res) &&
+                   *std::get<const Buffer *>(transition.p_res)) {
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
-                old_state = transition.p_buf->resource_state;
+                old_state = std::get<const Buffer *>(transition.p_res)->resource_state;
                 if (old_state == transition.new_state && old_state != eResState::UnorderedAccess) {
                     // transition is not needed
                     continue;
@@ -92,23 +93,24 @@ void Ray::Dx::TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, const
             auto &new_barrier = barriers.emplace_back();
             if (old_state != transition.new_state) {
                 new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                new_barrier.Transition.pResource = transition.p_buf->dx_resource();
+                new_barrier.Transition.pResource = std::get<const Buffer *>(transition.p_res)->dx_resource();
                 new_barrier.Transition.StateBefore = DXResourceState(old_state);
                 new_barrier.Transition.StateAfter = DXResourceState(transition.new_state);
                 new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             } else {
                 new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                new_barrier.UAV.pResource = transition.p_buf->dx_resource();
+                new_barrier.UAV.pResource = std::get<const Buffer *>(transition.p_res)->dx_resource();
             }
 
             if (transition.update_internal_state) {
-                transition.p_buf->resource_state = transition.new_state;
+                std::get<const Buffer *>(transition.p_res)->resource_state = transition.new_state;
             }
-        } else if (transition.p_tex_arr && transition.p_tex_arr->page_count()) {
+        } else if (std::holds_alternative<const TextureAtlas *>(transition.p_res) &&
+                   std::get<const TextureAtlas *>(transition.p_res)->page_count()) {
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
-                old_state = transition.p_tex_arr->resource_state;
+                old_state = std::get<const TextureAtlas *>(transition.p_res)->resource_state;
                 if (old_state != eResState::Undefined && old_state == transition.new_state &&
                     old_state != eResState::UnorderedAccess) {
                     // transition is not needed
@@ -119,17 +121,17 @@ void Ray::Dx::TransitionResourceStates(ID3D12GraphicsCommandList *cmd_buf, const
             auto &new_barrier = barriers.emplace_back();
             if (old_state != transition.new_state) {
                 new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                new_barrier.Transition.pResource = transition.p_tex_arr->dx_resource();
+                new_barrier.Transition.pResource = std::get<const TextureAtlas *>(transition.p_res)->dx_resource();
                 new_barrier.Transition.StateBefore = DXResourceState(old_state);
                 new_barrier.Transition.StateAfter = DXResourceState(transition.new_state);
                 new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             } else {
                 new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                new_barrier.UAV.pResource = transition.p_tex_arr->dx_resource();
+                new_barrier.UAV.pResource = std::get<const TextureAtlas *>(transition.p_res)->dx_resource();
             }
 
             if (transition.update_internal_state) {
-                transition.p_tex_arr->resource_state = transition.new_state;
+                std::get<const TextureAtlas *>(transition.p_res)->resource_state = transition.new_state;
             }
         }
     }
