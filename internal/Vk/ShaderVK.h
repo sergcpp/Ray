@@ -58,7 +58,7 @@ class Shader {
     SmallVector<Range, 4> pc_ranges;
 
     Shader() = default;
-    Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log);
+    Shader(std::string_view name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log);
     Shader(const Shader &rhs) = delete;
     Shader(Shader &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Shader();
@@ -69,9 +69,9 @@ class Shader {
     bool ready() const { return module_ != VK_NULL_HANDLE; }
     VkShaderModule module() const { return module_; }
     eShaderType type() const { return type_; }
-    const std::string &name() const { return name_; }
+    std::string_view name() const { return name_; }
 
-    bool Init(const char *name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log);
+    bool Init(std::string_view name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log);
 };
 
 } // namespace Vk

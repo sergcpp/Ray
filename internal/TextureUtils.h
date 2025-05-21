@@ -102,6 +102,6 @@ std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int data_len, int &w, i
 bool ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,
                  uint32_t &out_size);
 
-void WriteTGA(const uint8_t *data, int w, int h, int bpp, const char *name);
-void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
+void WriteTGA(const uint8_t *data, int w, int h, int bpp, std::string_view name);
+void WritePFM(std::string_view base_name, const float values[], int w, int h, int channels);
 } // namespace Ray

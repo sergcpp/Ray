@@ -8,8 +8,7 @@
 #include "ContextVK.h"
 #include "TextureVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 template <typename T, int N> eTexFormat tex_format();
 
 template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RGBA8; }
@@ -21,13 +20,10 @@ uint32_t FindMemoryType(uint32_t start_from, const VkPhysicalDeviceMemoryPropert
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
 
 extern const VkFormat g_formats_vk[];
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
-#define _MIN(x, y) ((x) < (y) ? (x) : (y))
-
-Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, const char *name, const eTexFormat format, const eTexFilter filter,
-                                    const int resx, const int resy, const int pages_count)
+Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, std::string_view name, const eTexFormat format,
+                                    const eTexFilter filter, const int resx, const int resy, const int pages_count)
     : ctx_(ctx), name_(name), format_(format), filter_(filter), res_{resx, resy} {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
@@ -134,10 +130,10 @@ void Ray::Vk::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _r
         for (int y = 0; y < src_res[1]; y += 2) {
             for (int x = 0; x < src_res[0]; x += 2) {
                 const color_t<T, N> c00 = src_data[(y + 0) * src_res[0] + (x + 0)];
-                const color_t<T, N> c10 = src_data[(y + 0) * src_res[0] + _MIN(x + 1, src_res[0] - 1)];
+                const color_t<T, N> c10 = src_data[(y + 0) * src_res[0] + std::min(x + 1, src_res[0] - 1)];
                 const color_t<T, N> c11 =
-                    src_data[_MIN(y + 1, src_res[1] - 1) * src_res[0] + _MIN(x + 1, src_res[0] - 1)];
-                const color_t<T, N> c01 = src_data[_MIN(y + 1, src_res[1] - 1) * src_res[0] + (x + 0)];
+                    src_data[std::min(y + 1, src_res[1] - 1) * src_res[0] + std::min(x + 1, src_res[0] - 1)];
+                const color_t<T, N> c01 = src_data[std::min(y + 1, src_res[1] - 1) * src_res[0] + (x + 0)];
 
                 color_t<T, N> res;
                 for (int j = 0; j < N; ++j) {

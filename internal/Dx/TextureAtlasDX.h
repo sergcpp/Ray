@@ -28,7 +28,7 @@ class TextureAtlas {
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const void *data);
 
   public:
-    TextureAtlas(Context *ctx, const char *name, eTexFormat format, eTexFilter filter, int resx, int resy,
+    TextureAtlas(Context *ctx, std::string_view name, eTexFormat format, eTexFilter filter, int resx, int resy,
                  int page_count = 0);
     ~TextureAtlas();
 

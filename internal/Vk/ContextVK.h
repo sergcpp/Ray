@@ -73,7 +73,7 @@ class Context {
     ~Context();
 
     bool Init(ILog *log, const VulkanDevice &vk_device, const VulkanFunctions &vk_functions,
-              const char *preferred_device, int validation_level);
+              std::string_view preferred_device, int validation_level);
     void Destroy();
 
     VkDevice device() const { return device_; }
@@ -148,7 +148,7 @@ class Context {
   private:
     static bool InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
                                int enabled_layers_count, int validation_level, ILog *log);
-    static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device, const char *preferred_device,
+    static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device, std::string_view preferred_device,
                                        VkInstance instance, ILog *log);
     static void CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalDevice &physical_device,
                                               VkPhysicalDeviceProperties &device_properties,

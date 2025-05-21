@@ -87,12 +87,12 @@ class Context {
     Context();
     ~Context();
 
-    bool Init(ILog *log, const char *preferred_device, int validation_level);
+    bool Init(ILog *log, std::string_view preferred_device, int validation_level);
     void Destroy();
 
     ID3D12Device *device() const { return device_; }
     ID3D12Device5 *device5() const { return device5_; }
-    const std::string &device_name() const { return device_name_; }
+    std::string_view device_name() const { return device_name_; }
 
     ILog *log() const { return log_; }
     void *api() const { return nullptr; }
@@ -148,7 +148,7 @@ class Context {
     bool frame_cpu_synced[MaxFramesInFlight] = {};
 
     Buffer uniform_data_bufs[MaxFramesInFlight];
-    uint32_t uniform_data_buf_offs[MaxFramesInFlight];
+    uint32_t uniform_data_buf_offs[MaxFramesInFlight] = {};
 
     // resources scheduled for deferred destruction
     SmallVector<MemAllocation, 128> allocs_to_free[MaxFramesInFlight];

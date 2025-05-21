@@ -118,7 +118,7 @@ struct vtx_attribute_t {
 
 /// Mesh description
 struct mesh_desc_t {
-    const char *name = nullptr;          ///< Mesh name (for debugging)
+    std::string_view name;               ///< Mesh name (for debugging)
     ePrimType prim_type;                 ///< Primitive type
     vtx_attribute_t vtx_positions;       ///< Vertex positions
     vtx_attribute_t vtx_normals;         ///< Vertex normals
@@ -178,7 +178,7 @@ struct tex_desc_t {
     eTextureFormat format; ///< Texture data format
     eTextureConvention convention =
         eTextureConvention::OGL;       ///< Texture convention (affects normalmaps and BC-compressed textures)
-    const char *name = nullptr;        ///< Debug name
+    std::string_view name;             ///< Debug name
     Span<const uint8_t> data;          ///< Texture data
     int w,                             ///< Texture width
         h;                             ///< Texture height

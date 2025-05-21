@@ -81,7 +81,7 @@ const uint32_t _DXC_PART_REFLECTION_DATA = _DXC_FOURCC('S', 'T', 'A', 'T');
 } // namespace Dx
 } // namespace Ray
 
-Ray::Dx::Shader::Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
+Ray::Dx::Shader::Shader(std::string_view name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
                         ILog *log) {
     if (!Init(name, ctx, shader_code, type, log)) {
         throw std::runtime_error("Shader Init error!");
@@ -103,7 +103,7 @@ Ray::Dx::Shader &Ray::Dx::Shader::operator=(Shader &&rhs) noexcept {
     return (*this);
 }
 
-bool Ray::Dx::Shader::Init(const char *name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
+bool Ray::Dx::Shader::Init(std::string_view name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
                            ILog *log) {
     name_ = name;
     device_ = ctx->device();

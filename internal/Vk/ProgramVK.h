@@ -35,10 +35,10 @@ class Program {
 
   public:
     Program() = default;
-    Program(const char *name, Context *ctx, Shader *vs_ref, Shader *fs_ref, Shader *tcs_ref, Shader *tes_ref,
+    Program(std::string_view name, Context *ctx, Shader *vs_ref, Shader *fs_ref, Shader *tcs_ref, Shader *tes_ref,
             ILog *log);
-    Program(const char *name, Context *ctx, Shader *cs_ref, ILog *log);
-    Program(const char *name, Context *ctx, Shader *raygen_ref, Shader *closesthit_ref, Shader *anyhit_ref,
+    Program(std::string_view name, Context *ctx, Shader *cs_ref, ILog *log);
+    Program(std::string_view name, Context *ctx, Shader *raygen_ref, Shader *closesthit_ref, Shader *anyhit_ref,
             Shader *miss_ref, Shader *intersection_ref, ILog *log);
 
     Program(const Program &rhs) = delete;
@@ -60,7 +60,7 @@ class Program {
     const std::string &name() const { return name_; }
 
     const Attribute &attribute(const int i) const { return attributes_[i]; }
-    const Attribute &attribute(const char *name) const {
+    const Attribute &attribute(std::string_view name) const {
         for (int i = 0; i < int(attributes_.size()); i++) {
             if (attributes_[i].name == name) {
                 return attributes_[i];
@@ -70,7 +70,7 @@ class Program {
     }
 
     const Uniform &uniform(const int i) const { return uniforms_[i]; }
-    const Uniform &uniform(const char *name) const {
+    const Uniform &uniform(std::string_view name) const {
         for (int i = 0; i < int(uniforms_.size()); i++) {
             if (uniforms_[i].name == name) {
                 return uniforms_[i];

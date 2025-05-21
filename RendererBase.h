@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <memory>
+#include <string_view>
 
 #include "Config.h"
 #include "SceneBase.h"
@@ -40,8 +41,8 @@ const Bitmask<eRendererType> RendererCPU = Bitmask<eRendererType>{eRendererType:
 // All GPU renderers
 const Bitmask<eRendererType> RendererGPU = Bitmask<eRendererType>{eRendererType::Vulkan} | eRendererType::DirectX12;
 
-const char *RendererTypeName(eRendererType rt);
-eRendererType RendererTypeFromName(const char *name);
+std::string_view RendererTypeName(eRendererType rt);
+eRendererType RendererTypeFromName(std::string_view name);
 
 /// Returns whether it is safe to call Render function for non-overlapping regions from different threads
 bool RendererSupportsMultithreading(eRendererType rt);
@@ -51,7 +52,7 @@ bool RendererSupportsHWRT(eRendererType rt);
 /// Renderer settings
 struct settings_t {
     int w = 0, h = 0;
-    const char *preferred_device = nullptr;
+    std::string_view preferred_device;
     bool use_tex_compression = true;
     bool use_hwrt = true;
     bool use_bindless = true;
@@ -141,7 +142,7 @@ class RendererBase {
     virtual ILog *log() const = 0;
 
     /// Name of the device
-    virtual const char *device_name() const = 0;
+    virtual std::string_view device_name() const = 0;
 
     /// Tells whether this is a hardware accelerated renderer
     virtual bool is_hwrt() const { return false; }

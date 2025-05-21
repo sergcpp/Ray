@@ -252,7 +252,7 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log,
 
 Ray::eRendererType Ray::Dx::Renderer::type() const { return eRendererType::DirectX12; }
 
-const char *Ray::Dx::Renderer::device_name() const { return ctx_->device_name().c_str(); }
+std::string_view Ray::Dx::Renderer::device_name() const { return ctx_->device_name(); }
 
 inline void Ray::Dx::Renderer::Clear(const color_rgba_t &c) {
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());

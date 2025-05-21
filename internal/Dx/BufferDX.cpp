@@ -39,7 +39,7 @@ eResState GetInitialDxResourceState(const eBufType type) {
 
 int Ray::Dx::Buffer::g_GenCounter = 0;
 
-Ray::Dx::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size)
+Ray::Dx::Buffer::Buffer(std::string_view name, Context *ctx, const eBufType type, const uint32_t initial_size)
     : ctx_(ctx), name_(name), type_(type), size_(0) {
     Resize(initial_size);
 }

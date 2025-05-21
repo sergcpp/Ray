@@ -34,7 +34,7 @@ void Ray::Vk::MemAllocation::Release() {
     }
 }
 
-Ray::Vk::MemAllocator::MemAllocator(const char *name, Context *ctx, const uint32_t initial_pool_size,
+Ray::Vk::MemAllocator::MemAllocator(std::string_view name, Context *ctx, const uint32_t initial_pool_size,
                                     uint32_t mem_type_index, const float growth_factor, const uint32_t max_pool_size)
     : name_(name), ctx_(ctx), growth_factor_(growth_factor), max_pool_size_(max_pool_size),
       mem_type_index_(mem_type_index) {
@@ -108,8 +108,8 @@ Ray::Vk::MemAllocation Ray::Vk::MemAllocators::Allocate(const uint32_t alignment
     if (!allocators_[mem_type_index]) {
         std::string name = name_;
         name += " (type " + std::to_string(mem_type_index) + ")";
-        allocators_[mem_type_index] = std::make_unique<MemAllocator>(name.c_str(), ctx_, initial_pool_size_,
-                                                                     mem_type_index, growth_factor_, max_pool_size_);
+        allocators_[mem_type_index] = std::make_unique<MemAllocator>(name, ctx_, initial_pool_size_, mem_type_index,
+                                                                     growth_factor_, max_pool_size_);
     }
 
     return allocators_[mem_type_index]->Allocate(alignment, size);

@@ -36,7 +36,7 @@ extern const float AnisotropyLevel;
 extern const DXGI_FORMAT g_formats_dx[] = {
 #include "../TextureFormat.inl"
 };
-static_assert(sizeof(g_formats_dx) / sizeof(g_formats_dx[0]) == size_t(eTexFormat::_Count), "!");
+static_assert(std::size(g_formats_dx) == size_t(eTexFormat::_Count), "!");
 #undef X
 
 uint32_t TextureHandleCounter = 0;
@@ -87,20 +87,18 @@ uint32_t D3D12CalcSubresource(uint32_t MipSlice, uint32_t ArraySlice, uint32_t P
 extern const int g_block_res[][2];
 
 int round_up(int v, int align);
-
-bool EndsWith(const std::string &str1, const char *str2);
 } // namespace Ray
 
 Ray::eTexUsage Ray::Dx::TexUsageFromState(const eResState state) { return g_tex_usage_per_state[int(state)]; }
 
-Ray::Dx::Texture::Texture(const char *name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
+Ray::Dx::Texture::Texture(std::string_view name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(p, mem_allocs, log);
 }
 
-Ray::Dx::Texture::Texture(const char *name, Context *ctx, const void *data, const uint32_t size, const TexParams &p,
-                          Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
-                          eTexLoadStatus *load_status, ILog *log)
+Ray::Dx::Texture::Texture(std::string_view name, Context *ctx, const void *data, const uint32_t size,
+                          const TexParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf,
+                          MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
@@ -196,7 +194,7 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
         new_alloc = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
-                                         name_.c_str());
+                                         name_);
         if (!alloc_) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -204,14 +202,14 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
             alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
                                           FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                          img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
-                                          name_.c_str());
+                                          name_);
             if (!alloc_) {
                 img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 
                 alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
                                               FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                              img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
-                                              name_.c_str());
+                                              name_);
             }
         }
 

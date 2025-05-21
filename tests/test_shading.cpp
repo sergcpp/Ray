@@ -22,7 +22,7 @@ std::mutex g_stdout_mtx;
 extern int g_validation_level;
 
 template <typename MatDesc>
-void run_material_test(const char *arch_list[], const char *preferred_device, const char *test_name,
+void run_material_test(const char *arch_list[], std::string_view preferred_device, const char *test_name,
                        const MatDesc &mat_desc, const int sample_count, const double min_psnr, const int pix_thres,
                        const eDenoiseMethod denoise = eDenoiseMethod::None, const bool partial = false,
                        const char *textures[] = nullptr, const eTestScene test_scene = eTestScene::Standard) {
@@ -31,7 +31,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 }
 
 template <typename MatDesc>
-void run_material_test(const char *arch_list[], const char *preferred_device, const char *test_name,
+void run_material_test(const char *arch_list[], std::string_view preferred_device, const char *test_name,
                        const MatDesc &mat_desc, const int min_sample_count, const int max_sample_count,
                        const float variance_threshold, const double min_psnr, const int pix_thres,
                        const eDenoiseMethod denoise = eDenoiseMethod::None, const bool partial = false,
@@ -87,11 +87,12 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     // skip unsupported (we fell back to some other renderer)
                     break;
                 }
-                if (preferred_device) {
+                if (!preferred_device.empty()) {
                     // make sure we use requested device
                     if (!require(MatchDeviceNames(renderer->device_name(), preferred_device))) {
                         std::lock_guard<std::mutex> _(g_stdout_mtx);
-                        printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
+                        printf("Wrong device: %s (%s was requested)\n", renderer->device_name().data(),
+                               preferred_device.data());
                         return;
                     }
                 }
@@ -162,15 +163,15 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 {
                     std::lock_guard<std::mutex> _(g_stdout_mtx);
                     if (g_minimal_output) {
-                        printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt), s.use_hwrt ? "HWRT" : "SWRT",
-                               100.0);
+                        printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt).data(),
+                               s.use_hwrt ? "HWRT" : "SWRT", 100.0);
                     }
                     printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i, Time: %.2fm)\n", psnr, min_psnr, error_pixels,
                            pix_thres, test_duration_m);
                     fflush(stdout);
                 }
 
-                std::string type = RendererTypeName(rt);
+                std::string type(RendererTypeName(rt));
                 if (use_hwrt) {
                     type += "_HWRT";
                 }
@@ -355,7 +356,7 @@ const double VeryFastMinPSNR = 25.0;
 // Oren-nayar material tests
 //
 
-void test_oren_mat0(const char *arch_list[], const char *preferred_device) {
+void test_oren_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 11;
     const int PixThres = 394;
 
@@ -368,7 +369,7 @@ void test_oren_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "oren_mat0", desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_oren_mat1(const char *arch_list[], const char *preferred_device) {
+void test_oren_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 308;
 
@@ -382,7 +383,7 @@ void test_oren_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "oren_mat1", desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_oren_mat2(const char *arch_list[], const char *preferred_device) {
+void test_oren_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const double MinPSNR = 30.7;
     const int PixThres = 385;
@@ -401,7 +402,7 @@ void test_oren_mat2(const char *arch_list[], const char *preferred_device) {
 // Diffuse material tests
 //
 
-void test_diff_mat0(const char *arch_list[], const char *preferred_device) {
+void test_diff_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const int PixThres = 328;
 
@@ -415,7 +416,7 @@ void test_diff_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "diff_mat0", desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_diff_mat1(const char *arch_list[], const char *preferred_device) {
+void test_diff_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 212;
 
@@ -429,7 +430,7 @@ void test_diff_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "diff_mat1", desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_diff_mat2(const char *arch_list[], const char *preferred_device) {
+void test_diff_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const double MinPSNR = 30.9;
     const int PixThres = 240;
@@ -448,7 +449,7 @@ void test_diff_mat2(const char *arch_list[], const char *preferred_device) {
 // Sheen material tests
 //
 
-void test_sheen_mat0(const char *arch_list[], const char *preferred_device) {
+void test_sheen_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const int PixThres = 215;
 
@@ -464,7 +465,7 @@ void test_sheen_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "sheen_mat0", mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_sheen_mat1(const char *arch_list[], const char *preferred_device) {
+void test_sheen_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 155;
 
@@ -480,7 +481,7 @@ void test_sheen_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "sheen_mat1", mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_sheen_mat2(const char *arch_list[], const char *preferred_device) {
+void test_sheen_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const int PixThres = 265;
 
@@ -496,7 +497,7 @@ void test_sheen_mat2(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "sheen_mat2", mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
+void test_sheen_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const double MinPSNR = 30.5;
     const int PixThres = 270;
@@ -517,7 +518,7 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
 // Glossy material tests
 //
 
-void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
+void test_glossy_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 440;
     const int PixThres = 375;
 
@@ -531,7 +532,7 @@ void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "glossy_mat0", node_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_glossy_mat1(const char *arch_list[], const char *preferred_device) {
+void test_glossy_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 54;
     const int PixThres = 350;
 
@@ -545,7 +546,7 @@ void test_glossy_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "glossy_mat1", node_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_glossy_mat2(const char *arch_list[], const char *preferred_device) {
+void test_glossy_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 130;
 
@@ -563,7 +564,7 @@ void test_glossy_mat2(const char *arch_list[], const char *preferred_device) {
 // Specular material tests
 //
 
-void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
+void test_spec_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 440;
     const int PixThres = 375;
 
@@ -577,7 +578,7 @@ void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "spec_mat0", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_spec_mat1(const char *arch_list[], const char *preferred_device) {
+void test_spec_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 54;
     const int PixThres = 350;
 
@@ -591,7 +592,7 @@ void test_spec_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "spec_mat1", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_spec_mat2(const char *arch_list[], const char *preferred_device) {
+void test_spec_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 130;
 
@@ -609,7 +610,7 @@ void test_spec_mat2(const char *arch_list[], const char *preferred_device) {
 // Anisotropic material tests
 //
 
-void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 326;
     const int PixThres = 490;
 
@@ -625,7 +626,7 @@ void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "aniso_mat0", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_aniso_mat1(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 330;
     const int PixThres = 465;
 
@@ -641,7 +642,7 @@ void test_aniso_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "aniso_mat1", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_aniso_mat2(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 336;
     const int PixThres = 455;
 
@@ -657,7 +658,7 @@ void test_aniso_mat2(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "aniso_mat2", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_aniso_mat3(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 352;
     const int PixThres = 475;
 
@@ -673,7 +674,7 @@ void test_aniso_mat3(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "aniso_mat3", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_aniso_mat4(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 350;
     const int PixThres = 470;
 
@@ -689,7 +690,7 @@ void test_aniso_mat4(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "aniso_mat4", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_aniso_mat5(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat5(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 310;
     const int PixThres = 540;
 
@@ -705,7 +706,7 @@ void test_aniso_mat5(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "aniso_mat5", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_aniso_mat6(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat6(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 336;
     const int PixThres = 495;
 
@@ -721,7 +722,7 @@ void test_aniso_mat6(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "aniso_mat6", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_aniso_mat7(const char *arch_list[], const char *preferred_device) {
+void test_aniso_mat7(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 352;
     const int PixThres = 505;
 
@@ -741,7 +742,7 @@ void test_aniso_mat7(const char *arch_list[], const char *preferred_device) {
 // Metal material tests
 //
 
-void test_metal_mat0(const char *arch_list[], const char *preferred_device) {
+void test_metal_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 86;
     const int PixThres = 1110;
 
@@ -755,7 +756,7 @@ void test_metal_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "metal_mat0", metal_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_metal_mat1(const char *arch_list[], const char *preferred_device) {
+void test_metal_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
     const int PixThres = 350;
 
@@ -769,7 +770,7 @@ void test_metal_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "metal_mat1", metal_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_metal_mat2(const char *arch_list[], const char *preferred_device) {
+void test_metal_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const double MinPSNR = 30.6;
     const int PixThres = 245;
@@ -788,7 +789,7 @@ void test_metal_mat2(const char *arch_list[], const char *preferred_device) {
 // Plastic material tests
 //
 
-void test_plastic_mat0(const char *arch_list[], const char *preferred_device) {
+void test_plastic_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 30;
     const int PixThres = 890;
 
@@ -802,7 +803,7 @@ void test_plastic_mat0(const char *arch_list[], const char *preferred_device) {
                       PixThres);
 }
 
-void test_plastic_mat1(const char *arch_list[], const char *preferred_device) {
+void test_plastic_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 19;
     const int PixThres = 210;
 
@@ -816,7 +817,7 @@ void test_plastic_mat1(const char *arch_list[], const char *preferred_device) {
                       PixThres);
 }
 
-void test_plastic_mat2(const char *arch_list[], const char *preferred_device) {
+void test_plastic_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 14;
     const int PixThres = 275;
 
@@ -834,7 +835,7 @@ void test_plastic_mat2(const char *arch_list[], const char *preferred_device) {
 // Tint material tests
 //
 
-void test_tint_mat0(const char *arch_list[], const char *preferred_device) {
+void test_tint_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 26;
     const int PixThres = 1070;
 
@@ -848,7 +849,7 @@ void test_tint_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "tint_mat0", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_tint_mat1(const char *arch_list[], const char *preferred_device) {
+void test_tint_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 27;
     const int PixThres = 1630;
 
@@ -862,7 +863,7 @@ void test_tint_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "tint_mat1", spec_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_tint_mat2(const char *arch_list[], const char *preferred_device) {
+void test_tint_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
     const int PixThres = 410;
 
@@ -880,7 +881,7 @@ void test_tint_mat2(const char *arch_list[], const char *preferred_device) {
 // Emissive material tests
 //
 
-void test_emit_mat0(const char *arch_list[], const char *preferred_device) {
+void test_emit_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 90;
     const int PixThres = 390;
 
@@ -899,7 +900,7 @@ void test_emit_mat0(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_NoLight);
 }
 
-void test_emit_mat1(const char *arch_list[], const char *preferred_device) {
+void test_emit_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 158;
     const int PixThres = 475;
 
@@ -922,7 +923,7 @@ void test_emit_mat1(const char *arch_list[], const char *preferred_device) {
 // Clear coat material tests
 //
 
-void test_coat_mat0(const char *arch_list[], const char *preferred_device) {
+void test_coat_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const double MinPSNR = 30.55;
     const int PixThres = 275;
@@ -938,7 +939,7 @@ void test_coat_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "coat_mat0", mat_desc, SampleCount, MinPSNR, PixThres);
 }
 
-void test_coat_mat1(const char *arch_list[], const char *preferred_device) {
+void test_coat_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const double MinPSNR = 30.80;
     const int PixThres = 165;
@@ -954,7 +955,7 @@ void test_coat_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "coat_mat1", mat_desc, SampleCount, MinPSNR, PixThres);
 }
 
-void test_coat_mat2(const char *arch_list[], const char *preferred_device) {
+void test_coat_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const int PixThres = 155;
 
@@ -973,7 +974,7 @@ void test_coat_mat2(const char *arch_list[], const char *preferred_device) {
 // Refractive material tests
 //
 
-void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
+void test_refr_mis0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 9;
     const double MinPSNR = 30.90;
     const int PixThres = 335;
@@ -990,7 +991,7 @@ void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Refraction_Plane);
 }
 
-void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
+void test_refr_mis1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 13;
     const double MinPSNR = 30.65;
     const int PixThres = 265;
@@ -1007,7 +1008,7 @@ void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Refraction_Plane);
 }
 
-void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
+void test_refr_mis2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const double MinPSNR = 30.60;
     const int PixThres = 225;
@@ -1026,7 +1027,7 @@ void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
 
 ///
 
-void test_refr_mat0(const char *arch_list[], const char *preferred_device) {
+void test_refr_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 295;
     const int PixThres = 1140;
 
@@ -1042,7 +1043,7 @@ void test_refr_mat0(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_refr_mat1(const char *arch_list[], const char *preferred_device) {
+void test_refr_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 382;
     const int PixThres = 765;
 
@@ -1058,7 +1059,7 @@ void test_refr_mat1(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_refr_mat2(const char *arch_list[], const char *preferred_device) {
+void test_refr_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 70;
     const int PixThres = 2175;
 
@@ -1074,7 +1075,7 @@ void test_refr_mat2(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_refr_mat3(const char *arch_list[], const char *preferred_device) {
+void test_refr_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 35;
     const int PixThres = 435;
 
@@ -1094,7 +1095,7 @@ void test_refr_mat3(const char *arch_list[], const char *preferred_device) {
 // Transmissive material tests
 //
 
-void test_trans_mat0(const char *arch_list[], const char *preferred_device) {
+void test_trans_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 309;
     const int PixThres = 1125;
 
@@ -1112,7 +1113,7 @@ void test_trans_mat0(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_trans_mat1(const char *arch_list[], const char *preferred_device) {
+void test_trans_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 850;
     const int PixThres = 940;
 
@@ -1130,7 +1131,7 @@ void test_trans_mat1(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_trans_mat2(const char *arch_list[], const char *preferred_device) {
+void test_trans_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 254;
     const int PixThres = 930;
 
@@ -1148,7 +1149,7 @@ void test_trans_mat2(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_trans_mat3(const char *arch_list[], const char *preferred_device) {
+void test_trans_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 221;
     const int PixThres = 425;
 
@@ -1166,7 +1167,7 @@ void test_trans_mat3(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_trans_mat4(const char *arch_list[], const char *preferred_device) {
+void test_trans_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 264;
     const int PixThres = 810;
 
@@ -1184,7 +1185,7 @@ void test_trans_mat4(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_trans_mat5(const char *arch_list[], const char *preferred_device) {
+void test_trans_mat5(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 64;
     const int PixThres = 200;
 
@@ -1206,7 +1207,7 @@ void test_trans_mat5(const char *arch_list[], const char *preferred_device) {
 // Transparent material tests
 //
 
-void test_alpha_mat0(const char *arch_list[], const char *preferred_device) {
+void test_alpha_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 46;
     const int PixThres = 650;
 
@@ -1220,7 +1221,7 @@ void test_alpha_mat0(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "alpha_mat0", alpha_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_alpha_mat1(const char *arch_list[], const char *preferred_device) {
+void test_alpha_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 52;
     const int PixThres = 535;
 
@@ -1234,7 +1235,7 @@ void test_alpha_mat1(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "alpha_mat1", alpha_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_alpha_mat2(const char *arch_list[], const char *preferred_device) {
+void test_alpha_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 42;
     const int PixThres = 415;
 
@@ -1248,7 +1249,7 @@ void test_alpha_mat2(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "alpha_mat2", alpha_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
+void test_alpha_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 18;
     const int PixThres = 120;
 
@@ -1262,7 +1263,7 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "alpha_mat3", alpha_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
 }
 
-void test_alpha_mat4(const char *arch_list[], const char *preferred_device) {
+void test_alpha_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 13;
     const double MinPSNR = 30.50;
     const int PixThres = 405;
@@ -1280,7 +1281,7 @@ void test_alpha_mat4(const char *arch_list[], const char *preferred_device) {
 // Complex material tests
 //
 
-void test_two_sided_mat(const char *arch_list[], const char *preferred_device) {
+void test_two_sided_mat(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const double MinPSNR = 28.7;
     const int PixThres = 700;
@@ -1299,7 +1300,7 @@ void test_two_sided_mat(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, textures, eTestScene::Two_Sided);
 }
 
-void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 11;
     const int PixThres = 760;
 
@@ -1319,7 +1320,7 @@ void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, textures);
 }
 
-void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 725;
 
@@ -1340,7 +1341,7 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, textures);
 }
 
-void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const int PixThres = 625;
 
@@ -1360,7 +1361,7 @@ void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, textures);
 }
 
-void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 8;
     const int PixThres = 400;
 
@@ -1381,7 +1382,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
                       eDenoiseMethod::None, false, textures);
 }
 
-void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
     const int PixThres = 2160;
 
@@ -1403,7 +1404,7 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
                       PixThres, eDenoiseMethod::None, false, textures);
 }
 
-void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 31;
     const int PixThres = 4695;
 
@@ -1423,7 +1424,7 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
                       PixThres, eDenoiseMethod::None, false, textures);
 }
 
-void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_clipped(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 37;
     const int PixThres = 5215;
 
@@ -1443,7 +1444,7 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_Clipped);
 }
 
-void test_complex_mat5_caching(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_caching(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 31;
     const int PixThres = 4695;
 
@@ -1464,7 +1465,7 @@ void test_complex_mat5_caching(const char *arch_list[], const char *preferred_de
                       eTestScene::Standard);
 }
 
-void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_adaptive(const char *arch_list[], std::string_view preferred_device) {
     const int MinSampleCount = 8;
     const int MaxSampleCount = 18;
     const float VarianceThreshold = 0.004f;
@@ -1487,7 +1488,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
                       textures);
 }
 
-void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_regions(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 7;
     const double MinPSNR = 25.50;
     const int PixThres = 3420;
@@ -1508,7 +1509,7 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
                       PixThres, eDenoiseMethod::None, true, textures);
 }
 
-void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_nlm_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
     const int PixThres = 2110;
 
@@ -1528,7 +1529,7 @@ void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred
                       PixThres, eDenoiseMethod::NLM, false, textures);
 }
 
-void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_unet_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 22;
     const int PixThres = 1150;
 
@@ -1548,7 +1549,7 @@ void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferre
                       DefaultMinPSNR, PixThres, eDenoiseMethod::UNet, false, textures);
 }
 
-void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_dof(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 24;
     const double MinPSNR = 21.0;
     const int PixThres = 9755;
@@ -1569,7 +1570,7 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
                       eDenoiseMethod::None, false, textures, eTestScene::Standard_DOF0);
 }
 
-void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_mesh_lights(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 29;
     const int PixThres = 4765;
 
@@ -1590,7 +1591,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
                       eTestScene::Standard_MeshLights);
 }
 
-void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_sphere_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 40;
     const double MinPSNR = 24.0;
     const int PixThres = 1465;
@@ -1611,7 +1612,7 @@ void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferr
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SphereLight);
 }
 
-void test_complex_mat5_inside_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_inside_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 48;
     const double MinPSNR = 25.0;
     const int PixThres = 2720;
@@ -1632,7 +1633,7 @@ void test_complex_mat5_inside_light(const char *arch_list[], const char *preferr
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_InsideLight);
 }
 
-void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_spot_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 5;
     const double MinPSNR = 31.30;
     const int PixThres = 565;
@@ -1653,7 +1654,7 @@ void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SpotLight);
 }
 
-void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_dir_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 26;
     const double MinPSNR = 23.0;
     const int PixThres = 5145;
@@ -1674,7 +1675,7 @@ void test_complex_mat5_dir_light(const char *arch_list[], const char *preferred_
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_DirLight);
 }
 
-void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_sun_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 15;
     const double MinPSNR = 24.25;
     const int PixThres = 4890;
@@ -1695,7 +1696,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SunLight);
 }
 
-void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_moon_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 430;
 
@@ -1715,7 +1716,7 @@ void test_complex_mat5_moon_light(const char *arch_list[], const char *preferred
                       DefaultMinPSNR, PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_MoonLight);
 }
 
-void test_complex_mat5_hdri_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_hdri_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 18;
     const double MinPSNR = 23.0;
     const int PixThres = 6270;
@@ -1736,7 +1737,7 @@ void test_complex_mat5_hdri_light(const char *arch_list[], const char *preferred
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_HDRLight);
 }
 
-void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 43;
     const double MinPSNR = 23.0;
     const int PixThres = 4375;
@@ -1752,7 +1753,7 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, MinPSNR, PixThres);
 }
 
-void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_nlm_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const int PixThres = 1610;
 
@@ -1768,7 +1769,7 @@ void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred
                       VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM);
 }
 
-void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_unet_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 23;
     const int PixThres = 900;
 
@@ -1784,7 +1785,7 @@ void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferre
                       PixThres, eDenoiseMethod::UNet);
 }
 
-void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_dof(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 25;
     const double MinPSNR = 22.0;
     const int PixThres = 5015;
@@ -1801,7 +1802,7 @@ void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_DOF1);
 }
 
-void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_mesh_lights(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 41;
     const double MinPSNR = 23.0;
     const int PixThres = 4375;
@@ -1818,7 +1819,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
-void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_sphere_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 86;
     const double MinPSNR = 23.0;
     const int PixThres = 1175;
@@ -1835,7 +1836,7 @@ void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferr
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_SphereLight);
 }
 
-void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_spot_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 4;
     const double MinPSNR = 31.15;
     const int PixThres = 195;
@@ -1852,7 +1853,7 @@ void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_SpotLight);
 }
 
-void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_dir_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 86;
     const double MinPSNR = 18.0;
     const int PixThres = 9450;
@@ -1869,7 +1870,7 @@ void test_complex_mat6_dir_light(const char *arch_list[], const char *preferred_
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_DirLight);
 }
 
-void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_hdri_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 55;
     const double MinPSNR = 21.0;
     const int PixThres = 6300;
@@ -1886,7 +1887,7 @@ void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_HDRLight);
 }
 
-void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat7_refractive(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 5;
     const double MinPSNR = 21.0;
     const int PixThres = 8015;
@@ -1896,7 +1897,7 @@ void test_complex_mat7_refractive(const char *arch_list[], const char *preferred
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall0);
 }
 
-void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat7_principled(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const double MinPSNR = 21.0;
     const int PixThres = 8225;
@@ -1906,7 +1907,7 @@ void test_complex_mat7_principled(const char *arch_list[], const char *preferred
                       eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall1);
 }
 
-void test_ray_flags(const char *arch_list[], const char *preferred_device) {
+void test_ray_flags(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 30;
     const double MinPSNR = 29.55;
     const int PixThres = 2120;

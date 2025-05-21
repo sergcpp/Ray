@@ -709,8 +709,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     p.usage = Bitmask<eTexUsage>(eTexUsage::Transfer) | eTexUsage::Sampled;
     p.sampling.filter = eTexFilter::Nearest;
 
-    std::pair<uint32_t, uint32_t> ret =
-        bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p, ctx_->default_mem_allocs(), log_);
+    std::pair<uint32_t, uint32_t> ret = bindless_textures_.emplace(!_t.name.empty() ? _t.name.data() : "Bindless Tex",
+                                                                   ctx_, p, ctx_->default_mem_allocs(), log_);
 
     { // Submit GPU commands
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -1631,8 +1631,8 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
 // #define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
-int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
-            const char **err);
+int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16,
+            std::string_view outfilename, const char **err);
 }
 #endif
 
