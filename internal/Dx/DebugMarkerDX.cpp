@@ -21,7 +21,7 @@ Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf
     : cmd_buf_(_cmd_buf) {
 #ifdef ENABLE_GPU_DEBUG
 #ifdef ENABLE_PIX
-    PIXBeginEvent(cmd_buf_, 0, name);
+    PIXBeginEvent(cmd_buf_, 0, name.data());
 #else
     const int req_size = MultiByteToWideChar(CP_UTF8, 0, name.data(), -1, nullptr, 0);
     assert(req_size > 0);
