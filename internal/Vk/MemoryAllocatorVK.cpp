@@ -61,9 +61,8 @@ bool Ray::Vk::MemAllocator::AllocateNewPool(const uint32_t size) {
         new_pool.mem = new_mem;
         new_pool.size = size;
 
-        const uint16_t pool_ndx = alloc_.AddPool(size);
+        [[maybe_unused]] const uint16_t pool_ndx = alloc_.AddPool(size);
         assert(pool_ndx == pools_.size() - 1);
-        (void)pool_ndx;
     }
     return res == VK_SUCCESS;
 }

@@ -154,7 +154,7 @@ void Ray::Dx::Texture::Free() {
 
 bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
                                ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, ILog *log) {
-    ID3D12Resource *new_image = nullptr;
+    [[maybe_unused]] ID3D12Resource *new_image = nullptr;
     // VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
     eResState new_resource_state = eResState::Undefined;
@@ -170,8 +170,6 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
         image_desc.SampleDesc.Count = samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = to_dx_image_flags(Bitmask<eTexUsage>{params.usage}, format);
-
-        (void)new_image;
 #if 0
         VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &new_image);
         if (res != VK_SUCCESS) {

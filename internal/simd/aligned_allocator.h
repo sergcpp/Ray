@@ -69,7 +69,9 @@ template <typename T, size_t Alignment> class aligned_allocator {
     }
 
     // The following must be the same for all allocators.
-    template <typename U> struct rebind { typedef aligned_allocator<U, Alignment> other; };
+    template <typename U> struct rebind {
+        typedef aligned_allocator<U, Alignment> other;
+    };
 
     bool operator!=(const aligned_allocator &other) const { return !(*this == other); }
 
@@ -77,17 +79,12 @@ template <typename T, size_t Alignment> class aligned_allocator {
         ::new ((void *)p) U(std::forward<Args>(args)...);
     }
 
-    template <class U> void destroy(U *p) {
-        p->~T();
-    }
+    template <class U> void destroy(U *p) { p->~T(); }
 
     // Returns true if and only if storage allocated from *this
     // can be deallocated from other, and vice versa.
     // Always returns true for stateless allocators.
-    bool operator==(const aligned_allocator &other) const {
-        ((void)other);
-        return true;
-    }
+    bool operator==(const aligned_allocator &) const { return true; }
 
     // Default constructor, copy constructor, rebinding constructor, and destructor.
     // Empty for stateless allocators.
@@ -129,10 +126,7 @@ template <typename T, size_t Alignment> class aligned_allocator {
         return static_cast<T *>(pv);
     }
 
-    void deallocate(T *const p, const size_t n) const {
-        ((void)n);
-        aligned_free(p);
-    }
+    void deallocate(T *const p, const size_t) const { aligned_free(p); }
 
     // The following will be the same for all allocators that ignore hints.
     template <typename U> T *allocate(const size_t n, const U * /* const hint */) const { return allocate(n); }

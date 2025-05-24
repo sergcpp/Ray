@@ -45,7 +45,7 @@ namespace Dx {
 // const uint32_t _DXC_PART_PRIVATE_DATA = _DXC_FOURCC('P', 'R', 'I', 'V');
 // const uint32_t _DXC_PART_ROOT_SIGNATURE = _DXC_FOURCC('R', 'T', 'S', '0');
 // const uint32_t _DXC_PART_DXIL = _DXC_FOURCC('D', 'X', 'I', 'L');
-const uint32_t _DXC_PART_REFLECTION_DATA = _DXC_FOURCC('S', 'T', 'A', 'T');
+[[maybe_unused]] const uint32_t _DXC_PART_REFLECTION_DATA = _DXC_FOURCC('S', 'T', 'A', 'T');
 // const uint32_t _DXC_PART_SHADER_HASH = _DXC_FOURCC('H', 'A', 'S', 'H');
 
 #undef _DXC_FOURCC
@@ -193,8 +193,6 @@ bool Ray::Dx::Shader::InitFromCSO(Span<const uint8_t> shader_code, const eShader
         memcpy(unif_bindings.data(), shader_code.data() + data_off, ub_count * sizeof(Descr));
         data_off += ub_count * sizeof(Descr);
     }
-
-    (void)_DXC_PART_REFLECTION_DATA;
 #else
     IDxcContainerReflection *container_reflection = {};
     HRESULT hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&container_reflection));
