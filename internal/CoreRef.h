@@ -302,6 +302,10 @@ force_inline fvec4 tangent_from_world(const fvec4 &T, const fvec4 &B, const fvec
     return fvec4{dot(V, T), dot(V, B), dot(V, N), 0.0f};
 }
 
+float portable_cos(float a);
+float portable_sin(float a);
+fvec2 portable_sincos(float a);
+
 fvec2 get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const int sample, const uint32_t rand_seq[]);
 
 float SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fvec4 &axis_u, const fvec4 &axis_v,

@@ -704,7 +704,8 @@ fvec4 map_to_cone(float r1, float r2, fvec4 N, float radius) {
         theta = 0.5f * PI * (1.0f - 0.5f * (offset.get<0>() / offset.get<1>()));
     }
 
-    const fvec2 uv = fvec2(radius * r * cosf(theta), radius * r * sinf(theta));
+    const fvec2 sincos_theta = portable_sincos(theta);
+    const fvec2 uv = fvec2(radius * r * sincos_theta.get<1>(), radius * r * sincos_theta.get<0>());
 
     fvec4 LT, LB;
     create_tbn(normalize(N), LT, LB);
@@ -764,7 +765,7 @@ force_inline bool quadratic(float a, float b, float c, float &t0, float &t1) {
 }
 
 force_inline float ngon_rad(const float theta, const float n) {
-    return cosf(PI / n) / cosf(theta - (2.0f * PI / n) * floorf((n * theta + PI) / (2.0f * PI)));
+    return portable_cos(PI / n) / portable_cos(theta - (2.0f * PI / n) * floorf((n * theta + PI) / (2.0f * PI)));
 }
 
 float approx_atan2(const float y, const float x) { // max error is 0.000004f
@@ -1116,10 +1117,112 @@ force_inline fvec4 slerp(const fvec4 &start, const fvec4 &end, const float perce
     // And multiplying that by percent returns the angle between
     // start and the final result.
     const float theta = acosf(cos_theta) * percent;
-    fvec4 relative_vec = safe_normalize(end - start * cos_theta);
+    const fvec4 relative_vec = safe_normalize(end - start * cos_theta);
     // Orthonormal basis
     // The final result.
-    return start * cosf(theta) + relative_vec * sinf(theta);
+    const fvec2 sincos_theta = portable_sincos(theta);
+    return start * sincos_theta.get<1>() + relative_vec * sincos_theta.get<0>();
+}
+
+//
+// Polynomial approximation of cosine
+// Max error : 6.987e-07
+//
+float portable_cos(float a) {
+    // Normalize angle to [0, 1] range, where 1 corresponds to 2*PI
+    a = fract(fabs(a) * 0.15915494309189535f);
+
+    // Select between ranges [0; 0.25), [0.25; 0.75), [0.75; 1.0]
+    fvec4 selector = 0.0f;
+    selector.set<0>(float(a < 0.25f));
+    selector.set<2>(float(a >= 0.75f));
+    selector.set<1>(-1.0f + dot(selector, fvec4{1, 0, 1, 0}));
+
+    // Center around ranges
+    fvec4 arg = fvec4{a} - fvec4{0.0f, 0.5f, 1.0f, 0.0f};
+    // Squared value gives better precision
+    arg *= arg;
+
+    // Evaluate 5th-degree polynome
+    fvec4 res = fmadd(-25.0407296503853054f, arg, 60.1524123580209817f);
+    res = fmsub(res, arg, 85.4539888046442542f);
+    res = fmadd(res, arg, 64.9393549651994562f);
+    res = fmsub(res, arg, 19.7392086060579359f);
+    res = fmadd(res, arg, 0.9999999998415476f);
+
+    // Combine contributions based on selector to get final value
+    return dot(res, selector);
+}
+
+//
+// Polynomial approximation of sine
+// Max error : 8.482e-07
+//
+float portable_sin(float a) {
+    // Normalize angle to [0, 1] range, where 1 corresponds to 2*PI
+    a = fract(fabs(a - 1.5707963267948966f) * 0.15915494309189535f);
+
+    // Select between ranges [0; 0.25), [0.25; 0.75), [0.75; 1.0]
+    fvec4 selector = 0.0f;
+    selector.set<0>(float(a < 0.25f));
+    selector.set<2>(float(a >= 0.75f));
+    selector.set<1>(-1.0f + dot(selector, fvec4{1, 0, 1, 0}));
+
+    // Center around ranges
+    fvec4 arg = fvec4{a} - fvec4{0.0f, 0.5f, 1.0f, 0.0f};
+    // Squared value gives better precision
+    arg *= arg;
+
+    // Evaluate 5th-degree polynome
+    fvec4 res = fmadd(-25.0407296503853054f, arg, 60.1524123580209817f);
+    res = fmsub(res, arg, 85.4539888046442542f);
+    res = fmadd(res, arg, 64.9393549651994562f);
+    res = fmsub(res, arg, 19.7392086060579359f);
+    res = fmadd(res, arg, 0.9999999998415476f);
+
+    // Combine contributions based on selector to get final value
+    return dot(res, selector);
+}
+
+//
+// Combined approximation of sine/cosine
+// Max error : 8.482e-07
+//
+fvec2 portable_sincos(const float a) {
+    // Normalize angle to [0, 1] range, where 1 corresponds to 2*PI
+    const float a_cos = fract(fabsf(a) * 0.15915494309189535f);
+    const float a_sin = fract(fabsf(a - 1.5707963267948966f) * 0.15915494309189535f);
+
+    // Select between ranges [0; 0.25), [0.25; 0.75), [0.75; 1.0]
+    fvec4 selector_cos = 0.0f, selector_sin = 0.0f;
+    selector_cos.set<0>(float(a_cos < 0.25f));
+    selector_cos.set<2>(float(a_cos >= 0.75f));
+    selector_cos.set<1>(-1.0f + dot(selector_cos, fvec4{1, 0, 1, 0}));
+    selector_sin.set<0>(float(a_sin < 0.25f));
+    selector_sin.set<2>(float(a_sin >= 0.75f));
+    selector_sin.set<1>(-1.0f + dot(selector_sin, fvec4{1, 0, 1, 0}));
+
+    // Center around ranges
+    fvec4 arg_cos = fvec4{a_cos} - fvec4{0.0f, 0.5f, 1.0f, 0.0f};
+    fvec4 arg_sin = fvec4{a_sin} - fvec4{0.0f, 0.5f, 1.0f, 0.0f};
+    // Squared value gives better precision
+    arg_cos *= arg_cos;
+    arg_sin *= arg_sin;
+
+    // Evaluate 5th-degree polynome
+    fvec4 res_cos = fmadd(-25.0407296503853054f, arg_cos, 60.1524123580209817f);
+    fvec4 res_sin = fmadd(-25.0407296503853054f, arg_sin, 60.1524123580209817f);
+    res_cos = fmsub(res_cos, arg_cos, 85.4539888046442542f);
+    res_sin = fmsub(res_sin, arg_sin, 85.4539888046442542f);
+    res_cos = fmadd(res_cos, arg_cos, 64.9393549651994562f);
+    res_sin = fmadd(res_sin, arg_sin, 64.9393549651994562f);
+    res_cos = fmsub(res_cos, arg_cos, 19.7392086060579359f);
+    res_sin = fmsub(res_sin, arg_sin, 19.7392086060579359f);
+    res_cos = fmadd(res_cos, arg_cos, 0.9999999998415476f);
+    res_sin = fmadd(res_sin, arg_sin, 0.9999999998415476f);
+
+    // Combine contributions based on selector to get final value
+    return fvec2{dot(res_sin, selector_sin), dot(res_cos, selector_cos)};
 }
 
 //
@@ -1224,7 +1327,8 @@ float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos,
     if (out_p) {
         // compute cu
         const float au = Xi.get<0>() * area + k;
-        const float fu = safe_div((cosf(au) * b0 - b1), sinf(au));
+        const fvec2 sincos_au = portable_sincos(au);
+        const float fu = safe_div((sincos_au.get<1>() * b0 - b1), sincos_au.get<0>());
         float cu = 1.0f / sqrtf(fu * fu + b0sq) * (fu > 0.0f ? 1.0f : -1.0f);
         cu = clamp(cu, -1.0f, 1.0f);
         // compute xu
@@ -1281,17 +1385,20 @@ float Ray::Ref::SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const f
         const float area_S = Xi.get<0>() * area;
 
         // Save the sine and cosine of the angle delta
-        const float p = sinf(area_S - alpha);
-        const float q = cosf(area_S - alpha);
+        const fvec2 sincos_area = portable_sincos(area_S - alpha);
+        const float p = sincos_area.get<0>();
+        const float q = sincos_area.get<1>();
 
         // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
-        const float u = q - cosf(alpha);
-        const float v = p + sinf(alpha) * cosf(c);
+        const fvec2 sincos_alpha = portable_sincos(alpha);
+        const float u = q - sincos_alpha.get<1>();
+        const float v = p + sincos_alpha.get<0>() * portable_cos(c);
 
         // Compute the s coordinate as normalized arc length from A to C_s
-        const float denom = ((v * p + u * q) * sinf(alpha));
-        const float s = safe_div(1.0f, b) *
-                        portable_acosf(clamp(safe_div(((v * q - u * p) * cosf(alpha) - v), denom), -1.0f, 1.0f));
+        const float denom = ((v * p + u * q) * sincos_alpha.get<0>());
+        const float s =
+            safe_div(1.0f, b) *
+            portable_acosf(clamp(safe_div(((v * q - u * p) * sincos_alpha.get<1>() - v), denom), -1.0f, 1.0f));
 
         // Compute the third vertex of the sub - triangle
         const fvec4 C_s = slerp(A, C, s);
@@ -1403,8 +1510,9 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &rect, cons
 
                     theta += cam.lens_rotation;
 
-                    offset.set<0>(0.5f * r * cosf(theta) / cam.lens_ratio);
-                    offset.set<1>(0.5f * r * sinf(theta));
+                    const fvec2 sincos_theta = portable_sincos(theta);
+                    offset.set<0>(0.5f * r * sincos_theta.get<1>() / cam.lens_ratio);
+                    offset.set<1>(0.5f * r * sincos_theta.get<0>());
                 }
 
                 const float coc = 0.5f * (cam.focal_length / cam.fstop);
@@ -3263,10 +3371,10 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         ls.L = make_fvec3(l.dir.dir);
         ls.area = 0.0f;
         ls.pdf = 1.0f;
-        if (l.dir.angle != 0.0f) {
+        if (l.dir.tan_angle != 0.0f) {
             const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
-            const float radius = tanf(l.dir.angle);
+            const float radius = l.dir.tan_angle;
             ls.L = normalize(map_to_cone(r1, r2, ls.L, radius));
             ls.area = PI * radius * radius;
 
@@ -3332,8 +3440,10 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
                 theta = 0.5f * PI - 0.25f * PI * (offset.get<0>() / offset.get<1>());
             }
 
-            offset.set<0>(0.5f * r * cosf(theta));
-            offset.set<1>(0.5f * r * sinf(theta));
+            const fvec2 sincos_theta = portable_sincos(theta);
+
+            offset.set<0>(0.5f * r * sincos_theta.get<1>());
+            offset.set<1>(0.5f * r * sincos_theta.get<0>());
         }
 
         const fvec4 lp = light_pos + light_u * offset.get<0>() + light_v * offset.get<1>();
@@ -3375,7 +3485,8 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         fvec4 light_v = cross(light_u, light_dir);
 
         const float phi = PI * r1;
-        const fvec4 normal = cosf(phi) * light_u + sinf(phi) * light_v;
+        const fvec2 sincos_phi = portable_sincos(phi);
+        const fvec4 normal = sincos_phi.get<1>() * light_u + sincos_phi.get<0>() * light_v;
 
         const fvec4 lp = light_pos + normal * l.line.radius + (r2 - 0.5f) * light_dir * l.line.height;
 
@@ -3473,7 +3584,8 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         } else {
             // Sample environment as hemishpere
             const float phi = 2 * PI * ry;
-            const float cos_phi = cosf(phi), sin_phi = sinf(phi);
+            const fvec2 sincos_phi = portable_sincos(phi);
+            const float cos_phi = sincos_phi.get<1>(), sin_phi = sincos_phi.get<0>();
 
             const float dir = sqrtf(1.0f - rx * rx);
             auto V = fvec4{dir * cos_phi, dir * sin_phi, rx, 0.0f}; // in tangent-space
@@ -3652,7 +3764,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const fvec4 light_dir = make_fvec3(l.dir.dir);
                     const float cos_theta = dot(rd, light_dir);
-                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > cosf(l.dir.angle)) {
+                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > l.dir.cos_angle) {
                         inout_inter.v = 0.0f;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = 1.0f / cos_theta;
@@ -3898,7 +4010,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const fvec4 light_dir = make_fvec3(l.dir.dir);
                     const float cos_theta = dot(rd, light_dir);
-                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > cosf(l.dir.angle)) {
+                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > l.dir.cos_angle) {
                         inout_inter.v = 0.0f;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = 1.0f / cos_theta;
@@ -4098,7 +4210,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const fvec4 light_dir = make_fvec3(l.dir.dir);
                     const float cos_theta = dot(rd, light_dir);
-                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > cosf(l.dir.angle)) {
+                    if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > l.dir.cos_angle) {
                         inout_inter.v = 0.0f;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = 1.0f / cos_theta;

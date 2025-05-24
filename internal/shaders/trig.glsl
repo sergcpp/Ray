@@ -2,61 +2,104 @@
 #define TRIG_GLSL
 
 //
-// sinf/cosf implemantation. Taken from cgfx documentation
+// Polynomial approximation of cosine
+// Max error : 6.987e-07
 //
+float portable_cos(float a) {
+    // Normalize angle to [0, 1] range, where 1 corresponds to 2*PI
+    a = fract(abs(a) * 0.15915494309189535);
 
-float portable_cosf(const float a) {
-    // C simulation gives a max absolute error of less than 1.8e-7
-    const vec4 c0 = vec4(0.0,            0.5,            1.0,            0.0           );
-    const vec4 c1 = vec4(0.25,          -9.0,            0.75,           0.159154943091);
-    const vec4 c2 = vec4(24.9808039603, -24.9808039603, -60.1458091736,  60.1458091736 );
-    const vec4 c3 = vec4(85.4537887573, -85.4537887573, -64.9393539429,  64.9393539429 );
-    const vec4 c4 = vec4(19.7392082214, -19.7392082214, -1.0,            1.0           );
+    // Select between ranges [0; 0.25), [0.25; 0.75), [0.75; 1.0]
+    vec3 selector = vec3(0.0);
+    selector.x = float(a < 0.25);
+    selector.z = float(a >= 0.75);
+    selector.y = -1.0 + dot(selector, vec3(1.0, 0.0, 1.0));
 
-    vec3 r0, r1, r2;
+    // Center around ranges
+    vec3 arg = vec3(a) - vec3(0.0, 0.5, 1.0);
+    // Squared value gives better precision
+    arg *= arg;
 
-    r1.x  = c1.w * a;                                 // normalize input
-    r1.y  = fract(r1.x);                              // and extract fraction
-    r2.x  = float(r1.y < c1.x);                       // range check: 0.0 to 0.25
-    r2.yz = vec2(greaterThanEqual(r1.yy, c1.yz));     // range check: 0.75 to 1.0
-    r2.y  = dot(r2, c4.zwz);                          // range check: 0.25 to 0.75
-    r0    = c0.xyz - r1.yyy;                          // range centering
-    r0    = r0 * r0;
-    r1    = c2.xyx * r0 + c2.zwz;                     // start power series
-    r1    =     r1 * r0 + c3.xyx;
-    r1    =     r1 * r0 + c3.zwz;
-    r1    =     r1 * r0 + c4.xyx;
-    r1    =     r1 * r0 + c4.zwz;
-    r0.x  = dot(r1, -r2);                             // range extract
+    // Evaluate 5th-degree polynome
+    vec3 res = fma(vec3(-25.0407296503853054), arg, vec3(60.1524123580209817));
+    res = fma(res, arg, vec3(-85.4539888046442542));
+    res = fma(res, arg, vec3(64.9393549651994562));
+    res = fma(res, arg, vec3(-19.7392086060579359));
+    res = fma(res, arg, vec3(0.9999999998415476));
 
-    return r0.x;
+    // Combine contributions based on selector to get final value
+    return dot(res, selector);
 }
 
-float portable_sinf(const float a) {
-    // C simulation gives a max absolute error of less than 1.8e-7
-    const vec4 c0 = vec4(0.0,            0.5,            1.0,            0.0           );
-    const vec4 c1 = vec4(0.25,          -9.0,            0.75,           0.159154943091);
-    const vec4 c2 = vec4(24.9808039603, -24.9808039603, -60.1458091736,  60.1458091736 );
-    const vec4 c3 = vec4(85.4537887573, -85.4537887573, -64.9393539429,  64.9393539429 );
-    const vec4 c4 = vec4(19.7392082214, -19.7392082214, -1.0,            1.0           );
+//
+// Polynomial approximation of sine
+// Max error : 8.482e-07
+//
+float portable_sin(float a) {
+    // Normalize angle to [0, 1] range, where 1 corresponds to 2*PI
+    a = fract(abs(a - 1.5707963267948966) * 0.15915494309189535);
 
-    vec3 r0, r1, r2;
+    // Select between ranges [0; 0.25), [0.25; 0.75), [0.75; 1.0]
+    vec3 selector = vec3(0.0);
+    selector.x = float(a < 0.25);
+    selector.z = float(a >= 0.75);
+    selector.y = -1.0 + dot(selector, vec3(1.0, 0.0, 1.0));
 
-    r1.x  = c1.w * a - c1.x;                          // only difference from cos!
-    r1.y  = fract(r1.x);                              // and extract fraction
-    r2.x  = float(r1.y < c1.x);                       // range check: 0.0 to 0.25
-    r2.yz = vec2(greaterThanEqual(r1.yy, c1.yz));     // range check: 0.75 to 1.0
-    r2.y  = dot(r2, c4.zwz);                          // range check: 0.25 to 0.75
-    r0    = c0.xyz - r1.yyy;                          // range centering
-    r0    = r0 * r0;
-    r1    = c2.xyx * r0 + c2.zwz;                     // start power series
-    r1    =     r1 * r0 + c3.xyx;
-    r1    =     r1 * r0 + c3.zwz;
-    r1    =     r1 * r0 + c4.xyx;
-    r1    =     r1 * r0 + c4.zwz;
-    r0.x  = dot(r1, -r2);                             // range extract
+    // Center around ranges
+    vec3 arg = vec3(a) - vec3(0.0, 0.5, 1.0);
+    // Squared value gives better precision
+    arg *= arg;
 
-    return r0.x;
+    // Evaluate 5th-degree polynome
+    vec3 res = fma(vec3(-25.0407296503853054), arg, vec3(60.1524123580209817));
+    res = fma(res, arg, vec3(-85.4539888046442542));
+    res = fma(res, arg, vec3(64.9393549651994562));
+    res = fma(res, arg, vec3(-19.7392086060579359));
+    res = fma(res, arg, vec3(0.9999999998415476));
+
+    // Combine contributions based on selector to get final value
+    return dot(res, selector);
+}
+
+//
+// Combined approximation of sine/cosine
+// Max error : 8.482e-07
+//
+vec2 portable_sincos(const float a) {
+    // Normalize angle to [0, 1] range, where 1 corresponds to 2*PI
+    const float a_cos = fract(abs(a) * 0.15915494309189535);
+    const float a_sin = fract(abs(a - 1.5707963267948966) * 0.15915494309189535);
+
+    // Select between ranges [0; 0.25), [0.25; 0.75), [0.75; 1.0]
+    vec3 selector_cos = vec3(0.0), selector_sin = vec3(0.0);
+    selector_cos.x = float(a_cos < 0.25);
+    selector_cos.z = float(a_cos >= 0.75);
+    selector_cos.y = -1.0 + dot(selector_cos, vec3(1, 0, 1));
+    selector_sin.x = float(a_sin < 0.25);
+    selector_sin.z = float(a_sin >= 0.75);
+    selector_sin.y = -1.0 + dot(selector_sin, vec3(1, 0, 1));
+
+    // Center around ranges
+    vec3 arg_cos = vec3(a_cos) - vec3(0.0, 0.5, 1.0);
+    vec3 arg_sin = vec3(a_sin) - vec3(0.0, 0.5, 1.0);
+    // Squared value gives better precision
+    arg_cos *= arg_cos;
+    arg_sin *= arg_sin;
+
+    // Evaluate 5th-degree polynome
+    vec3 res_cos = fma(vec3(-25.0407296503853054), arg_cos, vec3(60.1524123580209817));
+    vec3 res_sin = fma(vec3(-25.0407296503853054), arg_sin, vec3(60.1524123580209817));
+    res_cos = fma(res_cos, arg_cos, vec3(-85.4539888046442542));
+    res_sin = fma(res_sin, arg_sin, vec3(-85.4539888046442542));
+    res_cos = fma(res_cos, arg_cos, vec3(64.9393549651994562));
+    res_sin = fma(res_sin, arg_sin, vec3(64.9393549651994562));
+    res_cos = fma(res_cos, arg_cos, vec3(-19.7392086060579359));
+    res_sin = fma(res_sin, arg_sin, vec3(-19.7392086060579359));
+    res_cos = fma(res_cos, arg_cos, vec3(0.9999999998415476));
+    res_sin = fma(res_sin, arg_sin, vec3(0.9999999998415476));
+
+    // Combine contributions based on selector to get final value
+    return vec2(dot(res_sin, selector_sin), dot(res_cos, selector_cos));
 }
 
 //

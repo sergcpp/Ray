@@ -228,8 +228,9 @@ struct light_t {
             float _unused[9];
         } tri;
         struct {
-            float dir[3], angle;
-            float _unused[8];
+            float dir[3], cos_angle;
+            float tan_angle, angle, _unused0[2];
+            float _unused1[4];
         } dir;
     };
 };

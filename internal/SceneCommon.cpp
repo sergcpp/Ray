@@ -297,7 +297,12 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
             const uint32_t px_hash = Ref::hash((x << 16) | y);
 
             const float phi = 2.0f * PI * (x + 0.5f) / float(res[0]);
-            auto ray_dir = Ref::fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
+
+            const Ref::fvec2 sincos_theta = Ref::portable_sincos(theta);
+            const Ref::fvec2 sincos_phi = Ref::portable_sincos(phi);
+
+            auto ray_dir = Ref::fvec4{sincos_theta.get<0>() * sincos_phi.get<1>(), sincos_theta.get<1>(),
+                                      sincos_theta.get<0>() * sincos_phi.get<0>(), 0.0f};
 
             Ref::fvec4 color = 0.0f;
 
@@ -308,8 +313,8 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
 
                     const Ref::fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
                     Ref::fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
-                    if (l.dir.angle != 0.0f) {
-                        const float radius = tanf(l.dir.angle);
+                    if (l.dir.tan_angle != 0.0f) {
+                        const float radius = l.dir.tan_angle;
                         light_col *= (PI * radius * radius);
                     }
 

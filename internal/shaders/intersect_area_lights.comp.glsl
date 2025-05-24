@@ -155,7 +155,7 @@ void main() {
                 }
             } else if (light_type == LIGHT_TYPE_DIR) {
                 const float cos_theta = dot(rd, l.DIR_DIR);
-                if ((inter.v < 0.0 || no_shadow) && cos_theta > cos(l.DIR_ANGLE)) {
+                if ((inter.v < 0.0 || no_shadow) && cos_theta > l.DIR_COS_ANGLE) {
                     inter.v = 0.0;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = 1.0 / cos_theta;

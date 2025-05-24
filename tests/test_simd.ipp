@@ -1179,7 +1179,6 @@ using namespace Ray::NS;
     require(v20.get<6>() == 15);
     require(v20.get<7>() == 1);
 
-
     printf("OK\n");
 }
 

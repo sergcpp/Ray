@@ -862,8 +862,8 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
             memcpy(uniform_params.light_col, l.col, 3 * sizeof(float));
             memcpy(uniform_params.light_col_point, l.col, 3 * sizeof(float));
             uniform_params.light_col[3] = cosf(l.dir.angle);
-            if (l.dir.angle != 0.0f) {
-                const float radius = tanf(l.dir.angle);
+            if (l.dir.tan_angle != 0.0f) {
+                const float radius = l.dir.tan_angle;
                 uniform_params.light_col_point[0] *= (PI * radius * radius);
                 uniform_params.light_col_point[1] *= (PI * radius * radius);
                 uniform_params.light_col_point[2] *= (PI * radius * radius);

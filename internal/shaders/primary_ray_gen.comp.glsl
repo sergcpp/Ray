@@ -54,7 +54,7 @@ float lookup_filter_table(float x) {
 }
 
 float ngon_rad(const float theta, const float n) {
-    return cos(PI / n) / cos(theta - (2.0 * PI / n) * floor((n * theta + PI) / (2.0 * PI)));
+    return portable_cos(PI / n) / portable_cos(theta - (2.0 * PI / n) * floor((n * theta + PI) / (2.0 * PI)));
 }
 
 vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
@@ -126,8 +126,10 @@ void main() {
 
             theta += g_params.cam_lens_rotation;
 
-            offset.x = 0.5 * r * cos(theta) / g_params.cam_lens_ratio;
-            offset.y = 0.5 * r * sin(theta);
+            const vec2 sincos_theta = portable_sincos(theta);
+
+            offset.x = 0.5 * r * sincos_theta[1] / g_params.cam_lens_ratio;
+            offset.y = 0.5 * r * sincos_theta[0];
         }
 
         const float coc = 0.5 * (g_params.cam_focal_length / g_params.cam_fstop);

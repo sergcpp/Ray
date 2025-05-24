@@ -120,6 +120,7 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/Time.cpp
                           internal/TonemapRef.h
                           internal/TonemapRef.cpp
+                          internal/Trig.h
                           internal/UNetFilter.h
                           internal/UNetFilter.cpp
                           internal/VectorGPU.h)

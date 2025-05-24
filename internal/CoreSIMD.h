@@ -13,6 +13,7 @@
 
 #include "Convolution.h"
 #include "TextureStorageCPU.h"
+#include "Trig.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant
@@ -1640,8 +1641,9 @@ force_inline void slerp(const fvec<S> start[3], const fvec<S> end[3], const fvec
     safe_normalize(relative_vec);
     // Orthonormal basis
     // The final result.
-    const fvec<S> cos_theta2 = cos(theta), sin_theta = sin(theta);
-    UNROLLED_FOR(i, 3, { out_v[i] = start[i] * cos_theta2 + relative_vec[i] * sin_theta; })
+    fvec<S> sincos_theta[2];
+    portable_sincos(theta, sincos_theta[0], sincos_theta[1]);
+    UNROLLED_FOR(i, 3, { out_v[i] = start[i] * sincos_theta[1] + relative_vec[i] * sincos_theta[0]; })
 }
 
 // Return arcsine(x) given that .57 < x
@@ -1758,17 +1760,21 @@ fvec<S> SampleSphericalTriangle(const fvec<S> P[3], const fvec<S> p1[3], const f
         const fvec<S> area_S = Xi[0] * area;
 
         // Save the sine and cosine of the angle delta
-        const fvec<S> p = sin(area_S - alpha);
-        const fvec<S> q = cos(area_S - alpha);
+        fvec<S> sincos_area[2];
+        portable_sincos(area_S - alpha, sincos_area[0], sincos_area[1]);
+        const fvec<S> p = sincos_area[0];
+        const fvec<S> q = sincos_area[1];
 
         // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
-        const fvec<S> u = q - cos(alpha);
-        const fvec<S> v = p + sin(alpha) * cos(c);
+        fvec<S> sincos_alpha[2];
+        portable_sincos(alpha, sincos_alpha[0], sincos_alpha[1]);
+        const fvec<S> u = q - sincos_alpha[1];
+        const fvec<S> v = p + sincos_alpha[0] * portable_cos(c);
 
         // Compute the s coordinate as normalized arc length from A to C_s
-        const fvec<S> denom = ((v * p + u * q) * sin(alpha));
+        const fvec<S> denom = ((v * p + u * q) * sincos_alpha[0]);
         const fvec<S> s = safe_div(fvec<S>{1.0f}, b) *
-                          portable_acosf(clamp(safe_div(((v * q - u * p) * cos(alpha) - v), denom), -1.0f, 1.0f));
+                          portable_acosf(clamp(safe_div(((v * q - u * p) * sincos_alpha[1] - v), denom), -1.0f, 1.0f));
 
         // Compute the third vertex of the sub - triangle.
         fvec<S> C_s[3];
@@ -1839,7 +1845,9 @@ fvec<S> SampleSphericalRectangle(const fvec<S> P[3], const fvec<S> light_pos[3],
     if (out_p) {
         // compute cu
         const fvec<S> au = Xi[0] * area + k;
-        const fvec<S> fu = safe_div((cos(au) * b0 - b1), sin(au));
+        fvec<S> sincos_au[2];
+        portable_sincos(au, sincos_au[0], sincos_au[1]);
+        const fvec<S> fu = safe_div((sincos_au[1] * b0 - b1), sincos_au[0]);
         fvec<S> cu = 1.0f / sqrt(fu * fu + b0sq);
         where(fu <= 0.0f, cu) = -cu;
         cu = clamp(cu, -1.0f, 1.0f);
@@ -2305,10 +2313,10 @@ void SampleVNDF_Hemisphere_CrossSect(const fvec<S> Vh[3], const fvec<S> &U1, con
     // parameterization of the projected area
     const fvec<S> r = sqrt(U1);
     const fvec<S> phi = 2.0f * PI * U2;
-    fvec<S> t1;
-    UNROLLED_FOR_S(i, S, { t1.template set<i>(r.template get<i>() * cosf(phi.template get<i>())); })
-    fvec<S> t2;
-    UNROLLED_FOR_S(i, S, { t2.template set<i>(r.template get<i>() * sinf(phi.template get<i>())); })
+    fvec<S> sin_phi, cos_phi;
+    portable_sincos(phi, sin_phi, cos_phi);
+    const fvec<S> t1 = r * cos_phi;
+    fvec<S> t2 = r * sin_phi;
     const fvec<S> s = 0.5f * (1.0f + Vh[2]);
     t2 = (1.0f - s) * sqrt(1.0f - t1 * t1) + s * t2;
     // reprojection onto hemisphere
@@ -2320,8 +2328,10 @@ template <int S> void SampleVNDF_Hemisphere_SphCap(const fvec<S> Vh[3], const fv
     const fvec<S> phi = 2.0f * PI * rand[0];
     const fvec<S> z = fmadd(1.0f - rand[1], 1.0f + Vh[2], -Vh[2]);
     const fvec<S> sin_theta = sqrt(saturate(1.0f - z * z));
-    out_Nh[0] = Vh[0] + sin_theta * cos(phi);
-    out_Nh[1] = Vh[1] + sin_theta * sin(phi);
+    fvec<S> sin_phi, cos_phi;
+    portable_sincos(phi, sin_phi, cos_phi);
+    out_Nh[0] = Vh[0] + sin_theta * cos_phi;
+    out_Nh[1] = Vh[1] + sin_theta * sin_phi;
     out_Nh[2] = Vh[2] + z;
 }
 
@@ -2338,8 +2348,10 @@ void SampleVNDF_Hemisphere_SphCap_Bounded(const fvec<S> Ve[3], const fvec<S> Vh[
     const fvec<S> b = select(Ve[2] > 0.0f, k * Vh[2], Vh[2]);
     const fvec<S> z = fmadd(1.0f - rand[1], 1.0f + b, -b);
     const fvec<S> sin_theta = sqrt(saturate(1.0f - z * z));
-    const fvec<S> x = sin_theta * cos(phi);
-    const fvec<S> y = sin_theta * sin(phi);
+    fvec<S> sin_phi, cos_phi;
+    portable_sincos(phi, sin_phi, cos_phi);
+    const fvec<S> x = sin_theta * cos_phi;
+    const fvec<S> y = sin_theta * sin_phi;
     out_Nh[0] = x + Vh[0];
     out_Nh[1] = y + Vh[1];
     out_Nh[2] = z + Vh[2];
@@ -2443,7 +2455,9 @@ void map_to_cone(const fvec<S> &r1, const fvec<S> &r2, const fvec<S> N[3], const
     where(abs(offset[0]) > abs(offset[1]), r) = offset[0];
     where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * safe_div(offset[1], offset[0]);
 
-    const fvec<S> uv[2] = {radius * r * cos(theta), radius * r * sin(theta)};
+    fvec<S> sincos_theta[2];
+    portable_sincos(theta, sincos_theta[0], sincos_theta[1]);
+    const fvec<S> uv[2] = {radius * r * sincos_theta[1], radius * r * sincos_theta[0]};
 
     fvec<S> normalized_N[3] = {N[0], N[1], N[2]};
     normalize(normalized_N);
@@ -2546,13 +2560,9 @@ force_inline ivec<S> quadratic(const fvec<S> &a, const fvec<S> &b, const fvec<S>
 }
 
 template <int S> force_inline fvec<S> ngon_rad(const fvec<S> &theta, const float n) {
-    fvec<S> ret;
-    UNROLLED_FOR_S(i, S, {
-        ret.template set<i>(
-            cosf(PI / n) /
-            cosf(theta.template get<i>() - (2.0f * PI / n) * floorf((n * theta.template get<i>() + PI) / (2.0f * PI))));
-    })
-    return ret;
+    // TODO: Simplify!
+    return portable_cos(fvec<S>{PI / n}) /
+           portable_cos(theta - (2.0f * PI / n) * floor((n * theta + PI) / (2.0f * PI)));
 }
 
 template <int S>
@@ -2930,8 +2940,11 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &rect, int w
 
                 theta += cam.lens_rotation;
 
-                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[0]) = 0.5f * r * cos(theta) / cam.lens_ratio;
-                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[1]) = 0.5f * r * sin(theta);
+                fvec<S> sincos_theta[2];
+                portable_sincos(theta, sincos_theta[0], sincos_theta[1]);
+
+                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[0]) = 0.5f * r * sincos_theta[1] / cam.lens_ratio;
+                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[1]) = 0.5f * r * sincos_theta[0];
 
                 const float coc = 0.5f * (cam.focal_length / cam.fstop);
                 offset[0] *= coc * cam.sensor_height;
@@ -4290,7 +4303,8 @@ void Ray::NS::Sample_OrenDiffuse_BSDF(const fvec<S> T[3], const fvec<S> B[3], co
                                       const fvec<S> &roughness, const fvec<S> base_color[3], const fvec<S> &rand_u,
                                       const fvec<S> &rand_v, fvec<S> out_V[3], fvec<S> out_color[4]) {
     const fvec<S> phi = 2 * PI * rand_v;
-    const fvec<S> cos_phi = cos(phi), sin_phi = sin(phi);
+    fvec<S> cos_phi, sin_phi;
+    portable_sincos(phi, sin_phi, cos_phi);
     const fvec<S> dir = sqrt(1.0f - rand_u * rand_u);
 
     const fvec<S> V[3] = {dir * cos_phi, dir * sin_phi, rand_u}; // in tangent-space
@@ -4334,7 +4348,8 @@ void Ray::NS::Sample_PrincipledDiffuse_BSDF(const fvec<S> T[3], const fvec<S> B[
                                             const fvec<S> sheen_color[3], const bool uniform_sampling,
                                             const fvec<S> rand[2], fvec<S> out_V[3], fvec<S> out_color[4]) {
     const fvec<S> phi = 2 * PI * rand[1];
-    const fvec<S> cos_phi = cos(phi), sin_phi = sin(phi);
+    fvec<S> cos_phi, sin_phi;
+    portable_sincos(phi, sin_phi, cos_phi);
 
     fvec<S> V[3];
     if (uniform_sampling) {
@@ -4805,7 +4820,8 @@ template <int S> void Ray::NS::DirToCanonical(const fvec<S> d[3], float y_rotati
 
 template <int S>
 void Ray::NS::rotate_around_axis(const fvec<S> p[3], const fvec<S> axis[3], const fvec<S> &angle, fvec<S> out_p[3]) {
-    const fvec<S> costheta = cos(angle), sintheta = sin(angle);
+    fvec<S> costheta, sintheta;
+    portable_sincos(angle, sintheta, costheta);
 
     const fvec<S> temp0 = ((costheta + (1.0f - costheta) * axis[0] * axis[0]) * p[0]) +
                           (((1.0f - costheta) * axis[0] * axis[1] - axis[2] * sintheta) * p[1]) +
@@ -5594,8 +5610,8 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             where(ray_queue[index], ls.area) = 0.0f;
             where(ray_queue[index], ls.pdf) = 1.0f;
             where(ray_queue[index], ls.dist_mul) = MAX_DIST;
-            if (l.dir.angle != 0.0f) {
-                const float radius = tanf(l.dir.angle);
+            if (l.dir.tan_angle != 0.0f) {
+                const float radius = l.dir.tan_angle;
 
                 fvec<S> V[3];
                 map_to_cone(rand_light_uv[0], rand_light_uv[1], ls.L, fvec<S>{radius}, V);
@@ -5676,8 +5692,11 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 where(abs(offset[0]) > abs(offset[1]), r) = offset[0];
                 where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * safe_div(offset[1], offset[0]);
 
-                where(mask, offset[0]) = 0.5f * r * cos(theta);
-                where(mask, offset[1]) = 0.5f * r * sin(theta);
+                fvec<S> sincos_theta[2];
+                portable_sincos(theta, sincos_theta[0], sincos_theta[1]);
+
+                where(mask, offset[0]) = 0.5f * r * sincos_theta[1];
+                where(mask, offset[1]) = 0.5f * r * sincos_theta[0];
             }
 
             const fvec<S> lp[3] = {l.disk.pos[0] + l.disk.u[0] * offset[0] + l.disk.v[0] * offset[1],
@@ -5737,7 +5756,8 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                                         light_u[0] * light_dir[1] - light_u[1] * light_dir[0]};
 
             const fvec<S> phi = PI * rand_light_uv[0];
-            const fvec<S> cos_phi = cos(phi), sin_phi = sin(phi);
+            fvec<S> sin_phi, cos_phi;
+            portable_sincos(phi, sin_phi, cos_phi);
 
             const fvec<S> normal[3] = {cos_phi * light_u[0] - sin_phi * light_v[0],
                                        cos_phi * light_u[1] - sin_phi * light_v[1],
@@ -5882,7 +5902,8 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             } else {
                 // Sample environment as hemishpere
                 const fvec<S> phi = 2 * PI * rand_light_uv[1];
-                const fvec<S> cos_phi = cos(phi), sin_phi = sin(phi);
+                fvec<S> sin_phi, cos_phi;
+                portable_sincos(phi, sin_phi, cos_phi);
                 const fvec<S> dir = sqrt(1.0f - rand_light_uv[0] * rand_light_uv[0]);
 
                 const fvec<S> V[3] = {dir * cos_phi, dir * sin_phi, rand_light_uv[0]}; // in tangent-space
@@ -6105,7 +6126,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     }
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const fvec<S> cos_theta = dot3(r.d, l.dir.dir);
-                    const ivec<S> imask = simd_cast(cos_theta > cosf(l.dir.angle)) & ray_mask &
+                    const ivec<S> imask = simd_cast(cos_theta > portable_cos(fvec<S>{l.dir.angle})) & ray_mask &
                                           (simd_cast(inout_inter.v < 0.0f) | simd_cast(no_shadow));
                     where(imask, inout_inter.v) = 0.0f;
                     where(imask, inout_inter.obj_index) = -ivec<S>(light_index) - 1;
@@ -6616,7 +6637,7 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
                 }
             }
         } else if (l.type == LIGHT_TYPE_DIR) {
-            const float radius = tanf(l.dir.angle);
+            const float radius = l.dir.tan_angle;
             const float light_area = PI * radius * radius;
 
             const fvec<S> cos_theta = dot3(ray.d, l.dir.dir);
@@ -8172,8 +8193,8 @@ void Ray::NS::ShadeSky(const pass_settings_t &ps, float limit, Span<const hit_da
 
                     const Ref::fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
                     Ref::fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
-                    if (l.dir.angle != 0.0f) {
-                        const float radius = tanf(l.dir.angle);
+                    if (l.dir.tan_angle != 0.0f) {
+                        const float radius = l.dir.tan_angle;
                         light_col *= (PI * radius * radius);
                     }
 

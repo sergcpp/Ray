@@ -678,7 +678,7 @@ void main() {
 
     const float phi = 2.0 * PI * (x + 0.5) / float(g_params.res[0]);
     const float theta = PI * float(y) / float(g_params.res[1]);
-    const vec3 I = vec3(portable_sinf(theta) * portable_cosf(phi), portable_cosf(theta), portable_sinf(theta) * portable_sinf(phi));
+    const vec3 I = vec3(portable_sin(theta) * portable_cos(phi), portable_cos(theta), portable_sin(theta) * portable_sin(phi));
 
     const vec3 sky_color = IntegrateScattering(vec3(0.0, g_atmosphere_params.viewpoint_height, 0.0), I, MAX_DIST, rand_hash);
 #else // BAKE

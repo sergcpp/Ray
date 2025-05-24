@@ -308,16 +308,18 @@ float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const 
     const float area_S = Xi.x * area;
 
     // Save the sine and cosine of the angle delta
-    const float p = sin(area_S - alpha);
-    const float q = cos(area_S - alpha);
+    const vec2 sincos_area = portable_sincos(area_S - alpha);
+    const float p = sincos_area[0];
+    const float q = sincos_area[1];
 
     // Compute the pair(u; v) that determines sin(beta_s) and cos(beta_s)
-    const float u = q - cos(alpha);
-    const float v = p + sin(alpha) * cos(c);
+    const vec2 sincos_alpha = portable_sincos(alpha);
+    const float u = q - sincos_alpha[1];
+    const float v = p + sincos_alpha[0] * portable_cos(c);
 
     // Compute the s coordinate as normalized arc length from A to C_s
-    const float denom = (v * p + u * q) * sin(alpha);
-    const float a1 = ((v * q - u * p) * cos(alpha) - v) / denom;
+    const float denom = (v * p + u * q) * sincos_alpha[0];
+    const float a1 = ((v * q - u * p) * sincos_alpha[1] - v) / denom;
     const float s = (1.0 / b) * portable_acosf(clamp(a1, -1.0, 1.0));
 
     // Compute the third vertex of the sub - triangle
@@ -380,7 +382,8 @@ float SampleSphericalRectangle(const vec3 P, const vec3 light_pos, const vec3 ax
 
     // compute cu
     const float au = Xi.x * area + k;
-    const float fu = (cos(au) * b0 - b1) / sin(au);
+    const vec2 sincos_au = portable_sincos(au);
+    const float fu = (sincos_au[1] * b0 - b1) / sincos_au[0];
     float cu = 1.0 / sqrt(fu * fu + b0sq) * (fu > 0.0 ? 1.0 : -1.0);
     cu = clamp(cu, -1.0, 1.0);
     // compute xu
@@ -430,8 +433,9 @@ lobe_weights_t get_lobe_weights(const float base_color_lum, const float spec_col
 }
 
 vec3 rotate_around_axis(vec3 p, vec3 axis, float angle) {
-    const float costheta = cos(angle);
-    const float sintheta = sin(angle);
+    const vec2 sincos_theta = portable_sincos(angle);
+    const float costheta = sincos_theta[1];
+    const float sintheta = sincos_theta[0];
     vec3 r;
 
     r[0] = ((costheta + (1.0 - costheta) * axis[0] * axis[0]) * p[0]) +
@@ -475,8 +479,9 @@ vec3 SampleVNDF_Hemisphere_CrossSect(const vec3 Vh, float U1, float U2) {
     // parameterization of the projected area
     const float r = sqrt(U1);
     const float phi = 2.0 * PI * U2;
-    const float t1 = r * cos(phi);
-    float t2 = r * sin(phi);
+    const vec2 sincos_phi = portable_sincos(phi);
+    const float t1 = r * sincos_phi[1];
+    float t2 = r * sincos_phi[0];
     const float s = 0.5 * (1.0 + Vh[2]);
     t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
     // reprojection onto hemisphere
@@ -491,8 +496,9 @@ vec3 SampleVNDF_Hemisphere_SphCap(const vec3 Vh, const vec2 rand) {
     const float phi = 2.0f * PI * rand.x;
     const float z = fma(1.0 - rand.y, 1.0 + Vh.z, -Vh.z);
     const float sin_theta = sqrt(saturate(1.0 - z * z));
-    const float x = sin_theta * cos(phi);
-    const float y = sin_theta * sin(phi);
+    const vec2 sincos_phi = portable_sincos(phi);
+    const float x = sin_theta * sincos_phi[1];
+    const float y = sin_theta * sincos_phi[0];
     const vec3 c = vec3(x, y, z);
     // normalization will be done later
     return c + Vh;
@@ -509,8 +515,9 @@ vec3 SampleVNDF_Hemisphere_SphCap_Bounded(const vec3 Ve, const vec3 Vh, const ve
     const float b = (Ve.z > 0.0) ? k * Vh.z : Vh.z;
     const float z = fma(1.0 - rand.y, 1.0f + b, -b);
     const float sin_theta = sqrt(saturate(1.0 - z * z));
-    const float x = sin_theta * cos(phi);
-    const float y = sin_theta * sin(phi);
+    const vec2 sincos_phi = portable_sincos(phi);
+    const float x = sin_theta * sincos_phi[1];
+    const float y = sin_theta * sincos_phi[0];
     const vec3 c = vec3(x, y, z);
     // normalization will be done later
     return c + Vh;
@@ -704,7 +711,8 @@ vec4 Evaluate_OrenDiffuse_BSDF(vec3 V, vec3 N, vec3 L, float roughness, vec3 bas
 vec4 Sample_OrenDiffuse_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness,
                              vec3 base_color, vec2 rand, out vec3 out_V) {
     const float phi = 2 * PI * rand.y;
-    const float cos_phi = cos(phi), sin_phi = sin(phi);
+    const vec2 sincos_phi = portable_sincos(phi);
+    const float cos_phi = sincos_phi[1], sin_phi = sincos_phi[0];
 
     const float dir = sqrt(1.0 - rand.x * rand.x);
     vec3 V = vec3(dir * cos_phi, dir * sin_phi, rand.x); // in tangent-space
@@ -740,7 +748,8 @@ vec4 Sample_PrincipledDiffuse_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughne
                                    vec3 sheen_color, bool uniform_sampling, const vec2 rand,
                                    out vec3 out_V) {
     const float phi = 2 * PI * rand.y;
-    const float cos_phi = cos(phi), sin_phi = sin(phi);
+    const vec2 sincos_phi = portable_sincos(phi);
+    const float cos_phi = sincos_phi[1], sin_phi = sincos_phi[0];
 
     vec3 V;
     if (uniform_sampling) {
@@ -933,7 +942,8 @@ vec3 map_to_cone(float r1, float r2, vec3 N, float radius) {
         theta = 0.5 * PI * (1.0 - 0.5 * (offset[0] / offset[1]));
     }
 
-    const vec2 uv = vec2(radius * r * cos(theta), radius * r * sin(theta));
+    const vec2 sincos_theta = portable_sincos(theta);
+    const vec2 uv = vec2(radius * r * sincos_theta[1], radius * r * sincos_theta[0]);
 
     vec3 LT, LB;
     create_tbn(normalize(N), LT, LB);
@@ -1064,10 +1074,10 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         ls.area = 0.0;
         ls.pdf = 1.0;
         ls.dist_mul = MAX_DIST;
-        [[dont_flatten]] if (l.DIR_ANGLE != 0.0) {
+        [[dont_flatten]] if (l.DIR_TAN_ANGLE != 0.0) {
             const float r1 = rand_light_uv.x, r2 = rand_light_uv.y;
 
-            const float radius = tan(l.DIR_ANGLE);
+            const float radius = l.DIR_TAN_ANGLE;
             ls.L = normalize(map_to_cone(r1, r2, ls.L, radius));
             ls.area = PI * radius * radius;
 
@@ -1139,8 +1149,10 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
                 theta = 0.5 * PI - 0.25 * PI * (offset[0] / offset[1]);
             }
 
-            offset[0] = 0.5 * r * cos(theta);
-            offset[1] = 0.5 * r * sin(theta);
+            const vec2 sincos_theta = portable_sincos(theta);
+
+            offset[0] = 0.5 * r * sincos_theta[1];
+            offset[1] = 0.5 * r * sincos_theta[0];
         }
 
         const vec3 lp = light_pos + light_u * offset[0] + light_v * offset[1];
@@ -1186,7 +1198,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         vec3 light_v = cross(light_u, light_dir);
 
         const float phi = PI * r1;
-        const vec3 normal = cos(phi) * light_u + sin(phi) * light_v;
+        const vec2 sincos_phi = portable_sincos(phi);
+        const vec3 normal = sincos_phi[1] * light_u + sincos_phi[0] * light_v;
 
         const vec3 lp = light_pos + normal * l.LINE_RADIUS + (r2 - 0.5) * light_dir * l.LINE_HEIGHT;
 
@@ -1281,7 +1294,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         } else {
             // Sample environment as hemishpere
             const float phi = 2 * PI * ry;
-            const float cos_phi = cos(phi), sin_phi = sin(phi);
+            const vec2 sincos_phi = portable_sincos(phi);
+            const float cos_phi = sincos_phi[1], sin_phi = sincos_phi[0];
 
             const float dir = sqrt(1.0 - rx * rx);
             vec3 V = vec3(dir * cos_phi, dir * sin_phi, rx); // in tangent-space
@@ -1449,7 +1463,7 @@ vec3 Evaluate_LightColor(const ray_data_t ray, const hit_data_t inter, const vec
             }
         }
     } else if (l_type == LIGHT_TYPE_DIR) {
-        const float radius = tan(l.DIR_ANGLE);
+        const float radius = l.DIR_TAN_ANGLE;
         const float light_area = PI * radius * radius;
 
         const float cos_theta = dot(rd, l.DIR_DIR);

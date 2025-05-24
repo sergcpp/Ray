@@ -959,8 +959,8 @@ void Ray::Ref::ShadeSky(const pass_settings_t &ps, const float limit, Span<const
 
                 const fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
                 fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
-                if (l.dir.angle != 0.0f) {
-                    const float radius = tanf(l.dir.angle);
+                if (l.dir.tan_angle != 0.0f) {
+                    const float radius = l.dir.tan_angle;
                     light_col *= (PI * radius * radius);
                 }
 

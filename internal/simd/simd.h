@@ -570,13 +570,17 @@ force_inline fixed_size_simd<T, S> fmadd(const fixed_size_simd<T, S> &a, const f
 }
 
 template <typename T, int S>
-force_inline fixed_size_simd<T, S> fmadd(const fixed_size_simd<T, S> &a, const float b,
-                                         const fixed_size_simd<T, S> &c) {
+force_inline fixed_size_simd<T, S> fmadd(const fixed_size_simd<T, S> &a, const fixed_size_simd<T, S> &b, const T c) {
     return a * b + c;
 }
 
 template <typename T, int S>
-force_inline fixed_size_simd<T, S> fmadd(const float a, const fixed_size_simd<T, S> &b, const float c) {
+force_inline fixed_size_simd<T, S> fmadd(const fixed_size_simd<T, S> &a, const T b, const fixed_size_simd<T, S> &c) {
+    return a * b + c;
+}
+
+template <typename T, int S>
+force_inline fixed_size_simd<T, S> fmadd(const T a, const fixed_size_simd<T, S> &b, const T c) {
     return a * b + c;
 }
 
@@ -587,13 +591,17 @@ force_inline fixed_size_simd<T, S> fmsub(const fixed_size_simd<T, S> &a, const f
 }
 
 template <typename T, int S>
-force_inline fixed_size_simd<T, S> fmsub(const fixed_size_simd<T, S> &a, const float b,
-                                         const fixed_size_simd<T, S> &c) {
+force_inline fixed_size_simd<T, S> fmsub(const fixed_size_simd<T, S> &a, const fixed_size_simd<T, S> &b, const T c) {
     return a * b - c;
 }
 
 template <typename T, int S>
-force_inline fixed_size_simd<T, S> fmsub(const float a, const fixed_size_simd<T, S> &b, const float c) {
+force_inline fixed_size_simd<T, S> fmsub(const fixed_size_simd<T, S> &a, const T b, const fixed_size_simd<T, S> &c) {
+    return a * b - c;
+}
+
+template <typename T, int S>
+force_inline fixed_size_simd<T, S> fmsub(const T a, const fixed_size_simd<T, S> &b, const T c) {
     return a * b - c;
 }
 

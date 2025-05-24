@@ -1384,7 +1384,7 @@ void test_complex_mat3(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
-    const int PixThres = 2160;
+    const int PixThres = 2165;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1511,7 +1511,7 @@ void test_complex_mat5_regions(const char *arch_list[], std::string_view preferr
 
 void test_complex_mat5_nlm_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const int PixThres = 2110;
+    const int PixThres = 2115;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};

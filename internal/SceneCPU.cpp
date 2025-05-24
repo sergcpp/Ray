@@ -598,8 +598,10 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[1] = -_l.direction[1];
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
-    if (l.dir.angle > 0.0f) {
-        const float radius = tanf(l.dir.angle);
+    l.dir.cos_angle = cosf(l.dir.angle);
+    l.dir.tan_angle = tanf(l.dir.angle);
+    if (l.dir.tan_angle > 0.0f) {
+        const float radius = l.dir.tan_angle;
         const float mul = 1.0f / (PI * radius * radius);
         l.col[0] *= mul;
         l.col[1] *= mul;
@@ -1251,8 +1253,8 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             axis = Ref::fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
             omega_n = 0.0f; // single normal
             omega_e = l.dir.angle;
-            if (l.dir.angle != 0.0f) {
-                const float radius = tanf(l.dir.angle);
+            if (l.dir.tan_angle != 0.0f) {
+                const float radius = l.dir.tan_angle;
                 area = (PI * radius * radius);
             }
         } break;

@@ -22,6 +22,7 @@ void test_small_vector();
 void test_span();
 void test_sparse_storage();
 void test_tex_storage();
+void test_trig();
 
 void test_aux_channels(const char *arch_list[], std::string_view preferred_device);
 void test_ray_flags(const char *arch_list[], std::string_view preferred_device);
@@ -215,6 +216,7 @@ int main(int argc, char *argv[]) {
     test_span();
     test_sparse_storage();
     test_tex_storage();
+    test_trig();
     puts(" ---------------");
 
 #ifdef _WIN32

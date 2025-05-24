@@ -75,11 +75,12 @@ fvec3 sample_GTR1(const float rgh, const float r1, const float r2) {
 
     const float phi = r1 * (2.0f * PI);
 
-    const float cosTheta = sqrtf(fmaxf(0.0f, 1.0f - powf(a2, 1.0f - r2)) / (1.0f - a2));
-    const float sinTheta = sqrtf(fmaxf(0.0f, 1.0f - (cosTheta * cosTheta)));
-    const float sinPhi = sinf(phi), cosPhi = cosf(phi);
+    const float cos_theta = sqrtf(fmaxf(0.0f, 1.0f - powf(a2, 1.0f - r2)) / (1.0f - a2));
+    const float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - (cos_theta * cos_theta)));
+    const fvec2 sincos_phi = portable_sincos(phi);
+    const float sin_phi = sincos_phi.get<0>(), cos_phi = sincos_phi.get<1>();
 
-    return fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
+    return fvec3{sin_theta * cos_phi, sin_theta * sin_phi, cos_theta};
 }
 
 fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
@@ -87,11 +88,12 @@ fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
 
     const float phi = r1 * (2.0f * PI);
 
-    const float cosTheta = sqrtf((1.0f - r2) / (1.0f + (a * a - 1.0f) * r2));
-    const float sinTheta = Ray::saturate(sqrtf(1.0f - (cosTheta * cosTheta)));
-    const float sinPhi = sinf(phi), cosPhi = cosf(phi);
+    const float cos_theta = sqrtf((1.0f - r2) / (1.0f + (a * a - 1.0f) * r2));
+    const float sin_theta = Ray::saturate(sqrtf(1.0f - (cos_theta * cos_theta)));
+    const fvec2 sincos_phi = portable_sincos(phi);
+    const float sin_phi = sincos_phi.get<0>(), cos_phi = sincos_phi.get<1>();
 
-    return fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
+    return fvec3{sin_theta * cos_phi, sin_theta * sin_phi, cos_theta};
 }
 
 // http://jcgt.org/published/0007/04/01/paper.pdf
@@ -104,8 +106,9 @@ fvec4 SampleVNDF_Hemisphere_CrossSect(const fvec4 &Vh, float U1, float U2) {
     // parameterization of the projected area
     const float r = sqrtf(U1);
     const float phi = 2.0f * PI * U2;
-    const float t1 = r * cosf(phi);
-    float t2 = r * sinf(phi);
+    const fvec2 sincos_phi = portable_sincos(phi);
+    const float t1 = r * sincos_phi.get<1>();
+    float t2 = r * sincos_phi.get<0>();
     const float s = 0.5f * (1.0f + Vh.get<2>());
     t2 = (1.0f - s) * sqrtf(1.0f - t1 * t1) + s * t2;
     // reprojection onto hemisphere
@@ -120,8 +123,9 @@ fvec4 SampleVNDF_Hemisphere_SphCap(const fvec4 &Vh, const fvec2 alpha, const fve
     const float phi = 2.0f * PI * rand.get<0>();
     const float z = fma(1.0f - rand.get<1>(), 1.0f + Vh.get<2>(), -Vh.get<2>());
     const float sin_theta = sqrtf(Ray::saturate(1.0f - z * z));
-    const float x = sin_theta * cosf(phi);
-    const float y = sin_theta * sinf(phi);
+    const fvec2 sincos_phi = portable_sincos(phi);
+    const float x = sin_theta * sincos_phi.get<1>();
+    const float y = sin_theta * sincos_phi.get<0>();
     const fvec4 c = fvec4{x, y, z, 0.0f};
     // normalization will be done later
     return c + Vh;
@@ -138,8 +142,9 @@ fvec4 SampleVNDF_Hemisphere_SphCap_Bounded(const fvec4 &Ve, const fvec4 &Vh, con
     const float b = (Ve.get<2>() > 0.0f) ? k * Vh.get<2>() : Vh.get<2>();
     const float z = fma(1.0f - rand.get<1>(), 1.0f + b, -b);
     const float sin_theta = sqrtf(Ray::saturate(1.0f - z * z));
-    const float x = sin_theta * cosf(phi);
-    const float y = sin_theta * sinf(phi);
+    const fvec2 sincos_phi = portable_sincos(phi);
+    const float x = sin_theta * sincos_phi.get<1>();
+    const float y = sin_theta * sincos_phi.get<0>();
     const fvec4 c = fvec4{x, y, z, 0.0f};
     // normalization will be done later
     return c + Vh;
@@ -328,8 +333,9 @@ fvec4 ensure_valid_reflection(const fvec4 &Ng, const fvec4 &I, const fvec4 &N) {
 }
 
 fvec4 rotate_around_axis(const fvec4 &p, const fvec4 &axis, const float angle) {
-    const float costheta = cosf(angle);
-    const float sintheta = sinf(angle);
+    const fvec2 sincos_theta = portable_sincos(angle);
+    const float costheta = sincos_theta.get<1>();
+    const float sintheta = sincos_theta.get<0>();
     fvec4 r;
 
     r.set<0>(((costheta + (1.0f - costheta) * axis.get<0>() * axis.get<0>()) * p.get<0>()) +
@@ -422,9 +428,9 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_OrenDiffuse_BSDF(const fvec4 &V, const fvec4 
 Ray::Ref::fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I,
                                                   const float roughness, const fvec4 &base_color, const fvec2 rand,
                                                   fvec4 &out_V) {
-
     const float phi = 2 * PI * rand.get<1>();
-    const float cos_phi = cosf(phi), sin_phi = sinf(phi);
+    const fvec2 sincos_phi = portable_sincos(phi);
+    const float cos_phi = sincos_phi.get<1>(), sin_phi = sincos_phi.get<0>();
 
     const float dir = sqrtf(1.0f - rand.get<0>() * rand.get<1>());
     auto V = fvec4{dir * cos_phi, dir * sin_phi, rand.get<0>(), 0.0f}; // in tangent-space
@@ -464,7 +470,8 @@ Ray::Ref::fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const fvec4 &T, const fv
                                                         const fvec4 &sheen_color, const bool uniform_sampling,
                                                         const fvec2 rand, fvec4 &out_V) {
     const float phi = 2 * PI * rand.get<1>();
-    const float cos_phi = cosf(phi), sin_phi = sinf(phi);
+    const fvec2 sincos_phi = portable_sincos(phi);
+    const float cos_phi = sincos_phi.get<1>(), sin_phi = sincos_phi.get<0>();
 
     fvec4 V;
     if (uniform_sampling) {
@@ -1107,7 +1114,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_d
                 }
             }
         } else if (l.type == LIGHT_TYPE_DIR) {
-            const float radius = tanf(l.dir.angle);
+            const float radius = l.dir.tan_angle;
             const float light_area = PI * radius * radius;
 
             const float cos_theta = dot(I, make_fvec3(l.dir.dir));

@@ -180,7 +180,8 @@ struct light_t {
 #define TRI_TEX_INDEX param1.z
 
 #define DIR_DIR param1.xyz
-#define DIR_ANGLE param1.w
+#define DIR_COS_ANGLE param1.w
+#define DIR_TAN_ANGLE param2.x
 
 struct material_t {
     uint textures[MAX_MATERIAL_TEXTURES];
