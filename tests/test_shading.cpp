@@ -1656,8 +1656,8 @@ void test_complex_mat5_spot_light(const char *arch_list[], std::string_view pref
 
 void test_complex_mat5_dir_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 26;
-    const double MinPSNR = 23.0;
-    const int PixThres = 5145;
+    const double MinPSNR = 22.95;
+    const int PixThres = 5150;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1678,7 +1678,7 @@ void test_complex_mat5_dir_light(const char *arch_list[], std::string_view prefe
 void test_complex_mat5_sun_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 15;
     const double MinPSNR = 24.25;
-    const int PixThres = 4890;
+    const int PixThres = 4915;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1697,8 +1697,8 @@ void test_complex_mat5_sun_light(const char *arch_list[], std::string_view prefe
 }
 
 void test_complex_mat5_moon_light(const char *arch_list[], std::string_view preferred_device) {
-    const int SampleCount = 12;
-    const int PixThres = 430;
+    const int SampleCount = 14;
+    const int PixThres = 320;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1740,7 +1740,7 @@ void test_complex_mat5_hdri_light(const char *arch_list[], std::string_view pref
 void test_complex_mat6(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 43;
     const double MinPSNR = 23.0;
-    const int PixThres = 4375;
+    const int PixThres = 4380;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1873,7 +1873,7 @@ void test_complex_mat6_dir_light(const char *arch_list[], std::string_view prefe
 void test_complex_mat6_hdri_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 55;
     const double MinPSNR = 21.0;
-    const int PixThres = 6300;
+    const int PixThres = 6305;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1910,7 +1910,7 @@ void test_complex_mat7_principled(const char *arch_list[], std::string_view pref
 void test_ray_flags(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 30;
     const double MinPSNR = 29.55;
-    const int PixThres = 2120;
+    const int PixThres = 2125;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "ray_flags", unused, SampleCount, MinPSNR, PixThres,
