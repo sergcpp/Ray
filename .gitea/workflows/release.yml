@@ -580,30 +580,30 @@ jobs:
   #       with:
   #         name: macos-x86_64-cpu-output
   #         path: macos-x86_64-cpu-output/
-  test-linux-x86_64-cpu-sse2:
-    runs-on: [ linux, x86_64 ]
-    needs:
-      - build-linux-x86_64-rel
-    steps:
-      - name: Checkout Workflows
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: .gitea
-      - name: Re-initialize repository
-        uses: ./.gitea/actions/checkout
-      - name: Run Tests
-        uses: ./.gitea/actions/test-sde
-        with:
-          bin-dir: "linux-x86_64"
-          out-dir: "linux-x86_64-cpu-sse2-output"
-          test-args: "--arch SSE2 --nogpu -j4"
-          sde-args: "-p4p"
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: linux-x86_64-cpu-sse2-output
-          path: linux-x86_64-cpu-sse2-output/
+  # test-linux-x86_64-cpu-sse2:
+  #   runs-on: [ linux, x86_64 ]
+  #   needs:
+  #     - build-linux-x86_64-rel
+  #   steps:
+  #     - name: Checkout Workflows
+  #       uses: actions/checkout@v4
+  #       with:
+  #         sparse-checkout: .gitea
+  #     - name: Re-initialize repository
+  #       uses: ./.gitea/actions/checkout
+  #     - name: Run Tests
+  #       uses: ./.gitea/actions/test-sde
+  #       with:
+  #         bin-dir: "linux-x86_64"
+  #         out-dir: "linux-x86_64-cpu-sse2-output"
+  #         test-args: "--arch SSE2 --nogpu -j4"
+  #         sde-args: "-p4p"
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v3
+  #       if: always()
+  #       with:
+  #         name: linux-x86_64-cpu-sse2-output
+  #         path: linux-x86_64-cpu-sse2-output/
   test-linux-x86_64-cpu-sse41:
     runs-on: [ linux, x86_64 ]
     needs:
@@ -820,7 +820,7 @@ jobs:
   #         path: windows-arm64-gpu-perf-output/
   analyze-output:
     runs-on: [ linux ]
-    needs: [ test-windows-x86_64-cpu, test-windows-x86_64-gpu-amd, test-windows-x86_64-gpu-uhd, test-windows-x86_64-gpu-arc, test-linux-x86_64-cpu, test-linux-x86_64-gpu-nv, test-linux-x86_64-cpu-sse2, test-linux-x86_64-cpu-sse41, test-windows-x86_64-cpu-avx, test-windows-x86_64-cpu-avx2, test-windows-x86_64-cpu-avx512, test-linux-x86_64-cpu-tsan, test-windows-x86_64-cpu-asan, test-windows-x86_64-gpu-amd-asan ]
+    needs: [ test-windows-x86_64-cpu, test-windows-x86_64-gpu-amd, test-windows-x86_64-gpu-uhd, test-windows-x86_64-gpu-arc, test-linux-x86_64-cpu, test-linux-x86_64-gpu-nv, test-linux-x86_64-cpu-sse41, test-windows-x86_64-cpu-avx, test-windows-x86_64-cpu-avx2, test-windows-x86_64-cpu-avx512, test-linux-x86_64-cpu-tsan, test-windows-x86_64-cpu-asan, test-windows-x86_64-gpu-amd-asan ]
     if: always()
     steps:
       - name: Checkout Workflows
@@ -879,10 +879,10 @@ jobs:
       #   with:
       #     name: macos-x86_64-cpu-output
       #     path: macos-x86_64-cpu-output/
-      - uses: actions/download-artifact@v3
-        with:
-          name: linux-x86_64-cpu-sse2-output
-          path: linux-x86_64-cpu-sse2-output/
+      # - uses: actions/download-artifact@v3
+      #   with:
+      #     name: linux-x86_64-cpu-sse2-output
+      #     path: linux-x86_64-cpu-sse2-output/
       - uses: actions/download-artifact@v3
         with:
           name: linux-x86_64-cpu-sse41-output
@@ -921,5 +921,5 @@ jobs:
       #     path: windows-arm64-gpu-perf-output/
       - name: Analyze Output
         run: |
-          python scripts/analyze_output.py windows-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-gpu-amd-output/test_Ray_output.txt windows-x86_64-gpu-uhd-output/test_Ray_output.txt windows-x86_64-gpu-arc-output/test_Ray_output.txt linux-x86_64-cpu-output/test_Ray_output.txt linux-x86_64-gpu-nv-output/test_Ray_output.txt linux-x86_64-cpu-sse2-output/test_Ray_output.txt linux-x86_64-cpu-sse41-output/test_Ray_output.txt windows-x86_64-cpu-avx-output/test_Ray_output.txt windows-x86_64-cpu-avx2-output/test_Ray_output.txt windows-x86_64-cpu-avx512-output/test_Ray_output.txt linux-x86_64-cpu-tsan-output/test_Ray_output.txt windows-x86_64-cpu-asan-output/test_Ray_output.txt windows-x86_64-gpu-amd-asan-output/test_Ray_output.txt
+          python scripts/analyze_output.py windows-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-gpu-amd-output/test_Ray_output.txt windows-x86_64-gpu-uhd-output/test_Ray_output.txt windows-x86_64-gpu-arc-output/test_Ray_output.txt linux-x86_64-cpu-output/test_Ray_output.txt linux-x86_64-gpu-nv-output/test_Ray_output.txt linux-x86_64-cpu-sse41-output/test_Ray_output.txt windows-x86_64-cpu-avx-output/test_Ray_output.txt windows-x86_64-cpu-avx2-output/test_Ray_output.txt windows-x86_64-cpu-avx512-output/test_Ray_output.txt linux-x86_64-cpu-tsan-output/test_Ray_output.txt windows-x86_64-cpu-asan-output/test_Ray_output.txt windows-x86_64-gpu-amd-asan-output/test_Ray_output.txt
         shell: bash

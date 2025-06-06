@@ -23,7 +23,6 @@ enum class eRendererType : uint32_t {
     // Reference CPU renderer, slightly vectorized, the easiest to modify and debug
     Reference,
     // SIMD CPU renderers, heavily vectorized in SPMD fashion
-    SIMD_SSE2,
     SIMD_SSE41,
     SIMD_AVX,
     SIMD_AVX2,
@@ -35,7 +34,7 @@ enum class eRendererType : uint32_t {
 };
 
 // All CPU renderers
-const Bitmask<eRendererType> RendererCPU = Bitmask<eRendererType>{eRendererType::Reference} | eRendererType::SIMD_SSE2 |
+const Bitmask<eRendererType> RendererCPU = Bitmask<eRendererType>{eRendererType::Reference} |
                                            eRendererType::SIMD_SSE41 | eRendererType::SIMD_NEON |
                                            eRendererType::SIMD_AVX | eRendererType::SIMD_AVX2;
 // All GPU renderers

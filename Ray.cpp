@@ -15,12 +15,11 @@
 #include "internal/RendererAVX.h"
 #include "internal/RendererAVX2.h"
 #include "internal/RendererAVX512.h"
-#include "internal/RendererSSE2.h"
 #include "internal/RendererSSE41.h"
 #elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 #include "internal/RendererNEON.h"
 #elif defined(__i386__) || defined(__x86_64__)
-#include "internal/RendererSSE2.h"
+#include "internal/RendererSSE41.h"
 #endif
 #else // ENABLE_SIMD_IMPL
 #pragma message("Ray: Compiling without SIMD support")
@@ -92,10 +91,6 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
     if ((enabled_types & eRendererType::SIMD_SSE41) && features.sse41_supported) {
         log->Info("Ray: Creating SSE41 renderer %ix%i", s.w, s.h);
         return Sse41::CreateRenderer(s, log);
-    }
-    if ((enabled_types & eRendererType::SIMD_SSE2) && features.sse2_supported) {
-        log->Info("Ray: Creating SSE2 renderer %ix%i", s.w, s.h);
-        return Sse2::CreateRenderer(s, log);
     }
 #endif
 #ifdef ENABLE_REF_IMPL

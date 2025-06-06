@@ -121,7 +121,7 @@ bool g_stop_on_fail = false;
 std::atomic_bool g_tests_success{true};
 std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
-bool g_determine_sample_count = false;
+bool g_determine_sample_count = true;
 bool g_minimal_output = false;
 bool g_nohwrt = false;
 bool g_nodx = false;
@@ -227,8 +227,8 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-    static const char *ArchListFull[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", "DX", nullptr};
-    static const char *ArchListFullNoGPU[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", nullptr};
+    static const char *ArchListFull[] = {"REF", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", "DX", nullptr};
+    static const char *ArchListFullNoGPU[] = {"REF", "SSE41", "AVX", "AVX2", "AVX512", "NEON", nullptr};
     static const char *ArchListDefault[] = {"AVX2", "NEON", "VK", "DX", nullptr};
 #ifndef __APPLE__
     static const char *ArchListDefaultNoGPU[] = {"AVX2", "NEON", nullptr};

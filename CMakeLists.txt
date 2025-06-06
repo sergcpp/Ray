@@ -134,8 +134,6 @@ endif()
 
 if (ENABLE_SIMD_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                              internal/RendererSSE2.h
-                              internal/RendererSSE2.cpp
                               internal/RendererSSE41.h
                               internal/RendererSSE41.cpp
                               internal/RendererNEON.h
@@ -148,7 +146,6 @@ if (ENABLE_SIMD_IMPL)
                               internal/RendererAVX512.cpp)
 
     set_source_files_properties(
-        internal/RendererSSE2.cpp
         internal/RendererSSE41.cpp
         internal/RendererNEON.cpp
         internal/RendererAVX.cpp
@@ -184,7 +181,6 @@ endif(ENABLE_DX_IMPL AND WIN32)
 if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
     if(MSVC)
         if(NOT CMAKE_CL_64)
-            set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
             set_source_files_properties(internal/TextureUtilsSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
             set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
@@ -198,7 +194,6 @@ if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
     else()
         set_source_files_properties(internal/simd/detect.cpp PROPERTIES COMPILE_FLAGS -mxsave)
         set_source_files_properties(internal/TextureUtilsSSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
-        set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
         set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
         set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")

@@ -7,8 +7,6 @@ std::string_view RendererTypeName(const eRendererType rt) {
     switch (rt) {
     case eRendererType::Reference:
         return "REF";
-    case eRendererType::SIMD_SSE2:
-        return "SSE2";
     case eRendererType::SIMD_SSE41:
         return "SSE41";
     case eRendererType::SIMD_AVX:
@@ -31,8 +29,6 @@ std::string_view RendererTypeName(const eRendererType rt) {
 eRendererType RendererTypeFromName(std::string_view name) {
     if (name == "REF") {
         return eRendererType::Reference;
-    } else if (name == "SSE2") {
-        return eRendererType::SIMD_SSE2;
     } else if (name == "SSE41") {
         return eRendererType::SIMD_SSE41;
     } else if (name == "AVX") {
@@ -54,7 +50,6 @@ eRendererType RendererTypeFromName(std::string_view name) {
 bool RendererSupportsMultithreading(const eRendererType rt) {
     switch (rt) {
     case eRendererType::Reference:
-    case eRendererType::SIMD_SSE2:
     case eRendererType::SIMD_SSE41:
     case eRendererType::SIMD_AVX:
     case eRendererType::SIMD_AVX2:
