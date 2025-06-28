@@ -379,12 +379,13 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
     std::shared_lock<std::shared_timed_mutex> scene_lock(s.mtx_);
 
     const camera_t &cam = s.cams_[s.current_cam()._index];
+    const float cam_exposure = std::pow(2.0f, cam.exposure);
 
     ++region.iteration;
 
     cache_grid_params_t cache_grid_params;
     memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
-    cache_grid_params.exposure = std::pow(2.0f, cam.exposure);
+    cache_grid_params.exposure = cam_exposure;
 
     const scene_data_t sc_data = {s.env_,
                                   s.mesh_instances_.empty() ? nullptr : &s.mesh_instances_[0],
@@ -575,7 +576,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
     tonemap_params.view_transform = cam.view_transform;
     tonemap_params.inv_gamma = (1.0f / cam.gamma);
 
-    Ref::fvec4 exposure = std::pow(2.0f, cam.exposure);
+    Ref::fvec4 exposure = cam_exposure;
     exposure.set<3>(1.0f);
 
     const float variance_threshold =
