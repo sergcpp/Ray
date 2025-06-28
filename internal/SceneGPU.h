@@ -1488,6 +1488,7 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
 
     if (env_.env_map != InvalidTextureHandle._index &&
         (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
+        env_.env_map_rotation = 0.0f;
         env_.sky_map_spread_angle = 2 * PI / float(env_.envmap_resolution);
         if (!atmosphere_params_buf_) {
             atmosphere_params_buf_ = Buffer{"Atmosphere Params", ctx_, eBufType::Uniform, sizeof(atmosphere_params_t)};
