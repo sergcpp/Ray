@@ -298,6 +298,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     ++region.iteration;
 
     const Ray::camera_t &cam = s.cams_[s.current_cam()._index];
+    const float cam_exposure = std::pow(2.0f, cam.exposure);
 
     // TODO: Use common command buffer for all uploads
     if (cam.filter != filter_table_filter_ || cam.filter_width != filter_table_width_) {
@@ -347,7 +348,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
     cache_grid_params_t cache_grid_params;
     memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
-    cache_grid_params.exposure = std::pow(2.0f, cam.exposure);
+    cache_grid_params.exposure = cam_exposure;
 
 #if !RUN_IN_LOCKSTEP
     if (ctx_->in_flight_fence(ctx_->backend_frame)->GetCompletedValue() < ctx_->fence_values[ctx_->backend_frame]) {
@@ -637,13 +638,11 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     { // prepare result
         DebugMarker _(ctx_.get(), cmd_buf, "Ray::Prepare Result");
 
-        const float exposure = std::pow(2.0f, cam.exposure);
-
         // factor used to compute incremental average
         const float mix_factor = 1.0f / float(region.iteration);
         const float half_mix_factor = 1.0f / float((region.iteration + 1) / 2);
 
-        kernel_MixIncremental(cmd_buf, mix_factor, half_mix_factor, rect, region.iteration, exposure, temp_buf0_,
+        kernel_MixIncremental(cmd_buf, mix_factor, half_mix_factor, rect, region.iteration, cam_exposure, temp_buf0_,
                               temp_buf1_, temp_depth_normals_buf_, required_samples_buf_, full_buf_, half_buf_,
                               base_color_buf_, depth_normals_buf_);
     }
