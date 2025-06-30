@@ -121,7 +121,7 @@ bool g_stop_on_fail = false;
 std::atomic_bool g_tests_success{true};
 std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
-bool g_determine_sample_count = true;
+bool g_determine_sample_count = false;
 bool g_minimal_output = false;
 bool g_nohwrt = false;
 bool g_nodx = false;
