@@ -46,7 +46,7 @@ class Context {
 
     bool subgroup_supported_ = false;
 
-    bool coop_matrix_supported_ = false;
+    int coop_matrix_size_[3] = {-1, -1, -1};
 
     bool pageable_memory_supported_ = false;
 
@@ -94,7 +94,7 @@ class Context {
     bool int64_supported() const { return int64_supported_; }
     bool int64_atomics_supported() const { return int64_atomics_supported_; }
     bool subgroup_supported() const { return subgroup_supported_; }
-    bool coop_matrix_supported() const { return coop_matrix_supported_; }
+    const int *coop_matrix_size() const { return coop_matrix_size_; }
 
     uint32_t supported_stages_mask() const { return supported_stages_mask_; };
     bool image_blit_supported() const { return true; }
@@ -148,15 +148,15 @@ class Context {
   private:
     static bool InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
                                int enabled_layers_count, int validation_level, ILog *log);
-    static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device, std::string_view preferred_device,
-                                       VkInstance instance, ILog *log);
+    static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device,
+                                       std::string_view preferred_device, VkInstance instance, ILog *log);
     static void CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalDevice &physical_device,
                                               VkPhysicalDeviceProperties &device_properties,
                                               VkPhysicalDeviceMemoryProperties &mem_properties,
                                               uint32_t &graphics_family_index, bool &out_raytracing_supported,
                                               bool &out_ray_query_supported, bool &out_shader_fp16_supported,
                                               bool &out_shader_int64_supported, bool &out_int64_atomics_supported,
-                                              bool &out_coop_matrix_supported, bool &out_pageable_memory_supported);
+                                              int out_coop_matrix_size[3], bool &out_pageable_memory_supported);
     static bool InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                              uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
                              bool enable_fp16, bool enable_int64, bool enable_int64_atomics, bool enable_coop_matrix,

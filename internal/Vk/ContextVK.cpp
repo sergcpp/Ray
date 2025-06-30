@@ -215,7 +215,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
 
     CheckVkPhysicalDeviceFeatures(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
                                   raytracing_supported_, ray_query_supported_, fp16_supported_, int64_supported_,
-                                  int64_atomics_supported_, coop_matrix_supported_, pageable_memory_supported_);
+                                  int64_atomics_supported_, coop_matrix_size_, pageable_memory_supported_);
 
     // mask out unsupported stages
     if (!raytracing_supported_) {
@@ -227,7 +227,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
 
     if (!external_ && !InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
                                     ray_query_supported_, fp16_supported_, int64_supported_, int64_atomics_supported_,
-                                    coop_matrix_supported_, pageable_memory_supported_, log)) {
+                                    coop_matrix_size_[0] != -1, pageable_memory_supported_, log)) {
         return false;
     }
 
@@ -565,7 +565,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalD
                                                      uint32_t &out_graphics_family_index,
                                                      bool &out_raytracing_supported, bool &out_ray_query_supported,
                                                      bool &out_shader_fp16_supported, bool &out_shader_int64_supported,
-                                                     bool &out_int64_atomics_supported, bool &out_coop_matrix_supported,
+                                                     bool &out_int64_atomics_supported, int out_coop_matrix_size[3],
                                                      bool &out_pageable_memory_supported) {
     api.vkGetPhysicalDeviceProperties(physical_device, &out_device_properties);
     api.vkGetPhysicalDeviceMemoryProperties(physical_device, &out_mem_properties);
@@ -591,8 +591,10 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalD
 
     bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
          shader_fp16_supported = false, shader_int64_supported = false, storage_fp16_supported = false,
-         coop_matrix_supported = false, shader_buf_int64_atomics_supported = false, memory_priority_supported = false,
+         shader_buf_int64_atomics_supported = false, memory_priority_supported = false,
          pageable_memory_supported = false;
+
+    int coop_matrix_size[3] = {-1, -1, -1};
 
     { // check for features support
         uint32_t extension_count;
@@ -601,6 +603,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalD
         SmallVector<VkExtensionProperties, 16> available_extensions(extension_count);
         api.vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, &available_extensions[0]);
 
+        bool coop_matrix_supported = false;
         for (uint32_t j = 0; j < extension_count; j++) {
             const VkExtensionProperties &ext = available_extensions[j];
 
@@ -671,7 +674,10 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalD
             for (const VkCooperativeMatrixPropertiesKHR &p : coop_matrix_props) {
                 if (p.AType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.BType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
                     p.CType == VK_COMPONENT_TYPE_FLOAT16_KHR && p.ResultType == VK_COMPONENT_TYPE_FLOAT16_KHR &&
-                    p.MSize == 16 && p.NSize == 8 && p.KSize == 8 && p.scope == VK_SCOPE_SUBGROUP_KHR) {
+                    p.MSize == 16 && p.NSize == 16 && p.KSize == 16 && p.scope == VK_SCOPE_SUBGROUP_KHR) {
+                    coop_matrix_size[0] = 16;
+                    coop_matrix_size[1] = 16;
+                    coop_matrix_size[2] = 16;
                     found = true;
                     break;
                 }
@@ -685,14 +691,15 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalD
     out_shader_fp16_supported = (shader_fp16_supported && storage_fp16_supported);
     out_shader_int64_supported = shader_int64_supported;
     out_int64_atomics_supported = shader_buf_int64_atomics_supported;
-    out_coop_matrix_supported = coop_matrix_supported;
+    memcpy(out_coop_matrix_size, coop_matrix_size, 3 * sizeof(int));
     out_pageable_memory_supported = (memory_priority_supported && pageable_memory_supported);
 }
 
 bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
-                                    uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
-                                    bool enable_fp16, bool enable_int64, bool enable_int64_atomics,
-                                    bool enable_coop_matrix, bool enable_pageable_memory, ILog *log) {
+                                    const uint32_t graphics_family_index, const bool enable_raytracing,
+                                    const bool enable_ray_query, const bool enable_fp16, const bool enable_int64,
+                                    const bool enable_int64_atomics, const bool enable_coop_matrix,
+                                    const bool enable_pageable_memory, ILog *log) {
     VkDeviceQueueCreateInfo queue_create_infos[2] = {{}, {}};
     const float queue_priorities[] = {1.0f};
 

@@ -3,7 +3,7 @@
 #if USE_FP16
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
 #endif
-#if USE_COOP_MATRIX
+#ifdef COOP_M
 #extension GL_KHR_memory_scope_semantics : require
 #extension GL_KHR_cooperative_matrix : require
 #endif
@@ -215,24 +215,27 @@ int out_offset(int x, int y, int c) {
     #define IN_CHANNELS2 0
 #endif
 
-#if USE_COOP_MATRIX
+#ifdef COOP_M
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+const int C_ROWS = TILE_M / COOP_M;
+const int C_COLS = TILE_N / COOP_N;
 #else
 layout(local_size_x = 16, local_size_y = 1, local_size_z = 8) in;
-#endif
 
 const int C_ROWS = TILE_M / 16;
 const int C_COLS = TILE_N / 8;
+#endif
 
-shared float16_t g_mat_staging0[16 * 8];
-shared float16_t g_mat_staging1[16 * 8];
-shared float16_t g_mat_staging2[16 * 8];
-shared float16_t g_mat_staging3[16 * 8];
+shared float16_t g_mat_staging0[16 * 16];
+shared float16_t g_mat_staging1[16 * 16];
+shared float16_t g_mat_staging2[16 * 16];
+shared float16_t g_mat_staging3[16 * 16];
 
 void main() {
     ivec3 tile_id = ivec3(gl_WorkGroupID), li = ivec3(gl_LocalInvocationID);
 
-#if USE_COOP_MATRIX
+#ifdef COOP_M
     int x = TILE_M * tile_id.x;
     int y = tile_id.y * 2;
     int c = tile_id.z * TILE_N;
@@ -245,52 +248,52 @@ void main() {
         return;
     }
 
-    coopmat<float16_t, gl_ScopeSubgroup, 16, 8, gl_MatrixUseAccumulator> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
+    coopmat<float16_t, gl_ScopeSubgroup, COOP_M, COOP_N, gl_MatrixUseAccumulator> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
     for (int i = 0; i < C_COLS; ++i) {
         const int ii = int(gl_LocalInvocationIndex);
-        for (int jj = 0; jj < 16 && ii < 8; ++jj) {
-            g_mat_staging0[jj * 8 + ii] = float16_t(0.0);
+        for (int jj = 0; jj < COOP_M && ii < COOP_N; ++jj) {
+            g_mat_staging0[jj * 16 + ii] = float16_t(0.0);
             if (ii < OUT_CHANNELS) {
-                g_mat_staging0[jj * 8 + ii] = g_biases[c + i * 8 + ii];
+                g_mat_staging0[jj * 16 + ii] = g_biases[c + i * COOP_N + ii];
             }
             // zero out shared memory to avoid NANs later
-            g_mat_staging1[jj * 8 + ii] = g_mat_staging2[jj * 8 + ii] = g_mat_staging3[jj * 8 + ii] = float16_t(0.0);
+            g_mat_staging1[jj * 16 + ii] = g_mat_staging2[jj * 16 + ii] = g_mat_staging3[jj * 16 + ii] = float16_t(0.0);
         }
         groupMemoryBarrier(); barrier();
 
         for (int j = 0; j < C_ROWS; ++j) {
-            coopMatLoad(C0[j][i], g_mat_staging0, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(C1[j][i], g_mat_staging0, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(C0[j][i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(C1[j][i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
         }
     }
 
 #if IMG_INPUT1
-    for (int j = 0; j < 3 * IN_CHANNELS1; j += 8) {
-        coopmat<float16_t, gl_ScopeSubgroup, 16, 8, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+    for (int j = 0; j < 3 * IN_CHANNELS1; j += COOP_K) {
+        coopmat<float16_t, gl_ScopeSubgroup, COOP_M, COOP_K, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
         for (int i = 0; i < C_ROWS; ++i) {
-            for (int jj = 0; jj < 8 && li.x < 16; ++jj) {
+            for (int jj = 0; jj < COOP_K && li.x < COOP_M; ++jj) {
                 const int x_off = (j + jj) / IN_CHANNELS1, ch = (j + jj) % IN_CHANNELS1;
                 if (x_off < 3) {
-                    const vec2 tex_coord = (vec2(x + x_off + li.x + i * 16, y) + vec2(0.5)) * g_params.inv_img_size;
+                    const vec2 tex_coord = (vec2(x + x_off + li.x + i * COOP_M, y) + vec2(0.5)) * g_params.inv_img_size;
                     if (ch < 3) {
-                        g_mat_staging0[li.x * 8 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch]));
-                        g_mat_staging1[li.x * 8 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch]));
-                        g_mat_staging2[li.x * 8 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch]));
-                        g_mat_staging3[li.x * 8 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch]));
+                        g_mat_staging0[li.x * 16 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch]));
+                        g_mat_staging1[li.x * 16 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch]));
+                        g_mat_staging2[li.x * 16 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch]));
+                        g_mat_staging3[li.x * 16 + jj] = float16_t(transfer_input1(textureLodOffset(sampler2D(g_in_img1, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch]));
                     }
             #if IMG_INPUT2
                     else if (ch < 6) {
-                        g_mat_staging0[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 3]);
-                        g_mat_staging1[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 3]);
-                        g_mat_staging2[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 3]);
-                        g_mat_staging3[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 3]);
+                        g_mat_staging0[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 3]);
+                        g_mat_staging1[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 3]);
+                        g_mat_staging2[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 3]);
+                        g_mat_staging3[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 3]);
                     }
                 #if IMG_INPUT3
                     else {
-                        g_mat_staging0[li.x * 8 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 6]));
-                        g_mat_staging1[li.x * 8 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 6]));
-                        g_mat_staging2[li.x * 8 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 6]));
-                        g_mat_staging3[li.x * 8 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 6]));
+                        g_mat_staging0[li.x * 16 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 6]));
+                        g_mat_staging1[li.x * 16 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 6]));
+                        g_mat_staging2[li.x * 16 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 6]));
+                        g_mat_staging3[li.x * 16 + jj] = float16_t(transfer_input3(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 6]));
                     }
                 #endif // IMG_INPUT3
             #endif // IMG_INPUT2
@@ -299,20 +302,20 @@ void main() {
 
             groupMemoryBarrier(); barrier();
 
-            coopMatLoad(A0[i], g_mat_staging0, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A1[i], g_mat_staging1, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A2[i], g_mat_staging2, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A3[i], g_mat_staging3, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A0[i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A1[i], g_mat_staging1, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A2[i], g_mat_staging2, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A3[i], g_mat_staging3, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
         }
 
         for (int i = 0; i < C_COLS; ++i) {
-            coopmat<float16_t, gl_ScopeSubgroup, 8, 8, gl_MatrixUseB> B0, B1, B2;
+            coopmat<float16_t, gl_ScopeSubgroup, COOP_K, COOP_N, gl_MatrixUseB> B0, B1, B2;
 
-            const int rounded_triple1 = 8 * ((3 * IN_CHANNELS1 + 7) / 8); // stride and offset must be aligned
+            const int rounded_triple1 = 16 * ((3 * IN_CHANNELS1 + 15) / 16); // stride and offset must be aligned
 
-            coopMatLoad(B0, g_weights, (c + i * 8) * 3 * rounded_triple1 + 0 * rounded_triple1 + j, 3 * rounded_triple1, gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B1, g_weights, (c + i * 8) * 3 * rounded_triple1 + 1 * rounded_triple1 + j, 3 * rounded_triple1, gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B2, g_weights, (c + i * 8) * 3 * rounded_triple1 + 2 * rounded_triple1 + j, 3 * rounded_triple1, gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B0, g_weights, (c + i * COOP_N) * 3 * rounded_triple1 + 0 * rounded_triple1 + j, 3 * rounded_triple1, gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B1, g_weights, (c + i * COOP_N) * 3 * rounded_triple1 + 1 * rounded_triple1 + j, 3 * rounded_triple1, gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B2, g_weights, (c + i * COOP_N) * 3 * rounded_triple1 + 2 * rounded_triple1 + j, 3 * rounded_triple1, gl_CooperativeMatrixLayoutColumnMajor);
 
             for (int k = 0; k < C_ROWS; ++k) {
                 C0[k][i] = coopMatMulAdd(A0[k], B0, C0[k][i]);
@@ -327,40 +330,40 @@ void main() {
     }
 #endif // IMG_INPUT1
 
-    const int rows_count = min(C_ROWS, (int(g_params.in_dims[0]) - x + 15) / 16);
-    const int cols_count = min(C_COLS, (OUT_CHANNELS - c + 7) / 8);
+    const int rows_count = min(C_ROWS, (int(g_params.in_dims[0]) - x + COOP_M - 1) / COOP_M);
+    const int cols_count = min(C_COLS, (OUT_CHANNELS - c + COOP_N - 1) / COOP_N);
 
 #if BUF_INPUT1
-    for (int j = 0; j < 3 * IN_CHANNELS1; j += 8) {
-        coopmat<float16_t, gl_ScopeSubgroup, 16, 8, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+    for (int j = 0; j < 3 * IN_CHANNELS1; j += COOP_K) {
+        coopmat<float16_t, gl_ScopeSubgroup, COOP_M, COOP_K, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
         for (int i = 0; i < C_ROWS; ++i) {
 #if UPSCALE1
-            for (int jj = 0; jj < 8 && li.x < 16; ++jj) {
+            for (int jj = 0; jj < COOP_K && li.x < COOP_M; ++jj) {
                 const int x_off = ((j + jj) / IN_CHANNELS1), ch = ((j + jj) % IN_CHANNELS1);
-                const int x_final = (x + x_off + li.x + i * 16 - 1 + 2) / 2 - 1;
+                const int x_final = (x + x_off + li.x + i * COOP_M - 1 + 2) / 2 - 1;
 
                 const int i0 = IN_CHANNELS1 * (((y == 0 ? -1 : (y - 1) / 2) + 1) * g_params.input_stride1 + x_final + 1) + ch;
                 const int i1 = IN_CHANNELS1 * (((y + 0) / 2 + 1) * g_params.input_stride1 + x_final + 1) + ch;
                 const int i2 = IN_CHANNELS1 * (((y + 1) / 2 + 1) * g_params.input_stride1 + x_final + 1) + ch;
                 const int i3 = IN_CHANNELS1 * (((y + 2) / 2 + 1) * g_params.input_stride1 + x_final + 1) + ch;
 
-                g_mat_staging0[li.x * 8 + jj] = g_input1[i0];
-                g_mat_staging1[li.x * 8 + jj] = g_input1[i1];
-                g_mat_staging2[li.x * 8 + jj] = g_input1[i2];
-                g_mat_staging3[li.x * 8 + jj] = g_input1[i3];
+                g_mat_staging0[li.x * 16 + jj] = g_input1[i0];
+                g_mat_staging1[li.x * 16 + jj] = g_input1[i1];
+                g_mat_staging2[li.x * 16 + jj] = g_input1[i2];
+                g_mat_staging3[li.x * 16 + jj] = g_input1[i3];
             }
 
             groupMemoryBarrier(); barrier();
 
-            coopMatLoad(A0[i], g_mat_staging0, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A1[i], g_mat_staging1, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A2[i], g_mat_staging2, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A3[i], g_mat_staging3, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A0[i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A1[i], g_mat_staging1, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A2[i], g_mat_staging2, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A3[i], g_mat_staging3, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
 #else // UPSCALE1
-            const int i0 = IN_CHANNELS1 * ((y - 1 + 1) * g_params.input_stride1 + x + i * 16 - 1 + 1) + j;
-            const int i1 = IN_CHANNELS1 * ((y + 0 + 1) * g_params.input_stride1 + x + i * 16 - 1 + 1) + j;
-            const int i2 = IN_CHANNELS1 * ((y + 1 + 1) * g_params.input_stride1 + x + i * 16 - 1 + 1) + j;
-            const int i3 = IN_CHANNELS1 * ((y + 2 + 1) * g_params.input_stride1 + x + i * 16 - 1 + 1) + j;
+            const int i0 = IN_CHANNELS1 * ((y - 1 + 1) * g_params.input_stride1 + x + i * COOP_M - 1 + 1) + j;
+            const int i1 = IN_CHANNELS1 * ((y + 0 + 1) * g_params.input_stride1 + x + i * COOP_M - 1 + 1) + j;
+            const int i2 = IN_CHANNELS1 * ((y + 1 + 1) * g_params.input_stride1 + x + i * COOP_M - 1 + 1) + j;
+            const int i3 = IN_CHANNELS1 * ((y + 2 + 1) * g_params.input_stride1 + x + i * COOP_M - 1 + 1) + j;
 
             coopMatLoad(A0[i], g_input1, i0, IN_CHANNELS1, gl_CooperativeMatrixLayoutRowMajor);
             coopMatLoad(A1[i], g_input1, i1, IN_CHANNELS1, gl_CooperativeMatrixLayoutRowMajor);
@@ -370,14 +373,14 @@ void main() {
         }
 
         for (int i = 0; i < cols_count; ++i) {
-            coopmat<float16_t, gl_ScopeSubgroup, 8, 8, gl_MatrixUseB> B0, B1, B2;
+            coopmat<float16_t, gl_ScopeSubgroup, COOP_K, COOP_N, gl_MatrixUseB> B0, B1, B2;
 
-            const int rounded_triple1 = 8 * ((3 * IN_CHANNELS1 + 7) / 8),
-                      rounded_triple2 = 8 * ((3 * IN_CHANNELS2 + 7) / 8); // stride and offset must be aligned
+            const int rounded_triple1 = 16 * ((3 * IN_CHANNELS1 + 15) / 16),
+                      rounded_triple2 = 16 * ((3 * IN_CHANNELS2 + 15) / 16); // stride and offset must be aligned
 
-            coopMatLoad(B0, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B1, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B2, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 2 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B0, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B1, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B2, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 2 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
 
             for (int k = 0; k < C_ROWS; ++k) {
                 C0[k][i] = coopMatMulAdd(A0[k], B0, C0[k][i]);
@@ -393,13 +396,13 @@ void main() {
 #endif // BUF_INPUT1
 
 #if BUF_INPUT2
-    for (int j = 0; j < 3 * IN_CHANNELS2; j += 8) {
-        coopmat<float16_t, gl_ScopeSubgroup, 16, 8, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+    for (int j = 0; j < 3 * IN_CHANNELS2; j += COOP_K) {
+        coopmat<float16_t, gl_ScopeSubgroup, COOP_M, COOP_K, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
         for (int i = 0; i < C_ROWS; ++i) {
-            const int i0 = IN_CHANNELS2 * ((y - 1 + 1) * g_params.input_stride2 + x + i * 16 - 1 + 1) + j;
-            const int i1 = IN_CHANNELS2 * ((y + 0 + 1) * g_params.input_stride2 + x + i * 16 - 1 + 1) + j;
-            const int i2 = IN_CHANNELS2 * ((y + 1 + 1) * g_params.input_stride2 + x + i * 16 - 1 + 1) + j;
-            const int i3 = IN_CHANNELS2 * ((y + 2 + 1) * g_params.input_stride2 + x + i * 16 - 1 + 1) + j;
+            const int i0 = IN_CHANNELS2 * ((y - 1 + 1) * g_params.input_stride2 + x + i * COOP_M - 1 + 1) + j;
+            const int i1 = IN_CHANNELS2 * ((y + 0 + 1) * g_params.input_stride2 + x + i * COOP_M - 1 + 1) + j;
+            const int i2 = IN_CHANNELS2 * ((y + 1 + 1) * g_params.input_stride2 + x + i * COOP_M - 1 + 1) + j;
+            const int i3 = IN_CHANNELS2 * ((y + 2 + 1) * g_params.input_stride2 + x + i * COOP_M - 1 + 1) + j;
 
             coopMatLoad(A0[i], g_input2, i0, IN_CHANNELS2, gl_CooperativeMatrixLayoutRowMajor);
             coopMatLoad(A1[i], g_input2, i1, IN_CHANNELS2, gl_CooperativeMatrixLayoutRowMajor);
@@ -408,14 +411,14 @@ void main() {
         }
 
         for (int i = 0; i < C_COLS; ++i) {
-            coopmat<float16_t, gl_ScopeSubgroup, 8, 8, gl_MatrixUseB> B0, B1, B2;
+            coopmat<float16_t, gl_ScopeSubgroup, COOP_K, COOP_N, gl_MatrixUseB> B0, B1, B2;
 
-            const int rounded_triple1 = 8 * ((3 * IN_CHANNELS1 + 7) / 8),
-                      rounded_triple2 = 8 * ((3 * IN_CHANNELS2 + 7) / 8); // stride and offset must be aligned
+            const int rounded_triple1 = 16 * ((3 * IN_CHANNELS1 + 15) / 16),
+                      rounded_triple2 = 16 * ((3 * IN_CHANNELS2 + 15) / 16); // stride and offset must be aligned
 
-            coopMatLoad(B0, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B1, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B2, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 2 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B0, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B1, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B2, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 2 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
 
             for (int k = 0; k < C_ROWS; ++k) {
                 C0[k][i] = coopMatMulAdd(A0[k], B0, C0[k][i]);
@@ -431,32 +434,32 @@ void main() {
 #endif // BUF_INPUT1
 
 #if IMG_INPUT2
-    for (int j = 0; j < 3 * IN_CHANNELS2; j += 8) {
-        coopmat<float16_t, gl_ScopeSubgroup, 16, 8, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
+    for (int j = 0; j < 3 * IN_CHANNELS2; j += COOP_K) {
+        coopmat<float16_t, gl_ScopeSubgroup, COOP_M, COOP_K, gl_MatrixUseA> A0[C_ROWS], A1[C_ROWS], A2[C_ROWS], A3[C_ROWS];
         for (int i = 0; i < C_ROWS; ++i) {
-            for (int jj = 0; jj < 8 && li.x < 16; ++jj) {
+            for (int jj = 0; jj < COOP_K && li.x < COOP_M; ++jj) {
                 const int x_off = (j + jj) / IN_CHANNELS2, ch = (j + jj) % IN_CHANNELS2;
                 if (x_off < 3) {
-                    const vec2 tex_coord = (vec2(x + x_off + li.x + i * 16, y) + vec2(0.5)) * g_params.inv_img_size;
+                    const vec2 tex_coord = (vec2(x + x_off + li.x + i * COOP_M, y) + vec2(0.5)) * g_params.inv_img_size;
                     if (ch < 3) {
-                        g_mat_staging0[li.x * 8 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch]));
-                        g_mat_staging1[li.x * 8 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch]));
-                        g_mat_staging2[li.x * 8 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch]));
-                        g_mat_staging3[li.x * 8 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch]));
+                        g_mat_staging0[li.x * 16 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch]));
+                        g_mat_staging1[li.x * 16 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch]));
+                        g_mat_staging2[li.x * 16 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch]));
+                        g_mat_staging3[li.x * 16 + jj] = float16_t(transfer_input2(textureLodOffset(sampler2D(g_in_img2, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch]));
                     }
             #if IMG_INPUT3
                     else if (ch < 6) {
-                        g_mat_staging0[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 3]);
-                        g_mat_staging1[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 3]);
-                        g_mat_staging2[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 3]);
-                        g_mat_staging3[li.x * 8 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 3]);
+                        g_mat_staging0[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 3]);
+                        g_mat_staging1[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 3]);
+                        g_mat_staging2[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 3]);
+                        g_mat_staging3[li.x * 16 + jj] = float16_t(textureLodOffset(sampler2D(g_in_img3, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 3]);
                     }
                 #if IMG_INPUT4
                     else {
-                        g_mat_staging0[li.x * 8 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 6]));
-                        g_mat_staging1[li.x * 8 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 6]));
-                        g_mat_staging2[li.x * 8 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 6]));
-                        g_mat_staging3[li.x * 8 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 6]));
+                        g_mat_staging0[li.x * 16 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, -1))[ch - 6]));
+                        g_mat_staging1[li.x * 16 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, +0))[ch - 6]));
+                        g_mat_staging2[li.x * 16 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, +1))[ch - 6]));
+                        g_mat_staging3[li.x * 16 + jj] = float16_t(transfer_input4(textureLodOffset(sampler2D(g_in_img4, g_sampler), tex_coord, 0.0, ivec2(-1, +2))[ch - 6]));
                     }
                 #endif // IMG_INPUT4
             #endif // IMG_INPUT3
@@ -465,21 +468,21 @@ void main() {
 
             groupMemoryBarrier(); barrier();
 
-            coopMatLoad(A0[i], g_mat_staging0, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A1[i], g_mat_staging1, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A2[i], g_mat_staging2, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(A3[i], g_mat_staging3, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A0[i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A1[i], g_mat_staging1, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A2[i], g_mat_staging2, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(A3[i], g_mat_staging3, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
         }
 
         for (int i = 0; i < C_COLS; ++i) {
-            coopmat<float16_t, gl_ScopeSubgroup, 8, 8, gl_MatrixUseB> B0, B1, B2;
+            coopmat<float16_t, gl_ScopeSubgroup, COOP_K, COOP_N, gl_MatrixUseB> B0, B1, B2;
 
-            const int rounded_triple1 = 8 * ((3 * IN_CHANNELS1 + 7) / 8),
-                      rounded_triple2 = 8 * ((3 * IN_CHANNELS2 + 7) / 8); // stride and offset must be aligned
+            const int rounded_triple1 = 16 * ((3 * IN_CHANNELS1 + 15) / 16),
+                      rounded_triple2 = 16 * ((3 * IN_CHANNELS2 + 15) / 16); // stride and offset must be aligned
 
-            coopMatLoad(B0, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B1, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
-            coopMatLoad(B2, g_weights, (c + i * 8) * 3 * (rounded_triple1 + rounded_triple2) + 2 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B0, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B1, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
+            coopMatLoad(B2, g_weights, (c + i * COOP_N) * 3 * (rounded_triple1 + rounded_triple2) + 2 * rounded_triple2 + 3 * rounded_triple1 + j, 3 * (rounded_triple1 + rounded_triple2), gl_CooperativeMatrixLayoutColumnMajor);
 
             for (int k = 0; k < C_ROWS; ++k) {
                 C0[k][i] = coopMatMulAdd(A0[k], B0, C0[k][i]);
@@ -501,13 +504,13 @@ void main() {
                 C0[j][i][k] = max(max(C0[j][i][k], C1[j][i][k]), float16_t(0.0));
             }
 
-            coopMatStore(C0[j][i], g_mat_staging0, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatStore(C0[j][i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
             groupMemoryBarrier(); barrier();
 
-            for (int jj = 0; jj < 16; jj += 2) {
-                for (int ii = 0; ii < 8; ++ii) {
-                    const float16_t out_val = max(g_mat_staging0[(jj + 0) * 8 + ii], g_mat_staging0[(jj + 1) * 8 + ii]);
-                    g_out_buf[OUT_CHANNELS * ((y / 2 + 1) * g_params.output_stride + x / 2 + j * 16 / 2 + jj / 2 + 1) + c + i * 8 + ii] = max(out_val, float16_t(0.0));
+            for (int jj = 0; jj < COOP_M; jj += 2) {
+                for (int ii = 0; ii < COOP_N; ++ii) {
+                    const float16_t out_val = max(g_mat_staging0[(jj + 0) * 16 + ii], g_mat_staging0[(jj + 1) * 16 + ii]);
+                    g_out_buf[OUT_CHANNELS * ((y / 2 + 1) * g_params.output_stride + x / 2 + j * COOP_M / 2 + jj / 2 + 1) + c + i * COOP_N + ii] = max(out_val, float16_t(0.0));
                 }
             }
         }
@@ -519,18 +522,18 @@ void main() {
             C1[j][0][k] = max(C1[j][0][k], float16_t(0.0));
         }
 
-        coopMatStore(C0[j][0], g_mat_staging0, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
-        coopMatStore(C1[j][0], g_mat_staging1, 0u, 8u, gl_CooperativeMatrixLayoutRowMajor);
+        coopMatStore(C0[j][0], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+        coopMatStore(C1[j][0], g_mat_staging1, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
         groupMemoryBarrier(); barrier();
 
-        for (int jj = 0; jj < 16; ++jj) {
-            vec4 val0 = vec4(g_mat_staging0[jj * 8 + 0], g_mat_staging0[jj * 8 + 1], g_mat_staging0[jj * 8 + 2], 1.0),
-                 val1 = vec4(g_mat_staging1[jj * 8 + 0], g_mat_staging1[jj * 8 + 1], g_mat_staging1[jj * 8 + 2], 1.0);
+        for (int jj = 0; jj < COOP_M; ++jj) {
+            vec4 val0 = vec4(g_mat_staging0[jj * 16 + 0], g_mat_staging0[jj * 16 + 1], g_mat_staging0[jj * 16 + 2], 1.0),
+                 val1 = vec4(g_mat_staging1[jj * 16 + 0], g_mat_staging1[jj * 16 + 1], g_mat_staging1[jj * 16 + 2], 1.0);
             val0.xyz = transfer_output(val0.xyz);
             val1.xyz = transfer_output(val1.xyz);
-            imageStore(g_out_img, ivec2(x + j * 16 + jj, y), val0);
+            imageStore(g_out_img, ivec2(x + j * COOP_M + jj, y), val0);
             if (y + 1 < int(g_params.out_dims[1])) {
-                imageStore(g_out_img, ivec2(x + j * 16 + jj, y + 1), val1);
+                imageStore(g_out_img, ivec2(x + j * COOP_M + jj, y + 1), val1);
             }
         #if TONEMAP
             [[dont_flatten]] if (g_params.tonemap_mode == 0) {
@@ -541,9 +544,9 @@ void main() {
                 val1 = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, val1);
             }
         #endif
-            imageStore(g_out_tonemapped_img, ivec2(x + j * 16 + jj, y), val0);
+            imageStore(g_out_tonemapped_img, ivec2(x + j * COOP_M + jj, y), val0);
             if (y + 1 < int(g_params.out_dims[1])) {
-                imageStore(g_out_tonemapped_img, ivec2(x + j * 16 + jj, y + 1), val1);
+                imageStore(g_out_tonemapped_img, ivec2(x + j * COOP_M + jj, y + 1), val1);
             }
         }
     }
@@ -555,9 +558,9 @@ void main() {
                 C1[j][i][k] = max(C1[j][i][k], float16_t(0.0));
             }
 
-            coopMatStore(C0[j][i], g_out_buf, OUT_CHANNELS * ((y + 0 + 1) * g_params.output_stride + x + j * 16 + 1) + c + i * 8, OUT_CHANNELS, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatStore(C0[j][i], g_out_buf, OUT_CHANNELS * ((y + 0 + 1) * g_params.output_stride + x + j * COOP_M + 1) + c + i * COOP_N, OUT_CHANNELS, gl_CooperativeMatrixLayoutRowMajor);
             if (y + 1 < int(g_params.out_dims[1])) {
-                coopMatStore(C1[j][i], g_out_buf, OUT_CHANNELS * ((y + 1 + 1) * g_params.output_stride + x + j * 16 + 1) + c + i * 8, OUT_CHANNELS, gl_CooperativeMatrixLayoutRowMajor);
+                coopMatStore(C1[j][i], g_out_buf, OUT_CHANNELS * ((y + 1 + 1) * g_params.output_stride + x + j * COOP_M + 1) + c + i * COOP_N, OUT_CHANNELS, gl_CooperativeMatrixLayoutRowMajor);
             }
         }
     }
@@ -654,7 +657,7 @@ void main() {
         }
 
         for (int i = 0; i < C_COLS; ++i) {
-            const int rounded_triple = 8 * ((3 * IN_CHANNELS1 + 7) / 8); // stride and offset must be aligned
+            const int rounded_triple = 16 * ((3 * IN_CHANNELS1 + 15) / 16); // stride and offset must be aligned
 
             float16_t B0 = g_weights[(c + i) * 3 * rounded_triple + 0 * rounded_triple + j];
             float16_t B1 = g_weights[(c + i) * 3 * rounded_triple + 1 * rounded_triple + j];
@@ -695,8 +698,8 @@ void main() {
 #endif // UPSCALE1
 
         for (int i = 0; i < C_COLS; ++i) {
-            const int rounded_triple1 = 8 * ((3 * IN_CHANNELS1 + 7) / 8),
-                      rounded_triple2 = 8 * ((3 * IN_CHANNELS2 + 7) / 8); // stride and offset must be aligned
+            const int rounded_triple1 = 16 * ((3 * IN_CHANNELS1 + 15) / 16),
+                      rounded_triple2 = 16 * ((3 * IN_CHANNELS2 + 15) / 16); // stride and offset must be aligned
 
             float16_t B0 = g_weights[(c + i) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple1 + j];
             float16_t B1 = g_weights[(c + i) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple1 + j];
@@ -775,8 +778,8 @@ void main() {
         }
 
         for (int i = 0; i < C_COLS; ++i) {
-            const int rounded_triple1 = 8 * ((3 * IN_CHANNELS1 + 7) / 8),
-                      rounded_triple2 = 8 * ((3 * IN_CHANNELS2 + 7) / 8); // stride and offset must be aligned
+            const int rounded_triple1 = 16 * ((3 * IN_CHANNELS1 + 15) / 16),
+                      rounded_triple2 = 16 * ((3 * IN_CHANNELS2 + 15) / 16); // stride and offset must be aligned
 
             float16_t B0 = g_weights[(c + i) * 3 * (rounded_triple1 + rounded_triple2) + 0 * rounded_triple2 + 3 * rounded_triple1 + j];
             float16_t B1 = g_weights[(c + i) * 3 * (rounded_triple1 + rounded_triple2) + 1 * rounded_triple2 + 3 * rounded_triple1 + j];
