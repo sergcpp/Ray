@@ -52,8 +52,11 @@ bool Ray::Vk::Api::Load(ILog *log) {
 #else
     vulkan_module = dlopen("libvulkan.dylib", RTLD_LAZY);
     if (!vulkan_module) {
-        log->Error("Failed to load libvulkan.dylib");
-        return false;
+        vulkan_module = dlopen("/usr/local/lib/libvulkan.dylib", RTLD_LAZY);
+        if (!vulkan_module) {
+            log->Error("Failed to load libvulkan.dylib");
+            return false;
+        }
     }
 #endif
 

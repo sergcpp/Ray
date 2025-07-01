@@ -232,54 +232,54 @@ jobs:
         with:
           name: linux-x86_64-tsan
           path: linux-x86_64-tsan/
-  # build-macos-universal-rel:
-  #   runs-on: [ macos, builder ]
-  #   steps:
-  #     - name: Checkout Workflows
-  #       uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .gitea
-  #     - name: Re-initialize repository
-  #       uses: ./.gitea/actions/checkout
-  #     - name: Compile the code
-  #       uses: ./.gitea/actions/build-macos
-  #       with:
-  #         cmake-args: '-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_UNITY_BUILD=ON'
-  #         config: "Release"
-  #         bin-dir: "macos-universal"
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v3
-  #       with:
-  #         name: macos-universal
-  #         path: macos-universal/
-  # build-macos-universal-dbg:
-  #   runs-on: [ macos, builder ]
-  #   steps:
-  #     - name: Checkout Workflows
-  #       uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .gitea
-  #     - name: Re-initialize repository
-  #       uses: ./.gitea/actions/checkout
-  #     - name: Compile the code
-  #       uses: ./.gitea/actions/build-macos
-  #       with:
-  #         cmake-args: '-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"'
-  #         config: "Debug"
-  # build-macos-universal-dev:
-  #   runs-on: [ macos, builder ]
-  #   steps:
-  #     - name: Checkout Workflows
-  #       uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .gitea
-  #     - name: Re-initialize repository
-  #       uses: ./.gitea/actions/checkout
-  #     - name: Compile the code
-  #       uses: ./.gitea/actions/build-macos
-  #       with:
-  #         cmake-args: '-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"'
-  #         config: "RelWithDebInfo"
+  build-macos-universal-rel:
+    runs-on: [ macos, builder ]
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .gitea
+      - name: Re-initialize repository
+        uses: ./.gitea/actions/checkout
+      - name: Compile the code
+        uses: ./.gitea/actions/build-macos
+        with:
+          cmake-args: '-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_UNITY_BUILD=ON'
+          config: "Release"
+          bin-dir: "macos-universal"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-universal
+          path: macos-universal/
+  build-macos-universal-dbg:
+    runs-on: [ macos, builder ]
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .gitea
+      - name: Re-initialize repository
+        uses: ./.gitea/actions/checkout
+      - name: Compile the code
+        uses: ./.gitea/actions/build-macos
+        with:
+          cmake-args: '-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"'
+          config: "Debug"
+  build-macos-universal-dev:
+    runs-on: [ macos, builder ]
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .gitea
+      - name: Re-initialize repository
+        uses: ./.gitea/actions/checkout
+      - name: Compile the code
+        uses: ./.gitea/actions/build-macos
+        with:
+          cmake-args: '-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"'
+          config: "RelWithDebInfo"
   test-windows-x86_64-cpu:
     runs-on: [ windows, x86_64 ]
     needs:
@@ -510,76 +510,76 @@ jobs:
         with:
           name: linux-x86_64-gpu-nv-output
           path: linux-x86_64-gpu-nv-output/
-  # test-macos-arm64-cpu:
-  #   runs-on: [ macos, arm64 ]
-  #   needs:
-  #     - build-macos-universal-rel
-  #   steps:
-  #     - name: Checkout Workflows
-  #       uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .gitea
-  #     - name: Re-initialize repository
-  #       uses: ./.gitea/actions/checkout
-  #     - name: Run Tests
-  #       uses: ./.gitea/actions/test
-  #       with:
-  #         bin-dir: "macos-universal"
-  #         out-dir: "macos-arm64-cpu-output"
-  #         test-args: "--full --nogpu -j4"
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v3
-  #       if: always()
-  #       with:
-  #         name: macos-arm64-cpu-output
-  #         path: macos-arm64-cpu-output/
-  # test-macos-arm64-gpu-m1:
-  #   runs-on: [ macos, arm64, m1 ]
-  #   needs:
-  #     - build-macos-universal-rel
-  #   steps:
-  #     - name: Checkout Workflows
-  #       uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .gitea
-  #     - name: Re-initialize repository
-  #       uses: ./.gitea/actions/checkout
-  #     - name: Run Tests
-  #       uses: ./.gitea/actions/test
-  #       with:
-  #         bin-dir: "macos-universal"
-  #         out-dir: "macos-arm64-gpu-m1-output"
-  #         test-args: "--full --device M1 --nocpu"
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v3
-  #       if: always()
-  #       with:
-  #         name: macos-arm64-gpu-m1-output
-  #         path: macos-arm64-gpu-m1-output/
-  # test-macos-x86_64-cpu:
-  #   runs-on: [ macos, x86_64 ]
-  #   needs:
-  #     - build-macos-universal-rel
-  #   steps:
-  #     - name: Checkout Workflows
-  #       uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .gitea
-  #     - name: Re-initialize repository
-  #       uses: ./.gitea/actions/checkout
-  #     - name: Run Tests
-  #       uses: ./.gitea/actions/test-macos
-  #       with:
-  #         arch: "-x86_64"
-  #         bin-dir: "macos-universal"
-  #         out-dir: "macos-x86_64-cpu-output"
-  #         test-args: "--full --nogpu -j4"
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v3
-  #       if: always()
-  #       with:
-  #         name: macos-x86_64-cpu-output
-  #         path: macos-x86_64-cpu-output/
+  test-macos-arm64-cpu:
+    runs-on: [ macos, arm64 ]
+    needs:
+      - build-macos-universal-rel
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .gitea
+      - name: Re-initialize repository
+        uses: ./.gitea/actions/checkout
+      - name: Run Tests
+        uses: ./.gitea/actions/test
+        with:
+          bin-dir: "macos-universal"
+          out-dir: "macos-arm64-cpu-output"
+          test-args: "--full --nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: macos-arm64-cpu-output
+          path: macos-arm64-cpu-output/
+  test-macos-arm64-gpu-m4:
+    runs-on: [ macos, arm64, m4 ]
+    needs:
+      - build-macos-universal-rel
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .gitea
+      - name: Re-initialize repository
+        uses: ./.gitea/actions/checkout
+      - name: Run Tests
+        uses: ./.gitea/actions/test
+        with:
+          bin-dir: "macos-universal"
+          out-dir: "macos-arm64-gpu-m4-output"
+          test-args: "--full --device M4 --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: macos-arm64-gpu-m4-output
+          path: macos-arm64-gpu-m4-output/
+  test-macos-x86_64-cpu:
+    runs-on: [ macos, x86_64 ]
+    needs:
+      - build-macos-universal-rel
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .gitea
+      - name: Re-initialize repository
+        uses: ./.gitea/actions/checkout
+      - name: Run Tests
+        uses: ./.gitea/actions/test-macos
+        with:
+          arch: "-x86_64"
+          bin-dir: "macos-universal"
+          out-dir: "macos-x86_64-cpu-output"
+          test-args: "--full --nogpu -j4"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: macos-x86_64-cpu-output
+          path: macos-x86_64-cpu-output/
   # test-linux-x86_64-cpu-sse2:
   #   runs-on: [ linux, x86_64 ]
   #   needs:
@@ -820,7 +820,7 @@ jobs:
   #         path: windows-arm64-gpu-perf-output/
   analyze-output:
     runs-on: [ linux ]
-    needs: [ test-windows-x86_64-cpu, test-windows-x86_64-gpu-amd, test-windows-x86_64-gpu-uhd, test-windows-x86_64-gpu-arc, test-linux-x86_64-cpu, test-linux-x86_64-gpu-nv, test-linux-x86_64-cpu-sse41, test-windows-x86_64-cpu-avx, test-windows-x86_64-cpu-avx2, test-windows-x86_64-cpu-avx512, test-linux-x86_64-cpu-tsan, test-windows-x86_64-cpu-asan, test-windows-x86_64-gpu-amd-asan ]
+    needs: [ test-windows-x86_64-cpu, test-windows-x86_64-gpu-amd, test-windows-x86_64-gpu-uhd, test-windows-x86_64-gpu-arc, test-linux-x86_64-cpu, test-linux-x86_64-gpu-nv, test-linux-x86_64-cpu-sse41, test-windows-x86_64-cpu-avx, test-windows-x86_64-cpu-avx2, test-windows-x86_64-cpu-avx512, test-linux-x86_64-cpu-tsan, test-windows-x86_64-cpu-asan, test-windows-x86_64-gpu-amd-asan, test-macos-arm64-cpu, test-macos-arm64-gpu-m4, test-macos-x86_64-cpu ]
     if: always()
     steps:
       - name: Checkout Workflows
@@ -867,18 +867,18 @@ jobs:
         with:
           name: linux-x86_64-gpu-nv-output
           path: linux-x86_64-gpu-nv-output/
-      # - uses: actions/download-artifact@v3
-      #   with:
-      #     name: macos-arm64-cpu-output
-      #     path: macos-arm64-cpu-output/
-      # - uses: actions/download-artifact@v3
-      #   with:
-      #     name: macos-arm64-gpu-m1-output
-      #     path: macos-arm64-gpu-m1-output/
-      # - uses: actions/download-artifact@v3
-      #   with:
-      #     name: macos-x86_64-cpu-output
-      #     path: macos-x86_64-cpu-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: macos-arm64-cpu-output
+          path: macos-arm64-cpu-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: macos-arm64-gpu-m4-output
+          path: macos-arm64-gpu-m4-output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: macos-x86_64-cpu-output
+          path: macos-x86_64-cpu-output/
       # - uses: actions/download-artifact@v3
       #   with:
       #     name: linux-x86_64-cpu-sse2-output
@@ -921,5 +921,5 @@ jobs:
       #     path: windows-arm64-gpu-perf-output/
       - name: Analyze Output
         run: |
-          python scripts/analyze_output.py windows-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-gpu-amd-output/test_Ray_output.txt windows-x86_64-gpu-uhd-output/test_Ray_output.txt windows-x86_64-gpu-arc-output/test_Ray_output.txt linux-x86_64-cpu-output/test_Ray_output.txt linux-x86_64-gpu-nv-output/test_Ray_output.txt linux-x86_64-cpu-sse41-output/test_Ray_output.txt windows-x86_64-cpu-avx-output/test_Ray_output.txt windows-x86_64-cpu-avx2-output/test_Ray_output.txt windows-x86_64-cpu-avx512-output/test_Ray_output.txt linux-x86_64-cpu-tsan-output/test_Ray_output.txt windows-x86_64-cpu-asan-output/test_Ray_output.txt windows-x86_64-gpu-amd-asan-output/test_Ray_output.txt
+          python scripts/analyze_output.py windows-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-gpu-amd-output/test_Ray_output.txt windows-x86_64-gpu-uhd-output/test_Ray_output.txt windows-x86_64-gpu-arc-output/test_Ray_output.txt linux-x86_64-cpu-output/test_Ray_output.txt linux-x86_64-gpu-nv-output/test_Ray_output.txt linux-x86_64-cpu-sse41-output/test_Ray_output.txt windows-x86_64-cpu-avx-output/test_Ray_output.txt windows-x86_64-cpu-avx2-output/test_Ray_output.txt windows-x86_64-cpu-avx512-output/test_Ray_output.txt linux-x86_64-cpu-tsan-output/test_Ray_output.txt windows-x86_64-cpu-asan-output/test_Ray_output.txt windows-x86_64-gpu-amd-asan-output/test_Ray_output.txt macos-arm64-cpu-output/test_Ray_output.txt macos-arm64-gpu-m4-output/test_Ray_output.txt macos-x86_64-cpu-output/test_Ray_output.txt
         shell: bash

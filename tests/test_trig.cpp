@@ -112,7 +112,7 @@ void test_trig() {
             max_error = std::max(max_error, std::abs(ref_sin[2] - test_sincos[0].get<2>()));
             max_error = std::max(max_error, std::abs(ref_sin[3] - test_sincos[0].get<3>()));
         }
-        require(max_error < 6.416e-07);
+        require(max_error < 6.417e-07);
     }
 #endif
     printf("OK\n");

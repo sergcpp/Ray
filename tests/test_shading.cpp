@@ -1872,7 +1872,7 @@ void test_complex_mat6_dir_light(const char *arch_list[], std::string_view prefe
 }
 
 void test_complex_mat6_hdri_light(const char *arch_list[], std::string_view preferred_device) {
-    const int SampleCount = 55;
+    const int SampleCount = 56;
     const double MinPSNR = 21.0;
     const int PixThres = 6305;
 
