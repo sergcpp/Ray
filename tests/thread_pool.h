@@ -21,7 +21,7 @@ class ThreadPool {
     ~ThreadPool();
 
     template <class F, class... Args>
-    std::future<typename std::result_of<F(Args...)>::type> Enqueue(F &&f, Args &&... args);
+    std::future<typename std::invoke_result_t<F, Args...>> Enqueue(F &&f, Args &&...args);
 
     template <class UnaryFunction> void ParallelFor(int from, int to, UnaryFunction &&f);
 
@@ -63,8 +63,8 @@ inline ThreadPool::ThreadPool(const size_t threads_count) : stop_(false) {
 
 // add new work item to the pool
 template <class F, class... Args>
-std::future<typename std::result_of<F(Args...)>::type> ThreadPool::Enqueue(F &&f, Args &&... args) {
-    using return_type = typename std::result_of<F(Args...)>::type;
+std::future<typename std::invoke_result_t<F, Args...>> ThreadPool::Enqueue(F &&f, Args &&...args) {
+    using return_type = typename std::invoke_result_t<F, Args...>;
 
     auto task =
         std::make_shared<std::packaged_task<return_type()>>(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
