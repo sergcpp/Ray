@@ -17,6 +17,13 @@
     #define f16vec4 vec4
 #endif
 
+#ifndef C_TYPE
+    #define C_TYPE float16_t
+    #define C_CONVERT 0
+#else
+    #define C_CONVERT 1
+#endif
+
 layout(push_constant) uniform UniformParams {
     Params g_params;
 };
@@ -232,6 +239,11 @@ shared float16_t g_mat_staging1[16 * 16];
 shared float16_t g_mat_staging2[16 * 16];
 shared float16_t g_mat_staging3[16 * 16];
 
+#ifdef COOP_M
+shared C_TYPE g_mat_staging_C0[COOP_M * 16];
+shared C_TYPE g_mat_staging_C1[COOP_M * 16];
+#endif
+
 void main() {
     ivec3 tile_id = ivec3(gl_WorkGroupID), li = ivec3(gl_LocalInvocationID);
 
@@ -248,22 +260,22 @@ void main() {
         return;
     }
 
-    coopmat<float16_t, gl_ScopeSubgroup, COOP_M, COOP_N, gl_MatrixUseAccumulator> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
+    coopmat<C_TYPE, gl_ScopeSubgroup, COOP_M, COOP_N, gl_MatrixUseAccumulator> C0[C_ROWS][C_COLS], C1[C_ROWS][C_COLS];
     for (int i = 0; i < C_COLS; ++i) {
         const int ii = int(gl_LocalInvocationIndex);
         for (int jj = 0; jj < COOP_M && ii < COOP_N; ++jj) {
-            g_mat_staging0[jj * 16 + ii] = float16_t(0.0);
+            g_mat_staging_C0[jj * 16 + ii] = C_TYPE(0.0);
             if (ii < OUT_CHANNELS) {
-                g_mat_staging0[jj * 16 + ii] = g_biases[c + i * COOP_N + ii];
+                g_mat_staging_C0[jj * 16 + ii] = C_TYPE(g_biases[c + i * COOP_N + ii]);
             }
             // zero out shared memory to avoid NANs later
-            g_mat_staging1[jj * 16 + ii] = g_mat_staging2[jj * 16 + ii] = g_mat_staging3[jj * 16 + ii] = float16_t(0.0);
+            g_mat_staging0[jj * 16 + ii] = g_mat_staging1[jj * 16 + ii] = g_mat_staging2[jj * 16 + ii] = g_mat_staging3[jj * 16 + ii] = float16_t(0.0);
         }
         groupMemoryBarrier(); barrier();
 
         for (int j = 0; j < C_ROWS; ++j) {
-            coopMatLoad(C0[j][i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
-            coopMatLoad(C1[j][i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(C0[j][i], g_mat_staging_C0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatLoad(C1[j][i], g_mat_staging_C0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
         }
     }
 
@@ -501,16 +513,16 @@ void main() {
     for (int j = 0; j < C_ROWS; ++j) {
         for (int i = 0; i < cols_count; ++i) {
             for (int k = 0; k < C0[j][i].length(); ++k) {
-                C0[j][i][k] = max(max(C0[j][i][k], C1[j][i][k]), float16_t(0.0));
+                C0[j][i][k] = max(max(C0[j][i][k], C1[j][i][k]), C_TYPE(0.0));
             }
 
-            coopMatStore(C0[j][i], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatStore(C0[j][i], g_mat_staging_C0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
             groupMemoryBarrier(); barrier();
 
             for (int jj = 0; jj < COOP_M; jj += 2) {
                 for (int ii = 0; ii < COOP_N; ++ii) {
-                    const float16_t out_val = max(g_mat_staging0[(jj + 0) * 16 + ii], g_mat_staging0[(jj + 1) * 16 + ii]);
-                    g_out_buf[OUT_CHANNELS * ((y / 2 + 1) * g_params.output_stride + x / 2 + j * COOP_M / 2 + jj / 2 + 1) + c + i * COOP_N + ii] = max(out_val, float16_t(0.0));
+                    const C_TYPE out_val = max(max(g_mat_staging_C0[(jj + 0) * 16 + ii], g_mat_staging_C0[(jj + 1) * 16 + ii]), C_TYPE(0.0));
+                    g_out_buf[OUT_CHANNELS * ((y / 2 + 1) * g_params.output_stride + x / 2 + j * COOP_M / 2 + jj / 2 + 1) + c + i * COOP_N + ii] = float16_t(out_val);
                 }
             }
         }
@@ -518,17 +530,17 @@ void main() {
 #elif OUT_IMG
     for (int j = 0; j < rows_count && c == 0; ++j) {
         for (int k = 0; k < C0[j][0].length(); ++k) {
-            C0[j][0][k] = max(C0[j][0][k], float16_t(0.0));
-            C1[j][0][k] = max(C1[j][0][k], float16_t(0.0));
+            C0[j][0][k] = max(C0[j][0][k], C_TYPE(0.0));
+            C1[j][0][k] = max(C1[j][0][k], C_TYPE(0.0));
         }
 
-        coopMatStore(C0[j][0], g_mat_staging0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
-        coopMatStore(C1[j][0], g_mat_staging1, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+        coopMatStore(C0[j][0], g_mat_staging_C0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+        coopMatStore(C1[j][0], g_mat_staging_C1, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
         groupMemoryBarrier(); barrier();
 
         for (int jj = 0; jj < COOP_M; ++jj) {
-            vec4 val0 = vec4(g_mat_staging0[jj * 16 + 0], g_mat_staging0[jj * 16 + 1], g_mat_staging0[jj * 16 + 2], 1.0),
-                 val1 = vec4(g_mat_staging1[jj * 16 + 0], g_mat_staging1[jj * 16 + 1], g_mat_staging1[jj * 16 + 2], 1.0);
+            vec4 val0 = vec4(g_mat_staging_C0[jj * 16 + 0], g_mat_staging_C0[jj * 16 + 1], g_mat_staging_C0[jj * 16 + 2], 1.0),
+                 val1 = vec4(g_mat_staging_C1[jj * 16 + 0], g_mat_staging_C1[jj * 16 + 1], g_mat_staging_C1[jj * 16 + 2], 1.0);
             val0.xyz = transfer_output(val0.xyz);
             val1.xyz = transfer_output(val1.xyz);
             imageStore(g_out_img, ivec2(x + j * COOP_M + jj, y), val0);
@@ -554,14 +566,29 @@ void main() {
     for (int j = 0; j < rows_count; ++j) {
         for (int i = 0; i < cols_count; ++i) {
             for (int k = 0; k < C0[j][i].length(); ++k) {
-                C0[j][i][k] = max(C0[j][i][k], float16_t(0.0));
-                C1[j][i][k] = max(C1[j][i][k], float16_t(0.0));
+                C0[j][i][k] = max(C0[j][i][k], C_TYPE(0.0));
+                C1[j][i][k] = max(C1[j][i][k], C_TYPE(0.0));
             }
 
+#if C_CONVERT
+            coopMatStore(C0[j][i], g_mat_staging_C0, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            coopMatStore(C1[j][i], g_mat_staging_C1, 0u, 16u, gl_CooperativeMatrixLayoutRowMajor);
+            groupMemoryBarrier(); barrier();
+
+            for (int jj = 0; jj < COOP_M; ++jj) {
+                for (int ii = 0; ii < COOP_N; ++ii) {
+                    g_out_buf[OUT_CHANNELS * ((y + 0 + 1) * g_params.output_stride + x + j * COOP_M + jj + 1) + c + i * COOP_N + ii] = float16_t(g_mat_staging_C0[jj * 16 + ii]);
+                    if (y + 1 < int(g_params.out_dims[1])) {
+                        g_out_buf[OUT_CHANNELS * ((y + 1 + 1) * g_params.output_stride + x + j * COOP_M + jj + 1) + c + i * COOP_N + ii] = float16_t(g_mat_staging_C1[jj * 16 + ii]);
+                    }
+                }
+            }
+#else // C_CONVERT
             coopMatStore(C0[j][i], g_out_buf, OUT_CHANNELS * ((y + 0 + 1) * g_params.output_stride + x + j * COOP_M + 1) + c + i * COOP_N, OUT_CHANNELS, gl_CooperativeMatrixLayoutRowMajor);
             if (y + 1 < int(g_params.out_dims[1])) {
                 coopMatStore(C1[j][i], g_out_buf, OUT_CHANNELS * ((y + 1 + 1) * g_params.output_stride + x + j * COOP_M + 1) + c + i * COOP_N, OUT_CHANNELS, gl_CooperativeMatrixLayoutRowMajor);
             }
+#endif // C_CONVERT
         }
     }
 #endif // OUT_IMG

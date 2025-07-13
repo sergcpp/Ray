@@ -27,6 +27,7 @@ class Context {
     VkPhysicalDeviceLimits phys_device_limits_ = {};
     VkPhysicalDeviceProperties device_properties_ = {};
     VkPhysicalDeviceMemoryProperties mem_properties_ = {};
+    VkCooperativeMatrixPropertiesKHR coop_mat_properties_ = {};
     uint32_t graphics_family_index_ = 0;
 
     VkDevice device_ = {};
@@ -45,8 +46,6 @@ class Context {
     bool int64_atomics_supported_ = false;
 
     bool subgroup_supported_ = false;
-
-    int coop_matrix_size_[3] = {-1, -1, -1};
 
     bool pageable_memory_supported_ = false;
 
@@ -94,7 +93,6 @@ class Context {
     bool int64_supported() const { return int64_supported_; }
     bool int64_atomics_supported() const { return int64_atomics_supported_; }
     bool subgroup_supported() const { return subgroup_supported_; }
-    const int *coop_matrix_size() const { return coop_matrix_size_; }
 
     uint32_t supported_stages_mask() const { return supported_stages_mask_; };
     bool image_blit_supported() const { return true; }
@@ -102,6 +100,7 @@ class Context {
     const VkPhysicalDeviceLimits &phys_device_limits() const { return phys_device_limits_; }
     const VkPhysicalDeviceProperties &device_properties() const { return device_properties_; }
     const VkPhysicalDeviceMemoryProperties &mem_properties() const { return mem_properties_; }
+    const VkCooperativeMatrixPropertiesKHR &coop_mat_properties() const { return coop_mat_properties_; }
 
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR &rt_props() const { return rt_props_; }
 
@@ -153,10 +152,11 @@ class Context {
     static void CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalDevice &physical_device,
                                               VkPhysicalDeviceProperties &device_properties,
                                               VkPhysicalDeviceMemoryProperties &mem_properties,
+                                              VkCooperativeMatrixPropertiesKHR &coop_mat_properties,
                                               uint32_t &graphics_family_index, bool &out_raytracing_supported,
                                               bool &out_ray_query_supported, bool &out_shader_fp16_supported,
                                               bool &out_shader_int64_supported, bool &out_int64_atomics_supported,
-                                              int out_coop_matrix_size[3], bool &out_pageable_memory_supported);
+                                              bool &out_pageable_memory_supported);
     static bool InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                              uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
                              bool enable_fp16, bool enable_int64, bool enable_int64_atomics, bool enable_coop_matrix,
