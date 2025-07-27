@@ -605,8 +605,9 @@ template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteri
 
 Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params, fvec4 ray_start, const fvec4 &ray_dir,
                                               float ray_length, const fvec4 &light_dir, const float light_angle,
-                                              const fvec4 &light_color, Span<const float> transmittance_lut,
-                                              Span<const float> multiscatter_lut, uint32_t rand_hash) {
+                                              const fvec4 &light_color, const fvec4 &light_color_point,
+                                              Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
+                                              uint32_t rand_hash) {
     const fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     if (atm_intersection.get<0>() > 0) {
@@ -651,7 +652,7 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
         rand_hash = hash(rand_hash);
 
         total_radiance += IntegrateScatteringMain(params, ray_start, ray_dir, pre_atmosphere_ray_length, light_dir,
-                                                  moon_dir, light_color, transmittance_lut, multiscatter_lut,
+                                                  moon_dir, light_color_point, transmittance_lut, multiscatter_lut,
                                                   rand_offset, SKY_PRE_ATMOSPHERE_SAMPLE_COUNT, total_transmittance)
                               .first;
     }
@@ -754,7 +755,7 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
             float cloud_blend = linstep(SKY_CLOUDS_HORIZON_CUTOFF + 0.25f, SKY_CLOUDS_HORIZON_CUTOFF, ray_dir.get<1>());
             cloud_blend = 1.0f - powf(cloud_blend, 5.0f);
 
-            total_radiance += cloud_blend * clouds * light_color;
+            total_radiance += cloud_blend * clouds * light_color_point;
             total_transmittance = mix(transmittance_before, total_transmittance, cloud_blend);
         }
     }
@@ -808,11 +809,11 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
         }
 
         if (light_dir.get<1>() > -0.025f) {
-            total_radiance +=
-                total_transmittance * GetLightEnergy(0.002f, dC, phase_w) * light_transmittance * dC * light_color;
+            total_radiance += total_transmittance * GetLightEnergy(0.002f, dC, phase_w) * light_transmittance * dC *
+                              light_color_point;
         } else if (params.moon_radius > 0.0f) {
             total_radiance += SKY_MOON_SUN_RELATION * total_transmittance * GetLightEnergy(0.002f, dC, moon_phase_w) *
-                              moon_transmittance * dC * light_color;
+                              moon_transmittance * dC * light_color_point;
         }
         total_transmittance *= expf(-dC * 0.002f * 1000.0f);
     }
@@ -833,7 +834,7 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
         rand_hash = hash(rand_hash);
 
         total_radiance += IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir,
-                                                  light_color, transmittance_lut, multiscatter_lut, rand_offset,
+                                                  light_color_point, transmittance_lut, multiscatter_lut, rand_offset,
                                                   SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT, total_transmittance)
                               .first;
     }
@@ -842,14 +843,10 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
     // Sun disk (bake directional light into the texture)
     //
     if (light_angle > 0.0f && planet_intersection.get<0>() < 0.0f && light_brightness > 0.0f) {
-        const float cos_theta = cosf(light_angle);
+        const float cos_theta = cosf(fmaxf(light_angle, SKY_SUN_MIN_ANGLE));
         const float smooth_blend_val = fminf(SKY_SUN_BLEND_VAL, 1.0f - cos_theta);
-        fvec4 sun_disk =
+        const fvec4 sun_disk =
             total_transmittance * smoothstep(cos_theta - smooth_blend_val, cos_theta + smooth_blend_val, costh);
-        // 'de-multiply' by disk area (to get original brightness)
-        const float radius = tanf(light_angle);
-        sun_disk /= (PI * radius * radius);
-
         total_radiance += sun_disk * light_color;
     }
 
@@ -959,22 +956,24 @@ void Ray::Ref::ShadeSky(const pass_settings_t &ps, const float limit, Span<const
                 const light_t &l = sc.lights[li_index];
 
                 const fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
-                fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                const fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                fvec4 light_col_point = light_col;
                 if (l.dir.tan_angle != 0.0f) {
                     const float radius = l.dir.tan_angle;
-                    light_col *= (PI * radius * radius);
+                    light_col_point *= (PI * radius * radius);
                 }
 
-                color += IntegrateScattering(
-                    sc.env.atmosphere, fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f}, I, MAX_DIST,
-                    light_dir, l.dir.angle, light_col, sc.sky_transmittance_lut, sc.sky_multiscatter_lut, rand_hash);
+                color +=
+                    IntegrateScattering(sc.env.atmosphere, fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f},
+                                        I, MAX_DIST, light_dir, l.dir.angle, light_col, light_col_point,
+                                        sc.sky_transmittance_lut, sc.sky_multiscatter_lut, rand_hash);
             }
         } else if (sc.env.atmosphere.stars_brightness > 0.0f) {
             // Use fake lightsource (to light up the moon)
             const fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f}, light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
 
             color += IntegrateScattering(sc.env.atmosphere, fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f},
-                                         I, MAX_DIST, light_dir, 0.0f, light_col, sc.sky_transmittance_lut,
+                                         I, MAX_DIST, light_dir, 0.0f, light_col, light_col, sc.sky_transmittance_lut,
                                          sc.sky_multiscatter_lut, rand_hash);
         }
 

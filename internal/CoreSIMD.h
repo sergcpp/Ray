@@ -8193,14 +8193,19 @@ void Ray::NS::ShadeSky(const pass_settings_t &ps, float limit, Span<const hit_da
 
                     const Ref::fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
                     Ref::fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                    Ref::fvec4 light_col_point = light_col;
                     if (l.dir.tan_angle != 0.0f) {
                         const float radius = l.dir.tan_angle;
-                        light_col *= (PI * radius * radius);
+                        light_col_point *= (PI * radius * radius);
+                    }
+                    if (l.dir.angle < SKY_SUN_MIN_ANGLE) {
+                        const float div = PI * tanf(SKY_SUN_MIN_ANGLE) * tanf(SKY_SUN_MIN_ANGLE);
+                        light_col = light_col_point / div;
                     }
 
                     color += Ref::IntegrateScattering(sc.env.atmosphere,
                                                       Ref::fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f},
-                                                      _I, MAX_DIST, light_dir, l.dir.angle, light_col,
+                                                      _I, MAX_DIST, light_dir, l.dir.angle, light_col, light_col_point,
                                                       sc.sky_transmittance_lut, sc.sky_multiscatter_lut, rand_hash[j]);
                 }
             } else if (sc.env.atmosphere.stars_brightness > 0.0f) {
@@ -8208,9 +8213,10 @@ void Ray::NS::ShadeSky(const pass_settings_t &ps, float limit, Span<const hit_da
                 const Ref::fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
                                  light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
 
-                color += Ref::IntegrateScattering(
-                    sc.env.atmosphere, Ref::fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f}, _I, MAX_DIST,
-                    light_dir, 0.0f, light_col, sc.sky_transmittance_lut, sc.sky_multiscatter_lut, rand_hash[j]);
+                color += Ref::IntegrateScattering(sc.env.atmosphere,
+                                                  Ref::fvec4{0.0f, sc.env.atmosphere.viewpoint_height, 0.0f, 0.0f}, _I,
+                                                  MAX_DIST, light_dir, 0.0f, light_col, light_col,
+                                                  sc.sky_transmittance_lut, sc.sky_multiscatter_lut, rand_hash[j]);
             }
 
             color *= mis_weight[j];

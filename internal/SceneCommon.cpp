@@ -178,8 +178,8 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
 // #define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
-int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16,
-            const char *outfilename, const char **err);
+int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
+            const char **err);
 }
 #endif
 
@@ -313,14 +313,19 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
 
                     const Ref::fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
                     Ref::fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                    Ref::fvec4 light_col_point = light_col;
                     if (l.dir.tan_angle != 0.0f) {
                         const float radius = l.dir.tan_angle;
-                        light_col *= (PI * radius * radius);
+                        light_col_point *= (PI * radius * radius);
+                    }
+                    if (l.dir.angle < SKY_SUN_MIN_ANGLE) {
+                        const float div = PI * tanf(SKY_SUN_MIN_ANGLE) * tanf(SKY_SUN_MIN_ANGLE);
+                        light_col = light_col_point / div;
                     }
 
                     color += IntegrateScattering(params, Ref::fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f}, ray_dir,
-                                                 MAX_DIST, light_dir, l.dir.angle, light_col, sky_transmittance_lut_,
-                                                 sky_multiscatter_lut_, px_hash);
+                                                 MAX_DIST, light_dir, l.dir.angle, light_col, light_col_point,
+                                                 sky_transmittance_lut_, sky_multiscatter_lut_, px_hash);
                 }
             } else if (params.stars_brightness > 0.0f) {
                 // Use fake lightsource (to light up the moon)
@@ -328,7 +333,7 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
                                  light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
 
                 color += IntegrateScattering(params, Ref::fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f}, ray_dir,
-                                             MAX_DIST, light_dir, 0.0f, light_col, sky_transmittance_lut_,
+                                             MAX_DIST, light_dir, 0.0f, light_col, light_col, sky_transmittance_lut_,
                                              sky_multiscatter_lut_, px_hash);
             }
 

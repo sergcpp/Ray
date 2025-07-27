@@ -1695,12 +1695,18 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
                 uniform_params.light_dir[3] = l.dir.angle;
                 memcpy(uniform_params.light_col, l.col, 3 * sizeof(float));
                 memcpy(uniform_params.light_col_point, l.col, 3 * sizeof(float));
-                uniform_params.light_col[3] = cosf(l.dir.angle);
+                uniform_params.light_col[3] = cosf(fmaxf(l.dir.angle, SKY_SUN_MIN_ANGLE));
                 if (l.dir.tan_angle != 0.0f) {
                     const float radius = l.dir.tan_angle;
                     uniform_params.light_col_point[0] *= (PI * radius * radius);
                     uniform_params.light_col_point[1] *= (PI * radius * radius);
                     uniform_params.light_col_point[2] *= (PI * radius * radius);
+                }
+                if (l.dir.angle < SKY_SUN_MIN_ANGLE) {
+                    const float div = PI * tanf(SKY_SUN_MIN_ANGLE) * tanf(SKY_SUN_MIN_ANGLE);
+                    uniform_params.light_col[0] = uniform_params.light_col_point[0] / div;
+                    uniform_params.light_col[1] = uniform_params.light_col_point[1] / div;
+                    uniform_params.light_col[2] = uniform_params.light_col_point[2] / div;
                 }
 
                 DispatchCompute(cmd_buf, pi_bake_sky_, grp_count, bindings, &uniform_params, sizeof(uniform_params),

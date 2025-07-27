@@ -16,7 +16,8 @@ std::pair<fvec4, fvec4> IntegrateScatteringMain(const atmosphere_params_t &param
 
 fvec4 IntegrateScattering(const atmosphere_params_t &params, fvec4 ray_start, const fvec4 &ray_dir, float ray_length,
                           const fvec4 &light_dir, float light_angle, const fvec4 &light_color,
-                          Span<const float> transmittance_lut, Span<const float> multiscatter_lut, uint32_t rand_hash);
+                          const fvec4 &light_color_point, Span<const float> transmittance_lut,
+                          Span<const float> multiscatter_lut, uint32_t rand_hash);
 
 // Transmittance LUT function parameterisation from Bruneton 2017
 // https://github.com/ebruneton/precomputed_atmospheric_scattering

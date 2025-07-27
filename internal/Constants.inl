@@ -157,3 +157,4 @@ const float SKY_CLOUDS_OFFSET_SCALE = 0.00007f;
 const float SKY_MOON_SUN_RELATION = 0.0000001f;
 const float SKY_STARS_THRESHOLD = 14.0f;
 const float SKY_SUN_BLEND_VAL = 0.000005f;
+const float SKY_SUN_MIN_ANGLE = 0.0005f;
