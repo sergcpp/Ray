@@ -625,7 +625,8 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
     //
     if (g_params.light_dir.w > 0.0 && planet_intersection.x < 0.0 && light_brightness > 0.0) {
         const float cos_theta = g_params.light_col.w;
-        const vec3 sun_disk = total_transmittance * smoothstep(cos_theta - SKY_SUN_BLEND_VAL, cos_theta + SKY_SUN_BLEND_VAL, costh);
+        const float smooth_blend_val = min(SKY_SUN_BLEND_VAL, 1.0 - cos_theta);
+        const vec3 sun_disk = total_transmittance * smoothstep(cos_theta - smooth_blend_val, cos_theta + smooth_blend_val, costh);
         total_radiance += sun_disk * g_params.light_col.xyz;
     }
 

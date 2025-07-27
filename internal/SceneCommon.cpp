@@ -179,7 +179,7 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
 #ifdef DUMP_SKY_ENV
 extern "C" {
 int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16,
-            std::string_view outfilename, const char **err);
+            const char *outfilename, const char **err);
 }
 #endif
 

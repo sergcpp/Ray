@@ -843,8 +843,9 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
     //
     if (light_angle > 0.0f && planet_intersection.get<0>() < 0.0f && light_brightness > 0.0f) {
         const float cos_theta = cosf(light_angle);
+        const float smooth_blend_val = fminf(SKY_SUN_BLEND_VAL, 1.0f - cos_theta);
         fvec4 sun_disk =
-            total_transmittance * smoothstep(cos_theta - SKY_SUN_BLEND_VAL, cos_theta + SKY_SUN_BLEND_VAL, costh);
+            total_transmittance * smoothstep(cos_theta - smooth_blend_val, cos_theta + smooth_blend_val, costh);
         // 'de-multiply' by disk area (to get original brightness)
         const float radius = tanf(light_angle);
         sun_disk /= (PI * radius * radius);
