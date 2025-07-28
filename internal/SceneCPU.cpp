@@ -893,6 +893,9 @@ void Ray::Cpu::Scene::Finalize(const std::function<void(int, int, ParallelForFun
     if (env_.env_map != InvalidTextureHandle._index &&
         (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
         env_.env_map_rotation = 0.0f;
+        if (env_.back_map == env_.env_map) {
+            env_.back_map_rotation = 0.0f;
+        }
         env_.sky_map_spread_angle = 2 * PI / float(env_.envmap_resolution);
         PrepareSkyEnvMap_nolock(parallel_for);
     }
