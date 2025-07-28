@@ -103,7 +103,7 @@ class Scene : public SceneCommon {
     void RebuildLightTree_nolock();
 
     void PrepareSkyEnvMap_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
-    void PrepareEnvMapQTree_nolock();
+    void PrepareEnvMapQTree_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
 
     MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);
     void SetMeshInstanceTransform_nolock(MeshInstanceHandle mi, const float *xform);

@@ -138,7 +138,7 @@ class Scene : public SceneCommon {
     std::vector<Ray::color_rgba8_t> CalcSkyEnvTexture(const atmosphere_params_t &params, const int res[2],
                                                       const light_t lights[], Span<const uint32_t> dir_lights);
     void PrepareSkyEnvMap_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
-    void PrepareEnvMapQTree_nolock();
+    void PrepareEnvMapQTree_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
     void GenerateTextureMips_nolock();
     void PrepareBindlessTextures_nolock();
     std::pair<uint32_t, uint32_t> Build_HWRT_BLAS_nolock(uint32_t vert_index, uint32_t vert_count);
@@ -1516,7 +1516,7 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
 
     if (env_.importance_sample && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
         if (env_.env_map != InvalidTextureHandle._index) {
-            PrepareEnvMapQTree_nolock();
+            PrepareEnvMapQTree_nolock(parallel_for);
         } else {
             // Dummy
             TexParams p;
@@ -1964,7 +1964,9 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     log_->Info("PrepareSkyEnvMap (%ix%i) done in %lldms", SkyEnvRes[0], SkyEnvRes[1], (long long)(GetTimeMs() - t1));
 }
 
-inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
+inline void
+Ray::NS::Scene::PrepareEnvMapQTree_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    const uint64_t t1 = Ray::GetTimeMs();
     const int tex = int(env_.env_map & 0x00ffffff);
 
     Buffer temp_stage_buf;
@@ -2036,47 +2038,49 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
                                                  {1 / 273.0f, 4 / 273.0f, 7 / 273.0f, 4 / 273.0f, 1 / 273.0f}};
         static const float FilterSize = 0.5f;
 
-        for (int qy = 0; qy < cur_res; ++qy) {
-            for (int qx = 0; qx < cur_res; ++qx) {
-                for (int jj = -2; jj <= 2; ++jj) {
-                    for (int ii = -2; ii <= 2; ++ii) {
-                        const Ref::fvec2 q = {Ref::fract(1.0f + (float(qx) + 0.5f + ii * FilterSize) / cur_res),
-                                              Ref::fract(1.0f + (float(qy) + 0.5f + jj * FilterSize) / cur_res)};
-                        fvec4 dir;
-                        CanonicalToDir(value_ptr(q), 0.0f, value_ptr(dir));
+        parallel_for(0, cur_res / 2, [&](const int yy) {
+            for (int qy = 2 * yy; qy < 2 * yy + 2; ++qy) {
+                for (int qx = 0; qx < cur_res; ++qx) {
+                    for (int jj = -2; jj <= 2; ++jj) {
+                        for (int ii = -2; ii <= 2; ++ii) {
+                            const Ref::fvec2 q = {Ref::fract(1.0f + (float(qx) + 0.5f + ii * FilterSize) / cur_res),
+                                                  Ref::fract(1.0f + (float(qy) + 0.5f + jj * FilterSize) / cur_res)};
+                            fvec4 dir;
+                            CanonicalToDir(value_ptr(q), 0.0f, value_ptr(dir));
 
-                        const float theta = acosf(clamp(dir.get<1>(), -1.0f, 1.0f)) / PI;
-                        float phi = atan2f(dir.get<2>(), dir.get<0>());
-                        if (phi < 0) {
-                            phi += 2 * PI;
+                            const float theta = acosf(clamp(dir.get<1>(), -1.0f, 1.0f)) / PI;
+                            float phi = atan2f(dir.get<2>(), dir.get<0>());
+                            if (phi < 0) {
+                                phi += 2 * PI;
+                            }
+                            if (phi > 2 * PI) {
+                                phi -= 2 * PI;
+                            }
+
+                            const float u = Ref::fract(0.5f * phi / PI);
+
+                            const fvec2 uvs = fvec2{u, theta} * fvec2(size);
+                            const ivec2 iuvs = clamp(ivec2(uvs), ivec2(0), size - 1);
+
+                            const uint8_t *col_rgbe = &rgbe_data[4 * (iuvs.get<1>() * pitch + iuvs.get<0>())];
+                            fvec4 col_rgb;
+                            rgbe_to_rgb(col_rgbe, value_ptr(col_rgb));
+                            const float cur_lum = (col_rgb.get<0>() + col_rgb.get<1>() + col_rgb.get<2>());
+
+                            int index = 0;
+                            index |= (qx & 1) << 0;
+                            index |= (qy & 1) << 1;
+
+                            const int _qx = (qx / 2);
+                            const int _qy = (qy / 2);
+
+                            auto &qvec = env_map_qtree_.mips[0][_qy * cur_res / 2 + _qx];
+                            qvec.set(index, qvec[index] + cur_lum * FilterWeights[ii + 2][jj + 2]);
                         }
-                        if (phi > 2 * PI) {
-                            phi -= 2 * PI;
-                        }
-
-                        const float u = Ref::fract(0.5f * phi / PI);
-
-                        const fvec2 uvs = fvec2{u, theta} * fvec2(size);
-                        const ivec2 iuvs = clamp(ivec2(uvs), ivec2(0), size - 1);
-
-                        const uint8_t *col_rgbe = &rgbe_data[4 * (iuvs.get<1>() * pitch + iuvs.get<0>())];
-                        fvec4 col_rgb;
-                        rgbe_to_rgb(col_rgbe, value_ptr(col_rgb));
-                        const float cur_lum = (col_rgb.get<0>() + col_rgb.get<1>() + col_rgb.get<2>());
-
-                        int index = 0;
-                        index |= (qx & 1) << 0;
-                        index |= (qy & 1) << 1;
-
-                        const int _qx = (qx / 2);
-                        const int _qy = (qy / 2);
-
-                        auto &qvec = env_map_qtree_.mips[0][_qy * cur_res / 2 + _qx];
-                        qvec.set(index, qvec[index] + cur_lum * FilterWeights[ii + 2][jj + 2]);
                     }
                 }
             }
-        }
+        });
 
         for (const fvec4 &v : env_map_qtree_.mips[0]) {
             total_lum += hsum(v);
@@ -2206,7 +2210,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
 
     temp_stage_buf.FreeImmediate();
 
-    log_->Info("Env map qtree res is %i", env_map_qtree_.res);
+    log_->Info("PrepareEnvMapQTree (%i) done in %lldms", env_map_qtree_.res, (long long)(GetTimeMs() - t1));
 }
 
 inline void Ray::NS::Scene::RebuildLightTree_nolock() {
