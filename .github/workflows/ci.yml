@@ -107,29 +107,29 @@ jobs:
         with:
           name: windows-x86_64-cpu-output
           path: windows-x86_64-cpu-output/
-  # test-windows-x86_64-gpu-nv:
-  #   runs-on: [ windows, x86_64, nv ]
-  #   needs:
-  #     - build-windows-x86_64-rel
-  #   steps:
-  #     - name: Checkout Workflows
-  #       uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .github
-  #     - name: Re-initialize repository
-  #       uses: ./.github/actions/checkout
-  #     - name: Run Tests
-  #       uses: ./.github/actions/test
-  #       with:
-  #         bin-dir: "windows-x86_64"
-  #         out-dir: "windows-x86_64-gpu-nv-output"
-  #         test-args: "--device NV --nocpu"
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v4
-  #       if: always()
-  #       with:
-  #         name: windows-x86_64-gpu-nv-output
-  #         path: windows-x86_64-gpu-nv-output/
+  test-windows-x86_64-gpu-nv:
+    runs-on: [ windows, x86_64, nv ]
+    needs:
+      - build-windows-x86_64-rel
+    steps:
+      - name: Checkout Workflows
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - name: Re-initialize repository
+        uses: ./.github/actions/checkout
+      - name: Run Tests
+        uses: ./.github/actions/test
+        with:
+          bin-dir: "windows-x86_64"
+          out-dir: "windows-x86_64-gpu-nv-output"
+          test-args: "--device NV --nocpu"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-x86_64-gpu-nv-output
+          path: windows-x86_64-gpu-nv-output/
   test-windows-x86_64-gpu-amd:
     runs-on: [ windows, x86_64, amd ]
     needs:
@@ -386,7 +386,7 @@ jobs:
           path: macos-x86_64-cpu-output/
   analyze-output:
     runs-on: [ linux ]
-    needs: [ test-windows-x86_64-cpu, test-windows-x86_64-gpu-amd, test-windows-x86_64-gpu-uhd, test-windows-x86_64-gpu-arc, test-linux-x86_64-cpu, test-linux-x86_64-gpu-nv, test-macos-arm64-cpu, test-macos-arm64-gpu-m4, test-macos-x86_64-cpu ]
+    needs: [ test-windows-x86_64-cpu, test-windows-x86_64-gpu-nv, test-windows-x86_64-gpu-amd, test-windows-x86_64-gpu-uhd, test-windows-x86_64-gpu-arc, test-linux-x86_64-cpu, test-linux-x86_64-gpu-nv, test-macos-arm64-cpu, test-macos-arm64-gpu-m4, test-macos-x86_64-cpu ]
     if: always()
     steps:
       - name: Checkout Workflows
@@ -398,10 +398,10 @@ jobs:
         with:
           name: windows-x86_64-cpu-output
           path: windows-x86_64-cpu-output/
-      # - uses: actions/download-artifact@v4
-      #   with:
-      #     name: windows-x86_64-gpu-nv-output
-      #     path: windows-x86_64-gpu-nv-output/
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x86_64-gpu-nv-output
+          path: windows-x86_64-gpu-nv-output/
       - uses: actions/download-artifact@v4
         with:
           name: windows-x86_64-gpu-amd-output
@@ -448,5 +448,5 @@ jobs:
           path: macos-x86_64-cpu-output/
       - name: Analyze Output
         run: |
-          python scripts/analyze_output.py windows-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-gpu-amd-output/test_Ray_output.txt windows-x86_64-gpu-uhd-output/test_Ray_output.txt windows-x86_64-gpu-arc-output/test_Ray_output.txt linux-x86_64-cpu-output/test_Ray_output.txt linux-x86_64-gpu-nv-output/test_Ray_output.txt macos-arm64-cpu-output/test_Ray_output.txt macos-arm64-gpu-m4-output/test_Ray_output.txt macos-x86_64-cpu-output/test_Ray_output.txt
+          python scripts/analyze_output.py windows-x86_64-cpu-output/test_Ray_output.txt windows-x86_64-gpu-nv-output/test_Ray_output.txt windows-x86_64-gpu-amd-output/test_Ray_output.txt windows-x86_64-gpu-uhd-output/test_Ray_output.txt windows-x86_64-gpu-arc-output/test_Ray_output.txt linux-x86_64-cpu-output/test_Ray_output.txt linux-x86_64-gpu-nv-output/test_Ray_output.txt macos-arm64-cpu-output/test_Ray_output.txt macos-arm64-gpu-m4-output/test_Ray_output.txt macos-x86_64-cpu-output/test_Ray_output.txt
         shell: bash
