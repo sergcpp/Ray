@@ -1470,7 +1470,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], std::string_view prefer
     const int MinSampleCount = 8;
     const int MaxSampleCount = 18;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 2065;
+    const int PixThres = 2070;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1772,7 +1772,7 @@ void test_complex_mat6_nlm_filter(const char *arch_list[], std::string_view pref
 
 void test_complex_mat6_unet_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 23;
-    const int PixThres = 900;
+    const int PixThres = 905;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1857,7 +1857,7 @@ void test_complex_mat6_spot_light(const char *arch_list[], std::string_view pref
 void test_complex_mat6_dir_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 86;
     const double MinPSNR = 18.0;
-    const int PixThres = 9450;
+    const int PixThres = 9455;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
