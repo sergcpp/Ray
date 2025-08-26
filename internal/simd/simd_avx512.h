@@ -118,9 +118,8 @@ template <> class fixed_size_simd<float, 16> {
     force_inline float length() const { return sqrtf(length2()); }
 
     float length2() const {
-        float temp = 0;
-        UNROLLED_FOR(i, 16, { temp += comp_[i] * comp_[i]; })
-        return temp;
+        const __m512 squared = _mm512_mul_ps(vec_, vec_);
+        return _mm512_reduce_add_ps(squared);
     }
 
     force_inline float hsum() const { return _mm512_reduce_add_ps(vec_); }
@@ -296,8 +295,8 @@ template <> class fixed_size_simd<int, 16> {
         return *this;
     }
 
-    fixed_size_simd<int, 16> &vectorcall operator*=(const fixed_size_simd<int, 16> rhs) {
-        UNROLLED_FOR(i, 16, { comp_[i] *= rhs.comp_[i]; })
+    force_inline fixed_size_simd<int, 16> &vectorcall operator*=(const fixed_size_simd<int, 16> rhs) {
+        vec_ = _mm512_mullo_epi32(vec_, rhs.vec_);
         return *this;
     }
 
@@ -380,22 +379,22 @@ template <> class fixed_size_simd<int, 16> {
 
     force_inline static fixed_size_simd<int, 16> vectorcall and_not(const fixed_size_simd<int, 16> v1,
                                                                     const fixed_size_simd<int, 16> v2) {
-        return _mm512_castps_si512(_mm512_andnot_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_andnot_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<int, 16> vectorcall operator&(const fixed_size_simd<int, 16> v1,
                                                                       const fixed_size_simd<int, 16> v2) {
-        return _mm512_castps_si512(_mm512_and_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_and_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<int, 16> vectorcall operator|(const fixed_size_simd<int, 16> v1,
                                                                       const fixed_size_simd<int, 16> v2) {
-        return _mm512_castps_si512(_mm512_or_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_or_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<int, 16> vectorcall operator^(const fixed_size_simd<int, 16> v1,
                                                                       const fixed_size_simd<int, 16> v2) {
-        return _mm512_castps_si512(_mm512_xor_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_xor_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<int, 16> vectorcall operator+(const fixed_size_simd<int, 16> v1,
@@ -410,9 +409,7 @@ template <> class fixed_size_simd<int, 16> {
 
     friend fixed_size_simd<int, 16> vectorcall operator*(const fixed_size_simd<int, 16> v1,
                                                          const fixed_size_simd<int, 16> v2) {
-        fixed_size_simd<int, 16> ret;
-        UNROLLED_FOR(i, 16, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
-        return ret;
+        return _mm512_mullo_epi32(v1.vec_, v2.vec_);
     }
 
     friend fixed_size_simd<int, 16> vectorcall operator/(const fixed_size_simd<int, 16> v1,
@@ -588,8 +585,8 @@ template <> class fixed_size_simd<unsigned, 16> {
         return *this;
     }
 
-    fixed_size_simd<unsigned, 16> &vectorcall operator*=(const fixed_size_simd<unsigned, 16> rhs) {
-        UNROLLED_FOR(i, 16, { comp_[i] *= rhs.comp_[i]; })
+    force_inline fixed_size_simd<unsigned, 16> &vectorcall operator*=(const fixed_size_simd<unsigned, 16> rhs) {
+        vec_ = _mm512_mullo_epi32(vec_, rhs.vec_);
         return *this;
     }
 
@@ -676,22 +673,22 @@ template <> class fixed_size_simd<unsigned, 16> {
 
     force_inline static fixed_size_simd<unsigned, 16> vectorcall and_not(const fixed_size_simd<unsigned, 16> v1,
                                                                          const fixed_size_simd<unsigned, 16> v2) {
-        return _mm512_castps_si512(_mm512_andnot_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_andnot_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<unsigned, 16> vectorcall operator&(const fixed_size_simd<unsigned, 16> v1,
                                                                            const fixed_size_simd<unsigned, 16> v2) {
-        return _mm512_castps_si512(_mm512_and_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_and_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<unsigned, 16> vectorcall operator|(const fixed_size_simd<unsigned, 16> v1,
                                                                            const fixed_size_simd<unsigned, 16> v2) {
-        return _mm512_castps_si512(_mm512_or_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_or_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<unsigned, 16> vectorcall operator^(const fixed_size_simd<unsigned, 16> v1,
                                                                            const fixed_size_simd<unsigned, 16> v2) {
-        return _mm512_castps_si512(_mm512_xor_ps(_mm512_castsi512_ps(v1.vec_), _mm512_castsi512_ps(v2.vec_)));
+        return _mm512_xor_si512(v1.vec_, v2.vec_);
     }
 
     friend force_inline fixed_size_simd<unsigned, 16> vectorcall operator+(const fixed_size_simd<unsigned, 16> v1,
@@ -706,9 +703,7 @@ template <> class fixed_size_simd<unsigned, 16> {
 
     friend fixed_size_simd<unsigned, 16> vectorcall operator*(const fixed_size_simd<unsigned, 16> v1,
                                                               const fixed_size_simd<unsigned, 16> v2) {
-        fixed_size_simd<unsigned, 16> ret;
-        UNROLLED_FOR(i, 16, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
-        return ret;
+        return _mm512_mullo_epi32(v1.vec_, v2.vec_);
     }
 
     friend fixed_size_simd<unsigned, 16> vectorcall operator/(const fixed_size_simd<unsigned, 16> v1,

@@ -110,6 +110,14 @@
 
 namespace Ray {
 namespace NS {
+template <typename T> struct same_size_uint {
+    using type =
+        std::conditional_t<sizeof(T) == 1, uint8_t,
+                           std::conditional_t<sizeof(T) == 2, uint16_t,
+                                              std::conditional_t<sizeof(T) == 4, uint32_t,
+                                                                 std::conditional_t<sizeof(T) == 8, uint64_t,
+                                                                                    void>>>>; // void as "not found"
+};
 
 enum vector_aligned_tag { vector_aligned };
 
@@ -162,19 +170,20 @@ template <typename T, int S> class fixed_size_simd {
     }
 
     fixed_size_simd<T, S> &operator|=(const fixed_size_simd<T, S> &rhs) {
-        const auto *src2 = reinterpret_cast<const uint8_t *>(&rhs.comp_[0]);
-
-        auto *dst = reinterpret_cast<uint8_t *>(&comp_[0]);
-
-        for (int i = 0; i < S * sizeof(T); i++) {
+        const auto *src2 = reinterpret_cast<const typename same_size_uint<T>::type *>(&rhs.comp_[0]);
+        auto *dst = reinterpret_cast<typename same_size_uint<T>::type *>(&comp_[0]);
+        for (int i = 0; i < S; i++) {
             dst[i] |= src2[i];
         }
-
         return *this;
     }
 
     fixed_size_simd<T, S> &operator^=(const fixed_size_simd<T, S> &rhs) {
-        UNROLLED_FOR_S(i, S, { comp_[i] ^= rhs.comp_[i]; })
+        const auto *src2 = reinterpret_cast<const typename same_size_uint<T>::type *>(&rhs.comp_[0]);
+        auto *dst = reinterpret_cast<typename same_size_uint<T>::type *>(&comp_[0]);
+        for (int i = 0; i < S; i++) {
+            dst[i] ^= src2[i];
+        }
         return *this;
     }
 
@@ -257,15 +266,17 @@ template <typename T, int S> class fixed_size_simd {
     }
 
     fixed_size_simd<T, S> &operator&=(const fixed_size_simd<T, S> &rhs) {
-        UNROLLED_FOR_S(i, S,
-                       { reinterpret_cast<uint32_t &>(comp_[i]) &= reinterpret_cast<const uint32_t &>(rhs.comp_[i]); })
+        UNROLLED_FOR_S(i, S, {
+            reinterpret_cast<typename same_size_uint<T>::type &>(comp_[i]) &=
+                reinterpret_cast<const typename same_size_uint<T>::type &>(rhs.comp_[i]);
+        })
         return *this;
     }
 
     fixed_size_simd<T, S> operator~() const {
         fixed_size_simd<T, S> ret;
         UNROLLED_FOR_S(i, S, {
-            const uint32_t temp = ~reinterpret_cast<const uint32_t &>(comp_[i]);
+            const auto temp = ~reinterpret_cast<const typename same_size_uint<T>::type &>(comp_[i]);
             ret.comp_[i] = reinterpret_cast<const T &>(temp);
         })
         return ret;
@@ -336,15 +347,13 @@ template <typename T, int S> class fixed_size_simd {
     }
 
     bool all_zeros(const fixed_size_simd<int, S> &mask) const {
-        const auto *src1 = reinterpret_cast<const uint8_t *>(&comp_[0]);
-        const auto *src2 = reinterpret_cast<const uint8_t *>(&mask.comp_[0]);
-
-        for (int i = 0; i < S * sizeof(T); i++) {
+        const auto *src1 = reinterpret_cast<const typename same_size_uint<T>::type *>(&comp_[0]);
+        const auto *src2 = reinterpret_cast<const typename same_size_uint<T>::type *>(&mask.comp_[0]);
+        for (int i = 0; i < S; i++) {
             if ((src1[i] & src2[i]) != 0) {
                 return false;
             }
         }
-
         return true;
     }
 
@@ -397,14 +406,14 @@ template <typename T, int S> class fixed_size_simd {
     }
 
     static fixed_size_simd<T, S> and_not(const fixed_size_simd<T, S> &v1, const fixed_size_simd<T, S> &v2) {
-        const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
-        const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
+        const auto *src1 = reinterpret_cast<const typename same_size_uint<T>::type *>(&v1.comp_[0]);
+        const auto *src2 = reinterpret_cast<const typename same_size_uint<T>::type *>(&v2.comp_[0]);
 
         fixed_size_simd<T, S> ret;
 
-        auto *dst = reinterpret_cast<uint8_t *>(&ret.comp_[0]);
+        auto *dst = reinterpret_cast<typename same_size_uint<T>::type *>(&ret.comp_[0]);
 
-        for (int i = 0; i < S * sizeof(T); i++) {
+        for (int i = 0; i < S; i++) {
             dst[i] = (~src1[i]) & src2[i];
         }
 
@@ -413,26 +422,23 @@ template <typename T, int S> class fixed_size_simd {
 
     static fixed_size_simd<float, S> floor(const fixed_size_simd<float, S> &v1) {
         fixed_size_simd<float, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.comp_[i] = float(int(v1.comp_[i]) - (v1.comp_[i] < 0.0f)); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::floor(v1.comp_[i]); })
         return temp;
     }
 
     static fixed_size_simd<float, S> ceil(const fixed_size_simd<float, S> &v1) {
         fixed_size_simd<float, S> temp;
-        UNROLLED_FOR_S(i, S, {
-            int _v = int(v1.comp_[i]);
-            temp.comp_[i] = float(_v + (v1.comp_[i] != _v));
-        })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::ceil(v1.comp_[i]); })
         return temp;
     }
 
 #define DEFINE_BITS_OPERATOR(OP)                                                                                       \
     friend fixed_size_simd<T, S> operator OP(const fixed_size_simd<T, S> &v1, const fixed_size_simd<T, S> &v2) {       \
-        const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);                                            \
-        const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);                                            \
+        const auto *src1 = reinterpret_cast<const typename same_size_uint<T>::type *>(&v1.comp_[0]);                   \
+        const auto *src2 = reinterpret_cast<const typename same_size_uint<T>::type *>(&v2.comp_[0]);                   \
         fixed_size_simd<T, S> ret;                                                                                     \
-        auto *dst = reinterpret_cast<uint8_t *>(&ret.comp_[0]);                                                        \
-        for (int i = 0; i < S * sizeof(T); i++) {                                                                      \
+        auto *dst = reinterpret_cast<typename same_size_uint<T>::type *>(&ret.comp_[0]);                               \
+        for (int i = 0; i < S; i++) {                                                                                  \
             dst[i] = src1[i] OP src2[i];                                                                               \
         }                                                                                                              \
         return ret;                                                                                                    \

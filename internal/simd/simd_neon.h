@@ -100,9 +100,7 @@ template <> class fixed_size_simd<float, 4> {
     }
 
     force_inline fixed_size_simd<float, 4> operator-() const {
-        float32x4_t m = vdupq_n_f32(-0.0f);
-        int32x4_t res = veorq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(m));
-        return vreinterpretq_f32_s32(res);
+        return vnegq_f32(vec_);
     }
 
     force_inline fixed_size_simd<float, 4> vectorcall operator<(const fixed_size_simd<float, 4> rhs) const {
@@ -138,14 +136,14 @@ template <> class fixed_size_simd<float, 4> {
     force_inline operator fixed_size_simd<unsigned, 4>() const;
 
     fixed_size_simd<float, 4> sqrt() const {
-        // This is not precise enough :(
-        // float32x4_t recipsq = vrsqrteq_f32(vec_);
-        // temp.vec_ = vrecpeq_f32(recipsq);
-
+#if defined(__aarch64__) || defined(_M_ARM64)
+        return vsqrtq_f32(vec_);
+#else
         alignas(16) float comp[4];
         vst1q_f32(comp, vec_);
         UNROLLED_FOR(i, 4, { comp[i] = sqrtf(comp[i]); })
-        return fixed_size_simd<float, 4>{comp, vector_aligned};
+        return fixed_size_simd{comp, vector_aligned};
+#endif
     }
 
     fixed_size_simd<float, 4> log() const {
@@ -158,18 +156,22 @@ template <> class fixed_size_simd<float, 4> {
     force_inline float length() const { return sqrtf(length2()); }
 
     float length2() const {
-        alignas(16) float comp[4];
-        vst1q_f32(comp, vec_);
-
-        float temp = 0.0f;
-        UNROLLED_FOR(i, 4, { temp += comp[i] * comp[i]; })
-        return temp;
+        const float32x4_t r1 = vmulq_f32(vec_, vec_);
+#if defined(__aarch64__) || defined(_M_ARM64)
+        return vaddvq_f32(r1);
+#else
+        const float32x2_t r2 = vadd_f32(vget_high_f32(r1), vget_low_f32(r1));
+        return vget_lane_f32(vpadd_f32(r2, r2), 0);
+#endif
     }
 
     force_inline float hsum() const {
-        alignas(16) float comp[4];
-        vst1q_f32(comp, vec_);
-        return comp[0] + comp[1] + comp[2] + comp[3];
+#if defined(__aarch64__) || defined(_M_ARM64)
+        return vaddvq_f32(vec_);
+#else
+        const float32x2_t r2 = vadd_f32(vget_high_f32(vec_), vget_low_f32(vec_));
+        return vget_lane_f32(vpadd_f32(r2, r2), 0);
+#endif
     }
 
     force_inline void store_to(float *f) const { vst1q_f32(f, vec_); }
@@ -180,17 +182,13 @@ template <> class fixed_size_simd<float, 4> {
 
     force_inline void vectorcall blend_to(const fixed_size_simd<float, 4> mask, const fixed_size_simd<float, 4> v1) {
         validate_mask(mask);
-        int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
-        int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
-        vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
+        vec_ = vbslq_f32(vreinterpretq_u32_f32(mask.vec_), v1.vec_, vec_);
     }
 
     force_inline void vectorcall blend_inv_to(const fixed_size_simd<float, 4> mask,
                                               const fixed_size_simd<float, 4> v1) {
         validate_mask(mask);
-        int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
-        int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
-        vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
+        vec_ = vbslq_f32(vreinterpretq_u32_f32(mask.vec_), vec_, v1.vec_);
     }
 
     force_inline int movemask() const {
@@ -230,13 +228,23 @@ template <> class fixed_size_simd<float, 4> {
     }
 
     force_inline static fixed_size_simd<float, 4> vectorcall floor(const fixed_size_simd<float, 4> v1) {
+#if defined(__aarch64__) || defined(_M_ARM64)
+        return vrndmq_f32(v1.vec_);
+#else
         const float32x4_t t = vcvtq_f32_s32(vcvtq_s32_f32(v1.vec_));
-        return vsubq_f32(t, vandq_s32(vcltq_f32(v1.vec_, t), vdupq_n_f32(1.0f)));
+        const uint32x4_t sel = vcltq_f32(v1.vec_, t);
+        return vsubq_f32(t, vreinterpretq_f32_u32(vandq_u32(sel, vreinterpretq_u32_f32(vdupq_n_f32(1.0f)))));
+#endif
     }
 
     force_inline static fixed_size_simd<float, 4> vectorcall ceil(const fixed_size_simd<float, 4> v1) {
+#if defined(__aarch64__) || defined(_M_ARM64)
+        return vrndpq_f32(v1.vec_);
+#else
         const float32x4_t t = vcvtq_f32_s32(vcvtq_s32_f32(v1.vec_));
-        return vaddq_f32(t, vandq_s32(vcgtq_f32(v1.vec_, t), vdupq_n_f32(1.0f)));
+        const uint32x4_t sel = vcgtq_f32(v1.vec_, t);
+        return vaddq_f32(t, vreinterpretq_f32_u32(vandq_u32(sel, vreinterpretq_u32_f32(vdupq_n_f32(1.0f)))));
+#endif
     }
 
     friend force_inline fixed_size_simd<float, 4> vectorcall operator&(const fixed_size_simd<float, 4> v1,
@@ -265,7 +273,7 @@ template <> class fixed_size_simd<float, 4> {
     }
 
     force_inline fixed_size_simd<float, 4> vectorcall operator==(const fixed_size_simd<float, 4> rhs) const {
-        return vceqq_f32(vec_, rhs.vec_);
+        return vreinterpretq_f32_u32(vceqq_f32(vec_, rhs.vec_));
     }
 
     force_inline fixed_size_simd<float, 4> vectorcall operator!=(const fixed_size_simd<float, 4> rhs) const {
@@ -304,8 +312,12 @@ template <> class fixed_size_simd<float, 4> {
 
     friend force_inline float vectorcall dot(const fixed_size_simd<float, 4> v1, const fixed_size_simd<float, 4> v2) {
         const float32x4_t r1 = vmulq_f32(v1.vec_, v2.vec_);
+#if defined(__aarch64__) || defined(_M_ARM64)
+        return vaddvq_f32(r1);
+#else
         const float32x2_t r2 = vadd_f32(vget_high_f32(r1), vget_low_f32(r1));
         return vget_lane_f32(vpadd_f32(r2, r2), 0);
+#endif
     }
 
     friend fixed_size_simd<float, 4> vectorcall pow(const fixed_size_simd<float, 4> v1,
@@ -355,10 +367,8 @@ template <> class fixed_size_simd<float, 4> {
 
     friend force_inline fixed_size_simd<float, 4> vectorcall copysign(const fixed_size_simd<float, 4> val,
                                                                       const fixed_size_simd<float, 4> sign) {
-        const uint32x4_t sign_mask =
-            vandq_u32(vreinterpretq_u32_f32(sign.vec_), vreinterpretq_u32_f32(vdupq_n_f32(-0.0f)));
-        const uint32x4_t abs_val = vbicq_u32(vreinterpretq_u32_f32(val.vec_), sign_mask);
-        return vreinterpretq_f32_u32(vorrq_u32(abs_val, sign_mask));
+        const uint32x4_t sign_bit = vdupq_n_u32(0x80000000);
+        return vbslq_f32(sign_bit, sign.vec_, val.vec_);
     }
 
     template <typename U>
@@ -466,7 +476,7 @@ template <> class fixed_size_simd<int, 4> {
         return *this;
     }
 
-    force_inline fixed_size_simd<int, 4> operator-() const { return vsubq_s32(vdupq_n_s32(0), vec_); }
+    force_inline fixed_size_simd<int, 4> operator-() const { return vnegq_s32(vec_); }
 
     force_inline fixed_size_simd<int, 4> vectorcall operator==(const fixed_size_simd<int, 4> rhs) const {
         return vreinterpretq_s32_u32(vceqq_s32(vec_, rhs.vec_));
@@ -541,21 +551,18 @@ template <> class fixed_size_simd<int, 4> {
     }
 
     force_inline bool all_zeros() const {
-        int32_t res = 0;
 #if defined(__aarch64__) || defined(_M_ARM64)
-        res |= vaddvq_s32(vec_);
+        return vmaxvq_u32(vreinterpretq_u32_s32(vec_)) == 0;
 #else
-        alignas(16) int comp[4];
-        vst1q_s32(comp, vec_);
-        UNROLLED_FOR(i, 4, { res |= comp[i] != 0; })
+        uint64x2_t T = vreinterpretq_u64_s32(vec_);
+        return (vgetq_lane_u64(T, 0) | vgetq_lane_u64(T, 1)) == 0;
 #endif
-        return res == 0;
     }
 
     force_inline bool vectorcall all_zeros(const fixed_size_simd<int, 4> mask) const {
-        int32_t res = 0;
+        int32x4_t temp = vandq_s32(vec_, mask.vec_);
 #if defined(__aarch64__) || defined(_M_ARM64)
-        res |= vaddvq_s32(vandq_s32(vec_, mask.vec_));
+        return vmaxvq_u32(vreinterpretq_u32_s32(temp)) == 0;
 #else
         alignas(16) int comp[4], mask_comp[4];
         vst1q_s32(comp, vec_);
@@ -615,9 +622,7 @@ template <> class fixed_size_simd<int, 4> {
 
     friend fixed_size_simd<int, 4> vectorcall operator*(const fixed_size_simd<int, 4> v1,
                                                         const fixed_size_simd<int, 4> v2) {
-        fixed_size_simd<int, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
-        return ret;
+        return vmulq_s32(v1.vec_, v2.vec_);
     }
 
     friend fixed_size_simd<int, 4> vectorcall operator/(const fixed_size_simd<int, 4> v1,
@@ -628,9 +633,7 @@ template <> class fixed_size_simd<int, 4> {
     }
 
     friend fixed_size_simd<int, 4> vectorcall operator*(const fixed_size_simd<int, 4> v1, const int v2) {
-        fixed_size_simd<int, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] * v2; })
-        return ret;
+        return vmulq_n_s32(v1.vec_, v2);
     }
 
     friend fixed_size_simd<int, 4> vectorcall operator/(const fixed_size_simd<int, 4> v1, const int v2) {
@@ -640,9 +643,7 @@ template <> class fixed_size_simd<int, 4> {
     }
 
     friend fixed_size_simd<int, 4> vectorcall operator*(const int v1, const fixed_size_simd<int, 4> v2) {
-        fixed_size_simd<int, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1 * v2.comp_[i]; })
-        return ret;
+        return vmulq_n_s32(v2.vec_, v1);
     }
 
     friend fixed_size_simd<int, 4> vectorcall operator/(const int v1, const fixed_size_simd<int, 4> v2) {
@@ -651,30 +652,19 @@ template <> class fixed_size_simd<int, 4> {
         return ret;
     }
 
+
     friend fixed_size_simd<int, 4> vectorcall operator>>(const fixed_size_simd<int, 4> v1,
                                                          const fixed_size_simd<int, 4> v2) {
-        fixed_size_simd<int, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.ucomp_[i] = v1.ucomp_[i] >> v2.ucomp_[i]; })
-        return ret;
-    }
-
-    friend fixed_size_simd<int, 4> vectorcall operator>>(const fixed_size_simd<int, 4> v1, const int v2) {
-        fixed_size_simd<int, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.ucomp_[i] = v1.ucomp_[i] >> v2; })
-        return ret;
+        return vreinterpretq_s32_u32(vshlq_u32(vreinterpretq_u32_s32(v1.vec_), vnegq_s32(v2.vec_)));
     }
 
     friend fixed_size_simd<int, 4> vectorcall operator<<(const fixed_size_simd<int, 4> v1,
                                                          const fixed_size_simd<int, 4> v2) {
-        fixed_size_simd<int, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.ucomp_[i] = v1.ucomp_[i] << v2.ucomp_[i]; })
-        return ret;
+        return vshlq_s32(v1.vec_, v2.vec_);
     }
 
     friend fixed_size_simd<int, 4> vectorcall operator<<(const fixed_size_simd<int, 4> v1, const int v2) {
-        fixed_size_simd<int, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.ucomp_[i] = v1.ucomp_[i] << v2; })
-        return ret;
+        return vshlq_n_s32(v1.vec_, v2);
     }
 
     friend force_inline fixed_size_simd<int, 4> vectorcall srai(const fixed_size_simd<int, 4> v1, const int v2) {
@@ -867,21 +857,18 @@ template <> class fixed_size_simd<unsigned, 4> {
     }
 
     force_inline bool all_zeros() const {
-        int32_t res = 0;
 #if defined(__aarch64__) || defined(_M_ARM64)
-        res |= vaddvq_s32(vec_);
+        return vmaxvq_u32(vec_) == 0;
 #else
-        alignas(16) int comp[4];
-        vst1q_s32(comp, vec_);
-        UNROLLED_FOR(i, 4, { res |= comp[i] != 0; })
+        uint64x2_t T = vreinterpretq_u64_u32(vec_);
+        return (vgetq_lane_u64(T, 0) | vgetq_lane_u64(T, 1)) == 0;
 #endif
-        return res == 0;
     }
 
     force_inline bool vectorcall all_zeros(const fixed_size_simd<unsigned, 4> mask) const {
-        int32_t res = 0;
+        uint32x4_t temp = vandq_u32(vec_, mask.vec_);
 #if defined(__aarch64__) || defined(_M_ARM64)
-        res |= vaddvq_u32(vandq_u32(vec_, mask.vec_));
+        return vmaxvq_u32(temp) == 0;
 #else
         alignas(16) unsigned comp[4], mask_comp[4];
         vst1q_u32(comp, vec_);
@@ -941,9 +928,7 @@ template <> class fixed_size_simd<unsigned, 4> {
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator*(const fixed_size_simd<unsigned, 4> v1,
                                                              const fixed_size_simd<unsigned, 4> v2) {
-        fixed_size_simd<unsigned, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
-        return ret;
+        return vmulq_u32(v1.vec_, v2.vec_);
     }
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator/(const fixed_size_simd<unsigned, 4> v1,
@@ -954,9 +939,7 @@ template <> class fixed_size_simd<unsigned, 4> {
     }
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator*(const fixed_size_simd<unsigned, 4> v1, const unsigned v2) {
-        fixed_size_simd<unsigned, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] * v2; })
-        return ret;
+        return vmulq_n_u32(v1.vec_, v2);
     }
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator/(const fixed_size_simd<unsigned, 4> v1, const unsigned v2) {
@@ -966,9 +949,7 @@ template <> class fixed_size_simd<unsigned, 4> {
     }
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator*(const unsigned v1, const fixed_size_simd<unsigned, 4> v2) {
-        fixed_size_simd<unsigned, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1 * v2.comp_[i]; })
-        return ret;
+        return vmulq_n_u32(v2.vec_, v1);
     }
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator/(const unsigned v1, const fixed_size_simd<unsigned, 4> v2) {
@@ -979,30 +960,17 @@ template <> class fixed_size_simd<unsigned, 4> {
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator>>(const fixed_size_simd<unsigned, 4> v1,
                                                               const fixed_size_simd<unsigned, 4> v2) {
-        fixed_size_simd<unsigned, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
-        return ret;
-    }
-
-    friend fixed_size_simd<unsigned, 4> vectorcall operator>>(const fixed_size_simd<unsigned, 4> v1,
-                                                              const unsigned v2) {
-        fixed_size_simd<unsigned, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] >> v2; })
-        return ret;
+        return vshlq_u32(v1.vec_, vnegq_s32(vreinterpretq_s32_u32(v2.vec_)));
     }
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator<<(const fixed_size_simd<unsigned, 4> v1,
                                                               const fixed_size_simd<unsigned, 4> v2) {
-        fixed_size_simd<unsigned, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
-        return ret;
+        return vshlq_u32(v1.vec_, vreinterpretq_s32_u32(v2.vec_));
     }
 
     friend fixed_size_simd<unsigned, 4> vectorcall operator<<(const fixed_size_simd<unsigned, 4> v1,
                                                               const unsigned v2) {
-        fixed_size_simd<unsigned, 4> ret;
-        UNROLLED_FOR(i, 4, { ret.comp_[i] = v1.comp_[i] << v2; })
-        return ret;
+        return vshlq_n_u32(v1.vec_, v2);
     }
 
     friend bool vectorcall is_equal(const fixed_size_simd<unsigned, 4> v1, const fixed_size_simd<unsigned, 4> v2) {
@@ -1063,9 +1031,7 @@ force_inline fixed_size_simd<float, 4> vectorcall select(const fixed_size_simd<U
                                                          const fixed_size_simd<float, 4> vec1,
                                                          const fixed_size_simd<float, 4> vec2) {
     validate_mask(mask);
-    const int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(vec1.vec_), _vcast<int32x4_t>(mask.vec_));
-    const int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(vec2.vec_), _vcast<int32x4_t>(mask.vec_));
-    return vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
+    return vbslq_f32(_vcast<uint32x4_t>(mask.vec_), vec1.vec_, vec2.vec_);
 }
 
 template <typename U>
@@ -1073,9 +1039,7 @@ force_inline fixed_size_simd<int, 4> vectorcall select(const fixed_size_simd<U, 
                                                        const fixed_size_simd<int, 4> vec1,
                                                        const fixed_size_simd<int, 4> vec2) {
     validate_mask(mask);
-    const int32x4_t temp1 = vandq_s32(vec1.vec_, _vcast<int32x4_t>(mask.vec_));
-    const int32x4_t temp2 = vbicq_s32(vec2.vec_, _vcast<int32x4_t>(mask.vec_));
-    return vorrq_s32(temp1, temp2);
+    return vbslq_s32(_vcast<uint32x4_t>(mask.vec_), vec1.vec_, vec2.vec_);
 }
 
 template <typename U>
@@ -1083,9 +1047,7 @@ force_inline fixed_size_simd<unsigned, 4> vectorcall select(const fixed_size_sim
                                                             const fixed_size_simd<unsigned, 4> vec1,
                                                             const fixed_size_simd<unsigned, 4> vec2) {
     validate_mask(mask);
-    const uint32x4_t temp1 = vandq_u32(vec1.vec_, _vcast<uint32x4_t>(mask.vec_));
-    const uint32x4_t temp2 = vbicq_u32(vec2.vec_, _vcast<uint32x4_t>(mask.vec_));
-    return vorrq_u32(temp1, temp2);
+    return vbslq_u32(_vcast<uint32x4_t>(mask.vec_), vec1.vec_, vec2.vec_);
 }
 
 } // namespace NS

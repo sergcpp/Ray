@@ -30,8 +30,8 @@
 namespace Ray {
 namespace NS {
 
-template <> force_inline __m256 _mm_cast(__m256i x) { return _mm256_castsi256_ps(x); }
-template <> force_inline __m256i _mm_cast(__m256 x) { return _mm256_castps_si256(x); }
+template <> force_inline __m256 _mm_cast(const __m256i x) { return _mm256_castsi256_ps(x); }
+template <> force_inline __m256i _mm_cast(const __m256 x) { return _mm256_castps_si256(x); }
 
 template <> class fixed_size_simd<int, 8>;
 template <> class fixed_size_simd<unsigned, 8>;
@@ -417,14 +417,22 @@ template <> class fixed_size_simd<int, 8> {
 
     force_inline void vectorcall blend_to(const fixed_size_simd<int, 8> mask, const fixed_size_simd<int, 8> v1) {
         validate_mask(mask);
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        vec_ = _mm256_blendv_epi8(vec_, v1.vec_, mask.vec_);
+#else
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
+#endif
     }
 
     force_inline void vectorcall blend_inv_to(const fixed_size_simd<int, 8> mask, const fixed_size_simd<int, 8> v1) {
         validate_mask(mask);
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        vec_ = _mm256_blendv_epi8(v1.vec_, vec_, mask.vec_);
+#else
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(vec_), _mm256_castsi256_ps(mask.vec_)));
+#endif
     }
 
     force_inline int movemask() const { return _mm256_movemask_ps(_mm256_castsi256_ps(vec_)); }
@@ -469,22 +477,38 @@ template <> class fixed_size_simd<int, 8> {
 
     force_inline static fixed_size_simd<int, 8> vectorcall and_not(const fixed_size_simd<int, 8> v1,
                                                                    const fixed_size_simd<int, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_andnot_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator&(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_and_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator|(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_or_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator^(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_xor_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator+(const fixed_size_simd<int, 8> v1,
@@ -760,8 +784,12 @@ template <> class fixed_size_simd<unsigned, 8> {
         return operator-=(fixed_size_simd<unsigned, 8>{rhs});
     }
 
-    fixed_size_simd<unsigned, 8> &vectorcall operator*=(const fixed_size_simd<unsigned, 8> rhs) {
+    avx2_inline fixed_size_simd<unsigned, 8> &vectorcall operator*=(const fixed_size_simd<unsigned, 8> rhs) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
+#else
         UNROLLED_FOR(i, 8, { comp_[i] *= rhs.comp_[i]; })
+#endif
         return *this;
     }
 
@@ -855,15 +883,23 @@ template <> class fixed_size_simd<unsigned, 8> {
     force_inline void vectorcall blend_to(const fixed_size_simd<unsigned, 8> mask,
                                           const fixed_size_simd<unsigned, 8> v1) {
         validate_mask(mask);
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        vec_ = _mm256_blendv_epi8(vec_, v1.vec_, mask.vec_);
+#else
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
+#endif
     }
 
     force_inline void vectorcall blend_inv_to(const fixed_size_simd<unsigned, 8> mask,
                                               const fixed_size_simd<unsigned, 8> v1) {
         validate_mask(mask);
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        vec_ = _mm256_blendv_epi8(v1.vec_, vec_, mask.vec_);
+#else
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(vec_), _mm256_castsi256_ps(mask.vec_)));
+#endif
     }
 
     force_inline int movemask() const { return _mm256_movemask_ps(_mm256_castsi256_ps(vec_)); }
@@ -908,22 +944,38 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     force_inline static fixed_size_simd<unsigned, 8> vectorcall and_not(const fixed_size_simd<unsigned, 8> v1,
                                                                         const fixed_size_simd<unsigned, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_andnot_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator&(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_and_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator|(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_or_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator^(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        return _mm256_xor_si256(v1.vec_, v2.vec_);
+#else
         return _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
+#endif
     }
 
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator+(const fixed_size_simd<unsigned, 8> v1,
@@ -1328,8 +1380,12 @@ force_inline fixed_size_simd<int, 8> vectorcall select(const fixed_size_simd<U, 
                                                        const fixed_size_simd<int, 8> vec1,
                                                        const fixed_size_simd<int, 8> vec2) {
     validate_mask(mask);
+#if defined(USE_AVX2) || defined(USE_AVX512)
+    return _mm256_blendv_epi8(vec2.vec_, vec1.vec_, mask.vec_);
+#else
     return _mm256_castps_si256(
         _mm256_blendv_ps(_mm256_castsi256_ps(vec2.vec_), _mm256_castsi256_ps(vec1.vec_), _mm_cast<__m256>(mask.vec_)));
+#endif
 }
 
 template <typename U>
@@ -1337,8 +1393,12 @@ force_inline fixed_size_simd<unsigned, 8> vectorcall select(const fixed_size_sim
                                                             const fixed_size_simd<unsigned, 8> vec1,
                                                             const fixed_size_simd<unsigned, 8> vec2) {
     validate_mask(mask);
+#if defined(USE_AVX2) || defined(USE_AVX512)
+    return _mm256_blendv_epi8(vec2.vec_, vec1.vec_, mask.vec_);
+#else
     return _mm256_castps_si256(
         _mm256_blendv_ps(_mm256_castsi256_ps(vec2.vec_), _mm256_castsi256_ps(vec1.vec_), _mm_cast<__m256>(mask.vec_)));
+#endif
 }
 
 } // namespace NS

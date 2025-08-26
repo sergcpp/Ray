@@ -15,9 +15,9 @@
 namespace Ray {
 namespace NS {
 
-template <typename To, typename From> To _mm_cast(From x) { return x; }
-template <> force_inline __m128 _mm_cast(__m128i x) { return _mm_castsi128_ps(x); }
-template <> force_inline __m128i _mm_cast(__m128 x) { return _mm_castps_si128(x); }
+template <typename To, typename From> To _mm_cast(const From x) { return x; }
+template <> force_inline __m128 _mm_cast(const __m128i x) { return _mm_castsi128_ps(x); }
+template <> force_inline __m128i _mm_cast(const __m128 x) { return _mm_castps_si128(x); }
 
 template <> class fixed_size_simd<int, 4>;
 template <> class fixed_size_simd<unsigned, 4>;
@@ -36,7 +36,6 @@ template <> class fixed_size_simd<float, 4> {
   public:
     force_inline fixed_size_simd() = default;
     force_inline fixed_size_simd(const float f) { vec_ = _mm_set1_ps(f); }
-    template <typename... Tail>
     force_inline fixed_size_simd(const float f1, const float f2, const float f3, const float f4) {
         vec_ = _mm_setr_ps(f1, f2, f3, f4);
     }
@@ -202,8 +201,12 @@ template <> class fixed_size_simd<float, 4> {
     }
 
     force_inline static fixed_size_simd<float, 4> vectorcall ceil(const fixed_size_simd<float, 4> v1) {
+#if defined(USE_SSE41)
+        return _mm_ceil_ps(v1.vec_);
+#else
         __m128 t = _mm_cvtepi32_ps(_mm_cvttps_epi32(v1.vec_));
         return _mm_add_ps(t, _mm_and_ps(_mm_cmpgt_ps(v1.vec_, t), _mm_set1_ps(1.0f)));
+#endif
     }
 
     friend force_inline fixed_size_simd<float, 4> vectorcall operator&(const fixed_size_simd<float, 4> v1,
@@ -250,6 +253,9 @@ template <> class fixed_size_simd<float, 4> {
     }
 
     friend force_inline float vectorcall dot(const fixed_size_simd<float, 4> v1, const fixed_size_simd<float, 4> v2) {
+#if defined(USE_SSE41)
+        return _mm_cvtss_f32(_mm_dp_ps(v1.vec_, v2.vec_, 0xff));
+#else
         __m128 r1, r2;
         r1 = _mm_mul_ps(v1.vec_, v2.vec_);
         r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(2, 3, 0, 1));
@@ -257,6 +263,7 @@ template <> class fixed_size_simd<float, 4> {
         r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(0, 1, 2, 3));
         r1 = _mm_add_ps(r1, r2);
         return _mm_cvtss_f32(r1);
+#endif
     }
 
     friend force_inline fixed_size_simd<float, 4> vectorcall clamp(const fixed_size_simd<float, 4> v1,
@@ -302,9 +309,10 @@ template <> class fixed_size_simd<float, 4> {
 
     friend force_inline fixed_size_simd<float, 4> vectorcall copysign(const fixed_size_simd<float, 4> val,
                                                                       const fixed_size_simd<float, 4> sign) {
-        const __m128 sign_mask = _mm_and_ps(sign.vec_, _mm_set1_ps(-0.0f));
-        const __m128 abs_val = _mm_andnot_ps(sign_mask, val.vec_);
-        return _mm_or_ps(abs_val, sign_mask);
+        const __m128 sign_bit_mask = _mm_set1_ps(-0.0f);
+        const __m128 val_abs = _mm_andnot_ps(sign_bit_mask, val.vec_);   // abs(val)
+        const __m128 sign_bits = _mm_and_ps(sign_bit_mask, sign.vec_); // sign of 'sign'
+        return _mm_or_ps(val_abs, sign_bits);
     }
 
     template <typename U>
@@ -730,7 +738,13 @@ template <> class fixed_size_simd<unsigned, 4> {
         return _mm_andnot_si128(vec_, _mm_set1_epi32(~0));
     }
 
-    force_inline explicit vectorcall operator fixed_size_simd<float, 4>() const { return _mm_cvtepi32_ps(vec_); }
+    force_inline explicit vectorcall operator fixed_size_simd<float, 4>() const {
+        __m128i v_hi = _mm_srli_epi32(vec_, 16);
+        __m128i v_lo = _mm_and_si128(vec_, _mm_set1_epi32(0xffff));
+        __m128 v_hi_f = _mm_cvtepi32_ps(v_hi);
+        __m128 v_lo_f = _mm_cvtepi32_ps(v_lo);
+        return _mm_add_ps(_mm_mul_ps(v_hi_f, _mm_set1_ps(65536.0f)), v_lo_f);
+    }
 
     force_inline explicit vectorcall operator fixed_size_simd<int, 4>() const {
         fixed_size_simd<int, 4> ret;

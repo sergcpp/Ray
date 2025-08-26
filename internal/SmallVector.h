@@ -21,7 +21,7 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
     static const uint32_t OwnerBit = (1u << (8u * sizeof(uint32_t) - 1u));
     static const uint32_t CapacityMask = ~OwnerBit;
 
-    protected:
+  protected:
     SmallVectorImpl(T *begin, T *end, const uint32_t capacity, const Allocator &alloc)
         : Allocator(alloc), begin_(begin), size_(uint32_t(end - begin)), capacity_(capacity) {}
 
@@ -47,7 +47,7 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
         reserve(new_capacity);
     }
 
-    public:
+  public:
     using iterator = T *;
     using const_iterator = const T *;
 
@@ -68,16 +68,11 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
             capacity_ = 0;
         }
 
-        reserve(rhs.capacity_ & CapacityMask);
+        reserve(rhs.size_);
 
-        size_ = rhs.size_;
-
-        if (rhs.size_) {
-            T *src = rhs.begin_ + rhs.size_ - 1;
-            T *dst = begin_ + size_ - 1;
-            do {
-                new (dst--) T(*src--);
-            } while (src >= rhs.begin_);
+        while (size_ < rhs.size_) {
+            new (begin_ + size_) T(*(rhs.begin_ + size_));
+            ++size_;
         }
 
         return (*this);
@@ -102,14 +97,12 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
             size_ = std::exchange(rhs.size_, 0);
             capacity_ = std::exchange(rhs.capacity_, 0);
         } else {
-            reserve(rhs.capacity_ & CapacityMask);
+            reserve(rhs.size_);
 
-            size_ = rhs.size_;
-
-            T *dst = begin_ + size_ - 1;
             while (rhs.size_) {
-                new (dst--) T(std::move(*(rhs.begin_ + --rhs.size_)));
-                (rhs.begin_ + rhs.size_)->~T();
+                new (begin_ + size_) T(std::move(*(rhs.begin_ + size_)));
+                ++size_;
+                --rhs.size_;
             }
         }
 
@@ -378,7 +371,7 @@ template <typename T, int N, int AlignmentOfT = alignof(T), typename Allocator =
 class SmallVector : public SmallVectorImpl<T, Allocator> {
     alignas(AlignmentOfT) char buffer_[sizeof(T) * N];
 
-    public:
+  public:
     SmallVector(const Allocator &alloc = Allocator()) // NOLINT
         : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, alloc) {}
     explicit SmallVector(const uint32_t size, const T &val = T(), const Allocator &alloc = Allocator()) // NOLINT
