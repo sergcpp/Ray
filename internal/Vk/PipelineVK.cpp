@@ -18,17 +18,11 @@ const VkCullModeFlagBits g_cull_modes_vk[] = {
 };
 static_assert(std::size(g_cull_modes_vk) == int(eCullFace::_Count), "!");
 
+#define X(_0, _1, _2) _1,
 const VkCompareOp g_compare_op_vk[] = {
-    VK_COMPARE_OP_ALWAYS,          // Always
-    VK_COMPARE_OP_NEVER,           // Never
-    VK_COMPARE_OP_LESS,            // Less
-    VK_COMPARE_OP_EQUAL,           // Equal
-    VK_COMPARE_OP_GREATER,         // Greater
-    VK_COMPARE_OP_LESS_OR_EQUAL,   // LEqual
-    VK_COMPARE_OP_NOT_EQUAL,       // NotEqual
-    VK_COMPARE_OP_GREATER_OR_EQUAL // GEqual
+#include "../CompareOp.inl"
 };
-static_assert(std::size(g_compare_op_vk) == int(eCompareOp::_Count), "!");
+#undef X
 
 const VkStencilOp g_stencil_op_vk[] = {
     VK_STENCIL_OP_KEEP,                // Keep
@@ -107,7 +101,7 @@ void Ray::Vk::Pipeline::Destroy() {
     }
 
     color_formats_.clear();
-    depth_format_ = eTexFormat::Undefined;
+    depth_format_ = eFormat::Undefined;
 
     rt_shader_groups_.clear();
 
@@ -292,15 +286,15 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
         if (!render_pass) {
             for (const auto &att : color_attachments) {
                 color_formats_.push_back(att.format);
-                color_attachment_formats.push_back(VKFormatFromTexFormat(att.format));
+                color_attachment_formats.push_back(VKFormatFromFormat(att.format));
             }
             depth_format_ = depth_attachment.format;
 
             pipeline_rendering_create_info.colorAttachmentCount = int(color_attachment_formats.size());
             pipeline_rendering_create_info.pColorAttachmentFormats = color_attachment_formats.data();
-            pipeline_rendering_create_info.depthAttachmentFormat = VKFormatFromTexFormat(depth_attachment.format);
+            pipeline_rendering_create_info.depthAttachmentFormat = VKFormatFromFormat(depth_attachment.format);
             pipeline_rendering_create_info.stencilAttachmentFormat =
-                rast_state.stencil.enabled ? VKFormatFromTexFormat(depth_attachment.format) : VK_FORMAT_UNDEFINED;
+                rast_state.stencil.enabled ? VKFormatFromFormat(depth_attachment.format) : VK_FORMAT_UNDEFINED;
 
             pipeline_create_info.pNext = &pipeline_rendering_create_info;
         }

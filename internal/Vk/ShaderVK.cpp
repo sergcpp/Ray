@@ -4,8 +4,8 @@
 
 #include "../../Config.h"
 #include "../../Log.h"
+#include "../ImageParams.h"
 #include "../ScopeExit.h"
-#include "../TextureParams.h"
 #include "ContextVK.h"
 #include "SPIRV.h"
 

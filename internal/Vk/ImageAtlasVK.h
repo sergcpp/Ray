@@ -1,19 +1,19 @@
 #pragma once
 
 #include "../CoreVK.h"
-#include "../TextureSplitter.h"
+#include "../ImageSplitter.h"
 #include "ResourceVK.h"
 #include "SamplerVK.h"
 
 namespace Ray {
-enum class eTexFormat : uint8_t;
+enum class eFormat : uint8_t;
 namespace Vk {
 class Context;
-class TextureAtlas {
+class ImageAtlas {
     Context *ctx_;
     std::string name_;
-    eTexFormat format_, real_format_;
-    eTexFilter filter_;
+    eFormat format_, real_format_;
+    eFilter filter_;
     const int res_[2];
 
     VkImage img_ = VK_NULL_HANDLE;
@@ -21,18 +21,18 @@ class TextureAtlas {
     VkImageView img_view_ = VK_NULL_HANDLE;
     Sampler sampler_;
 
-    std::vector<TextureSplitter> splitters_;
+    std::vector<ImageSplitter> splitters_;
 
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const void *data);
 
   public:
-    TextureAtlas(Context *ctx, std::string_view name, eTexFormat format, eTexFilter filter, int resx, int resy,
-                 int page_count = 0);
-    ~TextureAtlas();
+    ImageAtlas(Context *ctx, std::string_view name, eFormat format, eFilter filter, int resx, int resy,
+               int page_count = 0);
+    ~ImageAtlas();
 
     Context *ctx() const { return ctx_; }
-    eTexFormat format() const { return format_; }
-    eTexFormat real_format() const { return real_format_; }
+    eFormat format() const { return format_; }
+    eFormat real_format() const { return real_format_; }
     VkImage vk_image() const { return img_; }
     VkImageView vk_imgage_view() const { return img_view_; }
     VkSampler vk_sampler() const { return sampler_.vk_handle(); }

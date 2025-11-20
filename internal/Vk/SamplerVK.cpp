@@ -7,25 +7,25 @@ namespace Ray {
 namespace Vk {
 #define X(_0, _1, _2, _3) _1,
 extern const VkFilter g_min_mag_filter_vk[] = {
-#include "../TextureFilter.inl"
+#include "../Filter.inl"
 };
 #undef X
 
 #define X(_0, _1, _2, _3) _2,
 extern const VkSamplerMipmapMode g_mipmap_mode_vk[] = {
-#include "../TextureFilter.inl"
+#include "../Filter.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _1,
 extern const VkSamplerAddressMode g_wrap_mode_vk[] = {
-#include "../TextureWrap.inl"
+#include "../Wrap.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _1,
 extern const VkCompareOp g_compare_ops_vk[] = {
-#include "../TextureCompare.inl"
+#include "../CompareOp.inl"
 };
 #undef X
 
@@ -70,11 +70,11 @@ void Ray::Vk::Sampler::Init(Context *ctx, const SamplingParams params) {
     sampler_info.addressModeU = g_wrap_mode_vk[size_t(params.wrap)];
     sampler_info.addressModeV = g_wrap_mode_vk[size_t(params.wrap)];
     sampler_info.addressModeW = g_wrap_mode_vk[size_t(params.wrap)];
-    sampler_info.anisotropyEnable = (params.filter == eTexFilter::Nearest) ? VK_FALSE : VK_TRUE;
+    sampler_info.anisotropyEnable = (params.filter == eFilter::Nearest) ? VK_FALSE : VK_TRUE;
     sampler_info.maxAnisotropy = AnisotropyLevel;
     sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     sampler_info.unnormalizedCoordinates = VK_FALSE;
-    sampler_info.compareEnable = (params.compare != eTexCompare::None) ? VK_TRUE : VK_FALSE;
+    sampler_info.compareEnable = (params.compare != eCompareOp::None) ? VK_TRUE : VK_FALSE;
     sampler_info.compareOp = g_compare_ops_vk[size_t(params.compare)];
     sampler_info.mipmapMode = g_mipmap_mode_vk[size_t(params.filter)];
     sampler_info.mipLodBias = params.lod_bias.to_float();

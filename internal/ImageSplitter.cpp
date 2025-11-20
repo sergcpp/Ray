@@ -1,6 +1,6 @@
-#include "TextureSplitter.h"
+#include "ImageSplitter.h"
 
-int Ray::TextureSplitter::Allocate(const int res[2], int pos[2]) {
+int Ray::ImageSplitter::Allocate(const int res[2], int pos[2]) {
     const int i = Insert_Recursive(0, res);
     if (i != -1) {
         pos[0] = nodes_[i].pos[0];
@@ -9,12 +9,12 @@ int Ray::TextureSplitter::Allocate(const int res[2], int pos[2]) {
     return i;
 }
 
-bool Ray::TextureSplitter::Free(const int pos[2]) {
+bool Ray::ImageSplitter::Free(const int pos[2]) {
     const int i = Find_Recursive(0, pos);
     return Free(i);
 }
 
-bool Ray::TextureSplitter::Free(const int i) {
+bool Ray::ImageSplitter::Free(const int i) {
     if (i == -1 || nodes_[i].is_free) {
         return false;
     }
@@ -41,7 +41,7 @@ bool Ray::TextureSplitter::Free(const int i) {
     return true;
 }
 
-int Ray::TextureSplitter::FindNode(const int pos[2], int size[2]) const {
+int Ray::ImageSplitter::FindNode(const int pos[2], int size[2]) const {
     const int i = Find_Recursive(0, pos);
     if (i != -1) {
         size[0] = nodes_[i].size[0];
@@ -50,7 +50,7 @@ int Ray::TextureSplitter::FindNode(const int pos[2], int size[2]) const {
     return i;
 }
 
-int Ray::TextureSplitter::Insert_Recursive(int i, const int res[2]) {
+int Ray::ImageSplitter::Insert_Recursive(int i, const int res[2]) {
     if (!nodes_[i].is_free || res[0] > nodes_[i].size[0] || res[1] > nodes_[i].size[1]) {
         return -1;
     }
@@ -106,7 +106,7 @@ int Ray::TextureSplitter::Insert_Recursive(int i, const int res[2]) {
     }
 }
 
-int Ray::TextureSplitter::Find_Recursive(const int i, const int pos[2]) const {
+int Ray::ImageSplitter::Find_Recursive(const int i, const int pos[2]) const {
     if (nodes_[i].is_free || pos[0] < nodes_[i].pos[0] || pos[0] > (nodes_[i].pos[0] + nodes_[i].size[0]) ||
         pos[1] < nodes_[i].pos[1] || pos[1] > (nodes_[i].pos[1] + nodes_[i].size[1])) {
         return -1;
@@ -129,7 +129,7 @@ int Ray::TextureSplitter::Find_Recursive(const int i, const int pos[2]) const {
     }
 }
 
-void Ray::TextureSplitter::SafeErase(const int i, int *indices, const int num) {
+void Ray::ImageSplitter::SafeErase(const int i, int *indices, const int num) {
     const int last = int(nodes_.size()) - 1;
 
     if (last != i) {

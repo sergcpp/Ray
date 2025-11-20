@@ -10,7 +10,7 @@
 #endif
 
 #include "BVHSplit.h"
-#include "TextureParams.h"
+#include "ImageParams.h"
 #include "TextureUtils.h"
 #include "Vk/ContextVK.h"
 #include "inflate/Inflate.h"
@@ -163,8 +163,8 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
 
     { // Init shared sampler
         SamplingParams params;
-        params.filter = eTexFilter::Nearest;
-        params.wrap = eTexWrap::Repeat;
+        params.filter = eFilter::Nearest;
+        params.wrap = eWrap::Repeat;
 
         bindless_tex_data_.shared_sampler.Init(ctx_, params);
     }
@@ -252,7 +252,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
 
     for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        const Texture &tex = bindless_textures_[it.index()];
+        const Image &tex = bindless_textures_[it.index()];
 
         { // Update descriptor
             VkDescriptorImageInfo img_info = tex.vk_desc_image_info();

@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "Core.h"
-#include "TextureParams.h"
+#include "ImageParams.h"
 
 namespace Ray {
 std::unique_ptr<float[]> ConvertRGBE_to_RGB32F(const uint8_t image_data[], int w, int h);
@@ -98,8 +98,8 @@ int Preprocess_BCn(const uint8_t in_data[], int tiles_w, int tiles_h, bool flip_
 void ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
                          Span<uint32_t> new_vtx_indices, Span<const uint32_t> indices);
 
-std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format);
-bool ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,
+std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int data_len, int &w, int &h, eFormat &format);
+bool ReadTGAFile(const void *data, int data_len, int &w, int &h, eFormat &format, uint8_t *out_data,
                  uint32_t &out_size);
 
 void WriteTGA(const uint8_t *data, int w, int h, int bpp, std::string_view name);

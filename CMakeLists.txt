@@ -66,6 +66,7 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/BVHSplit.cpp
                           internal/CDFUtils.h
                           internal/CDFUtils.cpp
+                          internal/CompareOp.inl
                           internal/Constants.inl
                           internal/Convolution.h
                           internal/Core.h
@@ -76,11 +77,17 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/CoreSIMD.h
                           internal/DenoiseRef.h
                           internal/DenoiseRef.cpp
+                          internal/Filter.inl
                           internal/Fixed.h
+                          internal/Format.inl
                           internal/FreelistAlloc.h
                           internal/FreelistAlloc.cpp
                           internal/HashMap32.h
                           internal/HashSet32.h
+                          internal/ImageParams.h
+                          internal/ImageParams.cpp
+                          internal/ImageSplitter.h
+                          internal/ImageSplitter.cpp
                           internal/PMJ.h
                           internal/PMJ.cpp
                           internal/RadCacheRef.h
@@ -102,20 +109,12 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h
                           internal/SparseStorageGPU.h
-                          internal/TextureCompare.inl
-                          internal/TextureFilter.inl
-                          internal/TextureFormat.inl
-                          internal/TextureParams.h
-                          internal/TextureParams.cpp
-                          internal/TextureSplitter.h
-                          internal/TextureSplitter.cpp
                           internal/TextureStorageCPU.h
                           internal/TextureStorageCPU.cpp
                           internal/TextureUtils.h
                           internal/TextureUtils.cpp
                           internal/TextureUtilsNEON.cpp
                           internal/TextureUtilsSSE2.cpp
-                          internal/TextureWrap.inl
                           internal/Time_.h
                           internal/Time.cpp
                           internal/TonemapRef.h
@@ -123,7 +122,8 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/Trig.h
                           internal/UNetFilter.h
                           internal/UNetFilter.cpp
-                          internal/VectorGPU.h)
+                          internal/VectorGPU.h
+                          internal/Wrap.inl)
 
 if (ENABLE_REF_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
@@ -239,6 +239,10 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/DrawCallVK.cpp
                     internal/Vk/FenceVK.h
                     internal/Vk/FenceVK.cpp
+                    internal/Vk/ImageVK.h
+                    internal/Vk/ImageVK.cpp
+                    internal/Vk/ImageAtlasVK.h
+                    internal/Vk/ImageAtlasVK.cpp
                     internal/Vk/MemoryAllocatorVK.h
                     internal/Vk/MemoryAllocatorVK.cpp
                     internal/Vk/PipelineVK.h
@@ -256,10 +260,6 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/SparseStorageVK.h
                     internal/Vk/SPIRV.h
                     internal/Vk/SPIRV.cpp
-                    internal/Vk/TextureVK.h
-                    internal/Vk/TextureVK.cpp
-                    internal/Vk/TextureAtlasVK.h
-                    internal/Vk/TextureAtlasVK.cpp
                     internal/Vk/VectorVK.h
                     internal/Vk/VertexInputVK.h
                     internal/Vk/VertexInputVK.cpp)
@@ -279,6 +279,10 @@ if(WIN32)
                         internal/Dx/DrawCallDX.cpp
                         internal/Dx/FenceDX.h
                         internal/Dx/FenceDX.cpp
+                        internal/Dx/ImageDX.h
+                        internal/Dx/ImageDX.cpp
+                        internal/Dx/ImageAtlasDX.h
+                        internal/Dx/ImageAtlasDX.cpp
                         internal/Dx/MemoryAllocatorDX.h
                         internal/Dx/MemoryAllocatorDX.cpp
                         internal/Dx/PipelineDX.h
@@ -294,10 +298,6 @@ if(WIN32)
                         internal/Dx/ShaderDX.h
                         internal/Dx/ShaderDX.cpp
                         internal/Dx/SparseStorageDX.h
-                        internal/Dx/TextureDX.h
-                        internal/Dx/TextureDX.cpp
-                        internal/Dx/TextureAtlasDX.h
-                        internal/Dx/TextureAtlasDX.cpp
                         internal/Dx/VectorDX.h
                         internal/Dx/VertexInputDX.h
                         internal/Dx/VertexInputDX.cpp)

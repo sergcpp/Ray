@@ -1,4 +1,4 @@
-#include "TextureAtlasVK.h"
+#include "ImageAtlasVK.h"
 
 #include <cassert>
 
@@ -6,15 +6,15 @@
 #include "../../Log.h"
 #include "../TextureUtils.h"
 #include "ContextVK.h"
-#include "TextureVK.h"
+#include "ImageVK.h"
 
 namespace Ray::Vk {
-template <typename T, int N> eTexFormat tex_format();
+template <typename T, int N> eFormat img_format();
 
-template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RGBA8; }
-template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RGB8; }
-template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RG8; }
-template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::R8; }
+template <> eFormat img_format<uint8_t, 4>() { return eFormat::RGBA8; }
+template <> eFormat img_format<uint8_t, 3>() { return eFormat::RGB8; }
+template <> eFormat img_format<uint8_t, 2>() { return eFormat::RG8; }
+template <> eFormat img_format<uint8_t, 1>() { return eFormat::R8; }
 
 uint32_t FindMemoryType(uint32_t start_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
@@ -22,15 +22,15 @@ uint32_t FindMemoryType(uint32_t start_from, const VkPhysicalDeviceMemoryPropert
 extern const VkFormat g_formats_vk[];
 } // namespace Ray::Vk
 
-Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, std::string_view name, const eTexFormat format,
-                                    const eTexFilter filter, const int resx, const int resy, const int pages_count)
+Ray::Vk::ImageAtlas::ImageAtlas(Context *ctx, std::string_view name, const eFormat format, const eFilter filter,
+                                    const int resx, const int resy, const int pages_count)
     : ctx_(ctx), name_(name), format_(format), filter_(filter), res_{resx, resy} {
     if (!Resize(pages_count)) {
-        throw std::runtime_error("TextureAtlas cannot be resized!");
+        throw std::runtime_error("ImageAtlas cannot be resized!");
     }
 }
 
-Ray::Vk::TextureAtlas::~TextureAtlas() {
+Ray::Vk::ImageAtlas::~ImageAtlas() {
     if (img_view_) {
         ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(img_view_);
     }
@@ -39,7 +39,7 @@ Ray::Vk::TextureAtlas::~TextureAtlas() {
 }
 
 template <typename T, int N>
-int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2], int pos[2]) {
+int Ray::Vk::ImageAtlas::Allocate(const color_t<T, N> *data, const int _res[2], int pos[2]) {
     int res[2] = {_res[0], _res[1]};
     if (res[0] > res_[0] || res[1] > res_[1]) {
         return -1;
@@ -73,19 +73,19 @@ int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
                     }
 
                     std::unique_ptr<uint8_t[]> compressed_data;
-                    if (format_ == eTexFormat::BC3) {
+                    if (format_ == eFormat::BC3) {
                         // TODO: get rid of allocation
                         auto temp_YCoCg = ConvertRGB_to_CoCgxY(&temp_storage[0].v[0], res[0], res[1]);
 
                         const int req_size = GetRequiredMemory_BC3(res[0], res[1], 1);
                         compressed_data = std::make_unique<uint8_t[]>(req_size);
                         CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), res[0], res[1], compressed_data.get());
-                    } else if (format_ == eTexFormat::BC4) {
+                    } else if (format_ == eFormat::BC4) {
                         const int req_size = GetRequiredMemory_BC4(res[0], res[1], 1);
                         // NOTE: 1 byte is added due to BC4 compression write outside of memory block
                         compressed_data = std::make_unique<uint8_t[]>(req_size + 1);
                         CompressImage_BC4<N>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
-                    } else if (format_ == eTexFormat::BC5) {
+                    } else if (format_ == eFormat::BC5) {
                         const int req_size = GetRequiredMemory_BC5(res[0], res[1], 1);
                         // NOTE: 1 byte is added due to BC5 compression write outside of memory block
                         compressed_data = std::make_unique<uint8_t[]>(req_size + 1);
@@ -103,13 +103,13 @@ int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
     return Allocate(data, _res, pos);
 }
 
-template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2], int pos[2]);
-template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2], int pos[2]);
-template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2], int pos[2]);
-template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
+template int Ray::Vk::ImageAtlas::Allocate<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2], int pos[2]);
+template int Ray::Vk::ImageAtlas::Allocate<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2], int pos[2]);
+template int Ray::Vk::ImageAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2], int pos[2]);
+template int Ray::Vk::ImageAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
 
 template <typename T, int N>
-void Ray::Vk::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _res[2], const int mip_count,
+void Ray::Vk::ImageAtlas::AllocateMips(const color_t<T, N> *data, const int _res[2], const int mip_count,
                                          int page[16], int pos[16][2]) {
     int src_res[2] = {_res[0], _res[1]};
 
@@ -159,16 +159,16 @@ void Ray::Vk::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _r
     }
 }
 
-template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2],
+template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2],
                                                               int mip_count, int page[16], int pos[16][2]);
-template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2],
+template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2],
                                                               int mip_count, int page[16], int pos[16][2]);
-template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2],
+template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2],
                                                               int mip_count, int page[16], int pos[16][2]);
-template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2],
+template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2],
                                                               int mip_count, int page[16], int pos[16][2]);
 
-int Ray::Vk::TextureAtlas::AllocateRaw(void *data, const int res[2], int pos[2]) {
+int Ray::Vk::ImageAtlas::AllocateRaw(void *data, const int res[2], int pos[2]) {
     for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
         const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
         if (index != -1) {
@@ -182,7 +182,7 @@ int Ray::Vk::TextureAtlas::AllocateRaw(void *data, const int res[2], int pos[2])
     return AllocateRaw(data, res, pos);
 }
 
-int Ray::Vk::TextureAtlas::Allocate(const int _res[2], int pos[2]) {
+int Ray::Vk::ImageAtlas::Allocate(const int _res[2], int pos[2]) {
     // add 1px border
     const int res[2] = {_res[0] + 2, _res[1] + 2};
 
@@ -201,7 +201,7 @@ int Ray::Vk::TextureAtlas::Allocate(const int _res[2], int pos[2]) {
     return Allocate(_res, pos);
 }
 
-bool Ray::Vk::TextureAtlas::Free(const int page, const int pos[2]) {
+bool Ray::Vk::ImageAtlas::Free(const int page, const int pos[2]) {
     if (page < 0 || page > int(splitters_.size())) {
         return false;
     }
@@ -209,7 +209,7 @@ bool Ray::Vk::TextureAtlas::Free(const int page, const int pos[2]) {
     return splitters_[page].Free(pos);
 }
 
-bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
+bool Ray::Vk::ImageAtlas::Resize(const int pages_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = pages_count; i < int(splitters_.size()); i++) {
         if (!splitters_[i].empty()) {
@@ -239,10 +239,10 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         img_info.samples = VK_SAMPLE_COUNT_1_BIT;
         img_info.flags = 0;
 
-        if (format_ == eTexFormat::RGB8 && !ctx_->rgb8_unorm_is_supported()) {
+        if (format_ == eFormat::RGB8 && !ctx_->rgb8_unorm_is_supported()) {
             // Fallback to 4-component texture
             img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
-            real_format_ = eTexFormat::RGBA8;
+            real_format_ = eFormat::RGBA8;
         }
 
         VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &new_img);
@@ -314,7 +314,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = std::max(pages_count, 1);
 
-        if (real_format_ == eTexFormat::R8 || real_format_ == eTexFormat::BC4) {
+        if (real_format_ == eFormat::R8 || real_format_ == eFormat::BC4) {
             view_info.components.r = VK_COMPONENT_SWIZZLE_R;
             view_info.components.g = VK_COMPONENT_SWIZZLE_R;
             view_info.components.b = VK_COMPONENT_SWIZZLE_R;
@@ -465,14 +465,14 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     sampler_.FreeImmediate();
     sampler_ = std::move(new_sampler);
 
-    splitters_.resize(pages_count, TextureSplitter{res_});
+    splitters_.resize(pages_count, ImageSplitter{res_});
 
     resource_state = new_resource_state;
 
     return true;
 }
 
-int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
+int Ray::Vk::ImageAtlas::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
                                             int dst_pos[2]) {
     const int dst_res[2] = {src_res[0] / 2, src_res[1] / 2};
     const int dst_page = Allocate(dst_res, dst_pos);
@@ -747,24 +747,24 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
     return dst_page;
 }
 
-void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const int posy, const int sizex,
+void Ray::Vk::ImageAtlas::WritePageData(const int page, const int posx, const int posy, const int sizex,
                                           const int sizey, const void *data) {
     uint32_t data_size = 0;
     if (!IsCompressedFormat(format_)) {
         data_size = sizex * sizey * GetPerPixelDataLen(format_);
     } else {
-        if (format_ == eTexFormat::BC1) {
+        if (format_ == eFormat::BC1) {
             data_size = GetRequiredMemory_BC1(sizex, sizey, 1);
-        } else if (format_ == eTexFormat::BC3) {
+        } else if (format_ == eFormat::BC3) {
             data_size = GetRequiredMemory_BC3(sizex, sizey, 1);
-        } else if (format_ == eTexFormat::BC4) {
+        } else if (format_ == eFormat::BC4) {
             data_size = GetRequiredMemory_BC4(sizex, sizey, 1);
-        } else if (format_ == eTexFormat::BC5) {
+        } else if (format_ == eFormat::BC5) {
             data_size = GetRequiredMemory_BC5(sizex, sizey, 1);
         }
     }
 
-    const bool rgb_as_rgba = (format_ == eTexFormat::RGB8 && real_format_ == eTexFormat::RGBA8);
+    const bool rgb_as_rgba = (format_ == eFormat::RGB8 && real_format_ == eFormat::RGBA8);
     const uint32_t buf_size = rgb_as_rgba ? sizex * sizey * sizeof(color_t<uint8_t, 4>) : data_size;
 
     Buffer temp_sbuf("Temp Stage", ctx_, eBufType::Upload, buf_size);
@@ -856,7 +856,7 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
     temp_sbuf.FreeImmediate();
 }
 
-void Ray::Vk::TextureAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
+void Ray::Vk::ImageAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
                                          const Buffer &dst_buf, VkCommandBuffer cmd_buf, const int data_off) const {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;

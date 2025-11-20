@@ -1,39 +1,39 @@
 #pragma once
 
 #include "../CoreDX.h"
-#include "../TextureSplitter.h"
+#include "../ImageSplitter.h"
+#include "DescriptorPoolDX.h"
 #include "ResourceDX.h"
 #include "SamplerDX.h"
-#include "DescriptorPoolDX.h"
 
 struct ID3D12Resource;
 
 namespace Ray {
-enum class eTexFormat : uint8_t;
+enum class eFormat : uint8_t;
 namespace Dx {
 class Context;
-class TextureAtlas {
+class ImageAtlas {
     Context *ctx_;
     std::string name_;
-    eTexFormat format_, real_format_;
-    eTexFilter filter_;
+    eFormat format_, real_format_;
+    eFilter filter_;
     const int res_[2];
 
     ID3D12Resource *img_ = nullptr;
     PoolRef srv_ref_;
     Sampler sampler_;
 
-    std::vector<TextureSplitter> splitters_;
+    std::vector<ImageSplitter> splitters_;
 
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const void *data);
 
   public:
-    TextureAtlas(Context *ctx, std::string_view name, eTexFormat format, eTexFilter filter, int resx, int resy,
-                 int page_count = 0);
-    ~TextureAtlas();
+    ImageAtlas(Context *ctx, std::string_view name, eFormat format, eFilter filter, int resx, int resy,
+               int page_count = 0);
+    ~ImageAtlas();
 
-    eTexFormat format() const { return format_; }
-    eTexFormat real_format() const { return real_format_; }
+    eFormat format() const { return format_; }
+    eFormat real_format() const { return real_format_; }
     ID3D12Resource *dx_resource() const { return img_; }
     PoolRef srv_ref() const { return srv_ref_; }
     PoolRef sampler_ref() const { return sampler_.ref(); }
@@ -53,7 +53,8 @@ class TextureAtlas {
 
     int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
 
-    void CopyRegionTo(int page, int x, int y, int w, int h, const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf, int data_off) const;
+    void CopyRegionTo(int page, int x, int y, int w, int h, const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf,
+                      int data_off) const;
 
     mutable eResState resource_state = eResState::Undefined;
 };

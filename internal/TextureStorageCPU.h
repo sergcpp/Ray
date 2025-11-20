@@ -4,7 +4,7 @@
 #include <memory>
 
 #include "Core.h"
-#include "TextureSplitter.h"
+#include "ImageSplitter.h"
 #include "TextureUtils.h"
 
 #pragma warning(push)

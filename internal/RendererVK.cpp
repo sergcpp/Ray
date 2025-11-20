@@ -12,11 +12,11 @@
 #include "Vk/BufferVK.h"
 #include "Vk/DebugMarkerVK.h"
 #include "Vk/DrawCallVK.h"
+#include "Vk/ImageVK.h"
 #include "Vk/PipelineVK.h"
 #include "Vk/ProgramVK.h"
 #include "Vk/SamplerVK.h"
 #include "Vk/ShaderVK.h"
-#include "Vk/TextureVK.h"
 
 #include "../Log.h"
 
@@ -311,14 +311,14 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log,
     }
 
     { // create tonemap LUT texture
-        TexParams params = {};
+        ImgParams params = {};
         params.w = params.h = params.d = LUT_DIMS;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
-        params.format = eTexFormat::RGB10_A2;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.sampling.wrap = eTexWrap::ClampToEdge;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.format = eFormat::RGB10_A2;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::ClampToEdge;
 
-        tonemap_lut_ = Texture{"Tonemap LUT", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        tonemap_lut_ = Image{"Tonemap LUT", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     }
 
     Renderer::Resize(s.w, s.h);
@@ -412,7 +412,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                                       {&tonemap_lut_, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            tonemap_lut_.SetSubImage(0, 0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RGB10_A2, temp_upload_buf,
+            tonemap_lut_.SetSubImage(0, 0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eFormat::RGB10_A2, temp_upload_buf,
                                      cmd_buf, 0, data_len);
 
             EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
@@ -1976,7 +1976,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
                                               const scene_data_t &sc_data, const Buffer &rand_seq,
                                               const uint32_t rand_seed, const int iteration, const rect_t &rect,
                                               const uint32_t node_index, const float cam_fwd[3], const float clip_dist,
-                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                               const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
@@ -2039,7 +2039,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
                                                      const scene_data_t &sc_data, const Buffer &rand_seq,
                                                      const uint32_t rand_seed, const int iteration, const rect_t &rect,
                                                      const uint32_t node_index, const float cam_fwd[3],
-                                                     const float clip_dist, Span<const TextureAtlas> tex_atlases,
+                                                     const float clip_dist, Span<const ImageAtlas> tex_atlases,
                                                      const BindlessTexData &bindless_tex, const Buffer &rays,
                                                      const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
@@ -2087,7 +2087,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
                                               const pass_settings_t &ps, const scene_data_t &sc_data,
                                               const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
                                               uint32_t node_index, const float cam_fwd[3], const float clip_dist,
-                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                               const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
@@ -2146,7 +2146,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
 void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(
     CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_index, const pass_settings_t &ps,
     const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
-    const uint32_t node_index, const float cam_fwd[3], const float clip_dist, Span<const TextureAtlas> tex_atlases,
+    const uint32_t node_index, const float cam_fwd[3], const float clip_dist, Span<const ImageAtlas> tex_atlases,
     const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&rays, eResState::UnorderedAccess},
@@ -2188,9 +2188,9 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, const environment_t &env,
     const Buffer &indir_args, const int indir_args_index, const Buffer &hits, const Buffer &rays,
     const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
-    const rect_t &rect, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Texture &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
-    const Buffer &inout_counters, const Texture &out_base_color, const Texture &out_depth_normals) {
+    const rect_t &rect, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Image &out_img,
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
+    const Image &out_base_color, const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -2305,9 +2305,9 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, float clamp_direct,
     const environment_t &env, const Buffer &indir_args, const int indir_args_index, const Buffer &hits,
     const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
-    const int iteration, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Texture &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
-    const Buffer &inout_counters, const Texture &out_depth_normals) {
+    const int iteration, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+    const Image &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
+    const Buffer &inout_counters, const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -2412,8 +2412,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
 void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const Buffer &indir_args, const int indir_args_index,
     const Buffer &counters, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
-    const int iteration, const uint32_t node_index, const float clamp_val, Span<const TextureAtlas> tex_atlases,
-    const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Texture &out_img) {
+    const int iteration, const uint32_t node_index, const float clamp_val, Span<const ImageAtlas> tex_atlases,
+    const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Image &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&sh_rays, eResState::ShaderResource},
@@ -2468,7 +2468,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
 }
 
 void Ray::Vk::Renderer::kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,
-                                       const Buffer &rays, const Texture &out_pixels) {
+                                       const Buffer &rays, const Image &out_pixels) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_pixels, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);

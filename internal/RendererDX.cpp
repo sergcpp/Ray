@@ -22,11 +22,11 @@
 #include "Dx/DebugMarkerDX.h"
 #include "Dx/DescriptorPoolDX.h"
 #include "Dx/DrawCallDX.h"
+#include "Dx/ImageDX.h"
 #include "Dx/PipelineDX.h"
 #include "Dx/ProgramDX.h"
 #include "Dx/SamplerDX.h"
 #include "Dx/ShaderDX.h"
-#include "Dx/TextureDX.h"
 
 #include "../Log.h"
 
@@ -237,14 +237,14 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log,
     }
 
     { // create tonemap LUT texture
-        TexParams params = {};
+        ImgParams params = {};
         params.w = params.h = params.d = LUT_DIMS;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
-        params.format = eTexFormat::RGB10_A2;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.sampling.wrap = eTexWrap::ClampToEdge;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.format = eFormat::RGB10_A2;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::ClampToEdge;
 
-        tonemap_lut_ = Texture{"Tonemap LUT", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        tonemap_lut_ = Image{"Tonemap LUT", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     }
 
     Renderer::Resize(s.w, s.h);
@@ -316,7 +316,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
             CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             const uint32_t data_len =
-                LUT_DIMS * LUT_DIMS * round_up(LUT_DIMS * sizeof(uint32_t), TextureDataPitchAlignment);
+                LUT_DIMS * LUT_DIMS * round_up(LUT_DIMS * sizeof(uint32_t), ImageDataPitchAlignment);
             Buffer temp_upload_buf{"Temp tonemap LUT upload", ctx_.get(), eBufType::Upload, data_len};
             { // update stage buffer
                 uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_upload_buf.Map());
@@ -325,7 +325,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                 int i = 0;
                 for (int yz = 0; yz < LUT_DIMS * LUT_DIMS; ++yz) {
                     memcpy(&mapped_ptr[i], &lut[yz * LUT_DIMS], LUT_DIMS * sizeof(uint32_t));
-                    i += round_up(LUT_DIMS, TextureDataPitchAlignment / sizeof(uint32_t));
+                    i += round_up(LUT_DIMS, ImageDataPitchAlignment / sizeof(uint32_t));
                 }
 
                 temp_upload_buf.Unmap();
@@ -335,7 +335,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                                       {&tonemap_lut_, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            tonemap_lut_.SetSubImage(0, 0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RGB10_A2, temp_upload_buf,
+            tonemap_lut_.SetSubImage(0, 0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eFormat::RGB10_A2, temp_upload_buf,
                                      cmd_buf, 0, data_len);
 
             EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
@@ -1528,7 +1528,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) con
         pixel_readback_is_tonemapped_ = tonemap;
     }
 
-    return {frame_pixels_, round_up(w_, TextureDataPitchAlignment / sizeof(color_rgba_t))};
+    return {frame_pixels_, round_up(w_, ImageDataPitchAlignment / sizeof(color_rgba_t))};
 }
 
 Ray::color_data_rgba_t Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer buf) const {
@@ -1563,7 +1563,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
     }
 
     return {((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_),
-            round_up(w_, TextureDataPitchAlignment / sizeof(color_rgba_t))};
+            round_up(w_, ImageDataPitchAlignment / sizeof(color_rgba_t))};
 }
 
 Ray::GpuImage Ray::Dx::Renderer::get_native_raw_pixels() const {
@@ -1672,7 +1672,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
                                               const scene_data_t &sc_data, const Buffer &rand_seq,
                                               const uint32_t rand_seed, const int iteration, const rect_t &rect,
                                               const uint32_t node_index, const float cam_fwd[3], const float clip_dist,
-                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                               const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
@@ -1738,7 +1738,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
                                               const pass_settings_t &ps, const scene_data_t &sc_data,
                                               const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
                                               uint32_t node_index, const float cam_fwd[3], const float clip_dist,
-                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                               const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
@@ -1799,9 +1799,9 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, const environment_t &env,
     const Buffer &indir_args, const int indir_args_index, const Buffer &hits, const Buffer &rays,
     const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
-    const rect_t &rect, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Texture &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
-    const Buffer &inout_counters, const Texture &out_base_color, const Texture &out_depth_normals) {
+    const rect_t &rect, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Image &out_img,
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
+    const Image &out_base_color, const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -1913,9 +1913,9 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, float clamp_direct,
     const environment_t &env, const Buffer &indir_args, const int indir_args_index, const Buffer &hits,
     const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
-    const int iteration, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Texture &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
-    const Buffer &inout_counters, const Texture &out_depth_normals) {
+    const int iteration, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+    const Image &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
+    const Buffer &inout_counters, const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {
         {&indir_args, eResState::IndirectArgument},   {&hits, eResState::ShaderResource},
         {&rays, eResState::ShaderResource},           {&rand_seq, eResState::ShaderResource},
@@ -2013,8 +2013,8 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
 void Ray::Dx::Renderer::kernel_IntersectSceneShadow(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const Buffer &indir_args, const int indir_args_index,
     const Buffer &counters, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
-    const int iteration, const uint32_t node_index, const float clamp_val, Span<const TextureAtlas> tex_atlases,
-    const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Texture &out_img) {
+    const int iteration, const uint32_t node_index, const float clamp_val, Span<const ImageAtlas> tex_atlases,
+    const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Image &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&sh_rays, eResState::ShaderResource},

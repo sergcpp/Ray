@@ -1,4 +1,4 @@
-#include "TextureDX.h"
+#include "ImageDX.h"
 
 #include <memory>
 
@@ -34,20 +34,20 @@ extern const float AnisotropyLevel;
 
 #define X(_0, _1, _2, _3, _4, _5, _6) _6,
 extern const DXGI_FORMAT g_formats_dx[] = {
-#include "../TextureFormat.inl"
+#include "../Format.inl"
 };
-static_assert(std::size(g_formats_dx) == size_t(eTexFormat::_Count), "!");
+static_assert(std::size(g_formats_dx) == size_t(eFormat::_Count), "!");
 #undef X
 
 uint32_t TextureHandleCounter = 0;
 
-D3D12_RESOURCE_FLAGS to_dx_image_flags(const Bitmask<eTexUsage> usage, const eTexFormat format) {
+D3D12_RESOURCE_FLAGS to_dx_image_flags(const Bitmask<eImgUsage> usage, const eFormat format) {
     D3D12_RESOURCE_FLAGS ret = D3D12_RESOURCE_FLAG_NONE;
-    if (usage & eTexUsage::Storage) {
+    if (usage & eImgUsage::Storage) {
         assert(!IsCompressedFormat(format));
         ret |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
-    if (usage & eTexUsage::RenderTarget) {
+    if (usage & eImgUsage::RenderTarget) {
         assert(!IsCompressedFormat(format));
         if (IsDepthFormat(format)) {
             ret |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -58,25 +58,25 @@ D3D12_RESOURCE_FLAGS to_dx_image_flags(const Bitmask<eTexUsage> usage, const eTe
     return ret;
 }
 
-const eTexUsage g_tex_usage_per_state[] = {
+const eImgUsage g_img_usage_per_state[] = {
     {},                      // Undefined
     {},                      // VertexBuffer
     {},                      // UniformBuffer
     {},                      // IndexBuffer
-    eTexUsage::RenderTarget, // RenderTarget
-    eTexUsage::Storage,      // UnorderedAccess
-    eTexUsage::RenderTarget, // DepthRead
-    eTexUsage::RenderTarget, // DepthWrite
-    eTexUsage::RenderTarget, // StencilTestDepthFetch
-    eTexUsage::Sampled,      // ShaderResource
+    eImgUsage::RenderTarget, // RenderTarget
+    eImgUsage::Storage,      // UnorderedAccess
+    eImgUsage::RenderTarget, // DepthRead
+    eImgUsage::RenderTarget, // DepthWrite
+    eImgUsage::RenderTarget, // StencilTestDepthFetch
+    eImgUsage::Sampled,      // ShaderResource
     {},                      // IndirectArgument
-    eTexUsage::Transfer,     // CopyDst
-    eTexUsage::Transfer,     // CopySrc
+    eImgUsage::Transfer,     // CopyDst
+    eImgUsage::Transfer,     // CopySrc
     {},                      // BuildASRead
     {},                      // BuildASWrite
     {}                       // RayTracing
 };
-static_assert(sizeof(g_tex_usage_per_state) / sizeof(g_tex_usage_per_state[0]) == int(eResState::_Count), "!");
+static_assert(sizeof(g_img_usage_per_state) / sizeof(g_img_usage_per_state[0]) == int(eResState::_Count), "!");
 
 uint32_t D3D12CalcSubresource(uint32_t MipSlice, uint32_t ArraySlice, uint32_t PlaneSlice, uint32_t MipLevels,
                               uint32_t ArraySize) {
@@ -89,23 +89,23 @@ extern const int g_block_res[][2];
 int round_up(int v, int align);
 } // namespace Ray
 
-Ray::eTexUsage Ray::Dx::TexUsageFromState(const eResState state) { return g_tex_usage_per_state[int(state)]; }
+Ray::eImgUsage Ray::Dx::ImgUsageFromState(const eResState state) { return g_img_usage_per_state[int(state)]; }
 
-Ray::Dx::Texture::Texture(std::string_view name, Context *ctx, const TexParams &p, MemAllocators *mem_allocs, ILog *log)
+Ray::Dx::Image::Image(std::string_view name, Context *ctx, const ImgParams &p, MemAllocators *mem_allocs, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(p, mem_allocs, log);
 }
 
-Ray::Dx::Texture::Texture(std::string_view name, Context *ctx, const void *data, const uint32_t size,
-                          const TexParams &p, Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf,
-                          MemAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log)
+Ray::Dx::Image::Image(std::string_view name, Context *ctx, const void *data, const uint32_t size, const ImgParams &p,
+                      Buffer &stage_buf, ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs,
+                      eImgLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
 
-Ray::Dx::Texture::~Texture() { Free(); }
+Ray::Dx::Image::~Image() { Free(); }
 
-Ray::Dx::Texture &Ray::Dx::Texture::operator=(Texture &&rhs) noexcept {
+Ray::Dx::Image &Ray::Dx::Image::operator=(Image &&rhs) noexcept {
     if (this == &rhs) {
         return (*this);
     }
@@ -123,13 +123,13 @@ Ray::Dx::Texture &Ray::Dx::Texture::operator=(Texture &&rhs) noexcept {
     return (*this);
 }
 
-void Ray::Dx::Texture::Init(const TexParams &p, MemAllocators *mem_allocs, ILog *log) {
+void Ray::Dx::Image::Init(const ImgParams &p, MemAllocators *mem_allocs, ILog *log) {
     InitFromRAWData(nullptr, 0, nullptr, mem_allocs, p, log);
 }
 
-void Ray::Dx::Texture::Init(const void *data, const uint32_t size, const TexParams &p, Buffer &sbuf,
-                            ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eTexLoadStatus *load_status,
-                            ILog *log) {
+void Ray::Dx::Image::Init(const void *data, const uint32_t size, const ImgParams &p, Buffer &sbuf,
+                          ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, eImgLoadStatus *load_status,
+                          ILog *log) {
     uint8_t *stage_data = sbuf.Map();
     memcpy(stage_data, data, size);
     sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(size));
@@ -137,23 +137,23 @@ void Ray::Dx::Texture::Init(const void *data, const uint32_t size, const TexPara
 
     InitFromRAWData(&sbuf, 0, cmd_buf, mem_allocs, p, log);
 
-    (*load_status) = eTexLoadStatus::CreatedFromData;
+    (*load_status) = eImgLoadStatus::CreatedFromData;
 }
 
-void Ray::Dx::Texture::Free() {
-    if (params.format != eTexFormat::Undefined && !bool(Bitmask<eTexFlags>{params.flags} & eTexFlags::NoOwnership)) {
+void Ray::Dx::Image::Free() {
+    if (params.format != eFormat::Undefined && !bool(Bitmask<eImgFlags>{params.flags} & eImgFlags::NoOwnership)) {
         ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
         ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
         ctx_->allocs_to_free[ctx_->backend_frame].emplace_back(std::move(alloc_));
 
         handle_ = {};
-        params.format = eTexFormat::Undefined;
+        params.format = eFormat::Undefined;
     }
 }
 
-bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const int samples, const eTexFormat format,
-                               ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, ILog *log) {
+bool Ray::Dx::Image::Realloc(const int w, const int h, int mip_count, const int samples, const eFormat format,
+                             ID3D12GraphicsCommandList *cmd_buf, MemAllocators *mem_allocs, ILog *log) {
     [[maybe_unused]] ID3D12Resource *new_image = nullptr;
     // VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
@@ -169,7 +169,7 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
         image_desc.Format = g_formats_dx[int(format)];
         image_desc.SampleDesc.Count = samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        image_desc.Flags = to_dx_image_flags(Bitmask<eTexUsage>{params.usage}, format);
+        image_desc.Flags = to_dx_image_flags(Bitmask<eImgUsage>{params.usage}, format);
 #if 0
         VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &new_image);
         if (res != VK_SUCCESS) {
@@ -254,7 +254,7 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
 
 #if 0
 #ifdef TEX_VERBOSE_LOGGING
-    if (params_.format != eTexFormat::Undefined) {
+    if (params_.format != eFormat::Undefined) {
         log->Info("Realloc %s, %ix%i (%i mips) -> %ix%i (%i mips)", name_.c_str(), int(params_.w), int(params_.h),
                   int(params_.mip_count), w, h, mip_count);
     } else {
@@ -262,7 +262,7 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
     }
 #endif
 
-    const TexHandle new_handle = {new_image, new_image_view, VK_NULL_HANDLE, std::exchange(handle_.sampler, {}),
+    const ImgHandle new_handle = {new_image, new_image_view, VK_NULL_HANDLE, std::exchange(handle_.sampler, {}),
                                   TextureHandleCounter++};
     uint16_t new_initialized_mips = 0;
 
@@ -383,8 +383,8 @@ bool Ray::Dx::Texture::Realloc(const int w, const int h, int mip_count, const in
     return true;
 }
 
-void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf,
-                                       MemAllocators *mem_allocs, const TexParams &p, ILog *log) {
+void Ray::Dx::Image::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsCommandList *cmd_buf,
+                                     MemAllocators *mem_allocs, const ImgParams &p, ILog *log) {
     Free();
 
     handle_.generation = TextureHandleCounter++;
@@ -400,7 +400,7 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
         image_desc.Format = g_formats_dx[int(p.format)];
         image_desc.SampleDesc.Count = p.samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        image_desc.Flags = to_dx_image_flags(Bitmask<eTexUsage>{params.usage}, p.format);
+        image_desc.Flags = to_dx_image_flags(Bitmask<eImgUsage>{params.usage}, p.format);
 
         const D3D12_RESOURCE_ALLOCATION_INFO alloc_info = ctx_->device()->GetResourceAllocationInfo(0, 1, &image_desc);
 
@@ -429,7 +429,7 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
         ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const UINT SAMPLER_INCR = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
-    const bool requires_uav = bool(p.usage & eTexUsage::Storage);
+    const bool requires_uav = bool(p.usage & eImgUsage::Storage);
 
     handle_.views_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
 
@@ -450,7 +450,7 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
         }
 
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        if (GetChannelCount(p.format) == 1 && !bool(p.usage & eTexUsage::Storage)) {
+        if (GetChannelCount(p.format) == 1 && !bool(p.usage & eImgUsage::Storage)) {
             srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
         }
 
@@ -582,7 +582,7 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
         sampler_desc.MinLOD = 0.0f;
         sampler_desc.MaxLOD = 1000.0f;
         sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
-        if (p.sampling.compare != eTexCompare::None) {
+        if (p.sampling.compare != eCompareOp::None) {
             sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(p.sampling.compare)];
         }
 
@@ -595,10 +595,10 @@ void Ray::Dx::Texture::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12Graphic
     }
 }
 
-void Ray::Dx::Texture::SetSubImage(const int level, const int offsetx, const int offsety, const int offsetz,
-                                   const int sizex, const int sizey, const int sizez, const eTexFormat format,
-                                   const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf, const int data_off,
-                                   const int data_len) {
+void Ray::Dx::Image::SetSubImage(const int level, const int offsetx, const int offsety, const int offsetz,
+                                 const int sizex, const int sizey, const int sizez, const eFormat format,
+                                 const Buffer &sbuf, ID3D12GraphicsCommandList *cmd_buf, const int data_off,
+                                 const int data_len) {
     assert(format == params.format);
     assert(params.samples == 1);
     assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
@@ -642,11 +642,11 @@ void Ray::Dx::Texture::SetSubImage(const int level, const int offsetx, const int
     src_loc.PlacedFootprint.Footprint.Depth = sizez;
     src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(params.format)];
     if (IsCompressedFormat(params.format)) {
-        src_loc.PlacedFootprint.Footprint.RowPitch = round_up(
-            GetBlockCount(sizex, 1, params.format) * GetBlockLenBytes(params.format), TextureDataPitchAlignment);
+        src_loc.PlacedFootprint.Footprint.RowPitch =
+            round_up(GetBlockCount(sizex, 1, params.format) * GetBlockLenBytes(params.format), ImageDataPitchAlignment);
     } else {
         src_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(sizex * GetPerPixelDataLen(params.format), TextureDataPitchAlignment);
+            round_up(sizex * GetPerPixelDataLen(params.format), ImageDataPitchAlignment);
     }
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc = {};
@@ -657,7 +657,7 @@ void Ray::Dx::Texture::SetSubImage(const int level, const int offsetx, const int
     cmd_buf->CopyTextureRegion(&dst_loc, offsetx, offsety, offsetz, &src_loc, nullptr);
 }
 
-void Ray::Dx::Texture::SetSampling(const SamplingParams s) {
+void Ray::Dx::Image::SetSampling(const SamplingParams s) {
     if (handle_.sampler_ref) {
         ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
     }
@@ -671,7 +671,7 @@ void Ray::Dx::Texture::SetSampling(const SamplingParams s) {
     sampler_desc.MinLOD = 0.0f;
     sampler_desc.MaxLOD = 1000.0f;
     sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
-    if (s.compare != eTexCompare::None) {
+    if (s.compare != eCompareOp::None) {
         sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(s.compare)];
     }
 
@@ -687,8 +687,8 @@ void Ray::Dx::Texture::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture &src_tex, const uint32_t src_level,
-                               const uint32_t src_x, const uint32_t src_y, Texture &dst_tex, const uint32_t dst_level,
+void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Image &src_tex, const uint32_t src_level,
+                               const uint32_t src_x, const uint32_t src_y, Image &dst_tex, const uint32_t dst_level,
                                const uint32_t dst_x, const uint32_t dst_y, const uint32_t width,
                                const uint32_t height) {
     assert(src_tex.resource_state == eResState::CopySrc);
@@ -715,7 +715,7 @@ void Ray::Dx::CopyImageToImage(ID3D12GraphicsCommandList *cmd_buf, Texture &src_
     cmd_buf->CopyTextureRegion(&dst_loc, dst_x, dst_y, 0, &src_loc, &src_region);
 }
 
-void Ray::Dx::CopyImageToBuffer(const Texture &src_tex, const int level, const int x, const int y, const int w,
+void Ray::Dx::CopyImageToBuffer(const Image &src_tex, const int level, const int x, const int y, const int w,
                                 const int h, const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf,
                                 const int data_off) {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
@@ -761,10 +761,10 @@ void Ray::Dx::CopyImageToBuffer(const Texture &src_tex, const int level, const i
     if (IsCompressedFormat(src_tex.params.format)) {
         dst_loc.PlacedFootprint.Footprint.RowPitch = round_up(
             GetBlockCount(src_tex.params.w, 1, src_tex.params.format) * GetBlockLenBytes(src_tex.params.format),
-            TextureDataPitchAlignment);
+            ImageDataPitchAlignment);
     } else {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(src_tex.params.w * GetPerPixelDataLen(src_tex.params.format), TextureDataPitchAlignment);
+            round_up(src_tex.params.w * GetPerPixelDataLen(src_tex.params.format), ImageDataPitchAlignment);
     }
 
     D3D12_BOX src_region = {};
@@ -778,7 +778,7 @@ void Ray::Dx::CopyImageToBuffer(const Texture &src_tex, const int level, const i
     cmd_buf->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, &src_region);
 }
 
-void Ray::Dx::_ClearColorImage(Texture &tex, const void *rgba, ID3D12GraphicsCommandList *cmd_buf) {
+void Ray::Dx::_ClearColorImage(Image &tex, const void *rgba, ID3D12GraphicsCommandList *cmd_buf) {
     assert(tex.resource_state == eResState::UnorderedAccess);
 
     Context *ctx = tex.ctx();
@@ -841,7 +841,7 @@ void Ray::Dx::_ClearColorImage(Texture &tex, const void *rgba, ID3D12GraphicsCom
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(const eTexFormat format) { return g_formats_dx[size_t(format)]; }
+DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(const eFormat format) { return g_formats_dx[size_t(format)]; }
 
 bool Ray::Dx::CanBeBlockCompressed(int w, int h, const int mip_count) {
     // NOTE: Assume only BC-formats for now

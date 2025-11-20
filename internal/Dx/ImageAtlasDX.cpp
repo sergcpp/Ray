@@ -1,4 +1,4 @@
-#include "TextureAtlasDX.h"
+#include "ImageAtlasDX.h"
 
 #include <cassert>
 
@@ -14,18 +14,18 @@
 #include "../../Log.h"
 #include "../TextureUtils.h"
 #include "ContextDX.h"
-#include "TextureDX.h"
+#include "ImageDX.h"
 
 namespace Ray {
 int round_up(int v, int align);
 
 namespace Dx {
-template <typename T, int N> eTexFormat tex_format();
+template <typename T, int N> eFormat img_format();
 
-template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RGBA8; }
-template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RGB8; }
-template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RG8; }
-template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::R8; }
+template <> eFormat img_format<uint8_t, 4>() { return eFormat::RGBA8; }
+template <> eFormat img_format<uint8_t, 3>() { return eFormat::RGB8; }
+template <> eFormat img_format<uint8_t, 2>() { return eFormat::RG8; }
+template <> eFormat img_format<uint8_t, 1>() { return eFormat::R8; }
 
 extern const DXGI_FORMAT g_formats_dx[];
 
@@ -36,21 +36,21 @@ uint32_t D3D12CalcSubresource(uint32_t MipSlice, uint32_t ArraySlice, uint32_t P
 
 #define _MIN(x, y) ((x) < (y) ? (x) : (y))
 
-Ray::Dx::TextureAtlas::TextureAtlas(Context *ctx, std::string_view name, const eTexFormat format,
-                                    const eTexFilter filter, const int resx, const int resy, const int pages_count)
+Ray::Dx::ImageAtlas::ImageAtlas(Context *ctx, std::string_view name, const eFormat format, const eFilter filter,
+                                const int resx, const int resy, const int pages_count)
     : ctx_(ctx), name_(name), format_(format), filter_(filter), res_{resx, resy} {
     if (!Resize(pages_count)) {
-        throw std::runtime_error("TextureAtlas cannot be resized!");
+        throw std::runtime_error("ImageAtlas cannot be resized!");
     }
 }
 
-Ray::Dx::TextureAtlas::~TextureAtlas() {
+Ray::Dx::ImageAtlas::~ImageAtlas() {
     ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, srv_ref_);
     ctx_->resources_to_destroy[ctx_->backend_frame].push_back(img_);
 }
 
 template <typename T, int N>
-int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2], int pos[2]) {
+int Ray::Dx::ImageAtlas::Allocate(const color_t<T, N> *data, const int _res[2], int pos[2]) {
     int res[2] = {_res[0], _res[1]};
     if (res[0] > res_[0] || res[1] > res_[1]) {
         return -1;
@@ -84,19 +84,19 @@ int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
                     }
 
                     std::unique_ptr<uint8_t[]> compressed_data;
-                    if (format_ == eTexFormat::BC3) {
+                    if (format_ == eFormat::BC3) {
                         // TODO: get rid of allocation
                         auto temp_YCoCg = ConvertRGB_to_CoCgxY(&temp_storage[0].v[0], res[0], res[1]);
 
                         const int req_size = GetRequiredMemory_BC3(res[0], res[1], 1);
                         compressed_data = std::make_unique<uint8_t[]>(req_size);
                         CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), res[0], res[1], compressed_data.get());
-                    } else if (format_ == eTexFormat::BC4) {
+                    } else if (format_ == eFormat::BC4) {
                         const int req_size = GetRequiredMemory_BC4(res[0], res[1], 1);
                         // NOTE: 1 byte is added due to BC4 compression write outside of memory block
                         compressed_data = std::make_unique<uint8_t[]>(req_size + 1);
                         CompressImage_BC4<N>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
-                    } else if (format_ == eTexFormat::BC5) {
+                    } else if (format_ == eFormat::BC5) {
                         const int req_size = GetRequiredMemory_BC5(res[0], res[1], 1);
                         // NOTE: 1 byte is added due to BC5 compression write outside of memory block
                         compressed_data = std::make_unique<uint8_t[]>(req_size + 1);
@@ -114,14 +114,14 @@ int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
     return Allocate(data, _res, pos);
 }
 
-template int Ray::Dx::TextureAtlas::Allocate<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2], int pos[2]);
-template int Ray::Dx::TextureAtlas::Allocate<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2], int pos[2]);
-template int Ray::Dx::TextureAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2], int pos[2]);
-template int Ray::Dx::TextureAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
+template int Ray::Dx::ImageAtlas::Allocate<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2], int pos[2]);
+template int Ray::Dx::ImageAtlas::Allocate<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2], int pos[2]);
+template int Ray::Dx::ImageAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2], int pos[2]);
+template int Ray::Dx::ImageAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
 
 template <typename T, int N>
-void Ray::Dx::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _res[2], const int mip_count,
-                                         int page[16], int pos[16][2]) {
+void Ray::Dx::ImageAtlas::AllocateMips(const color_t<T, N> *data, const int _res[2], const int mip_count, int page[16],
+                                       int pos[16][2]) {
     int src_res[2] = {_res[0], _res[1]};
 
     // TODO: try to get rid of these allocations
@@ -170,16 +170,16 @@ void Ray::Dx::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _r
     }
 }
 
-template void Ray::Dx::TextureAtlas::AllocateMips<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
-template void Ray::Dx::TextureAtlas::AllocateMips<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
-template void Ray::Dx::TextureAtlas::AllocateMips<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
-template void Ray::Dx::TextureAtlas::AllocateMips<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
+template void Ray::Dx::ImageAtlas::AllocateMips<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2],
+                                                            int mip_count, int page[16], int pos[16][2]);
+template void Ray::Dx::ImageAtlas::AllocateMips<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2],
+                                                            int mip_count, int page[16], int pos[16][2]);
+template void Ray::Dx::ImageAtlas::AllocateMips<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2],
+                                                            int mip_count, int page[16], int pos[16][2]);
+template void Ray::Dx::ImageAtlas::AllocateMips<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2],
+                                                            int mip_count, int page[16], int pos[16][2]);
 
-int Ray::Dx::TextureAtlas::AllocateRaw(void *data, const int res[2], int pos[2]) {
+int Ray::Dx::ImageAtlas::AllocateRaw(void *data, const int res[2], int pos[2]) {
     for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
         const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
         if (index != -1) {
@@ -193,7 +193,7 @@ int Ray::Dx::TextureAtlas::AllocateRaw(void *data, const int res[2], int pos[2])
     return AllocateRaw(data, res, pos);
 }
 
-int Ray::Dx::TextureAtlas::Allocate(const int _res[2], int pos[2]) {
+int Ray::Dx::ImageAtlas::Allocate(const int _res[2], int pos[2]) {
     // add 1px border
     const int res[2] = {_res[0] + 2, _res[1] + 2};
 
@@ -212,7 +212,7 @@ int Ray::Dx::TextureAtlas::Allocate(const int _res[2], int pos[2]) {
     return Allocate(_res, pos);
 }
 
-bool Ray::Dx::TextureAtlas::Free(const int page, const int pos[2]) {
+bool Ray::Dx::ImageAtlas::Free(const int page, const int pos[2]) {
     if (page < 0 || page > int(splitters_.size())) {
         return false;
     }
@@ -220,7 +220,7 @@ bool Ray::Dx::TextureAtlas::Free(const int page, const int pos[2]) {
     return splitters_[page].Free(pos);
 }
 
-bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
+bool Ray::Dx::ImageAtlas::Resize(const int pages_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = pages_count; i < int(splitters_.size()); i++) {
         if (!splitters_[i].empty()) {
@@ -245,10 +245,10 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-        if (format_ == eTexFormat::RGB8 && !ctx_->rgb8_unorm_is_supported()) {
+        if (format_ == eFormat::RGB8 && !ctx_->rgb8_unorm_is_supported()) {
             // Fallback to 4-component texture
             image_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            real_format_ = eTexFormat::RGBA8;
+            real_format_ = eFormat::RGBA8;
         }
 
         D3D12_HEAP_PROPERTIES heap_properties = {};
@@ -389,21 +389,21 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
     sampler_.FreeImmediate();
     sampler_ = std::move(new_sampler);
 
-    splitters_.resize(pages_count, TextureSplitter{res_});
+    splitters_.resize(pages_count, ImageSplitter{res_});
 
     resource_state = new_resource_state;
 
     return true;
 }
 
-int Ray::Dx::TextureAtlas::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
-                                            int dst_pos[2]) {
+int Ray::Dx::ImageAtlas::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
+                                          int dst_pos[2]) {
     assert(false && "Not implemented!");
     return -1;
 }
 
-void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const int posy, const int sizex,
-                                          const int sizey, const void *_data) {
+void Ray::Dx::ImageAtlas::WritePageData(const int page, const int posx, const int posy, const int sizex,
+                                        const int sizey, const void *_data) {
     const uint8_t *data = reinterpret_cast<const uint8_t *>(_data);
 
     int pitch = 0, lines;
@@ -412,18 +412,18 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
         lines = sizey;
     } else {
         lines = (sizey + 3) / 4;
-        if (format_ == eTexFormat::BC1) {
+        if (format_ == eFormat::BC1) {
             pitch = GetRequiredMemory_BC1(sizex, 1, 1);
-        } else if (format_ == eTexFormat::BC3) {
+        } else if (format_ == eFormat::BC3) {
             pitch = GetRequiredMemory_BC3(sizex, 1, 1);
-        } else if (format_ == eTexFormat::BC4) {
+        } else if (format_ == eFormat::BC4) {
             pitch = GetRequiredMemory_BC4(sizex, 1, 1);
-        } else if (format_ == eTexFormat::BC5) {
+        } else if (format_ == eFormat::BC5) {
             pitch = GetRequiredMemory_BC5(sizex, 1, 1);
         }
     }
-    const uint32_t data_size = round_up(pitch, TextureDataPitchAlignment) * lines;
-    const bool rgb_as_rgba = (format_ == eTexFormat::RGB8 && real_format_ == eTexFormat::RGBA8);
+    const uint32_t data_size = round_up(pitch, ImageDataPitchAlignment) * lines;
+    const bool rgb_as_rgba = (format_ == eFormat::RGB8 && real_format_ == eFormat::RGBA8);
 
     Buffer temp_sbuf("Temp Stage", ctx_, eBufType::Upload, data_size);
 
@@ -439,13 +439,13 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
                 dst[x].v[3] = 255;
             }
             src += sizex;
-            dst += round_up(sizex, TextureDataPitchAlignment / sizeof(color_t<uint8_t, 4>));
+            dst += round_up(sizex, ImageDataPitchAlignment / sizeof(color_t<uint8_t, 4>));
         }
     } else {
         int i = 0;
         for (int y = 0; y < lines; ++y) {
             memcpy(ptr + i, &data[y * pitch], pitch);
-            i += round_up(pitch, TextureDataPitchAlignment);
+            i += round_up(pitch, ImageDataPitchAlignment);
         }
     }
     temp_sbuf.Unmap();
@@ -485,7 +485,7 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = 1;
     src_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(real_format_)];
-    src_loc.PlacedFootprint.Footprint.RowPitch = round_up(pitch, TextureDataPitchAlignment);
+    src_loc.PlacedFootprint.Footprint.RowPitch = round_up(pitch, ImageDataPitchAlignment);
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc = {};
     dst_loc.pResource = img_;
@@ -499,9 +499,9 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
     temp_sbuf.FreeImmediate();
 }
 
-void Ray::Dx::TextureAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
-                                         const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf,
-                                         const int data_off) const {
+void Ray::Dx::ImageAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
+                                       const Buffer &dst_buf, ID3D12GraphicsCommandList *cmd_buf,
+                                       const int data_off) const {
     SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
     if (resource_state != eResState::CopySrc) {
@@ -544,10 +544,10 @@ void Ray::Dx::TextureAtlas::CopyRegionTo(const int page, const int x, const int 
     dst_loc.PlacedFootprint.Footprint.Format = g_formats_dx[int(real_format_)];
     if (IsCompressedFormat(real_format_)) {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(GetBlockCount(w, 1, real_format_) * GetBlockLenBytes(real_format_), TextureDataPitchAlignment);
+            round_up(GetBlockCount(w, 1, real_format_) * GetBlockLenBytes(real_format_), ImageDataPitchAlignment);
     } else {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(w * GetPerPixelDataLen(real_format_), TextureDataPitchAlignment);
+            round_up(w * GetPerPixelDataLen(real_format_), ImageDataPitchAlignment);
     }
 
     D3D12_BOX src_region = {};

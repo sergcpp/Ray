@@ -1289,7 +1289,7 @@ template void Ray::CompressImage_BC4<2 /* SrcChannels */>(const uint8_t img_src[
 template void Ray::CompressImage_BC4<1 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
                                                           int dst_pitch);
 
-#include "TextureParams.h"
+#include "ImageParams.h"
 
 template <int SrcChannels>
 void Ray::CompressImage_BC5(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[], int dst_pitch) {
@@ -1740,7 +1740,7 @@ void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<v
     }
 }
 
-std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTexFormat &format) {
+std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eFormat &format) {
     uint32_t img_size;
     ReadTGAFile(data, data_len, w, h, format, nullptr, img_size);
 
@@ -1750,7 +1750,7 @@ std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, const int data_len
     return image_ret;
 }
 
-bool Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,
+bool Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eFormat &format, uint8_t *out_data,
                       uint32_t &out_size) {
     const uint8_t tga_header[12] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     const auto *tga_compare = (const uint8_t *)data;
@@ -1791,9 +1791,9 @@ bool Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTex
     const uint32_t bpp = img_header[4];
     const uint32_t bytes_per_pixel = bpp / 8;
     if (bpp == 32) {
-        format = eTexFormat::RGBA8;
+        format = eFormat::RGBA8;
     } else if (bpp == 24) {
-        format = eTexFormat::RGB8;
+        format = eFormat::RGB8;
     }
 
     if (out_data && out_size < w * h * bytes_per_pixel) {

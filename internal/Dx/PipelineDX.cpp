@@ -27,17 +27,11 @@ namespace Dx {
 };
 static_assert(std::size(g_cull_modes_vk) == int(eCullFace::_Count), "!");
 
+#define X(_0, _1, _2) _1,
 const VkCompareOp g_compare_op_vk[] = {
-    VK_COMPARE_OP_ALWAYS,          // Always
-    VK_COMPARE_OP_NEVER,           // Never
-    VK_COMPARE_OP_LESS,            // Less
-    VK_COMPARE_OP_EQUAL,           // Equal
-    VK_COMPARE_OP_GREATER,         // Greater
-    VK_COMPARE_OP_LESS_OR_EQUAL,   // LEqual
-    VK_COMPARE_OP_NOT_EQUAL,       // NotEqual
-    VK_COMPARE_OP_GREATER_OR_EQUAL // GEqual
+#include "../CompareOp.inl"
 };
-static_assert(std::size(g_compare_op_vk) == int(eCompareOp::_Count), "!");
+#undef X
 
 const VkStencilOp g_stencil_op_vk[] = {
     VK_STENCIL_OP_KEEP,                // Keep
@@ -112,7 +106,7 @@ void Ray::Dx::Pipeline::Destroy() {
     }
 
     color_formats_.clear();
-    depth_format_ = eTexFormat::Undefined;
+    depth_format_ = eFormat::Undefined;
 
     // rt_shader_groups_.clear();
 

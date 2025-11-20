@@ -1,4 +1,4 @@
-#include "TextureParams.h"
+#include "ImageParams.h"
 
 #include <cassert>
 
@@ -11,29 +11,29 @@ struct {
     int pp_data_len;
     int block_x;
     int block_y;
-} g_tex_format_info[] = {
-#include "TextureFormat.inl"
+} g_format_info[] = {
+#include "Format.inl"
 };
 #undef X
 } // namespace Ray
 
-int Ray::GetChannelCount(const eTexFormat format) { return g_tex_format_info[int(format)].channel_count; }
+int Ray::GetChannelCount(const eFormat format) { return g_format_info[int(format)].channel_count; }
 
-int Ray::GetPerPixelDataLen(const eTexFormat format) { return g_tex_format_info[int(format)].pp_data_len; }
+int Ray::GetPerPixelDataLen(const eFormat format) { return g_format_info[int(format)].pp_data_len; }
 
-int Ray::GetBlockLenBytes(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 37, "Update the list below!");
+int Ray::GetBlockLenBytes(const eFormat format) {
+    static_assert(int(eFormat::_Count) == 37, "Update the list below!");
     switch (format) {
-    case eTexFormat::BC1:
-    case eTexFormat::BC1_srgb:
+    case eFormat::BC1:
+    case eFormat::BC1_srgb:
         return 8;
-    case eTexFormat::BC2:
-    case eTexFormat::BC2_srgb:
-    case eTexFormat::BC3:
-    case eTexFormat::BC3_srgb:
-    case eTexFormat::BC5:
+    case eFormat::BC2:
+    case eFormat::BC2_srgb:
+    case eFormat::BC3:
+    case eFormat::BC3_srgb:
+    case eFormat::BC5:
         return 16;
-    case eTexFormat::BC4:
+    case eFormat::BC4:
         return 8;
     default:
         return -1;
@@ -41,13 +41,13 @@ int Ray::GetBlockLenBytes(const eTexFormat format) {
     return -1;
 }
 
-int Ray::GetBlockCount(const int w, const int h, const eTexFormat format) {
+int Ray::GetBlockCount(const int w, const int h, const eFormat format) {
     const int i = int(format);
-    return ((w + g_tex_format_info[i].block_x - 1) / g_tex_format_info[i].block_x) *
-           ((h + g_tex_format_info[i].block_y - 1) / g_tex_format_info[i].block_y);
+    return ((w + g_format_info[i].block_x - 1) / g_format_info[i].block_x) *
+           ((h + g_format_info[i].block_y - 1) / g_format_info[i].block_y);
 }
 
-uint32_t Ray::EstimateMemory(const TexParams &params) {
+uint32_t Ray::EstimateMemory(const ImgParams &params) {
     uint32_t total_len = 0;
     for (int i = 0; i < params.mip_count; i++) {
         const int w = std::max(params.w >> i, 1);
@@ -61,8 +61,8 @@ uint32_t Ray::EstimateMemory(const TexParams &params) {
             assert(params.d == 0);
             total_len += uint32_t(block_len) * block_cnt;
         } else {
-            assert(g_tex_format_info[int(params.format)].pp_data_len != 0);
-            total_len += w * h * d * g_tex_format_info[int(params.format)].pp_data_len;
+            assert(g_format_info[int(params.format)].pp_data_len != 0);
+            total_len += w * h * d * g_format_info[int(params.format)].pp_data_len;
         }
     }
     return total_len;
@@ -111,83 +111,83 @@ uint32_t Ray::EstimateMemory(const TexParams &params) {
 #define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR 0x93DC
 #define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR 0x93DD
 
-Ray::eTexFormat Ray::FormatFromGLInternalFormat(const uint32_t gl_internal_format, bool *is_srgb) {
+Ray::eFormat Ray::FormatFromGLInternalFormat(const uint32_t gl_internal_format, bool *is_srgb) {
     (*is_srgb) = false;
 
     switch (gl_internal_format) {
     case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
-        return eTexFormat::BC1;
+        return eFormat::BC1;
     case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
-        return eTexFormat::BC2;
+        return eFormat::BC2;
     case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
-        return eTexFormat::BC3;
+        return eFormat::BC3;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR:
         (*is_srgb) = true;
     /*case GL_COMPRESSED_RGBA_ASTC_4x4_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_5x4_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_5x5_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_6x5_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_6x6_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_8x5_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_8x6_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_8x8_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x5_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x6_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x8_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x10_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_12x10_KHR:
-        return eTexFormat::ASTC;
+        return eFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_12x12_KHR:
-        return eTexFormat::ASTC;*/
+        return eFormat::ASTC;*/
     default:
         assert(false && "Unsupported format!");
     }
 
-    return eTexFormat::Undefined;
+    return eFormat::Undefined;
 }
 
 int Ray::BlockLenFromGLInternalFormat(const uint32_t gl_internal_format) {

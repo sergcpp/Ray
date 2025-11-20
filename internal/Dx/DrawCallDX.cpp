@@ -13,9 +13,9 @@
 #include "BufferDX.h"
 #include "ContextDX.h"
 #include "DescriptorPoolDX.h"
+#include "ImageAtlasDX.h"
+#include "ImageDX.h"
 #include "PipelineDX.h"
-#include "TextureAtlasDX.h"
-#include "TextureDX.h"
 
 namespace Ray {
 namespace Dx {

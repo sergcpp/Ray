@@ -3,12 +3,12 @@
 #include "Vk/AccStructureVK.h"
 #include "Vk/DescriptorPoolVK.h"
 #include "Vk/DrawCallVK.h"
+#include "Vk/ImageAtlasVK.h"
+#include "Vk/ImageVK.h"
 #include "Vk/PipelineVK.h"
 #include "Vk/ProgramVK.h"
 #include "Vk/ShaderVK.h"
 #include "Vk/SparseStorageVK.h"
-#include "Vk/TextureAtlasVK.h"
-#include "Vk/TextureVK.h"
 #include "Vk/VectorVK.h"
 
 namespace Ray::Vk {

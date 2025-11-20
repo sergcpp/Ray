@@ -25,7 +25,7 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
                                                    const rect_t &rect, const int img_w, const int img_h,
                                                    const Buffer &rand_seq, const Buffer &filter_table,
                                                    const int iteration, const bool _adaptive,
-                                                   const Texture &req_samples_img, const Buffer &inout_counters,
+                                                   const Image &req_samples_img, const Buffer &inout_counters,
                                                    const Buffer &out_rays) {
     const TransitionInfo res_transitions[] = {{&rand_seq, eResState::ShaderResource},
                                               {&req_samples_img, eResState::ShaderResource},
@@ -104,11 +104,11 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
 
 void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float mix_factor,
                                               const float half_mix_factor, const rect_t &rect, int iteration,
-                                              const float exposure, const Texture &temp_img,
-                                              const Texture &temp_base_color, const Texture &temp_depth_normals,
-                                              const Texture &req_samples, const Texture &out_full_img,
-                                              const Texture &out_half_img, const Texture &out_base_color,
-                                              const Texture &out_depth_normals) {
+                                              const float exposure, const Image &temp_img,
+                                              const Image &temp_base_color, const Image &temp_depth_normals,
+                                              const Image &req_samples, const Image &out_full_img,
+                                              const Image &out_half_img, const Image &out_base_color,
+                                              const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {
         {&temp_img, eResState::UnorderedAccess},           {&temp_base_color, eResState::UnorderedAccess},
         {&req_samples, eResState::UnorderedAccess},        {&out_full_img, eResState::UnorderedAccess},
@@ -150,10 +150,10 @@ void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture &full_buf, const Texture &half_buf,
+void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Image &full_buf, const Image &half_buf,
                                            const float inv_gamma, const rect_t &rect, const float variance_threshold,
-                                           const int iteration, const Texture &out_pixels, const Texture &out_variance,
-                                           const Texture &out_req_samples) const {
+                                           const int iteration, const Image &out_pixels, const Image &out_variance,
+                                           const Image &out_req_samples) const {
     const TransitionInfo res_transitions[] = {
         {&full_buf, eResState::UnorderedAccess},     {&half_buf, eResState::UnorderedAccess},
         {&tonemap_lut_, eResState::ShaderResource},  {&out_pixels, eResState::UnorderedAccess},
@@ -185,9 +185,9 @@ void Ray::NS::Renderer::kernel_Postprocess(CommandBuffer cmd_buf, const Texture 
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::NS::Renderer::kernel_FilterVariance(CommandBuffer cmd_buf, const Texture &img_buf, const rect_t &rect,
+void Ray::NS::Renderer::kernel_FilterVariance(CommandBuffer cmd_buf, const Image &img_buf, const rect_t &rect,
                                               const float variance_threshold, const int iteration,
-                                              const Texture &out_variance, const Texture &out_req_samples) {
+                                              const Image &out_variance, const Image &out_req_samples) {
     const TransitionInfo res_transitions[] = {{&img_buf, eResState::ShaderResource},
                                               {&out_variance, eResState::UnorderedAccess},
                                               {&out_req_samples, eResState::UnorderedAccess}};
@@ -215,12 +215,12 @@ void Ray::NS::Renderer::kernel_FilterVariance(CommandBuffer cmd_buf, const Textu
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture &img_buf, const Texture &var_buf,
-                                         const float alpha, const float damping, const Texture &base_color_img,
-                                         const float base_color_weight, const Texture &depth_normals_img,
-                                         const float depth_normals_weight, const Texture &out_raw_img,
+void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Image &img_buf, const Image &var_buf,
+                                         const float alpha, const float damping, const Image &base_color_img,
+                                         const float base_color_weight, const Image &depth_normals_img,
+                                         const float depth_normals_weight, const Image &out_raw_img,
                                          const eViewTransform view_transform, const float inv_gamma, const rect_t &rect,
-                                         const Texture &out_img) {
+                                         const Image &out_img) {
     const TransitionInfo res_transitions[] = {
         {&img_buf, eResState::ShaderResource},           {&var_buf, eResState::ShaderResource},
         {&tonemap_lut_, eResState::ShaderResource},      {&base_color_img, eResState::ShaderResource},
@@ -262,11 +262,11 @@ void Ray::NS::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture &i
 }
 
 void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels,
-                                           const Texture &img_buf1, const Texture &img_buf2, const Texture &img_buf3,
+                                           const Image &img_buf1, const Image &img_buf2, const Image &img_buf3,
                                            const Sampler &sampler, const rect_t &rect, int w, int h,
                                            const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
                                            const Buffer &out_buf, uint32_t output_offset, int output_stride,
-                                           const Texture &out_debug_img) {
+                                           const Image &out_debug_img) {
     const TransitionInfo res_transitions[] = {{&img_buf1, eResState::ShaderResource},
                                               {&img_buf2, eResState::ShaderResource},
                                               {&img_buf3, eResState::ShaderResource},
@@ -329,7 +329,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
                                            const rect_t &rect, int w, int h, const Buffer &weights,
                                            uint32_t weights_offset, uint32_t biases_offset, const Buffer &out_buf,
                                            uint32_t output_offset, int output_stride, const bool downsample,
-                                           const Texture &out_debug_img) {
+                                           const Image &out_debug_img) {
     const TransitionInfo res_transitions[] = {{&out_buf, eResState::UnorderedAccess},
                                               {&out_debug_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -399,7 +399,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
                                            const Buffer &input_buf, uint32_t input_offset, int input_stride,
                                            const float inv_gamma, const rect_t &rect, int w, int h,
                                            const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
-                                           const Texture &out_img, const Texture &out_tonemapped_img) {
+                                           const Image &out_img, const Image &out_tonemapped_img) {
     const TransitionInfo res_transitions[] = {{&input_buf, eResState::ShaderResource},
                                               {&out_img, eResState::UnorderedAccess},
                                               {&out_tonemapped_img, eResState::UnorderedAccess}};
@@ -450,7 +450,7 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
                                                  uint32_t input_offset2, int input_stride2, const rect_t &rect, int w,
                                                  int h, const Buffer &weights, uint32_t weights_offset,
                                                  uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset,
-                                                 int output_stride, const Texture &out_debug_img) {
+                                                 int output_stride, const Image &out_debug_img) {
     const TransitionInfo res_transitions[] = {{&out_buf, eResState::UnorderedAccess},
                                               {&out_debug_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -503,12 +503,12 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
 
 void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2,
                                                  int out_channels, const Buffer &input_buf1, uint32_t input_offset1,
-                                                 int input_stride1, bool upscale1, const Texture &img_buf1,
-                                                 const Texture &img_buf2, const Texture &img_buf3,
+                                                 int input_stride1, bool upscale1, const Image &img_buf1,
+                                                 const Image &img_buf2, const Image &img_buf3,
                                                  const Sampler &sampler, const rect_t &rect, int w, int h,
                                                  const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
                                                  const Buffer &out_buf, uint32_t output_offset, int output_stride,
-                                                 const Texture &out_debug_img) {
+                                                 const Image &out_debug_img) {
     const TransitionInfo res_transitions[] = {{&img_buf1, eResState::ShaderResource},
                                               {&img_buf2, eResState::ShaderResource},
                                               {&out_buf, eResState::UnorderedAccess},
@@ -742,7 +742,7 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
                                                   const Buffer &indir_args, const int indir_args_index,
                                                   const Buffer &counters, const int counter_index, const Buffer &inters,
                                                   const Buffer &rays, const Buffer &cache_data,
-                                                  const Texture &radiance_img, const Texture &depth_normals_img,
+                                                  const Image &radiance_img, const Image &depth_normals_img,
                                                   const Buffer &inout_entries, const Buffer &inout_voxels_curr,
                                                   const Buffer &inout_lock_buf) {
     SmallVector<TransitionInfo, 16> res_transitions = {{&indir_args, eResState::IndirectArgument},
@@ -816,7 +816,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
                                                const int indir_args_index, const Buffer &hits, const Buffer &rays,
                                                const Buffer &ray_indices, const Buffer &counters,
                                                const scene_data_t &sc_data, const int iteration,
-                                               const Texture &out_img) {
+                                               const Image &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -894,7 +894,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSkyPrimary(CommandBuffer cmd_buf, con
                                                       const int indir_args_index, const Buffer &hits,
                                                       const Buffer &rays, const Buffer &ray_indices,
                                                       const Buffer &counters, const scene_data_t &sc_data,
-                                                      const int iteration, const Texture &out_img) {
+                                                      const int iteration, const Image &out_img) {
     const float limit = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
     kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, counters, sc_data,
                     iteration, out_img);
@@ -903,7 +903,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSkyPrimary(CommandBuffer cmd_buf, con
 inline void Ray::NS::Renderer::kernel_ShadeSkySecondary(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const float clamp_direct, const environment_t &env,
     const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays, const Buffer &ray_indices,
-    const Buffer &counters, const scene_data_t &sc_data, int iteration, const Texture &out_img) {
+    const Buffer &counters, const scene_data_t &sc_data, int iteration, const Image &out_img) {
     const float limit = (clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX;
     kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, counters, sc_data,
                     iteration, out_img);

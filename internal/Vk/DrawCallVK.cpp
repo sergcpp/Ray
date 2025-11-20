@@ -5,9 +5,9 @@
 #include "BufferVK.h"
 #include "ContextVK.h"
 #include "DescriptorPoolVK.h"
+#include "ImageAtlasVK.h"
+#include "ImageVK.h"
 #include "PipelineVK.h"
-#include "TextureAtlasVK.h"
-#include "TextureVK.h"
 
 VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayout layout, Span<const Binding> bindings,
                                               DescrMultiPoolAlloc *descr_alloc, ILog *log) {

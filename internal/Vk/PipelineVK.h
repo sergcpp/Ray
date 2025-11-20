@@ -3,8 +3,8 @@
 #include <cstdint>
 
 #include "../../Span.h"
+#include "../ImageParams.h"
 #include "../RastState.h"
-#include "../TextureParams.h"
 #include "BufferVK.h"
 #include "ProgramVK.h"
 
@@ -36,8 +36,8 @@ class Pipeline {
     ePipelineType type_ = ePipelineType::Undefined;
     RastState rast_state_;
     const RenderPass *render_pass_ = nullptr;
-    SmallVector<eTexFormat, 4> color_formats_;
-    eTexFormat depth_format_ = eTexFormat::Undefined;
+    SmallVector<eFormat, 4> color_formats_;
+    eFormat depth_format_ = eFormat::Undefined;
     Program *prog_ = nullptr;
     const VertexInput *vtx_input_ = nullptr;
 
@@ -76,8 +76,8 @@ class Pipeline {
     const Program *prog() const { return prog_; }
     const VertexInput *vtx_input() const { return vtx_input_; }
 
-    const SmallVectorImpl<eTexFormat> &color_formats() const { return color_formats_; }
-    eTexFormat depth_format() const { return depth_format_; }
+    const SmallVectorImpl<eFormat> &color_formats() const { return color_formats_; }
+    eFormat depth_format() const { return depth_format_; }
 
     VkPipelineLayout layout() const { return layout_; }
     VkPipeline handle() const { return handle_; }

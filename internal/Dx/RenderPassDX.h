@@ -1,14 +1,14 @@
 #pragma once
 
 #include "../../Span.h"
+#include "../ImageParams.h"
 #include "../SmallVector.h"
-#include "../TextureParams.h"
 
 namespace Ray {
 class ILog;
 namespace Dx {
 class Context;
-class Texture;
+class Image;
 
 const int MaxRTAttachments = 4;
 
@@ -28,7 +28,7 @@ enum class eLoadOp : uint8_t { Load, Clear, DontCare, None, _Count };
 enum class eStoreOp : uint8_t { Store, DontCare, None, _Count };
 
 struct RenderTarget {
-    Texture *ref = nullptr;
+    Image *ref = nullptr;
     uint8_t view_index = 0;
     eLoadOp load = eLoadOp::DontCare;
     eStoreOp store = eStoreOp::DontCare;
@@ -36,10 +36,10 @@ struct RenderTarget {
     eStoreOp stencil_store = eStoreOp::DontCare;
 
     RenderTarget() = default;
-    RenderTarget(Texture *_ref, eLoadOp _load, eStoreOp _store, eLoadOp _stencil_load = eLoadOp::DontCare,
+    RenderTarget(Image *_ref, eLoadOp _load, eStoreOp _store, eLoadOp _stencil_load = eLoadOp::DontCare,
                  eStoreOp _stencil_store = eStoreOp::DontCare)
         : ref(_ref), load(_load), store(_store), stencil_load(_stencil_load), stencil_store(_stencil_store) {}
-    RenderTarget(Texture *_ref, uint8_t _view_index, eLoadOp _load, eStoreOp _store,
+    RenderTarget(Image *_ref, uint8_t _view_index, eLoadOp _load, eStoreOp _store,
                  eLoadOp _stencil_load = eLoadOp::DontCare, eStoreOp _stencil_store = eStoreOp::DontCare)
         : ref(_ref), view_index(_view_index), load(_load), store(_store), stencil_load(_stencil_load),
           stencil_store(_stencil_store) {}
@@ -55,9 +55,9 @@ inline bool operator==(const RenderTarget &lhs, const RenderTarget &rhs) {
 }
 
 struct RenderTargetInfo {
-    eTexFormat format = eTexFormat::Undefined;
+    eFormat format = eFormat::Undefined;
     uint8_t samples = 1;
-    eTexFlags flags = {};
+    eImgFlags flags = {};
     eImageLayout layout = eImageLayout::Undefined;
     eLoadOp load = eLoadOp::DontCare;
     eStoreOp store = eStoreOp::DontCare;
@@ -65,17 +65,17 @@ struct RenderTargetInfo {
     eStoreOp stencil_store = eStoreOp::DontCare;
 
     RenderTargetInfo() = default;
-    /*RenderTargetInfo(Texture *_ref, eLoadOp _load, eStoreOp _store, eLoadOp _stencil_load = eLoadOp::DontCare,
+    /*RenderTargetInfo(Image *_ref, eLoadOp _load, eStoreOp _store, eLoadOp _stencil_load = eLoadOp::DontCare,
                      eStoreOp _stencil_store = eStoreOp::DontCare)
         : format(_ref->params.format), samples(_ref->params.samples), flags(_ref->params.flags),
           layout(eImageLayout(VKImageLayoutForState(_ref->resource_state))), load(_load), store(_store),
           stencil_load(_stencil_load), stencil_store(_stencil_store) {}
-    RenderTargetInfo(const Texture *tex, eLoadOp _load, eStoreOp _store, eLoadOp _stencil_load = eLoadOp::DontCare,
+    RenderTargetInfo(const Image *tex, eLoadOp _load, eStoreOp _store, eLoadOp _stencil_load = eLoadOp::DontCare,
                      eStoreOp _stencil_store = eStoreOp::DontCare)
         : format(tex->params.format), samples(tex->params.samples), flags(tex->params.flags),
           layout(eImageLayout(VKImageLayoutForState(tex->resource_state))), load(_load), store(_store),
           stencil_load(_stencil_load), stencil_store(_stencil_store) {}
-    RenderTargetInfo(eTexFormat _format, uint8_t _samples, eImageLayout _layout, eLoadOp _load, eStoreOp _store,
+    RenderTargetInfo(eFormat _format, uint8_t _samples, eImageLayout _layout, eLoadOp _load, eStoreOp _store,
                      eLoadOp _stencil_load = eLoadOp::DontCare, eStoreOp _stencil_store = eStoreOp::DontCare)
         : format(_format), samples(_samples), layout(_layout), load(_load), store(_store), stencil_load(_stencil_load),
           stencil_store(_stencil_store) {}*/
@@ -92,7 +92,7 @@ struct RenderTargetInfo {
         }
     }
 
-    operator bool() const { return format != eTexFormat::Undefined; }
+    operator bool() const { return format != eFormat::Undefined; }
 };
 
 inline bool operator==(const RenderTargetInfo &lhs, const RenderTarget &rhs) {

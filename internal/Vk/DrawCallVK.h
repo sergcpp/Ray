@@ -24,8 +24,8 @@ class Context;
 class Buffer;
 class DescrMultiPoolAlloc;
 class Pipeline;
-class TextureAtlas;
-class Texture;
+class ImageAtlas;
+class Image;
 class Sampler;
 
 enum class eBindTarget : uint16_t {
@@ -45,19 +45,19 @@ enum class eBindTarget : uint16_t {
 
 struct OpaqueHandle {
     union {
-        const Texture *tex;
+        const Image *tex;
         const Buffer *buf;
-        const TextureAtlas *tex_arr;
+        const ImageAtlas *tex_arr;
         const Sampler *sampler;
         const AccStructure *acc_struct;
     };
     int count = 0;
     OpaqueHandle() = default;
-    OpaqueHandle(const Texture &_tex) : tex(&_tex), count(1) {}
+    OpaqueHandle(const Image &_tex) : tex(&_tex), count(1) {}
     OpaqueHandle(const Buffer &_buf) : buf(&_buf), count(1) {}
-    OpaqueHandle(const TextureAtlas &_tex_arr) : tex_arr(&_tex_arr), count(1) {}
-    OpaqueHandle(const TextureAtlas *_tex_arr, int _count = 1) : tex_arr(_tex_arr), count(_count) {}
-    OpaqueHandle(Span<const TextureAtlas> tex_arrs) : tex_arr(tex_arrs.data()), count(int(tex_arrs.size())) {}
+    OpaqueHandle(const ImageAtlas &_tex_arr) : tex_arr(&_tex_arr), count(1) {}
+    OpaqueHandle(const ImageAtlas *_tex_arr, int _count = 1) : tex_arr(_tex_arr), count(_count) {}
+    OpaqueHandle(Span<const ImageAtlas> tex_arrs) : tex_arr(tex_arrs.data()), count(int(tex_arrs.size())) {}
     OpaqueHandle(const Sampler &_sampler) : sampler(&_sampler), count(1) {}
     OpaqueHandle(const AccStructure &_acc_struct) : acc_struct(&_acc_struct), count(1) {}
 };

@@ -40,16 +40,16 @@ inline Ref::fvec4 cross(const Ref::fvec4 &v1, const Ref::fvec4 &v2) {
                       v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
 }
 
-const eTexFormat g_to_internal_format[] = {
-    eTexFormat::Undefined, // Undefined
-    eTexFormat::RGBA8,     // RGBA8888
-    eTexFormat::RGB8,      // RGB888
-    eTexFormat::RG8,       // RG88
-    eTexFormat::R8,        // R8
-    eTexFormat::BC1,       // BC1
-    eTexFormat::BC3,       // BC3
-    eTexFormat::BC4,       // BC4
-    eTexFormat::BC5        // BC5
+const eFormat g_to_internal_format[] = {
+    eFormat::Undefined, // Undefined
+    eFormat::RGBA8,     // RGBA8888
+    eFormat::RGB8,      // RGB888
+    eFormat::RG8,       // RG88
+    eFormat::R8,        // R8
+    eFormat::BC1,       // BC1
+    eFormat::BC3,       // BC3
+    eFormat::BC4,       // BC4
+    eFormat::BC5        // BC5
 };
 
 class Scene : public SceneCommon {
@@ -70,11 +70,11 @@ class Scene : public SceneCommon {
 
     SparseStorage<material_t> materials_;
     SparseStorage<atlas_texture_t> atlas_textures_;
-    Cpu::SparseStorage<Texture> bindless_textures_;
+    Cpu::SparseStorage<Image> bindless_textures_;
 
     BindlessTexData bindless_tex_data_;
 
-    TextureAtlas tex_atlases_[8];
+    ImageAtlas tex_atlases_[8];
 
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;
@@ -82,9 +82,9 @@ class Scene : public SceneCommon {
     Vector<light_cwbvh_node_t> light_cwnodes_;
     std::vector<uint32_t> dir_lights_; // compacted list of all directional lights
 
-    Texture sky_transmittance_lut_tex_, sky_multiscatter_lut_tex_;
-    Texture sky_moon_tex_, sky_weather_tex_, sky_cirrus_tex_, sky_curl_tex_;
-    Texture sky_noise3d_tex_;
+    Image sky_transmittance_lut_tex_, sky_multiscatter_lut_tex_;
+    Image sky_moon_tex_, sky_weather_tex_, sky_cirrus_tex_, sky_curl_tex_;
+    Image sky_noise3d_tex_;
 
     LightHandle env_map_light_ = InvalidLightHandle;
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;
@@ -92,7 +92,7 @@ class Scene : public SceneCommon {
         int res = -1;
         float medium_lum = 0.0f;
         SmallVector<aligned_vector<fvec4>, 16> mips;
-        Texture tex;
+        Image tex;
     } env_map_qtree_;
 
     mutable Vector<uint64_t> spatial_cache_entries_;
@@ -238,14 +238,14 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
       nodes_(ctx, "Nodes"), tris_(ctx, "Tris"), tri_indices_(ctx, "Tri Indices"), tri_materials_(ctx, "Tri Materials"),
       mesh_instances_(ctx, "Mesh Instances"), vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"),
       materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
-      tex_atlases_{{ctx, "Atlas RGBA", eTexFormat::RGBA8, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, "Atlas RGB", eTexFormat::RGB8, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, "Atlas RG", eTexFormat::RG8, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, "Atlas R", eTexFormat::R8, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, "Atlas BC1", eTexFormat::BC1, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, "Atlas BC3", eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
+      tex_atlases_{{ctx, "Atlas RGBA", eFormat::RGBA8, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, "Atlas RGB", eFormat::RGB8, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, "Atlas RG", eFormat::RG8, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, "Atlas R", eFormat::R8, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, "Atlas BC1", eFormat::BC1, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, "Atlas BC3", eFormat::BC3, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, "Atlas BC4", eFormat::BC4, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, "Atlas BC5", eFormat::BC5, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_cwnodes_(ctx, "Light CWNodes"),
       spatial_cache_entries_(ctx, "Spatial Cache Entries"),
       spatial_cache_voxels_curr_(ctx, "Spatial Cache Voxels (1/2)"),
@@ -466,7 +466,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
 }
 
 inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_desc_t &_t) {
-    eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
+    eFormat src_fmt = eFormat::Undefined, fmt = eFormat::Undefined;
 
     const int expected_mip_count = CalcMipCount(_t.w, _t.h, 4);
     const int mip_count = (_t.generate_mipmaps && !Ray::IsCompressedFormat(_t.format))
@@ -487,15 +487,15 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
     if (_t.format == eTextureFormat::RGBA8888) {
         if (!_t.is_normalmap) {
-            src_fmt = fmt = eTexFormat::RGBA8;
-            data_size[0] = round_up(_t.w * 4, TextureDataPitchAlignment) * _t.h;
+            src_fmt = fmt = eFormat::RGBA8;
+            data_size[0] = round_up(_t.w * 4, ImageDataPitchAlignment) * _t.h;
 
             const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
 
             int j = 0;
             for (int y = 0; y < _t.h; ++y) {
                 memcpy(&stage_data[j], &rgba_data[y * _t.w], _t.w * 4);
-                j += round_up(_t.w * 4, TextureDataPitchAlignment);
+                j += round_up(_t.w * 4, ImageDataPitchAlignment);
             }
         } else {
             // TODO: get rid of this allocation
@@ -510,19 +510,19 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             }
 
             if (use_compression) {
-                src_fmt = eTexFormat::RG8;
-                fmt = eTexFormat::BC5;
-                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, TextureDataPitchAlignment);
+                src_fmt = eFormat::RG8;
+                fmt = eFormat::BC5;
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, ImageDataPitchAlignment);
                 CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data,
-                                     GetRequiredMemory_BC5(_t.w, 1, TextureDataPitchAlignment));
+                                     GetRequiredMemory_BC5(_t.w, 1, ImageDataPitchAlignment));
             } else {
-                src_fmt = fmt = eTexFormat::RG8;
-                data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
+                src_fmt = fmt = eFormat::RG8;
+                data_size[0] = round_up(_t.w * 2, ImageDataPitchAlignment) * _t.h;
 
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
                     memcpy(&stage_data[j], &repacked_data[y * _t.w * 2], _t.w * 2);
-                    j += round_up(_t.w * 2, TextureDataPitchAlignment);
+                    j += round_up(_t.w * 2, ImageDataPitchAlignment);
                 }
             }
         }
@@ -531,26 +531,26 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             if (use_compression) {
                 auto temp_YCoCg = ConvertRGB_to_CoCgxY(_t.data.data(), _t.w, _t.h);
                 is_YCoCg = true;
-                src_fmt = eTexFormat::RGB8;
-                fmt = eTexFormat::BC3;
-                data_size[0] = GetRequiredMemory_BC3(_t.w, _t.h, TextureDataPitchAlignment);
+                src_fmt = eFormat::RGB8;
+                fmt = eFormat::BC3;
+                data_size[0] = GetRequiredMemory_BC3(_t.w, _t.h, ImageDataPitchAlignment);
                 CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), _t.w, _t.h, stage_data,
-                                                       GetRequiredMemory_BC3(_t.w, 1, TextureDataPitchAlignment));
+                                                       GetRequiredMemory_BC3(_t.w, 1, ImageDataPitchAlignment));
             } else if (ctx_->rgb8_unorm_is_supported()) {
-                src_fmt = fmt = eTexFormat::RGB8;
-                data_size[0] = round_up(_t.w * 3, TextureDataPitchAlignment) * _t.h;
+                src_fmt = fmt = eFormat::RGB8;
+                data_size[0] = round_up(_t.w * 3, ImageDataPitchAlignment) * _t.h;
 
                 const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
 
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
                     memcpy(&stage_data[j], &rgb_data[y * _t.w], _t.w * 3);
-                    j += round_up(_t.w * 3, TextureDataPitchAlignment);
+                    j += round_up(_t.w * 3, ImageDataPitchAlignment);
                 }
             } else {
                 // Fallback to 4-component texture
-                src_fmt = fmt = eTexFormat::RGBA8;
-                data_size[0] = round_up(_t.w * 4, TextureDataPitchAlignment) * _t.h;
+                src_fmt = fmt = eFormat::RGBA8;
+                data_size[0] = round_up(_t.w * 4, ImageDataPitchAlignment) * _t.h;
 
                 // TODO: get rid of this allocation
                 repacked_data = std::make_unique<uint8_t[]>(4 * _t.w * _t.h);
@@ -567,7 +567,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
                     memcpy(&stage_data[j], &repacked_data[y * _t.w * 4], _t.w * 4);
-                    j += round_up(_t.w * 4, TextureDataPitchAlignment);
+                    j += round_up(_t.w * 4, ImageDataPitchAlignment);
                 }
             }
         } else {
@@ -583,25 +583,25 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             }
 
             if (use_compression) {
-                src_fmt = eTexFormat::RG8;
-                fmt = eTexFormat::BC5;
-                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, TextureDataPitchAlignment);
+                src_fmt = eFormat::RG8;
+                fmt = eFormat::BC5;
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, ImageDataPitchAlignment);
                 CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data,
-                                     GetRequiredMemory_BC5(_t.w, 1, TextureDataPitchAlignment));
+                                     GetRequiredMemory_BC5(_t.w, 1, ImageDataPitchAlignment));
             } else {
-                src_fmt = fmt = eTexFormat::RG8;
-                data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
+                src_fmt = fmt = eFormat::RG8;
+                data_size[0] = round_up(_t.w * 2, ImageDataPitchAlignment) * _t.h;
 
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
                     memcpy(&stage_data[j], &repacked_data[y * _t.w * 2], _t.w * 2);
-                    j += round_up(_t.w * 2, TextureDataPitchAlignment);
+                    j += round_up(_t.w * 2, ImageDataPitchAlignment);
                 }
             }
         }
     } else if (_t.format == eTextureFormat::RG88) {
-        src_fmt = fmt = eTexFormat::RG8;
-        data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
+        src_fmt = fmt = eFormat::RG8;
+        data_size[0] = round_up(_t.w * 2, ImageDataPitchAlignment) * _t.h;
 
         const bool invert_y = _t.is_normalmap && (_t.convention == Ray::eTextureConvention::DX);
         const auto *rg_data = reinterpret_cast<const color_rg8_t *>(_t.data.data());
@@ -613,27 +613,27 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                 dst[x].v[0] = rg_data[y * _t.w + x].v[0];
                 dst[x].v[1] = invert_y ? (255 - rg_data[y * _t.w + x].v[1]) : rg_data[y * _t.w + x].v[1];
             }
-            j += round_up(_t.w * 2, TextureDataPitchAlignment);
+            j += round_up(_t.w * 2, ImageDataPitchAlignment);
         }
 
         reconstruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         if (use_compression) {
-            src_fmt = eTexFormat::R8;
-            fmt = eTexFormat::BC4;
-            data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h, TextureDataPitchAlignment);
+            src_fmt = eFormat::R8;
+            fmt = eFormat::BC4;
+            data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h, ImageDataPitchAlignment);
             CompressImage_BC4<1>(_t.data.data(), _t.w, _t.h, stage_data,
-                                 GetRequiredMemory_BC4(_t.w, 1, TextureDataPitchAlignment));
+                                 GetRequiredMemory_BC4(_t.w, 1, ImageDataPitchAlignment));
         } else {
-            src_fmt = fmt = eTexFormat::R8;
-            data_size[0] = round_up(_t.w, TextureDataPitchAlignment) * _t.h;
+            src_fmt = fmt = eFormat::R8;
+            data_size[0] = round_up(_t.w, ImageDataPitchAlignment) * _t.h;
 
             const auto *r_data = reinterpret_cast<const color_r8_t *>(_t.data.data());
 
             int j = 0;
             for (int y = 0; y < _t.h; ++y) {
                 memcpy(&stage_data[j], &r_data[y * _t.w], _t.w);
-                j += round_up(_t.w, TextureDataPitchAlignment);
+                j += round_up(_t.w, ImageDataPitchAlignment);
             }
         }
     } else {
@@ -650,21 +650,21 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         int w = _t.w, h = _t.h;
         for (int i = 0; i < mip_count; ++i) {
             if (_t.format == eTextureFormat::BC1) {
-                data_size[i] = Preprocess_BCn<3>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset],
-                                                 GetRequiredMemory_BC1(w, 1, TextureDataPitchAlignment));
+                data_size[i] =
+                    Preprocess_BCn<3>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical, invert_green,
+                                      &stage_data[write_offset], GetRequiredMemory_BC1(w, 1, ImageDataPitchAlignment));
             } else if (_t.format == eTextureFormat::BC3) {
-                data_size[i] = Preprocess_BCn<4>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset],
-                                                 GetRequiredMemory_BC3(w, 1, TextureDataPitchAlignment));
+                data_size[i] =
+                    Preprocess_BCn<4>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical, invert_green,
+                                      &stage_data[write_offset], GetRequiredMemory_BC3(w, 1, ImageDataPitchAlignment));
             } else if (_t.format == eTextureFormat::BC4) {
-                data_size[i] = Preprocess_BCn<1>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset],
-                                                 GetRequiredMemory_BC4(w, 1, TextureDataPitchAlignment));
+                data_size[i] =
+                    Preprocess_BCn<1>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical, invert_green,
+                                      &stage_data[write_offset], GetRequiredMemory_BC4(w, 1, ImageDataPitchAlignment));
             } else if (_t.format == eTextureFormat::BC5) {
-                data_size[i] = Preprocess_BCn<2>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset],
-                                                 GetRequiredMemory_BC5(w, 1, TextureDataPitchAlignment));
+                data_size[i] =
+                    Preprocess_BCn<2>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical, invert_green,
+                                      &stage_data[write_offset], GetRequiredMemory_BC5(w, 1, ImageDataPitchAlignment));
             }
 
             read_offset += data_size[i];
@@ -677,19 +677,19 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
     if (_t.generate_mipmaps && !IsCompressedFormat(src_fmt)) {
         const int res[2] = {_t.w, _t.h};
-        if (src_fmt == eTexFormat::RGBA8) {
+        if (src_fmt == eFormat::RGBA8) {
             const auto *rgba_data =
                 reinterpret_cast<const color_rgba8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(rgba_data, res, mip_count, use_compression, stage_data, data_size);
-        } else if (src_fmt == eTexFormat::RGB8) {
+        } else if (src_fmt == eFormat::RGB8) {
             const auto *rgb_data =
                 reinterpret_cast<const color_rgb8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(rgb_data, res, mip_count, use_compression, stage_data, data_size);
-        } else if (src_fmt == eTexFormat::RG8) {
+        } else if (src_fmt == eFormat::RG8) {
             const auto *rg_data =
                 reinterpret_cast<const color_rg8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(rg_data, res, mip_count, use_compression, stage_data, data_size);
-        } else if (src_fmt == eTexFormat::R8) {
+        } else if (src_fmt == eFormat::R8) {
             const auto *r_data =
                 reinterpret_cast<const color_r8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(r_data, res, mip_count, use_compression, stage_data, data_size);
@@ -698,7 +698,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
     temp_stage_buf.Unmap();
 
-    TexParams p = {};
+    ImgParams p = {};
     p.w = _t.w;
     p.h = _t.h;
     p.format = fmt;
@@ -706,8 +706,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         p.format = ToSRGBFormat(p.format);
     }
     p.mip_count = mip_count;
-    p.usage = Bitmask<eTexUsage>(eTexUsage::Transfer) | eTexUsage::Sampled;
-    p.sampling.filter = eTexFilter::Nearest;
+    p.usage = Bitmask<eImgUsage>(eImgUsage::Transfer) | eImgUsage::Sampled;
+    p.sampling.filter = eFilter::Nearest;
 
     std::pair<uint32_t, uint32_t> ret = bindless_textures_.emplace(!_t.name.empty() ? _t.name.data() : "Bindless Tex",
                                                                    ctx_, p, ctx_->default_mem_allocs(), log_);
@@ -786,24 +786,24 @@ void Ray::NS::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
             if (N == 3) {
                 auto temp_YCoCg = ConvertRGB_to_CoCgxY(&dst_data[0].v[0], dst_res[0], dst_res[1]);
 
-                out_size[i] = GetRequiredMemory_BC3(dst_res[0], dst_res[1], TextureDataPitchAlignment);
+                out_size[i] = GetRequiredMemory_BC3(dst_res[0], dst_res[1], ImageDataPitchAlignment);
                 CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), dst_res[0], dst_res[1], out_data,
-                                                       GetRequiredMemory_BC3(dst_res[0], 1, TextureDataPitchAlignment));
+                                                       GetRequiredMemory_BC3(dst_res[0], 1, ImageDataPitchAlignment));
             } else if (N == 1) {
-                out_size[i] = GetRequiredMemory_BC4(dst_res[0], dst_res[1], TextureDataPitchAlignment);
+                out_size[i] = GetRequiredMemory_BC4(dst_res[0], dst_res[1], ImageDataPitchAlignment);
                 CompressImage_BC4<N>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data,
-                                     GetRequiredMemory_BC4(dst_res[0], 1, TextureDataPitchAlignment));
+                                     GetRequiredMemory_BC4(dst_res[0], 1, ImageDataPitchAlignment));
             } else if (N == 2) {
-                out_size[i] = GetRequiredMemory_BC5(dst_res[0], dst_res[1], TextureDataPitchAlignment);
+                out_size[i] = GetRequiredMemory_BC5(dst_res[0], dst_res[1], ImageDataPitchAlignment);
                 CompressImage_BC5<2>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data,
-                                     GetRequiredMemory_BC5(dst_res[0], 1, TextureDataPitchAlignment));
+                                     GetRequiredMemory_BC5(dst_res[0], 1, ImageDataPitchAlignment));
             }
         } else {
-            out_size[i] = int(dst_res[1] * round_up(dst_res[0] * sizeof(color_t<T, N>), TextureDataPitchAlignment));
+            out_size[i] = int(dst_res[1] * round_up(dst_res[0] * sizeof(color_t<T, N>), ImageDataPitchAlignment));
             int j = 0;
             for (int y = 0; y < dst_res[1]; ++y) {
                 memcpy(&out_data[j], &dst_data[y * dst_res[0]], dst_res[0] * sizeof(color_t<T, N>));
-                j += round_up(dst_res[0] * sizeof(color_t<T, N>), TextureDataPitchAlignment);
+                j += round_up(dst_res[0] * sizeof(color_t<T, N>), ImageDataPitchAlignment);
             }
         }
 
@@ -1539,13 +1539,13 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
             PrepareEnvMapQTree_nolock(parallel_for);
         } else {
             // Dummy
-            TexParams p;
+            ImgParams p;
             p.w = p.h = 1;
-            p.format = eTexFormat::RGBA32F;
+            p.format = eFormat::RGBA32F;
             p.mip_count = 1;
-            p.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
+            p.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
 
-            env_map_qtree_.tex = Texture("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
+            env_map_qtree_.tex = Image("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
         }
         { // add env light source
             light_t l = {};
@@ -1564,13 +1564,13 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
         }
     } else {
         // Dummy
-        TexParams p;
+        ImgParams p;
         p.w = p.h = 1;
-        p.format = eTexFormat::RGBA32F;
+        p.format = eFormat::RGBA32F;
         p.mip_count = 1;
-        p.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
+        p.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
 
-        env_map_qtree_.tex = Texture("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
+        env_map_qtree_.tex = Image("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
     }
 
     if (use_bindless_ && env_.env_map != InvalidTextureHandle._index) {
@@ -1665,12 +1665,12 @@ int SaveEXR(const float *data, int width, int height, int components, const int 
 inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const atmosphere_params_t &params,
                                                                          const int res[2], const light_t lights[],
                                                                          Span<const uint32_t> dir_lights) {
-    TexParams p;
+    ImgParams p;
     p.w = res[0];
     p.h = res[1];
-    p.format = eTexFormat::RGBA32F;
-    p.usage = Bitmask<eTexUsage>(eTexUsage::Storage) | eTexUsage::Transfer;
-    auto temp_img = Texture{"Temp Sky Tex", ctx_, p, ctx_->default_mem_allocs(), log_};
+    p.format = eFormat::RGBA32F;
+    p.usage = Bitmask<eImgUsage>(eImgUsage::Storage) | eImgUsage::Transfer;
+    auto temp_img = Image{"Temp Sky Tex", ctx_, p, ctx_->default_mem_allocs(), log_};
 
     { // Write sky image
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -1753,7 +1753,7 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
     }
 
     Buffer temp_readback_buf("Temp Sky Readback", ctx_, eBufType::Readback,
-                             round_up(4 * res[0] * sizeof(float), TextureDataPitchAlignment) * res[1]);
+                             round_up(4 * res[0] * sizeof(float), ImageDataPitchAlignment) * res[1]);
 
     { // Readback texture data
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -1813,15 +1813,15 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     // }
 
     if (!sky_moon_tex_) {
-        TexParams params;
+        ImgParams params;
         params.w = MOON_TEX_W;
         params.h = MOON_TEX_H;
-        params.format = eTexFormat::RGBA8_srgb;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.sampling.wrap = eTexWrap::ClampToEdge;
+        params.format = eFormat::RGBA8_srgb;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::ClampToEdge;
 
-        sky_moon_tex_ = Texture{"Moon Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
+        sky_moon_tex_ = Image{"Moon Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 4 * MOON_TEX_W * MOON_TEX_H);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1834,7 +1834,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        sky_moon_tex_.SetSubImage(0, 0, 0, 0, MOON_TEX_W, MOON_TEX_H, 1, eTexFormat::RGBA8_srgb, stage_buf, cmd_buf, 0,
+        sky_moon_tex_.SetSubImage(0, 0, 0, 0, MOON_TEX_W, MOON_TEX_H, 1, eFormat::RGBA8_srgb, stage_buf, cmd_buf, 0,
                                   stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
@@ -1842,14 +1842,14 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     }
 
     if (!sky_weather_tex_) {
-        TexParams params;
+        ImgParams params;
         params.w = params.h = WEATHER_TEX_RES;
-        params.format = eTexFormat::RGBA8;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.sampling.wrap = eTexWrap::Repeat;
+        params.format = eFormat::RGBA8;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::Repeat;
 
-        sky_weather_tex_ = Texture{"Weather Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
+        sky_weather_tex_ = Image{"Weather Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 4 * WEATHER_TEX_RES * WEATHER_TEX_RES);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1862,7 +1862,7 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        sky_weather_tex_.SetSubImage(0, 0, 0, 0, WEATHER_TEX_RES, WEATHER_TEX_RES, 1, eTexFormat::RGBA8, stage_buf,
+        sky_weather_tex_.SetSubImage(0, 0, 0, 0, WEATHER_TEX_RES, WEATHER_TEX_RES, 1, eFormat::RGBA8, stage_buf,
                                      cmd_buf, 0, stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
@@ -1870,14 +1870,14 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
     }
 
     if (!sky_cirrus_tex_) {
-        TexParams params;
+        ImgParams params;
         params.w = params.h = CIRRUS_TEX_RES;
-        params.format = eTexFormat::RG8;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.sampling.wrap = eTexWrap::Repeat;
+        params.format = eFormat::RG8;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::Repeat;
 
-        sky_cirrus_tex_ = Texture{"Cirrus Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
+        sky_cirrus_tex_ = Image{"Cirrus Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 2 * CIRRUS_TEX_RES * CIRRUS_TEX_RES);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1885,22 +1885,22 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        sky_cirrus_tex_.SetSubImage(0, 0, 0, 0, CIRRUS_TEX_RES, CIRRUS_TEX_RES, 1, eTexFormat::RG8, stage_buf, cmd_buf,
-                                    0, stage_buf.size());
+        sky_cirrus_tex_.SetSubImage(0, 0, 0, 0, CIRRUS_TEX_RES, CIRRUS_TEX_RES, 1, eFormat::RG8, stage_buf, cmd_buf, 0,
+                                    stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         stage_buf.FreeImmediate();
     }
 
     if (!sky_curl_tex_) {
-        TexParams params;
+        ImgParams params;
         params.w = params.h = CURL_TEX_RES;
-        params.format = eTexFormat::RGBA8_srgb;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.sampling.wrap = eTexWrap::Repeat;
+        params.format = eFormat::RGBA8_srgb;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::Repeat;
 
-        sky_curl_tex_ = Texture{"Curl Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
+        sky_curl_tex_ = Image{"Curl Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, 4 * CURL_TEX_RES * CURL_TEX_RES);
         uint8_t *mapped_ptr = stage_buf.Map();
@@ -1913,37 +1913,37 @@ Ray::NS::Scene::PrepareSkyEnvMap_nolock(const std::function<void(int, int, Paral
         stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        sky_curl_tex_.SetSubImage(0, 0, 0, 0, CURL_TEX_RES, CURL_TEX_RES, 1, eTexFormat::RGBA8_srgb, stage_buf, cmd_buf,
-                                  0, stage_buf.size());
+        sky_curl_tex_.SetSubImage(0, 0, 0, 0, CURL_TEX_RES, CURL_TEX_RES, 1, eFormat::RGBA8_srgb, stage_buf, cmd_buf, 0,
+                                  stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         stage_buf.FreeImmediate();
     }
 
     if (!sky_noise3d_tex_.handle()) {
-        TexParams params;
+        ImgParams params;
         params.w = params.h = params.d = NOISE_3D_RES;
-        params.format = eTexFormat::R8;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.sampling.wrap = eTexWrap::Repeat;
+        params.format = eFormat::R8;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::Repeat;
 
-        sky_noise3d_tex_ = Texture{"Noise 3d Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
+        sky_noise3d_tex_ = Image{"Noise 3d Tex", ctx_, params, ctx_->default_mem_allocs(), log_};
 
-        const uint32_t data_len = NOISE_3D_RES * NOISE_3D_RES * round_up(NOISE_3D_RES, TextureDataPitchAlignment);
+        const uint32_t data_len = NOISE_3D_RES * NOISE_3D_RES * round_up(NOISE_3D_RES, ImageDataPitchAlignment);
         Buffer stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Upload, data_len);
         uint8_t *mapped_ptr = stage_buf.Map();
 
         int i = 0;
         for (int yz = 0; yz < NOISE_3D_RES * NOISE_3D_RES; ++yz) {
             memcpy(&mapped_ptr[i], &__3d_noise_tex[yz * NOISE_3D_RES], NOISE_3D_RES);
-            i += round_up(NOISE_3D_RES, TextureDataPitchAlignment);
+            i += round_up(NOISE_3D_RES, ImageDataPitchAlignment);
         }
 
         stage_buf.Unmap();
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        sky_noise3d_tex_.SetSubImage(0, 0, 0, 0, NOISE_3D_RES, NOISE_3D_RES, NOISE_3D_RES, eTexFormat::R8, stage_buf,
+        sky_noise3d_tex_.SetSubImage(0, 0, 0, 0, NOISE_3D_RES, NOISE_3D_RES, NOISE_3D_RES, eFormat::R8, stage_buf,
                                      cmd_buf, 0, NOISE_3D_RES * NOISE_3D_RES * NOISE_3D_RES);
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
@@ -1994,12 +1994,12 @@ Ray::NS::Scene::PrepareEnvMapQTree_nolock(const std::function<void(int, int, Par
     int pitch = 0;
 
     if (use_bindless_) {
-        const Texture &t = bindless_textures_[tex];
+        const Image &t = bindless_textures_[tex];
         size.template set<0>(t.params.w);
         size.template set<1>(t.params.h);
 
-        assert(t.params.format == eTexFormat::RGBA8);
-        pitch = round_up(t.params.w * GetPerPixelDataLen(eTexFormat::RGBA8), TextureDataPitchAlignment);
+        assert(t.params.format == eFormat::RGBA8);
+        pitch = round_up(t.params.w * GetPerPixelDataLen(eFormat::RGBA8), ImageDataPitchAlignment);
         const uint32_t data_size = pitch * t.params.h;
 
         temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
@@ -2015,10 +2015,10 @@ Ray::NS::Scene::PrepareEnvMapQTree_nolock(const std::function<void(int, int, Par
         size.template set<0>(t.width & ATLAS_TEX_WIDTH_BITS);
         size.template set<1>(t.height & ATLAS_TEX_HEIGHT_BITS);
 
-        const TextureAtlas &atlas = tex_atlases_[t.atlas];
+        const ImageAtlas &atlas = tex_atlases_[t.atlas];
 
-        assert(atlas.format() == eTexFormat::RGBA8);
-        pitch = round_up(size.get<0>() * GetPerPixelDataLen(atlas.real_format()), TextureDataPitchAlignment);
+        assert(atlas.format() == eFormat::RGBA8);
+        pitch = round_up(size.get<0>() * GetPerPixelDataLen(atlas.real_format()), ImageDataPitchAlignment);
         const uint32_t data_size = pitch * size.get<1>();
 
         temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
@@ -2205,24 +2205,24 @@ Ray::NS::Scene::PrepareEnvMapQTree_nolock(const std::function<void(int, int, Par
         int j = mip_offsets[i];
         for (int y = 0; y < res; ++y) {
             memcpy(&stage_data[j], &env_map_qtree_.mips[i][y * res], res * sizeof(fvec4));
-            j += round_up(res * sizeof(fvec4), TextureDataPitchAlignment);
+            j += round_up(res * sizeof(fvec4), ImageDataPitchAlignment);
         }
     }
     temp_stage_buf.Unmap();
 
-    TexParams p;
+    ImgParams p;
     p.w = p.h = (env_map_qtree_.res / 2);
-    p.format = eTexFormat::RGBA32F;
+    p.format = eFormat::RGBA32F;
     p.mip_count = env_.qtree_levels;
-    p.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
+    p.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
 
-    env_map_qtree_.tex = Texture("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
+    env_map_qtree_.tex = Image("Env map qtree", ctx_, p, ctx_->default_mem_allocs(), log_);
 
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     for (int i = 0; i < env_.qtree_levels; ++i) {
         env_map_qtree_.tex.SetSubImage(i, 0, 0, 0, (env_map_qtree_.res >> i) / 2, (env_map_qtree_.res >> i) / 2, 1,
-                                       eTexFormat::RGBA32F, temp_stage_buf, cmd_buf, mip_offsets[i],
+                                       eFormat::RGBA32F, temp_stage_buf, cmd_buf, mip_offsets[i],
                                        int(env_map_qtree_.mips[i].size() * sizeof(fvec4)));
     }
 
@@ -2561,25 +2561,25 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
     SceneCommon::SetEnvironment(env);
 
     if (!sky_transmittance_lut_tex_) {
-        TexParams params;
+        ImgParams params;
         params.w = SKY_TRANSMITTANCE_LUT_W;
         params.h = SKY_TRANSMITTANCE_LUT_H;
-        params.format = eTexFormat::RGBA32F;
-        params.sampling.wrap = eTexWrap::ClampToEdge;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
+        params.format = eFormat::RGBA32F;
+        params.sampling.wrap = eWrap::ClampToEdge;
+        params.sampling.filter = eFilter::Bilinear;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
 
-        sky_transmittance_lut_tex_ = Texture{"Sky Transmittance LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
+        sky_transmittance_lut_tex_ = Image{"Sky Transmittance LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
     }
     if (!sky_multiscatter_lut_tex_) {
-        TexParams params;
+        ImgParams params;
         params.w = params.h = SKY_MULTISCATTER_LUT_RES;
-        params.format = eTexFormat::RGBA32F;
-        params.sampling.wrap = eTexWrap::ClampToEdge;
-        params.sampling.filter = eTexFilter::Bilinear;
-        params.usage = Bitmask<eTexUsage>(eTexUsage::Sampled) | eTexUsage::Transfer;
+        params.format = eFormat::RGBA32F;
+        params.sampling.wrap = eWrap::ClampToEdge;
+        params.sampling.filter = eFilter::Bilinear;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
 
-        sky_multiscatter_lut_tex_ = Texture{"Sky Multiscatter LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
+        sky_multiscatter_lut_tex_ = Image{"Sky Multiscatter LUT", ctx_, params, ctx_->default_mem_allocs(), log_};
     }
 
     // Upload textures
@@ -2593,7 +2593,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         sky_transmittance_lut_tex_.SetSubImage(0, 0, 0, 0, SKY_TRANSMITTANCE_LUT_W, SKY_TRANSMITTANCE_LUT_H, 1,
-                                               eTexFormat::RGBA32F, stage_buf, cmd_buf, 0, stage_buf.size());
+                                               eFormat::RGBA32F, stage_buf, cmd_buf, 0, stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         stage_buf.FreeImmediate();
@@ -2608,7 +2608,7 @@ inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         sky_multiscatter_lut_tex_.SetSubImage(0, 0, 0, 0, SKY_MULTISCATTER_LUT_RES, SKY_MULTISCATTER_LUT_RES, 1,
-                                              eTexFormat::RGBA32F, stage_buf, cmd_buf, 0, stage_buf.size());
+                                              eFormat::RGBA32F, stage_buf, cmd_buf, 0, stage_buf.size());
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         stage_buf.FreeImmediate();

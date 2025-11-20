@@ -59,11 +59,11 @@ uint32_t VKPipelineStagesForState(eResState state);
 Bitmask<eStage> StagesForState(eResState state);
 
 class Buffer;
-class Texture;
-class TextureAtlas;
+class Image;
+class ImageAtlas;
 
 struct TransitionInfo {
-    std::variant<const Texture *, const TextureAtlas *, const Buffer *> p_res;
+    std::variant<const Image *, const ImageAtlas *, const Buffer *> p_res;
 
     eResState old_state = eResState::Undefined;
     eResState new_state = eResState::Undefined;
@@ -71,9 +71,9 @@ struct TransitionInfo {
     bool update_internal_state = false;
 
     TransitionInfo() = default;
-    TransitionInfo(const Texture *_p_tex, eResState _new_state)
+    TransitionInfo(const Image *_p_tex, eResState _new_state)
         : p_res(_p_tex), new_state(_new_state), update_internal_state(true) {}
-    TransitionInfo(const TextureAtlas *_p_tex_arr, eResState _new_state)
+    TransitionInfo(const ImageAtlas *_p_tex_arr, eResState _new_state)
         : p_res(_p_tex_arr), new_state(_new_state), update_internal_state(true) {}
     TransitionInfo(const Buffer *_p_buf, eResState _new_state)
         : p_res(_p_buf), new_state(_new_state), update_internal_state(true) {}

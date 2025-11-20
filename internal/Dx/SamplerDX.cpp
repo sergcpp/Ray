@@ -15,19 +15,19 @@ namespace Ray {
 namespace Dx {
 #define X(_0, _1, _2, _3) _3,
 extern const D3D12_FILTER g_filter_dx[] = {
-#include "../TextureFilter.inl"
+#include "../Filter.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _2,
 extern const D3D12_TEXTURE_ADDRESS_MODE g_wrap_mode_dx[] = {
-#include "../TextureWrap.inl"
+#include "../Wrap.inl"
 };
 #undef X
 
 #define X(_0, _1, _2) _2,
 extern const D3D12_COMPARISON_FUNC g_compare_func_dx[] = {
-#include "../TextureCompare.inl"
+#include "../CompareOp.inl"
 };
 #undef X
 
@@ -70,7 +70,7 @@ void Ray::Dx::Sampler::Init(Context *ctx, const SamplingParams params) {
     sampler_desc.MinLOD = 0.0f;
     sampler_desc.MaxLOD = 1000.0f;
     sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
-    if (params.compare != eTexCompare::None) {
+    if (params.compare != eCompareOp::None) {
         sampler_desc.ComparisonFunc = g_compare_func_dx[size_t(params.compare)];
     }
 

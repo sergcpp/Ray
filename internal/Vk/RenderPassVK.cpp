@@ -73,7 +73,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
         const uint32_t att_index = pass_attachments.size();
 
         auto &att_desc = pass_attachments.emplace_back();
-        att_desc.format = Ray::Vk::VKFormatFromTexFormat(_depth_rt.format);
+        att_desc.format = Ray::Vk::VKFormatFromFormat(_depth_rt.format);
         att_desc.samples = VkSampleCountFlagBits(_depth_rt.samples);
         att_desc.loadOp = vk_load_ops[int(_depth_rt.load)];
         att_desc.storeOp = vk_store_ops[int(_depth_rt.store)];
@@ -96,7 +96,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
         const uint32_t att_index = pass_attachments.size();
 
         auto &att_desc = pass_attachments.emplace_back();
-        att_desc.format = VKFormatFromTexFormat(_color_rts[i].format);
+        att_desc.format = VKFormatFromFormat(_color_rts[i].format);
         att_desc.samples = VkSampleCountFlagBits(_color_rts[i].samples);
         if (VkImageLayout(_color_rts[i].layout) == VK_IMAGE_LAYOUT_UNDEFINED) {
             att_desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;

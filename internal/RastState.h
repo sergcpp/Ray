@@ -4,9 +4,10 @@
 #include <cstring>
 #undef Always
 
+#include "SamplingParams.h"
+
 namespace Ray {
 enum class eCullFace : uint8_t { None, Front, Back, _Count };
-enum class eCompareOp : uint8_t { Always, Never, Less, Equal, Greater, LEqual, NotEqual, GEqual, _Count };
 enum class eBlendFactor : uint8_t {
     Zero,
     One,
