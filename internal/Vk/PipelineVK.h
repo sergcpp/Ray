@@ -92,7 +92,7 @@ class Pipeline {
     bool Init(Context *ctx, const RastState &rast_state, Program *prog, const VertexInput *vtx_input,
               Span<const RenderTarget> color_attachments, RenderTarget depth_attachment, uint32_t subpass_index,
               ILog *log);
-    bool Init(Context *ctx, Program *prog, ILog *log, int subgroup_size = -1);
+    bool Init(Context *ctx, Program *prog, ILog *log, int subgroup_size = -1, bool require_full_subgroup = false);
 };
 } // namespace Vk
 } // namespace Ray

@@ -255,6 +255,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
         api_.vkGetPhysicalDeviceFeatures2KHR(physical_device_, &feat2);
 
         subgroup_size_control_supported_ &= (subgroup_size_control_features.subgroupSizeControl == VK_TRUE);
+        subgroup_size_control_supported_ &= (subgroup_size_control_features.computeFullSubgroups == VK_TRUE);
     }
 
     if (!InitCommandBuffers(api_, command_pool_, temp_command_pool_, draw_cmd_bufs_, render_finished_semaphores_,
@@ -893,6 +894,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
     VkPhysicalDeviceSubgroupSizeControlFeaturesEXT subgroup_size_control_features = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT};
     subgroup_size_control_features.subgroupSizeControl = VK_TRUE;
+    subgroup_size_control_features.computeFullSubgroups = VK_TRUE;
     if (enable_subgroup_size_control) {
         (*pp_next) = &subgroup_size_control_features;
         pp_next = &subgroup_size_control_features.pNext;

@@ -336,7 +336,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
                 subpass_index, log);
 }
 
-bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log, const int subgroup_size) {
+bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log, const int subgroup_size, const bool require_full_subgroup) {
     Destroy();
 
     ePipelineType type = ePipelineType::Undefined;
@@ -413,6 +413,9 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log, const int s
         stage_info.module = prog->shader(eShaderType(i))->module();
         stage_info.pName = "main";
         stage_info.pSpecializationInfo = nullptr;
+        if (ctx->subgroup_size_control_supported() && require_full_subgroup) {
+            stage_info.flags |= VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT;
+        }
 
         if (ctx->subgroup_size_control_supported() && subgroup_size != -1) {
             stage_info.pNext = &subgroup_size_info;
