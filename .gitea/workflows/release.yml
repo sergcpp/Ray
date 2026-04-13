@@ -296,7 +296,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-cpu-output"
-          test-args: "--full --nogpu -j4"
+          test-args: "--full --no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -319,7 +319,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-nv-output"
-          test-args: "--full --device NV --nocpu"
+          test-args: "--full --device NV --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -342,7 +342,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-amd-output"
-          test-args: "--full --device AMD --nocpu"
+          test-args: "--full --device AMD --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -365,7 +365,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-arc-output"
-          test-args: "--full --device Arc --nocpu"
+          test-args: "--full --device Arc --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -388,7 +388,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-uhd-output"
-          test-args: "--full --device UHD --nocpu --nodx -vl 0"
+          test-args: "--full --device UHD --no-cpu --no-dx -vl 0"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -411,7 +411,7 @@ jobs:
   #       with:
   #         bin-dir: "windows-arm64"
   #         out-dir: "windows-arm64-cpu-output"
-  #         test-args: "--full --nogpu -j4"
+  #         test-args: "--full --no-gpu -j4"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v3
   #       if: always()
@@ -434,7 +434,7 @@ jobs:
   #       with:
   #         bin-dir: "windows-arm64"
   #         out-dir: "windows-arm64-gpu-adreno-output"
-  #         test-args: "--full --device Adreno --nocpu"
+  #         test-args: "--full --device Adreno --no-cpu"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v3
   #       if: always()
@@ -457,7 +457,7 @@ jobs:
         with:
           bin-dir: "linux-x86_64"
           out-dir: "linux-x86_64-cpu-output"
-          test-args: "--full --nogpu -j4"
+          test-args: "--full --no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -480,7 +480,7 @@ jobs:
   #       with:
   #         bin-dir: "linux-x86_64"
   #         out-dir: "linux-x86_64-gpu-amd-output"
-  #         test-args: "--full --device AMD --nocpu --nohwrt"
+  #         test-args: "--full --device AMD --no-cpu --no-hwrt"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v3
   #       if: always()
@@ -503,7 +503,7 @@ jobs:
         with:
           bin-dir: "linux-x86_64"
           out-dir: "linux-x86_64-gpu-nv-output"
-          test-args: "--full --device NV --nocpu"
+          test-args: "--full --device NV --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -526,7 +526,7 @@ jobs:
         with:
           bin-dir: "macos-universal"
           out-dir: "macos-arm64-cpu-output"
-          test-args: "--full --nogpu -j4"
+          test-args: "--full --no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -549,7 +549,7 @@ jobs:
         with:
           bin-dir: "macos-universal"
           out-dir: "macos-arm64-gpu-m4-output"
-          test-args: "--full --device M4 --nocpu"
+          test-args: "--full --device M4 --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -573,7 +573,7 @@ jobs:
           arch: "-x86_64"
           bin-dir: "macos-universal"
           out-dir: "macos-x86_64-cpu-output"
-          test-args: "--full --nogpu -j4"
+          test-args: "--full --no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -596,7 +596,7 @@ jobs:
   #       with:
   #         bin-dir: "linux-x86_64"
   #         out-dir: "linux-x86_64-cpu-sse2-output"
-  #         test-args: "--arch SSE2 --nogpu -j4"
+  #         test-args: "--arch SSE2 --no-gpu -j4"
   #         sde-args: "-p4p"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v3
@@ -620,7 +620,7 @@ jobs:
         with:
           bin-dir: "linux-x86_64"
           out-dir: "linux-x86_64-cpu-sse41-output"
-          test-args: "--arch SSE41 --nogpu -j4"
+          test-args: "--arch SSE41 --no-gpu -j4"
           sde-args: "-pnr"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -644,7 +644,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-cpu-avx-output"
-          test-args: "--arch AVX --nogpu -j4"
+          test-args: "--arch AVX --no-gpu -j4"
           sde-args: "-snb"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -668,7 +668,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-cpu-avx2-output"
-          test-args: "--arch AVX2 --nogpu -j4"
+          test-args: "--arch AVX2 --no-gpu -j4"
           sde-args: "-hsw"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -692,7 +692,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-cpu-avx512-output"
-          test-args: "--arch AVX512 --nogpu -j4"
+          test-args: "--arch AVX512 --no-gpu -j4"
           sde-args: "-future"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -717,7 +717,7 @@ jobs:
           bin-name: "test_Ray-tsan"
           bin-dir: "linux-x86_64-tsan"
           out-dir: "linux-x86_64-cpu-tsan-output"
-          test-args: "--nogpu -j4"
+          test-args: "--no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -741,7 +741,7 @@ jobs:
           bin-name: "test_Ray-asan"
           bin-dir: "windows-x86_64-asan"
           out-dir: "windows-x86_64-cpu-asan-output"
-          test-args: "--nogpu -j4"
+          test-args: "--no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -765,7 +765,7 @@ jobs:
           bin-name: "test_Ray-asan"
           bin-dir: "windows-x86_64-asan"
           out-dir: "windows-x86_64-gpu-amd-asan-output"
-          test-args: "--device AMD --nocpu"
+          test-args: "--device AMD --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         if: always()
@@ -788,7 +788,7 @@ jobs:
   #       with:
   #         bin-dir: "windows-arm64"
   #         out-dir: "windows-arm64-cpu-perf-output"
-  #         test-args: "--nogpu -j4 --time_limit 1.60"
+  #         test-args: "--no-gpu -j4 --time-limit 1.60"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v3
   #       if: always()
@@ -811,7 +811,7 @@ jobs:
   #       with:
   #         bin-dir: "windows-arm64"
   #         out-dir: "windows-arm64-gpu-perf-output"
-  #         test-args: "--nocpu -j4 -vl 0 --time_limit 1.40"
+  #         test-args: "--no-cpu -j4 -vl 0 --time-limit 1.40"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v3
   #       if: always()

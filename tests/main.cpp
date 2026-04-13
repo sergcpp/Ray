@@ -154,39 +154,37 @@ int main(int argc, char *argv[]) {
 
     const auto t1 = high_resolution_clock::now();
 
-    bool full_tests = false, nogpu = false, nocpu = false, run_detail_tests_on_fail = false;
+    bool full_tests = false, nogpu = false, nocpu = false;
     std::string_view device_name;
     const char *preferred_arch[] = {nullptr, nullptr};
     double time_limit_m = DBL_MAX;
     int threads_count = 1;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--nogpu") == 0) {
+        if (strcmp(argv[i], "--no-gpu") == 0) {
             nogpu = true;
-        } else if (strcmp(argv[i], "--nocpu") == 0) {
+        } else if (strcmp(argv[i], "--no-cpu") == 0) {
             nocpu = true;
-        } else if (strcmp(argv[i], "--nodx") == 0) {
+        } else if (strcmp(argv[i], "--no-dx") == 0) {
             g_nodx = true;
         } else if (strcmp(argv[i], "--full") == 0) {
             full_tests = true;
         } else if ((strcmp(argv[i], "--device") == 0 || strcmp(argv[i], "-d") == 0) && (++i != argc)) {
             device_name = argv[i];
-        } else if (strcmp(argv[i], "--detail_on_fail") == 0) {
-            run_detail_tests_on_fail = true;
         } else if (strcmp(argv[i], "--arch") == 0 && (++i != argc)) {
             preferred_arch[0] = argv[i];
         } else if (strcmp(argv[i], "-j") == 0 && (++i != argc)) {
             threads_count = atoi(argv[i]);
         } else if (strncmp(argv[i], "-j", 2) == 0) {
             threads_count = atoi(&argv[i][2]);
-        } else if (strcmp(argv[i], "--time_limit") == 0 && (++i != argc)) {
+        } else if (strcmp(argv[i], "--time-limit") == 0 && (++i != argc)) {
             time_limit_m = atof(argv[i]);
 #ifdef _WIN32
             SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
 #endif
-        } else if ((strcmp(argv[i], "--validation_level") == 0 || strcmp(argv[i], "-vl") == 0) && (++i != argc)) {
+        } else if ((strcmp(argv[i], "--validation-level") == 0 || strcmp(argv[i], "-vl") == 0) && (++i != argc)) {
             g_validation_level = atoi(argv[i]);
-        } else if (strcmp(argv[i], "--nohwrt") == 0) {
+        } else if (strcmp(argv[i], "--no-hwrt") == 0) {
             g_nohwrt = true;
         }
     }
@@ -308,10 +306,6 @@ int main(int argc, char *argv[]) {
         printf("Finished complex_mat tests in %.2f minutes\n",
                duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
 
-        // schedule detailed material tests if complex tests failed (to find out the reason)
-        if (run_detail_tests_on_fail) {
-            detailed_material_tests_needed |= !g_tests_success;
-        }
         tests_success_final &= g_tests_success;
         g_tests_success = true;
     }

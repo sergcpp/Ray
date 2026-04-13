@@ -100,7 +100,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-cpu-output"
-          test-args: "--nogpu -j4"
+          test-args: "--no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -123,7 +123,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-nv-output"
-          test-args: "--device NV --nocpu"
+          test-args: "--device NV --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -146,7 +146,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-amd-output"
-          test-args: "--device AMD --nocpu"
+          test-args: "--device AMD --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -169,7 +169,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-arc-output"
-          test-args: "--device Arc --nocpu"
+          test-args: "--device Arc --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -192,7 +192,7 @@ jobs:
         with:
           bin-dir: "windows-x86_64"
           out-dir: "windows-x86_64-gpu-uhd-output"
-          test-args: "--device UHD --nocpu --nodx"
+          test-args: "--device UHD --no-cpu --no-dx"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -215,7 +215,7 @@ jobs:
   #       with:
   #         bin-dir: "windows-arm64"
   #         out-dir: "windows-arm64-cpu-output"
-  #         test-args: "--nogpu -j4"
+  #         test-args: "--no-gpu -j4"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v4
   #       if: always()
@@ -238,7 +238,7 @@ jobs:
   #       with:
   #         bin-dir: "windows-arm64"
   #         out-dir: "windows-arm64-gpu-adreno-output"
-  #         test-args: "--device Adreno --nocpu"
+  #         test-args: "--device Adreno --no-cpu"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v4
   #       if: always()
@@ -261,7 +261,7 @@ jobs:
         with:
           bin-dir: "linux-x86_64"
           out-dir: "linux-x86_64-cpu-output"
-          test-args: "--nogpu -j4"
+          test-args: "--no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -284,7 +284,7 @@ jobs:
   #       with:
   #         bin-dir: "linux-x86_64"
   #         out-dir: "linux-x86_64-gpu-amd-output"
-  #         test-args: "--device AMD --nocpu --nohwrt"
+  #         test-args: "--device AMD --no-cpu --no-hwrt"
   #     - name: Upload artifacts
   #       uses: actions/upload-artifact@v4
   #       if: always()
@@ -307,7 +307,7 @@ jobs:
         with:
           bin-dir: "linux-x86_64"
           out-dir: "linux-x86_64-gpu-nv-output"
-          test-args: "--device NV --nocpu"
+          test-args: "--device NV --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -330,7 +330,7 @@ jobs:
         with:
           bin-dir: "macos-universal"
           out-dir: "macos-arm64-cpu-output"
-          test-args: "--nogpu -j4"
+          test-args: "--no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -353,7 +353,7 @@ jobs:
         with:
           bin-dir: "macos-universal"
           out-dir: "macos-arm64-gpu-m4-output"
-          test-args: "--device M4 --nocpu"
+          test-args: "--device M4 --no-cpu"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -377,7 +377,7 @@ jobs:
           arch: "-x86_64"
           bin-dir: "macos-universal"
           out-dir: "macos-x86_64-cpu-output"
-          test-args: "--nogpu -j4"
+          test-args: "--no-gpu -j4"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
