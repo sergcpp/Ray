@@ -101,6 +101,7 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
 
             while (rhs.size_) {
                 new (begin_ + size_) T(std::move(*(rhs.begin_ + size_)));
+                (rhs.begin_ + size_)->~T();
                 ++size_;
                 --rhs.size_;
             }
