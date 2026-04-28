@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <initializer_list>
 #include <new>
+#include <type_traits>
 #include <utility>
 
 #include "../Span.h"
@@ -220,13 +221,9 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
         T *new_begin = this->allocate(req_capacity);
         T *new_end = new_begin + size_;
 
-        if (size_) {
-            T *src = begin_ + size_ - 1;
-            T *dst = new_end - 1;
-            do {
-                new (dst--) T(std::move(*src));
-                (src--)->~T();
-            } while (src >= begin_);
+        for (uint32_t i = 0; i < size_; ++i) {
+            new (new_begin + i) T(std::move(begin_[i]));
+            begin_[i].~T();
         }
 
         if (capacity_ & OwnerBit) {
@@ -324,10 +321,7 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
 
         iterator move_dst = pos, move_src = pos + 1;
         while (move_src != begin_ + size_) {
-            (*move_dst) = std::move(*move_src);
-
-            ++move_dst;
-            ++move_src;
+            (*move_dst++) = std::move(*move_src++);
         }
         (begin_ + --size_)->~T();
 
@@ -339,16 +333,13 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
 
         iterator move_dst = first, move_src = last;
         while (move_src != begin_ + size_) {
-            (*move_dst) = std::move(*move_src);
-
-            ++move_dst;
-            ++move_src;
+            (*move_dst++) = std::move(*move_src++);
         }
         while (begin_ + size_ != move_dst) {
             (begin_ + --size_)->~T();
         }
 
-        return move_dst;
+        return first;
     }
 
     void assign(const uint32_t count, const T &val) {
@@ -359,7 +350,8 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
         }
     }
 
-    template <class InputIt> void assign(const InputIt first, const InputIt last) {
+    template <class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
+    void assign(const InputIt first, const InputIt last) {
         clear();
         reserve(uint32_t(last - first));
         for (InputIt it = first; it != last; ++it) {
@@ -388,15 +380,15 @@ class SmallVector : public SmallVectorImpl<T, Allocator> {
         SmallVectorImpl<T, Allocator>::operator=(rhs);
     }
     SmallVector(SmallVector<T, N, AlignmentOfT> &&rhs) noexcept // NOLINT
-        : SmallVectorImpl<T>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
+        : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
         SmallVectorImpl<T, Allocator>::operator=(std::move(rhs));
     }
     SmallVector(SmallVectorImpl<T, Allocator> &&rhs) noexcept // NOLINT
-        : SmallVectorImpl<T>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
+        : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, rhs.alloc()) {
         SmallVectorImpl<T, Allocator>::operator=(std::move(rhs));
     }
 
-    template <class InputIt>
+    template <class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
     SmallVector(InputIt beg, InputIt end, const Allocator &alloc = Allocator())
         : SmallVectorImpl<T, Allocator>((T *)buffer_, (T *)buffer_, N, alloc) {
         SmallVectorImpl<T, Allocator>::assign(beg, end);
