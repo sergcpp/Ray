@@ -519,7 +519,7 @@ template <> class fixed_size_simd<int, 4> {
         return temp;
     }
 
-    static fixed_size_simd<int, 4> vectorcall max(const fixed_size_simd<int, 4> v1, const fixed_size_simd<int, 4> v2) {
+    friend fixed_size_simd<int, 4> vectorcall max(const fixed_size_simd<int, 4> v1, const fixed_size_simd<int, 4> v2) {
         fixed_size_simd<int, 4> temp;
 #if defined(USE_SSE41)
         temp.vec_ = _mm_max_epi32(v1.vec_, v2.vec_);
@@ -616,6 +616,10 @@ template <> class fixed_size_simd<int, 4> {
 
     friend force_inline fixed_size_simd<int, 4> vectorcall srai(const fixed_size_simd<int, 4> v1, const int v2) {
         return _mm_srai_epi32(v1.vec_, v2);
+    }
+
+    friend force_inline fixed_size_simd<int, 4> vectorcall srli(const fixed_size_simd<int, 4> v1, const int v2) {
+        return _mm_srli_epi32(v1.vec_, v2);
     }
 
     friend force_inline bool vectorcall is_equal(const fixed_size_simd<int, 4> v1, const fixed_size_simd<int, 4> v2) {
@@ -818,7 +822,7 @@ template <> class fixed_size_simd<unsigned, 4> {
 
     force_inline bool not_all_zeros() const { return !all_zeros(); }
 
-    static fixed_size_simd<unsigned, 4> vectorcall min(const fixed_size_simd<unsigned, 4> v1,
+    friend fixed_size_simd<unsigned, 4> vectorcall min(const fixed_size_simd<unsigned, 4> v1,
                                                        const fixed_size_simd<unsigned, 4> v2) {
         fixed_size_simd<unsigned, 4> temp;
 #if defined(USE_SSE41)
@@ -829,7 +833,7 @@ template <> class fixed_size_simd<unsigned, 4> {
         return temp;
     }
 
-    static fixed_size_simd<unsigned, 4> vectorcall max(const fixed_size_simd<unsigned, 4> v1,
+    friend fixed_size_simd<unsigned, 4> vectorcall max(const fixed_size_simd<unsigned, 4> v1,
                                                        const fixed_size_simd<unsigned, 4> v2) {
         fixed_size_simd<unsigned, 4> temp;
 #if defined(USE_SSE41)
@@ -921,6 +925,11 @@ template <> class fixed_size_simd<unsigned, 4> {
     friend force_inline fixed_size_simd<unsigned, 4> vectorcall operator<<(const fixed_size_simd<unsigned, 4> v1,
                                                                            const unsigned v2) {
         return _mm_slli_epi32(v1.vec_, v2);
+    }
+
+    friend force_inline fixed_size_simd<unsigned, 4> vectorcall srli(const fixed_size_simd<unsigned, 4> v1,
+                                                                      const unsigned v2) {
+        return _mm_srli_epi32(v1.vec_, v2);
     }
 
     friend force_inline bool vectorcall is_equal(const fixed_size_simd<unsigned, 4> v1,

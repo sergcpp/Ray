@@ -164,6 +164,34 @@ using namespace Ray::NS;
     require(v11[2] == 0);
     require(v11[3] == -1);
 
+    auto v11le = simd_cast(v2 <= v9);
+
+    require(v11le[0] == 0);
+    require(v11le[1] == -1);
+    require(v11le[2] == -1);
+    require(v11le[3] == 0);
+
+    auto v11ge = simd_cast(v2 >= v9);
+
+    require(v11ge[0] == -1);
+    require(v11ge[1] == 0);
+    require(v11ge[2] == 0);
+    require(v11ge[3] == -1);
+
+    auto v11eq = simd_cast(v2 == v9);
+
+    require(v11eq[0] == 0);
+    require(v11eq[1] == 0);
+    require(v11eq[2] == 0);
+    require(v11eq[3] == 0);
+
+    auto v11ne = simd_cast(v2 != v9);
+
+    require(v11ne[0] == -1);
+    require(v11ne[1] == -1);
+    require(v11ne[2] == -1);
+    require(v11ne[3] == -1);
+
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0};
 
     const ivec4 v12i = {-1, 2, 6, 13};
@@ -235,6 +263,87 @@ using namespace Ray::NS;
     require(v20[1] == Approx(7));
     require(v20[2] == Approx(-9));
     require(v20[3] == Approx(-11));
+
+    const fvec4 vw2 = {10.0f, 20.0f, 30.0f, 40.0f};
+    const ivec4 vwmask = {-1, 0, 0, -1};
+
+    fvec4 vw_add = {1.0f, 2.0f, 3.0f, 4.0f};
+    where(vwmask, vw_add) += vw2;
+    require(vw_add[0] == Approx(11.0f));
+    require(vw_add[1] == Approx(2.0f));
+    require(vw_add[2] == Approx(3.0f));
+    require(vw_add[3] == Approx(44.0f));
+
+    fvec4 vw_sub = {1.0f, 2.0f, 3.0f, 4.0f};
+    where(vwmask, vw_sub) -= vw2;
+    require(vw_sub[0] == Approx(-9.0f));
+    require(vw_sub[1] == Approx(2.0f));
+    require(vw_sub[2] == Approx(3.0f));
+    require(vw_sub[3] == Approx(-36.0f));
+
+    fvec4 vw_mul = {1.0f, 2.0f, 3.0f, 4.0f};
+    where(vwmask, vw_mul) *= vw2;
+    require(vw_mul[0] == Approx(10.0f));
+    require(vw_mul[1] == Approx(2.0f));
+    require(vw_mul[2] == Approx(3.0f));
+    require(vw_mul[3] == Approx(160.0f));
+
+    fvec4 vw_div = {1.0f, 2.0f, 3.0f, 4.0f};
+    where(vwmask, vw_div) /= vw2;
+    require(vw_div[0] == Approx(0.1f));
+    require(vw_div[1] == Approx(2.0f));
+    require(vw_div[2] == Approx(3.0f));
+    require(vw_div[3] == Approx(0.1f));
+
+    const fvec4 vmix1 = {0.0f, 2.0f, 4.0f, 6.0f};
+    const fvec4 vmix2 = {4.0f, 6.0f, 8.0f, 10.0f};
+
+    const fvec4 vmix_0 = mix(vmix1, vmix2, 0.0f);
+    require(vmix_0[0] == Approx(0.0f));
+    require(vmix_0[1] == Approx(2.0f));
+    require(vmix_0[2] == Approx(4.0f));
+    require(vmix_0[3] == Approx(6.0f));
+
+    const fvec4 vmix_1 = mix(vmix1, vmix2, 1.0f);
+    require(vmix_1[0] == Approx(4.0f));
+    require(vmix_1[1] == Approx(6.0f));
+    require(vmix_1[2] == Approx(8.0f));
+    require(vmix_1[3] == Approx(10.0f));
+
+    const fvec4 vmix_h = mix(vmix1, vmix2, 0.5f);
+    require(vmix_h[0] == Approx(2.0f));
+    require(vmix_h[1] == Approx(4.0f));
+    require(vmix_h[2] == Approx(6.0f));
+    require(vmix_h[3] == Approx(8.0f));
+
+    const fvec4 vconv_f = {1.9f, -2.1f, 3.5f, -4.9f};
+
+    const ivec4 vconv_fi = (ivec4)vconv_f;
+    require(vconv_fi[0] == 1);
+    require(vconv_fi[1] == -2);
+    require(vconv_fi[2] == 3);
+    require(vconv_fi[3] == -4);
+
+    const fvec4 vconv_fu_src = {1.9f, 2.1f, 3.5f, 4.9f};
+    const uvec4 vconv_fu = (uvec4)vconv_fu_src;
+    require(vconv_fu[0] == 1);
+    require(vconv_fu[1] == 2);
+    require(vconv_fu[2] == 3);
+    require(vconv_fu[3] == 4);
+
+    const fvec4 vmin_a = {3.0f, 1.0f, 4.0f, 1.0f};
+    const fvec4 vmin_b = {2.0f, 3.0f, 2.0f, 5.0f};
+    const fvec4 vmin_r = min(vmin_a, vmin_b);
+    const fvec4 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == 2.0f);
+    require(vmin_r[1] == 1.0f);
+    require(vmin_r[2] == 2.0f);
+    require(vmin_r[3] == 1.0f);
+    require(vmax_r[0] == 3.0f);
+    require(vmax_r[1] == 3.0f);
+    require(vmax_r[2] == 4.0f);
+    require(vmax_r[3] == 5.0f);
 
     printf("OK\n");
 }
@@ -405,6 +514,13 @@ using namespace Ray::NS;
     const ivec4 v16 = srai(v15, 31);
     require((v16 != ivec4{-1, 0, -1, 0}).all_zeros());
 
+    const ivec4 vsrli_i = {-1, -2, (int)0x80000000, 16};
+    const ivec4 vsrli_r = srli(vsrli_i, 1);
+    require(vsrli_r[0] == 0x7fffffff);
+    require(vsrli_r[1] == 0x7fffffff);
+    require(vsrli_r[2] == 0x40000000);
+    require(vsrli_r[3] == 8);
+
     const ivec4 v17 = {3, 1, 4, 1};
     const ivec4 v18 = inclusive_scan(v17);
 
@@ -429,6 +545,58 @@ using namespace Ray::NS;
     require(v20.get<1>() == 7);
     require(v20.get<2>() == 9);
     require(v20.get<3>() == 7);
+
+    const ivec4 vwmask_i = {-1, 0, 0, -1};
+
+    ivec4 vw_or = {0x0f, 0x0f, 0x0f, 0x0f};
+    where(vwmask_i, vw_or) |= ivec4{0xf0, 0xf0, 0xf0, 0xf0};
+    require(vw_or[0] == 0xff);
+    require(vw_or[1] == 0x0f);
+    require(vw_or[2] == 0x0f);
+    require(vw_or[3] == 0xff);
+
+    ivec4 vw_and = {0xff, 0xff, 0xff, 0xff};
+    where(vwmask_i, vw_and) &= ivec4{0x0f, 0x0f, 0x0f, 0x0f};
+    require(vw_and[0] == 0x0f);
+    require(vw_and[1] == 0xff);
+    require(vw_and[2] == 0xff);
+    require(vw_and[3] == 0x0f);
+
+    ivec4 vw_xor = {0xff, 0xff, 0xff, 0xff};
+    where(vwmask_i, vw_xor) ^= ivec4{0x0f, 0x0f, 0x0f, 0x0f};
+    require(vw_xor[0] == 0xf0);
+    require(vw_xor[1] == 0xff);
+    require(vw_xor[2] == 0xff);
+    require(vw_xor[3] == 0xf0);
+
+    // 0x3f800000 = 1.0f, 0x40000000 = 2.0f, 0xbf800000 = -1.0f, 0xc0000000 = -2.0f
+    const ivec4 vsc_i = {0x3f800000, 0x40000000, (int)0xbf800000, (int)0xc0000000};
+    const fvec4 vsc_if = simd_cast(vsc_i);
+    require(vsc_if[0] == Approx(1.0f));
+    require(vsc_if[1] == Approx(2.0f));
+    require(vsc_if[2] == Approx(-1.0f));
+    require(vsc_if[3] == Approx(-2.0f));
+
+    const ivec4 vconv_i = {1, -2, 2147483647, -2147483647};
+    const fvec4 vconv_if = (fvec4)vconv_i;
+    require(vconv_if[0] == Approx(1.0f));
+    require(vconv_if[1] == Approx(-2.0f));
+    require(vconv_if[2] == Approx(2147483647.0f));
+    require(vconv_if[3] == Approx(-2147483647.0f));
+
+    const ivec4 vmin_a = {3, -1, 4, -5};
+    const ivec4 vmin_b = {-2, 3, 2, 1};
+    const ivec4 vmin_r = min(vmin_a, vmin_b);
+    const ivec4 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == -2);
+    require(vmin_r[1] == -1);
+    require(vmin_r[2] == 2);
+    require(vmin_r[3] == -5);
+    require(vmax_r[0] == 3);
+    require(vmax_r[1] == 3);
+    require(vmax_r[2] == 4);
+    require(vmax_r[3] == 1);
 
     printf("OK\n");
 }
@@ -615,6 +783,42 @@ using namespace Ray::NS;
     require(v20.get<1>() == 7);
     require(v20.get<2>() == 9);
     require(v20.get<3>() == 7);
+
+    // 0x3f800000 = 1.0f, 0xbf800000 = -1.0f, 0x40000000 = 2.0f, 0xc0000000 = -2.0f
+    const uvec4 vsc_u = {0x3f800000u, 0xbf800000u, 0x40000000u, 0xc0000000u};
+    const fvec4 vsc_uf = simd_cast(vsc_u);
+    require(vsc_uf[0] == Approx(1.0f));
+    require(vsc_uf[1] == Approx(-1.0f));
+    require(vsc_uf[2] == Approx(2.0f));
+    require(vsc_uf[3] == Approx(-2.0f));
+
+    const uvec4 vconv_u = {1, 0x80000000, 0xffffffff, 42};
+    const fvec4 vconv_uf = (fvec4)vconv_u;
+    require(vconv_uf[0] == Approx(1.0f));
+    require(vconv_uf[1] == Approx(2147483648.0f));
+    require(vconv_uf[2] == Approx(4294967295.0f));
+    require(vconv_uf[3] == Approx(42.0f));
+
+    const uvec4 vmin_a = {3, 0xffffffff, 4, 1};
+    const uvec4 vmin_b = {2, 3, 0xffffffff, 5};
+    const uvec4 vmin_r = min(vmin_a, vmin_b);
+    const uvec4 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == 2);
+    require(vmin_r[1] == 3);
+    require(vmin_r[2] == 4);
+    require(vmin_r[3] == 1);
+    require(vmax_r[0] == 3);
+    require(vmax_r[1] == 0xffffffff);
+    require(vmax_r[2] == 0xffffffff);
+    require(vmax_r[3] == 5);
+
+    const uvec4 vsrli_u = {0xffffffffu, 0x80000000u, 16u, 0u};
+    const uvec4 vsrli_r = srli(vsrli_u, 4u);
+    require(vsrli_r[0] == 0x0fffffffu);
+    require(vsrli_r[1] == 0x08000000u);
+    require(vsrli_r[2] == 1u);
+    require(vsrli_r[3] == 0u);
 
     printf("OK\n");
 }
@@ -834,6 +1038,50 @@ using namespace Ray::NS;
     require(v11[6] == 0);
     require(v11[7] == -1);
 
+    auto v11le = simd_cast(v2 <= v9);
+
+    require(v11le[0] == 0);
+    require(v11le[1] == -1);
+    require(v11le[2] == -1);
+    require(v11le[3] == 0);
+    require(v11le[4] == 0);
+    require(v11le[5] == -1);
+    require(v11le[6] == -1);
+    require(v11le[7] == 0);
+
+    auto v11ge = simd_cast(v2 >= v9);
+
+    require(v11ge[0] == -1);
+    require(v11ge[1] == 0);
+    require(v11ge[2] == 0);
+    require(v11ge[3] == -1);
+    require(v11ge[4] == -1);
+    require(v11ge[5] == 0);
+    require(v11ge[6] == 0);
+    require(v11ge[7] == -1);
+
+    auto v11eq = simd_cast(v2 == v9);
+
+    require(v11eq[0] == 0);
+    require(v11eq[1] == 0);
+    require(v11eq[2] == 0);
+    require(v11eq[3] == 0);
+    require(v11eq[4] == 0);
+    require(v11eq[5] == 0);
+    require(v11eq[6] == 0);
+    require(v11eq[7] == 0);
+
+    auto v11ne = simd_cast(v2 != v9);
+
+    require(v11ne[0] == -1);
+    require(v11ne[1] == -1);
+    require(v11ne[2] == -1);
+    require(v11ne[3] == -1);
+    require(v11ne[4] == -1);
+    require(v11ne[5] == -1);
+    require(v11ne[6] == -1);
+    require(v11ne[7] == -1);
+
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0};
 
@@ -936,6 +1184,28 @@ using namespace Ray::NS;
     require(v20[5] == Approx(14));
     require(v20[6] == Approx(-15));
     require(v20[7] == Approx(-3));
+
+    const fvec8 vmin_a = {3.0f, 1.0f, 4.0f, 1.0f, 5.0f, 9.0f, 2.0f, 6.0f};
+    const fvec8 vmin_b = {2.0f, 3.0f, 2.0f, 5.0f, 9.0f, 5.0f, 8.0f, 2.0f};
+    const fvec8 vmin_r = min(vmin_a, vmin_b);
+    const fvec8 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == 2.0f);
+    require(vmin_r[1] == 1.0f);
+    require(vmin_r[2] == 2.0f);
+    require(vmin_r[3] == 1.0f);
+    require(vmin_r[4] == 5.0f);
+    require(vmin_r[5] == 5.0f);
+    require(vmin_r[6] == 2.0f);
+    require(vmin_r[7] == 2.0f);
+    require(vmax_r[0] == 3.0f);
+    require(vmax_r[1] == 3.0f);
+    require(vmax_r[2] == 4.0f);
+    require(vmax_r[3] == 5.0f);
+    require(vmax_r[4] == 9.0f);
+    require(vmax_r[5] == 9.0f);
+    require(vmax_r[6] == 8.0f);
+    require(vmax_r[7] == 6.0f);
 
     printf("OK\n");
 }
@@ -1142,6 +1412,17 @@ using namespace Ray::NS;
     const ivec8 v16 = srai(v15, 31);
     require((v16 != ivec8{-1, 0, -1, 0, -1, 0, -1, 0}).all_zeros());
 
+    const ivec8 vsrli_i = {-1, -2, (int)0x80000000, 16, -1, -2, (int)0x80000000, 16};
+    const ivec8 vsrli_r = srli(vsrli_i, 1);
+    require(vsrli_r[0] == 0x7fffffff);
+    require(vsrli_r[1] == 0x7fffffff);
+    require(vsrli_r[2] == 0x40000000);
+    require(vsrli_r[3] == 8);
+    require(vsrli_r[4] == 0x7fffffff);
+    require(vsrli_r[5] == 0x7fffffff);
+    require(vsrli_r[6] == 0x40000000);
+    require(vsrli_r[7] == 8);
+
     const ivec8 v17 = {3, 1, 4, 1, 3, 1, 4, 1};
     const ivec8 v18 = inclusive_scan(v17);
 
@@ -1178,6 +1459,28 @@ using namespace Ray::NS;
     require(v20.get<5>() == 14);
     require(v20.get<6>() == 15);
     require(v20.get<7>() == 1);
+
+    const ivec8 vmin_a = {3, -1, 4, -5, 9, 2, -6, 5};
+    const ivec8 vmin_b = {-2, 3, 2, 1, -9, 5, 3, 5};
+    const ivec8 vmin_r = min(vmin_a, vmin_b);
+    const ivec8 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == -2);
+    require(vmin_r[1] == -1);
+    require(vmin_r[2] == 2);
+    require(vmin_r[3] == -5);
+    require(vmin_r[4] == -9);
+    require(vmin_r[5] == 2);
+    require(vmin_r[6] == -6);
+    require(vmin_r[7] == 5);
+    require(vmax_r[0] == 3);
+    require(vmax_r[1] == 3);
+    require(vmax_r[2] == 4);
+    require(vmax_r[3] == 1);
+    require(vmax_r[4] == 9);
+    require(vmax_r[5] == 5);
+    require(vmax_r[6] == 3);
+    require(vmax_r[7] == 5);
 
     printf("OK\n");
 }
@@ -1407,6 +1710,39 @@ using namespace Ray::NS;
     require(v20.get<5>() == 14);
     require(v20.get<6>() == 15);
     require(v20.get<7>() == 1);
+
+    const uvec8 vmin_a = {3, 0xffffffff, 4, 1, 5, 0x80000001, 2, 6};
+    const uvec8 vmin_b = {2, 3, 0xffffffff, 5, 9, 5, 0x80000000, 2};
+    const uvec8 vmin_r = min(vmin_a, vmin_b);
+    const uvec8 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == 2);
+    require(vmin_r[1] == 3);
+    require(vmin_r[2] == 4);
+    require(vmin_r[3] == 1);
+    require(vmin_r[4] == 5);
+    require(vmin_r[5] == 5);
+    require(vmin_r[6] == 2);
+    require(vmin_r[7] == 2);
+    require(vmax_r[0] == 3);
+    require(vmax_r[1] == 0xffffffff);
+    require(vmax_r[2] == 0xffffffff);
+    require(vmax_r[3] == 5);
+    require(vmax_r[4] == 9);
+    require(vmax_r[5] == 0x80000001);
+    require(vmax_r[6] == 0x80000000);
+    require(vmax_r[7] == 6);
+
+    const uvec8 vsrli_u = {0xffffffffu, 0x80000000u, 16u, 0u, 0xffffffffu, 0x80000000u, 16u, 0u};
+    const uvec8 vsrli_r = srli(vsrli_u, 4u);
+    require(vsrli_r[0] == 0x0fffffffu);
+    require(vsrli_r[1] == 0x08000000u);
+    require(vsrli_r[2] == 1u);
+    require(vsrli_r[3] == 0u);
+    require(vsrli_r[4] == 0x0fffffffu);
+    require(vsrli_r[5] == 0x08000000u);
+    require(vsrli_r[6] == 1u);
+    require(vsrli_r[7] == 0u);
 
     printf("OK\n");
 }
@@ -1773,6 +2109,50 @@ using namespace Ray::NS;
     require(v11[6] == 0);
     require(v11[7] == -1);
 
+    auto v11le = simd_cast(v2 <= v9);
+
+    require(v11le[0] == 0);
+    require(v11le[1] == -1);
+    require(v11le[2] == -1);
+    require(v11le[3] == 0);
+    require(v11le[4] == 0);
+    require(v11le[5] == -1);
+    require(v11le[6] == -1);
+    require(v11le[7] == 0);
+
+    auto v11ge = simd_cast(v2 >= v9);
+
+    require(v11ge[0] == -1);
+    require(v11ge[1] == 0);
+    require(v11ge[2] == 0);
+    require(v11ge[3] == -1);
+    require(v11ge[4] == -1);
+    require(v11ge[5] == 0);
+    require(v11ge[6] == 0);
+    require(v11ge[7] == -1);
+
+    auto v11eq = simd_cast(v2 == v9);
+
+    require(v11eq[0] == 0);
+    require(v11eq[1] == 0);
+    require(v11eq[2] == 0);
+    require(v11eq[3] == 0);
+    require(v11eq[4] == 0);
+    require(v11eq[5] == 0);
+    require(v11eq[6] == 0);
+    require(v11eq[7] == 0);
+
+    auto v11ne = simd_cast(v2 != v9);
+
+    require(v11ne[0] == -1);
+    require(v11ne[1] == -1);
+    require(v11ne[2] == -1);
+    require(v11ne[3] == -1);
+    require(v11ne[4] == -1);
+    require(v11ne[5] == -1);
+    require(v11ne[6] == -1);
+    require(v11ne[7] == -1);
+
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
@@ -1938,6 +2318,44 @@ using namespace Ray::NS;
     require(v20[13] == Approx(14));
     require(v20[14] == Approx(-15));
     require(v20[15] == Approx(-3));
+
+    const fvec16 vmin_a = {3, 1, 4, 1, 5, 9, 2, 6, 3, 1, 4, 1, 5, 9, 2, 6};
+    const fvec16 vmin_b = {2, 3, 2, 5, 9, 5, 8, 2, 2, 3, 2, 5, 9, 5, 8, 2};
+    const fvec16 vmin_r = min(vmin_a, vmin_b);
+    const fvec16 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == 2.0f);
+    require(vmin_r[1] == 1.0f);
+    require(vmin_r[2] == 2.0f);
+    require(vmin_r[3] == 1.0f);
+    require(vmin_r[4] == 5.0f);
+    require(vmin_r[5] == 5.0f);
+    require(vmin_r[6] == 2.0f);
+    require(vmin_r[7] == 2.0f);
+    require(vmin_r[8] == 2.0f);
+    require(vmin_r[9] == 1.0f);
+    require(vmin_r[10] == 2.0f);
+    require(vmin_r[11] == 1.0f);
+    require(vmin_r[12] == 5.0f);
+    require(vmin_r[13] == 5.0f);
+    require(vmin_r[14] == 2.0f);
+    require(vmin_r[15] == 2.0f);
+    require(vmax_r[0] == 3.0f);
+    require(vmax_r[1] == 3.0f);
+    require(vmax_r[2] == 4.0f);
+    require(vmax_r[3] == 5.0f);
+    require(vmax_r[4] == 9.0f);
+    require(vmax_r[5] == 9.0f);
+    require(vmax_r[6] == 8.0f);
+    require(vmax_r[7] == 6.0f);
+    require(vmax_r[8] == 3.0f);
+    require(vmax_r[9] == 3.0f);
+    require(vmax_r[10] == 4.0f);
+    require(vmax_r[11] == 5.0f);
+    require(vmax_r[12] == 9.0f);
+    require(vmax_r[13] == 9.0f);
+    require(vmax_r[14] == 8.0f);
+    require(vmax_r[15] == 6.0f);
 
     printf("OK\n");
 }
@@ -2280,6 +2698,18 @@ using namespace Ray::NS;
     const ivec16 v16 = srai(v15, 31);
     require((v16 != ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}).all_zeros());
 
+    const ivec16 vsrli_i = {-1, -2, (int)0x80000000, 16, -1, -2, (int)0x80000000, 16,
+                            -1, -2, (int)0x80000000, 16, -1, -2, (int)0x80000000, 16};
+    const ivec16 vsrli_r = srli(vsrli_i, 1);
+    require(vsrli_r[0] == 0x7fffffff);
+    require(vsrli_r[1] == 0x7fffffff);
+    require(vsrli_r[2] == 0x40000000);
+    require(vsrli_r[3] == 8);
+    require(vsrli_r[4] == 0x7fffffff);
+    require(vsrli_r[5] == 0x7fffffff);
+    require(vsrli_r[6] == 0x40000000);
+    require(vsrli_r[7] == 8);
+
     const ivec16 v17 = {3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1};
     const ivec16 v18 = inclusive_scan(v17);
 
@@ -2341,6 +2771,44 @@ using namespace Ray::NS;
     require(v20.get<13>() == 14);
     require(v20.get<14>() == 15);
     require(v20.get<15>() == 1);
+
+    const ivec16 vmin_a = {3, -1, 4, -5, 9, 2, -6, 5, 3, -1, 4, -5, 9, 2, -6, 5};
+    const ivec16 vmin_b = {-2, 3, 2, 1, -9, 5, 3, 5, -2, 3, 2, 1, -9, 5, 3, 5};
+    const ivec16 vmin_r = min(vmin_a, vmin_b);
+    const ivec16 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == -2);
+    require(vmin_r[1] == -1);
+    require(vmin_r[2] == 2);
+    require(vmin_r[3] == -5);
+    require(vmin_r[4] == -9);
+    require(vmin_r[5] == 2);
+    require(vmin_r[6] == -6);
+    require(vmin_r[7] == 5);
+    require(vmin_r[8] == -2);
+    require(vmin_r[9] == -1);
+    require(vmin_r[10] == 2);
+    require(vmin_r[11] == -5);
+    require(vmin_r[12] == -9);
+    require(vmin_r[13] == 2);
+    require(vmin_r[14] == -6);
+    require(vmin_r[15] == 5);
+    require(vmax_r[0] == 3);
+    require(vmax_r[1] == 3);
+    require(vmax_r[2] == 4);
+    require(vmax_r[3] == 1);
+    require(vmax_r[4] == 9);
+    require(vmax_r[5] == 5);
+    require(vmax_r[6] == 3);
+    require(vmax_r[7] == 5);
+    require(vmax_r[8] == 3);
+    require(vmax_r[9] == 3);
+    require(vmax_r[10] == 4);
+    require(vmax_r[11] == 1);
+    require(vmax_r[12] == 9);
+    require(vmax_r[13] == 5);
+    require(vmax_r[14] == 3);
+    require(vmax_r[15] == 5);
 
     printf("OK\n");
 }
@@ -2724,6 +3192,56 @@ using namespace Ray::NS;
     require(v20.get<13>() == 14);
     require(v20.get<14>() == 15);
     require(v20.get<15>() == 1);
+
+    const uvec16 vmin_a = {3, 0xffffffff, 4, 1, 5, 0x80000001, 2, 6, 3, 0xffffffff, 4, 1, 5, 0x80000001, 2, 6};
+    const uvec16 vmin_b = {2, 3, 0xffffffff, 5, 9, 5, 0x80000000, 2, 2, 3, 0xffffffff, 5, 9, 5, 0x80000000, 2};
+    const uvec16 vmin_r = min(vmin_a, vmin_b);
+    const uvec16 vmax_r = max(vmin_a, vmin_b);
+
+    require(vmin_r[0] == 2);
+    require(vmin_r[1] == 3);
+    require(vmin_r[2] == 4);
+    require(vmin_r[3] == 1);
+    require(vmin_r[4] == 5);
+    require(vmin_r[5] == 5);
+    require(vmin_r[6] == 2);
+    require(vmin_r[7] == 2);
+    require(vmin_r[8] == 2);
+    require(vmin_r[9] == 3);
+    require(vmin_r[10] == 4);
+    require(vmin_r[11] == 1);
+    require(vmin_r[12] == 5);
+    require(vmin_r[13] == 5);
+    require(vmin_r[14] == 2);
+    require(vmin_r[15] == 2);
+    require(vmax_r[0] == 3);
+    require(vmax_r[1] == 0xffffffff);
+    require(vmax_r[2] == 0xffffffff);
+    require(vmax_r[3] == 5);
+    require(vmax_r[4] == 9);
+    require(vmax_r[5] == 0x80000001);
+    require(vmax_r[6] == 0x80000000);
+    require(vmax_r[7] == 6);
+    require(vmax_r[8] == 3);
+    require(vmax_r[9] == 0xffffffff);
+    require(vmax_r[10] == 0xffffffff);
+    require(vmax_r[11] == 5);
+    require(vmax_r[12] == 9);
+    require(vmax_r[13] == 0x80000001);
+    require(vmax_r[14] == 0x80000000);
+    require(vmax_r[15] == 6);
+
+    const uvec16 vsrli_u = {0xffffffffu, 0x80000000u, 16u, 0u, 0xffffffffu, 0x80000000u, 16u, 0u,
+                            0xffffffffu, 0x80000000u, 16u, 0u, 0xffffffffu, 0x80000000u, 16u, 0u};
+    const uvec16 vsrli_r = srli(vsrli_u, 4u);
+    require(vsrli_r[0] == 0x0fffffffu);
+    require(vsrli_r[1] == 0x08000000u);
+    require(vsrli_r[2] == 1u);
+    require(vsrli_r[3] == 0u);
+    require(vsrli_r[4] == 0x0fffffffu);
+    require(vsrli_r[5] == 0x08000000u);
+    require(vsrli_r[6] == 1u);
+    require(vsrli_r[7] == 0u);
 
     printf("OK\n");
 }

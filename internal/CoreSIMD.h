@@ -2584,46 +2584,24 @@ void get_pix_dirs(const float w, const float h, const camera_t &cam, const float
 
 template <int S> void push_ior_stack(const ivec<S> &_mask, fvec<S> stack[4], const fvec<S> &val) {
     fvec<S> active_lanes = simd_cast(_mask);
-    // 0
-    fvec<S> mask = active_lanes & (stack[0] < 0.0f);
-    where(mask, stack[0]) = val;
-    active_lanes &= ~mask;
-    // 1
-    mask = active_lanes & (stack[1] < 0.0f);
-    where(mask, stack[1]) = val;
-    active_lanes &= ~mask;
-    // 2
-    mask = active_lanes & (stack[2] < 0.0f);
-    where(mask, stack[2]) = val;
-    active_lanes &= ~mask;
-    // 3
-    // replace the last value regardless of sign
+    for (int n = 0; n < 3; ++n) {
+        const fvec<S> mask = active_lanes & (stack[n] < 0.0f);
+        where(mask, stack[n]) = val;
+        active_lanes &= ~mask;
+    }
+    // slot 3: replace regardless of sign
     where(active_lanes, stack[3]) = val;
 }
 
 template <int S> fvec<S> pop_ior_stack(const ivec<S> &_mask, fvec<S> stack[4], const fvec<S> &default_value = {1.0f}) {
     fvec<S> ret = default_value;
     fvec<S> active_lanes = simd_cast(_mask);
-    // 3
-    fvec<S> mask = active_lanes & (stack[3] > 0.0f);
-    where(mask, ret) = stack[3];
-    where(mask, stack[3]) = -1.0f;
-    active_lanes &= ~mask;
-    // 2
-    mask = active_lanes & (stack[2] > 0.0f);
-    where(mask, ret) = stack[2];
-    where(mask, stack[2]) = -1.0f;
-    active_lanes &= ~mask;
-    // 1
-    mask = active_lanes & (stack[1] > 0.0f);
-    where(mask, ret) = stack[1];
-    where(mask, stack[1]) = -1.0f;
-    active_lanes &= ~mask;
-    // 0
-    mask = active_lanes & (stack[0] > 0.0f);
-    where(mask, ret) = stack[0];
-    where(mask, stack[0]) = -1.0f;
-
+    for (int n = 3; n >= 0; --n) {
+        const fvec<S> mask = active_lanes & (stack[n] > 0.0f);
+        where(mask, ret) = stack[n];
+        where(mask, stack[n]) = -1.0f;
+        active_lanes &= ~mask;
+    }
     return ret;
 }
 
@@ -2631,26 +2609,16 @@ template <int S>
 fvec<S> peek_ior_stack(const fvec<S> stack[4], const ivec<S> &_skip_first, const fvec<S> &default_value = {1.0f}) {
     fvec<S> ret = default_value;
     fvec<S> skip_first = simd_cast(_skip_first);
-    // 3
     fvec<S> mask = (stack[3] > 0.0f);
     mask &= ~std::exchange(skip_first, skip_first & ~mask);
     where(mask, ret) = stack[3];
     fvec<S> active_lanes = ~mask;
-    // 2
-    mask = active_lanes & (stack[2] > 0.0f);
-    mask &= ~std::exchange(skip_first, skip_first & ~mask);
-    where(mask, ret) = stack[2];
-    active_lanes &= ~mask;
-    // 1
-    mask = active_lanes & (stack[1] > 0.0f);
-    mask &= ~std::exchange(skip_first, skip_first & ~mask);
-    where(mask, ret) = stack[1];
-    active_lanes &= ~mask;
-    // 0
-    mask = active_lanes & (stack[0] > 0.0f);
-    mask &= ~std::exchange(skip_first, skip_first & ~mask);
-    where(mask, ret) = stack[0];
-
+    for (int n = 2; n >= 0; --n) {
+        mask = active_lanes & (stack[n] > 0.0f);
+        mask &= ~std::exchange(skip_first, skip_first & ~mask);
+        where(mask, ret) = stack[n];
+        active_lanes &= ~mask;
+    }
     return ret;
 }
 
@@ -3500,10 +3468,6 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, co
 
     for (int j = tri_start; j < tri_end; j++) {
         res |= _IntersectTri(o, d, i, tris[j], j, out_inter);
-        // if (res && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
-        //             (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
-        //     break;
-        // }
     }
 
     if (res) {
@@ -3522,10 +3486,6 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], const mtr
 
     for (int j = tri_start / 8; j < (tri_end + 7) / 8; j++) {
         res |= IntersectTri<S>(o, d, mtris[j], j * 8, inter_prim_index, inter_t, inter_u, inter_v);
-        // if (res && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
-        //             (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
-        //     break;
-        // }
     }
 
     return res;

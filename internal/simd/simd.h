@@ -346,17 +346,6 @@ template <typename T, int S> class fixed_size_simd {
         return true;
     }
 
-    bool all_zeros(const fixed_size_simd<int, S> &mask) const {
-        const auto *src1 = reinterpret_cast<const typename same_size_uint<T>::type *>(&comp_[0]);
-        const auto *src2 = reinterpret_cast<const typename same_size_uint<T>::type *>(&mask.comp_[0]);
-        for (int i = 0; i < S; i++) {
-            if ((src1[i] & src2[i]) != 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     bool not_all_zeros() const {
         UNROLLED_FOR_S(i, S, {
             if (comp_[i] != 0) {
@@ -622,7 +611,7 @@ force_inline fixed_size_simd<T, S> fmsub(const T a, const fixed_size_simd<T, S> 
 
 template <typename T, int S>
 force_inline fixed_size_simd<T, S> mix(const fixed_size_simd<T, S> &v1, const fixed_size_simd<T, S> &v2, T k) {
-    return (1.0f - k) * v1 + k * v2;
+    return (T(1) - k) * v1 + k * v2;
 }
 
 template <typename T, int S>
@@ -705,6 +694,7 @@ template <typename T, typename U, int S> class simd_where_expression {
     force_inline void operator/=(const fixed_size_simd<T, S> &vec) && { comp_.blend_to(mask_, comp_ / vec); }
     force_inline void operator|=(const fixed_size_simd<T, S> &vec) && { comp_.blend_to(mask_, comp_ | vec); }
     force_inline void operator&=(const fixed_size_simd<T, S> &vec) && { comp_.blend_to(mask_, comp_ & vec); }
+    force_inline void operator^=(const fixed_size_simd<T, S> &vec) && { comp_.blend_to(mask_, comp_ ^ vec); }
 };
 
 template <typename T, typename U, int S> class simd_where_inv_expression {
@@ -722,6 +712,7 @@ template <typename T, typename U, int S> class simd_where_inv_expression {
     force_inline void operator/=(const fixed_size_simd<T, S> &vec) && { comp_.blend_inv_to(mask_, comp_ / vec); }
     force_inline void operator|=(const fixed_size_simd<T, S> &vec) && { comp_.blend_inv_to(mask_, comp_ | vec); }
     force_inline void operator&=(const fixed_size_simd<T, S> &vec) && { comp_.blend_inv_to(mask_, comp_ & vec); }
+    force_inline void operator^=(const fixed_size_simd<T, S> &vec) && { comp_.blend_inv_to(mask_, comp_ ^ vec); }
 };
 
 template <typename T, typename U, int S>
@@ -750,13 +741,13 @@ template <int S> force_inline fixed_size_simd<int, S> simd_cast(const fixed_size
     return ret;
 }
 
-template <int S> force_inline const fixed_size_simd<float, S> simd_cast(const fixed_size_simd<int, S> &vec) {
+template <int S> force_inline fixed_size_simd<float, S> simd_cast(const fixed_size_simd<int, S> &vec) {
     fixed_size_simd<float, S> ret;
     memcpy(&ret, &vec, sizeof(fixed_size_simd<float, S>));
     return ret;
 }
 
-template <int S> force_inline const fixed_size_simd<float, S> simd_cast(const fixed_size_simd<unsigned, S> &vec) {
+template <int S> force_inline fixed_size_simd<float, S> simd_cast(const fixed_size_simd<unsigned, S> &vec) {
     fixed_size_simd<float, S> ret;
     memcpy(&ret, &vec, sizeof(fixed_size_simd<float, S>));
     return ret;

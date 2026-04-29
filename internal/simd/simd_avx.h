@@ -469,7 +469,7 @@ template <> class fixed_size_simd<int, 8> {
         return ret;
     }
 
-    avx2_inline static fixed_size_simd<int, 8> vectorcall max(const fixed_size_simd<int, 8> v1,
+    friend avx2_inline fixed_size_simd<int, 8> vectorcall max(const fixed_size_simd<int, 8> v1,
                                                               const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -675,6 +675,16 @@ template <> class fixed_size_simd<int, 8> {
         ret.vec_ = _mm256_srai_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2); })
+#endif
+        return ret;
+    }
+
+    friend avx2_inline fixed_size_simd<int, 8> vectorcall srli(const fixed_size_simd<int, 8> v1, const int v2) {
+        fixed_size_simd<int, 8> ret;
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
+#else
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) >> v2); })
 #endif
         return ret;
     }
@@ -971,7 +981,7 @@ template <> class fixed_size_simd<unsigned, 8> {
         return ret;
     }
 
-    avx2_inline static fixed_size_simd<unsigned, 8> vectorcall max(const fixed_size_simd<unsigned, 8> v1,
+    friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall max(const fixed_size_simd<unsigned, 8> v1,
                                                                    const fixed_size_simd<unsigned, 8> v2) {
         fixed_size_simd<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -1132,6 +1142,17 @@ template <> class fixed_size_simd<unsigned, 8> {
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = ~comp_[i]; })
+#endif
+        return ret;
+    }
+
+    friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall srli(const fixed_size_simd<unsigned, 8> v1,
+                                                                     const unsigned v2) {
+        fixed_size_simd<unsigned, 8> ret;
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
+#else
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2); })
 #endif
         return ret;
     }

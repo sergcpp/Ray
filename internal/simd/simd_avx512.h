@@ -131,18 +131,12 @@ template <> class fixed_size_simd<float, 16> {
 
     force_inline void vectorcall blend_to(const fixed_size_simd<float, 16> mask, const fixed_size_simd<float, 16> v1) {
         validate_mask(mask);
-        //__mmask16 msk =
-        //    _mm512_fpclass_ps_mask(mask.vec_, 0x54); // 0x54 = Negative_Finite | Negative_Infinity | Negative_Zero
-        // vec_ = _mm512_mask_blend_ps(msk, vec_, v1.vec_);
         vec_ = _mm512_blendv_ps(vec_, v1.vec_, mask.vec_);
     }
 
     force_inline void vectorcall blend_inv_to(const fixed_size_simd<float, 16> mask,
                                               const fixed_size_simd<float, 16> v1) {
         validate_mask(mask);
-        //__mmask16 msk =
-        //    _mm512_fpclass_ps_mask(mask.vec_, 0x54); // 0x54 = Negative_Finite | Negative_Infinity | Negative_Zero
-        // vec_ = _mm512_mask_blend_ps(msk, v1.vec_, vec_);
         vec_ = _mm512_blendv_ps(v1.vec_, vec_, mask.vec_);
     }
 
@@ -470,6 +464,10 @@ template <> class fixed_size_simd<int, 16> {
         return _mm512_srai_epi32(v1.vec_, v2);
     }
 
+    friend force_inline fixed_size_simd<int, 16> vectorcall srli(const fixed_size_simd<int, 16> v1, const int v2) {
+        return _mm512_srli_epi32(v1.vec_, v2);
+    }
+
     friend force_inline bool vectorcall is_equal(const fixed_size_simd<int, 16> v1, const fixed_size_simd<int, 16> v2) {
         return _mm512_cmpeq_epi32_mask(v1.vec_, v2.vec_) == 0xFFFF;
     }
@@ -753,6 +751,11 @@ template <> class fixed_size_simd<unsigned, 16> {
 
     force_inline fixed_size_simd<unsigned, 16> operator~() const {
         return _mm512_andnot_si512(vec_, _mm512_set1_epi32(~0));
+    }
+
+    friend force_inline fixed_size_simd<unsigned, 16> vectorcall srli(const fixed_size_simd<unsigned, 16> v1,
+                                                                       const unsigned v2) {
+        return _mm512_srli_epi32(v1.vec_, v2);
     }
 
     friend force_inline bool vectorcall is_equal(const fixed_size_simd<unsigned, 16> v1,

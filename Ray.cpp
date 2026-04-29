@@ -117,6 +117,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
     log->Info("Ray: Creating Reference renderer %ix%i", s.w, s.h);
     return Ref::CreateRenderer(s, log);
 #else
+    log->Error("Ray: Failed to create any renderer (no enabled backend matched the requested types)");
     return nullptr;
 #endif
 }

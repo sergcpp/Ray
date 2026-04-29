@@ -67,8 +67,14 @@ template <typename T> class Span {
     force_inline ptrdiff_t size_bytes() const { return size_ * sizeof(T); }
     force_inline bool empty() const { return size_ == 0; }
 
-    force_inline T &front() const { return p_data_[0]; }
-    force_inline T &back() const { return p_data_[size_ - 1]; }
+    force_inline T &front() const {
+        assert(!empty());
+        return p_data_[0];
+    }
+    force_inline T &back() const {
+        assert(!empty());
+        return p_data_[size_ - 1];
+    }
 
     force_inline T &operator[](const ptrdiff_t i) const {
         assert(i >= 0 && i < size_);

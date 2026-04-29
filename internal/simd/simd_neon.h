@@ -61,7 +61,7 @@ template <> class fixed_size_simd<float, 4> {
         alignas(16) const float init[4] = {f1, f2, f3, f4};
         vec_ = vld1q_f32(init);
     }
-    force_inline fixed_size_simd(const float *f) { vec_ = vld1q_f32(f); }
+    force_inline explicit fixed_size_simd(const float *f) { vec_ = vld1q_f32(f); }
     force_inline fixed_size_simd(const float *f, vector_aligned_tag) {
         const float *_f = (const float *)__builtin_assume_aligned(f, 16);
         vec_ = vld1q_f32(_f);
@@ -420,7 +420,7 @@ template <> class fixed_size_simd<int, 4> {
         alignas(16) const int init[4] = {i1, i2, i3, i4};
         vec_ = vld1q_s32(init);
     }
-    force_inline fixed_size_simd(const int *f) { vec_ = vld1q_s32((const int32_t *)f); }
+    force_inline explicit fixed_size_simd(const int *f) { vec_ = vld1q_s32((const int32_t *)f); }
     force_inline fixed_size_simd(const int *f, vector_aligned_tag) {
         const int *_f = (const int *)__builtin_assume_aligned(f, 16);
         vec_ = vld1q_s32((const int32_t *)_f);
@@ -578,10 +578,10 @@ template <> class fixed_size_simd<int, 4> {
 #if defined(__aarch64__) || defined(_M_ARM64)
         return vmaxvq_u32(vreinterpretq_u32_s32(temp)) == 0;
 #else
-        alignas(16) int comp[4], mask_comp[4];
-        vst1q_s32(comp, vec_);
-        vst1q_s32(mask_comp, mask.vec_);
-        UNROLLED_FOR(i, 4, { res |= (comp[i] & mask_comp[i]) != 0; })
+        alignas(16) int comp[4];
+        vst1q_s32(comp, temp);
+        int res = 0;
+        UNROLLED_FOR(i, 4, { res |= comp[i]; })
         return res == 0;
 #endif
     }
@@ -693,6 +693,10 @@ template <> class fixed_size_simd<int, 4> {
         return ret;
     }
 
+    friend force_inline fixed_size_simd<int, 4> vectorcall srli(const fixed_size_simd<int, 4> v1, const int v2) {
+        return vreinterpretq_s32_u32(vshlq_u32(vreinterpretq_u32_s32(v1.vec_), vdupq_n_s32(-v2)));
+    }
+
     friend bool vectorcall is_equal(const fixed_size_simd<int, 4> v1, const fixed_size_simd<int, 4> v2) {
         bool res = true;
         UNROLLED_FOR(i, 4, { res &= (v1.comp_[i] == v2.comp_[i]); })
@@ -754,7 +758,7 @@ template <> class fixed_size_simd<unsigned, 4> {
         alignas(16) const unsigned init[4] = {i1, i2, i3, i4};
         vec_ = vld1q_u32(init);
     }
-    force_inline fixed_size_simd(const unsigned *f) { vec_ = vld1q_u32(f); }
+    force_inline explicit fixed_size_simd(const unsigned *f) { vec_ = vld1q_u32(f); }
     force_inline fixed_size_simd(const unsigned *f, vector_aligned_tag) {
         const unsigned *_f = (const unsigned *)__builtin_assume_aligned(f, 16);
         vec_ = vld1q_u32(_f);
@@ -906,10 +910,10 @@ template <> class fixed_size_simd<unsigned, 4> {
 #if defined(__aarch64__) || defined(_M_ARM64)
         return vmaxvq_u32(temp) == 0;
 #else
-        alignas(16) unsigned comp[4], mask_comp[4];
-        vst1q_u32(comp, vec_);
-        vst1q_u32(mask_comp, mask.vec_);
-        UNROLLED_FOR(i, 4, { res |= (comp[i] & mask_comp[i]) != 0; })
+        alignas(16) unsigned comp[4];
+        vst1q_u32(comp, temp);
+        unsigned res = 0;
+        UNROLLED_FOR(i, 4, { res |= comp[i]; })
         return res == 0;
 #endif
     }
@@ -1014,6 +1018,11 @@ template <> class fixed_size_simd<unsigned, 4> {
     friend fixed_size_simd<unsigned, 4> vectorcall operator<<(const fixed_size_simd<unsigned, 4> v1,
                                                               const unsigned v2) {
         return vshlq_u32(v1.vec_, vdupq_n_u32(v2));
+    }
+
+    friend force_inline fixed_size_simd<unsigned, 4> vectorcall srli(const fixed_size_simd<unsigned, 4> v1,
+                                                                      const unsigned v2) {
+        return vshlq_u32(v1.vec_, vdupq_n_s32(-(int)v2));
     }
 
     friend bool vectorcall is_equal(const fixed_size_simd<unsigned, 4> v1, const fixed_size_simd<unsigned, 4> v2) {
