@@ -16,17 +16,17 @@ force_inline int fls(const uint32_t word) {
 }
 
 force_inline int fls(const uint64_t size) {
-    int high = int(size >> 32);
+    uint32_t high = uint32_t(size >> 32);
     int bits = 0;
     if (high) {
-        bits = 32 + fls(uint32_t(high));
+        bits = 32 + fls(high);
     } else {
         bits = fls(uint32_t(size & 0xffffffff));
     }
     return bits;
 }
 
-force_inline int ffs(uint32_t word) {
+force_inline int ffs(const uint32_t word) {
 #ifdef _MSC_VER
     unsigned long index;
     return _BitScanForward(&index, word) ? index : -1;
@@ -57,7 +57,7 @@ std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_insert(const
 }
 
 template <typename OffsetType, bool InPlace>
-std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_search(OffsetType size) {
+std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_search(const OffsetType size) {
     return mapping_insert(rounded_size(size));
 }
 
@@ -95,6 +95,7 @@ template struct Ray::tlsf_index_t<uint64_t, true>;
 /////////////
 
 uint16_t Ray::FreelistAlloc::AddPool(const uint32_t size) {
+    assert(size < (1u << tlsf_index_t<uint32_t, false>::FL_INDEX_MAX));
     uint16_t pool_index = create_pool();
 
     const uint32_t main_block_index = create_block();
@@ -159,7 +160,7 @@ void Ray::FreelistAlloc::ResizePool(uint16_t pool, uint32_t size) {
         all_blocks_[tail_index].offset = size;
         insert_free_block(prev_index, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[prev_index].size));
     } else {
-        // create new emply block
+        // create new empty block
         const uint32_t new_block_index = create_block();
 
         all_blocks_[new_block_index].prev_phys = prev_index;
@@ -194,6 +195,9 @@ Ray::FreelistAlloc::Allocation Ray::FreelistAlloc::Alloc(const uint32_t size) {
 }
 
 Ray::FreelistAlloc::Allocation Ray::FreelistAlloc::Alloc(uint32_t align, uint32_t size) {
+    if (align == 1) {
+        return Alloc(size);
+    }
     uint32_t block = block_locate_free(size + align);
     uint32_t offset = 0xffffffff;
     uint16_t pool = 0xffff;
@@ -225,6 +229,7 @@ Ray::FreelistAlloc::Range Ray::FreelistAlloc::GetFirstOccupiedBlock(const uint16
     }
     while (all_blocks_[block].is_free) {
         block = all_blocks_[block].next_phys;
+        assert(block != 0xffffffff && "malformed block list");
     }
     return {block, all_blocks_[block].offset, all_blocks_[block].size};
 }
@@ -236,6 +241,7 @@ Ray::FreelistAlloc::Range Ray::FreelistAlloc::GetNextOccupiedBlock(uint32_t bloc
     }
     while (all_blocks_[block].is_free) {
         block = all_blocks_[block].next_phys;
+        assert(block != 0xffffffff && "malformed block list");
     }
     return {block, all_blocks_[block].offset, all_blocks_[block].size};
 }
@@ -298,8 +304,8 @@ void Ray::FreelistAlloc::insert_free_block(const uint32_t block_index, const std
 
     // Insert the new block at the head of the list, and mark bitmaps appropriately
     index_.free_heads[index.first][index.second] = block_index;
-    index_.fl_bitmap |= (1 << index.first);
-    index_.sl_bitmap[index.first] |= (1 << index.second);
+    index_.fl_bitmap |= (1u << index.first);
+    index_.sl_bitmap[index.first] |= (1u << index.second);
 }
 
 uint32_t Ray::FreelistAlloc::block_locate_free(uint32_t size) {
@@ -371,7 +377,7 @@ void Ray::FreelistAlloc::block_trim_free(uint32_t block_index, uint32_t size) {
 
 uint32_t Ray::FreelistAlloc::block_trim_free_leading(uint32_t block_index, uint32_t size) {
     uint32_t remaining_block = block_index;
-    if (true /* split? */) {
+    if (all_blocks_[block_index].size > size) {
         remaining_block = create_block();
         all_blocks_[remaining_block].prev_phys = block_index;
         all_blocks_[remaining_block].next_phys = all_blocks_[block_index].next_phys;
