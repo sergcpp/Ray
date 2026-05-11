@@ -348,9 +348,9 @@ float GetDensityHeightGradientForPoint(float height, float cloud_type) {
     const vec4 stratusGrad = vec4(0.02, 0.05, 0.09, 0.11);
     const vec4 stratocumulusGrad = vec4(0.02, 0.2, 0.48, 0.625);
     const vec4 cumulusGrad = vec4(0.01, 0.0625, 0.78, 1.0);
-    float stratus = 1.0 - clamp(cloud_type * 2.0, 0.0, 1.0);
+    float stratus = 1.0 - saturate(cloud_type * 2.0);
     float stratocumulus = 1.0 - abs(cloud_type - 0.5) * 2.0;
-    float cumulus = clamp(cloud_type - 0.5, 0, 1) * 2.0;
+    float cumulus = saturate(cloud_type - 0.5) * 2.0;
     vec4 cloudGradient = stratusGrad * stratus + stratocumulusGrad * stratocumulus + cumulusGrad * cumulus;
     return smoothstep(cloudGradient.x, cloudGradient.y, height) -
            smoothstep(cloudGradient.z, cloudGradient.w, height);
@@ -636,7 +636,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
     if (g_atmosphere_params.stars_brightness > 0.0 && planet_intersection.x < 0 && moon_intersection.x < 0) {
         total_radiance +=
             total_transmittance *
-            (pow(clamp(stars_noise(ray_dir * 400.0), 0.0, 1.0), SKY_STARS_THRESHOLD) * g_atmosphere_params.stars_brightness);
+            (pow(saturate(stars_noise(ray_dir * 400.0)), SKY_STARS_THRESHOLD) * g_atmosphere_params.stars_brightness);
     }
 
     //
