@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <type_traits>
 #include <vector>
@@ -41,17 +42,17 @@ template <typename T> class Span {
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
 
     template <size_t N>
-    Span(const std::array<typename remove_all_const<T>::type, N> &arr) : Span(arr.data(), arr.size()) {}
+    Span(const std::array<typename remove_all_const<T>::type, N> &arr) : Span(static_cast<T *>(arr.data()), arr.size()) {}
     template <size_t N>
     Span(const std::array<const typename remove_all_const<T>::type, N> &arr) : Span(arr.data(), arr.size()) {}
-    template <size_t N> Span(std::array<typename std::remove_cv<T>::type, N> &arr) : Span(arr.data(), arr.size()) {}
+    template <size_t N> Span(std::array<typename std::remove_cv<T>::type, N> &arr) : Span(static_cast<T *>(arr.data()), arr.size()) {}
 
     template <typename Alloc>
-    Span(const std::vector<typename remove_all_const<T>::type, Alloc> &v) : Span(v.data(), v.size()) {}
+    Span(const std::vector<typename remove_all_const<T>::type, Alloc> &v) : Span(static_cast<T *>(v.data()), v.size()) {}
     template <typename Alloc>
     Span(const std::vector<const typename remove_all_const<T>::type, Alloc> &v) : Span(v.data(), v.size()) {}
     template <typename Alloc>
-    Span(std::vector<typename std::remove_cv<T>::type, Alloc> &v) : Span(v.data(), v.size()) {}
+    Span(std::vector<typename std::remove_cv<T>::type, Alloc> &v) : Span(static_cast<T *>(v.data()), v.size()) {}
 
     template <size_t N> Span(T (&arr)[N]) : Span(arr, N) {}
 
