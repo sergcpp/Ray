@@ -54,10 +54,16 @@ class HashMap32 : HashFunc, KeyEqual, Allocator {
     HashMap32(const HashMap32 &rhs) = delete;
     HashMap32 &operator=(const HashMap32 &rhs) = delete;
 
-    HashMap32(HashMap32 &&rhs) noexcept { (*this) = std::move(rhs); }
+    HashMap32(HashMap32 &&rhs) noexcept : ctrl_(nullptr), nodes_(nullptr), capacity_(0), size_(0) {
+        (*this) = std::move(rhs);
+    }
     HashMap32 &operator=(HashMap32 &&rhs) noexcept {
         if (this == &rhs) {
             return (*this);
+        }
+        if (ctrl_) {
+            clear();
+            this->deallocate(ctrl_, mem_size(capacity_));
         }
         if constexpr (std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value) {
             Allocator::operator=(static_cast<Allocator &&>(rhs));
@@ -78,6 +84,8 @@ class HashMap32 : HashFunc, KeyEqual, Allocator {
 
     uint32_t size() const { return size_; }
     uint32_t capacity() const { return capacity_; }
+
+    bool empty() const { return size_ == 0; }
 
     void clear() {
         for (uint32_t i = 0; i < capacity_ && size_; i++) {
@@ -185,7 +193,7 @@ class HashMap32 : HashFunc, KeyEqual, Allocator {
     }
 
     template <typename K2> V *Find(const uint32_t hash, const K2 &key) {
-        return const_cast<V *>(const_cast<const HashMap32 *>(this)->Find(hash, key));
+        return const_cast<V *>(std::as_const(*this).Find(hash, key));
     }
 
     Node *GetOrNull(const uint32_t index) {
@@ -328,6 +336,15 @@ class HashMap32 : HashFunc, KeyEqual, Allocator {
         nodes_[it.index_].val.~V();
 
         return iter_at(next);
+    }
+
+    uint32_t FindOccupiedInRange(const uint32_t start, const uint32_t end) {
+        for (uint32_t i = start; i < end; ++i) {
+            if (ctrl_[i] & OccupiedBit) {
+                return i;
+            }
+        }
+        return end;
     }
 
   private:

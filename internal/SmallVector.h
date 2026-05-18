@@ -219,7 +219,6 @@ template <typename T, typename Allocator = aligned_allocator<T, alignof(T)>> cla
         }
 
         T *new_begin = this->allocate(req_capacity);
-        T *new_end = new_begin + size_;
 
         for (uint32_t i = 0; i < size_; ++i) {
             new (new_begin + i) T(std::move(begin_[i]));

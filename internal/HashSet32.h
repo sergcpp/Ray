@@ -56,16 +56,26 @@ template <typename K> class Hash {
 template <> class Hash<char *> {
   public:
     uint32_t operator()(const char *s) const { return _str_hash(s); }
+    uint32_t operator()(const std::string_view &s) const { return _str_hash_len(s.data(), s.size()); }
 };
 
 template <> class Hash<const char *> {
   public:
+    uint32_t operator()(const char *s) const { return _str_hash(s); }
+    uint32_t operator()(const std::string_view &s) const { return _str_hash_len(s.data(), s.size()); }
+};
+
+template <> class Hash<std::string_view> {
+  public:
+    uint32_t operator()(const std::string &s) const { return _str_hash_len(s.c_str(), s.length()); }
+    uint32_t operator()(const std::string_view &s) const { return _str_hash_len(s.data(), s.size()); }
     uint32_t operator()(const char *s) const { return _str_hash(s); }
 };
 
 template <> class Hash<std::string> {
   public:
     uint32_t operator()(const std::string &s) const { return _str_hash_len(s.c_str(), s.length()); }
+    uint32_t operator()(const std::string_view &s) const { return _str_hash_len(s.data(), s.size()); }
     uint32_t operator()(const char *s) const { return _str_hash(s); }
 };
 
@@ -77,11 +87,13 @@ template <typename K> class Equal : std::equal_to<K> {
 template <> class Equal<char *> {
   public:
     bool operator()(const char *k1, const char *k2) const { return strcmp(k1, k2) == 0; }
+    bool operator()(const char *k1, std::string_view k2) const { return k2 == k1; }
 };
 
 template <> class Equal<const char *> {
   public:
     bool operator()(const char *k1, const char *k2) const { return strcmp(k1, k2) == 0; }
+    bool operator()(const char *k1, std::string_view k2) const { return k2 == k1; }
 };
 
 template <> class Equal<std::string> {
@@ -138,10 +150,16 @@ class HashSet32 : HashFunc, KeyEqual, Allocator {
     HashSet32(const HashSet32 &rhs) = delete;
     HashSet32 &operator=(const HashSet32 &rhs) = delete;
 
-    HashSet32(HashSet32 &&rhs) noexcept { (*this) = std::move(rhs); }
+    HashSet32(HashSet32 &&rhs) noexcept : ctrl_(nullptr), nodes_(nullptr), capacity_(0), size_(0) {
+        (*this) = std::move(rhs);
+    }
     HashSet32 &operator=(HashSet32 &&rhs) noexcept {
         if (this == &rhs) {
             return (*this);
+        }
+        if (ctrl_) {
+            clear();
+            this->deallocate(ctrl_, mem_size(capacity_));
         }
         if constexpr (std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value) {
             Allocator::operator=(static_cast<Allocator &&>(rhs));
@@ -252,7 +270,7 @@ class HashSet32 : HashFunc, KeyEqual, Allocator {
     }
 
     template <typename K2> K *Find(const uint32_t hash, const K2 &key) {
-        return const_cast<K *>(const_cast<const HashSet32 *>(this)->Find(hash, key));
+        return const_cast<K *>(std::as_const(*this).Find(hash, key));
     }
 
     Node *GetOrNull(const uint32_t index) {
