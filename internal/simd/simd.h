@@ -11,95 +11,83 @@
 
 // Used to force loop unroll and make index compile-time constant
 // clang-format off
-#define UNROLLED_FOR_0(I, N, C)
-#define UNROLLED_FOR_1(I, N, C) { const int I =  0 % (N); C }
-#define UNROLLED_FOR_2(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C }
-#define UNROLLED_FOR_3(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C }
-#define UNROLLED_FOR_4(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C }
-#define UNROLLED_FOR_5(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C }
-#define UNROLLED_FOR_6(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C }
-#define UNROLLED_FOR_7(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C }
-#define UNROLLED_FOR_8(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C }
-#define UNROLLED_FOR_9(I, N, C) { const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C }
-#define UNROLLED_FOR_10(I, N, C){ const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C } { const int I =  9 % (N); C }
-#define UNROLLED_FOR_11(I, N, C){ const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C } { const int I =  9 % (N); C } { const int I = 10 % (N); C }
-#define UNROLLED_FOR_12(I, N, C){ const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C } { const int I =  9 % (N); C } { const int I = 10 % (N); C } { const int I = 11 % (N); C }
-#define UNROLLED_FOR_13(I, N, C){ const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C } { const int I =  9 % (N); C } { const int I = 10 % (N); C } { const int I = 11 % (N); C } \
-                                { const int I = 12 % (N); C }
-#define UNROLLED_FOR_14(I, N, C){ const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C } { const int I =  9 % (N); C } { const int I = 10 % (N); C } { const int I = 11 % (N); C } \
-                                { const int I = 12 % (N); C } { const int I = 13 % (N); C }
-#define UNROLLED_FOR_15(I, N, C){ const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C } { const int I =  9 % (N); C } { const int I = 10 % (N); C } { const int I = 11 % (N); C } \
-                                { const int I = 12 % (N); C } { const int I = 13 % (N); C } { const int I = 14 % (N); C }
-#define UNROLLED_FOR_16(I, N, C){ const int I =  0 % (N); C } { const int I =  1 % (N); C } { const int I =  2 % (N); C } { const int I =  3 % (N); C } \
-                                { const int I =  4 % (N); C } { const int I =  5 % (N); C } { const int I =  6 % (N); C } { const int I =  7 % (N); C } \
-                                { const int I =  8 % (N); C } { const int I =  9 % (N); C } { const int I = 10 % (N); C } { const int I = 11 % (N); C } \
-                                { const int I = 12 % (N); C } { const int I = 13 % (N); C } { const int I = 14 % (N); C } { const int I = 15 % (N); C }
+#define UNROLLED_FOR_0(I, C)
+#define UNROLLED_FOR_1(I, C) { constexpr int I =  0; C }
+#define UNROLLED_FOR_2(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C }
+#define UNROLLED_FOR_3(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C }
+#define UNROLLED_FOR_4(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C }
+#define UNROLLED_FOR_5(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C }
+#define UNROLLED_FOR_6(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C }
+#define UNROLLED_FOR_7(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C }
+#define UNROLLED_FOR_8(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C }
+#define UNROLLED_FOR_9(I, C) { constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C }
+#define UNROLLED_FOR_10(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C }
+#define UNROLLED_FOR_11(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C }
+#define UNROLLED_FOR_12(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C } { constexpr int I = 11; C }
+#define UNROLLED_FOR_13(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C } { constexpr int I = 11; C } \
+                             { constexpr int I = 12; C }
+#define UNROLLED_FOR_14(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C } { constexpr int I = 11; C } \
+                             { constexpr int I = 12; C } { constexpr int I = 13; C }
+#define UNROLLED_FOR_15(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C } { constexpr int I = 11; C } \
+                             { constexpr int I = 12; C } { constexpr int I = 13; C } { constexpr int I = 14; C }
+#define UNROLLED_FOR_16(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C } { constexpr int I = 11; C } \
+                             { constexpr int I = 12; C } { constexpr int I = 13; C } { constexpr int I = 14; C } { constexpr int I = 15; C }
 
-#define UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE) UNROLLED_FOR_##COUNT(INDEX, COUNT, CODE)
+#define UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE) UNROLLED_FOR_##COUNT(INDEX, CODE)
 #define UNROLLED_FOR(INDEX, COUNT, CODE) UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE)
 
 // Needed for cases when count is not a literal constant (e.g. template parameter)
-#define UNROLLED_FOR_S(INDEX, COUNT, CODE)                      \
-    static_assert(COUNT == 1 || COUNT == 2 || COUNT == 3 ||     \
-                  COUNT == 4 || COUNT == 7 || COUNT == 8 ||     \
-                  COUNT == 15 || COUNT == 16, "!");             \
-    switch(COUNT) {                                             \
-        /*case  0: UNROLLED_FOR_0(INDEX, COUNT, CODE); break;*/ \
-        case  1: UNROLLED_FOR_1(INDEX, COUNT, CODE); break;     \
-        case  2: UNROLLED_FOR_2(INDEX, COUNT, CODE); break;     \
-        case  3: UNROLLED_FOR_3(INDEX, COUNT, CODE); break;     \
-        case  4: UNROLLED_FOR_4(INDEX, COUNT, CODE); break;     \
-        /*case  5: UNROLLED_FOR_5(INDEX, COUNT, CODE); break;*/ \
-        /*case  6: UNROLLED_FOR_6(INDEX, COUNT, CODE); break;*/ \
-        case  7: UNROLLED_FOR_7(INDEX, COUNT, CODE); break;     \
-        case  8: UNROLLED_FOR_8(INDEX, COUNT, CODE); break;     \
-        /*case  9: UNROLLED_FOR_9(INDEX, COUNT, CODE); break;*/ \
-        /*case 10: UNROLLED_FOR_10(INDEX, COUNT, CODE); break;*/\
-        /*case 11: UNROLLED_FOR_11(INDEX, COUNT, CODE); break;*/\
-        /*case 12: UNROLLED_FOR_12(INDEX, COUNT, CODE); break;*/\
-        /*case 13: UNROLLED_FOR_13(INDEX, COUNT, CODE); break;*/\
-        /*case 14: UNROLLED_FOR_14(INDEX, COUNT, CODE); break;*/\
-        case 15: UNROLLED_FOR_15(INDEX, COUNT, CODE); break;    \
-        case 16: UNROLLED_FOR_16(INDEX, COUNT, CODE); break;    \
-        default:                                      break;    \
-    }
+#define UNROLLED_FOR_S(INDEX, COUNT, CODE)                                          \
+    static_assert(COUNT == 1 || COUNT == 2 || COUNT == 3 ||                         \
+                  COUNT == 4 || COUNT == 7 || COUNT == 8 ||                         \
+                  COUNT == 15 || COUNT == 16, "!");                                 \
+    if constexpr (COUNT ==  1) { UNROLLED_FOR_1(INDEX, CODE)  } else         \
+    if constexpr (COUNT ==  2) { UNROLLED_FOR_2(INDEX, CODE)  } else         \
+    if constexpr (COUNT ==  3) { UNROLLED_FOR_3(INDEX, CODE)  } else         \
+    if constexpr (COUNT ==  4) { UNROLLED_FOR_4(INDEX, CODE)  } else         \
+    if constexpr (COUNT ==  7) { UNROLLED_FOR_7(INDEX, CODE)  } else         \
+    if constexpr (COUNT ==  8) { UNROLLED_FOR_8(INDEX, CODE)  } else         \
+    if constexpr (COUNT == 15) { UNROLLED_FOR_15(INDEX, CODE) } else         \
+    if constexpr (COUNT == 16) { UNROLLED_FOR_16(INDEX, CODE) }
 
 #define UNROLLED_FOR_R(INDEX, COUNT, CODE)              \
     switch(COUNT) {                                     \
-        case 16: { const int INDEX = 15 % COUNT; CODE } \
-        case 15: { const int INDEX = 14 % COUNT; CODE } \
-        case 14: { const int INDEX = 13 % COUNT; CODE } \
-        case 13: { const int INDEX = 12 % COUNT; CODE } \
-        case 12: { const int INDEX = 11 % COUNT; CODE } \
-        case 11: { const int INDEX = 10 % COUNT; CODE } \
-        case 10: { const int INDEX =  9 % COUNT; CODE } \
-        case  9: { const int INDEX =  8 % COUNT; CODE } \
-        case  8: { const int INDEX =  7 % COUNT; CODE } \
-        case  7: { const int INDEX =  6 % COUNT; CODE } \
-        case  6: { const int INDEX =  5 % COUNT; CODE } \
-        case  5: { const int INDEX =  4 % COUNT; CODE } \
-        case  4: { const int INDEX =  3 % COUNT; CODE } \
-        case  3: { const int INDEX =  2 % COUNT; CODE } \
-        case  2: { const int INDEX =  1 % COUNT; CODE } \
-        case  1: { const int INDEX =  0 % COUNT; CODE } \
+        case 16: { constexpr int INDEX = 15 % COUNT; CODE } \
+        case 15: { constexpr int INDEX = 14 % COUNT; CODE } \
+        case 14: { constexpr int INDEX = 13 % COUNT; CODE } \
+        case 13: { constexpr int INDEX = 12 % COUNT; CODE } \
+        case 12: { constexpr int INDEX = 11 % COUNT; CODE } \
+        case 11: { constexpr int INDEX = 10 % COUNT; CODE } \
+        case 10: { constexpr int INDEX =  9 % COUNT; CODE } \
+        case  9: { constexpr int INDEX =  8 % COUNT; CODE } \
+        case  8: { constexpr int INDEX =  7 % COUNT; CODE } \
+        case  7: { constexpr int INDEX =  6 % COUNT; CODE } \
+        case  6: { constexpr int INDEX =  5 % COUNT; CODE } \
+        case  5: { constexpr int INDEX =  4 % COUNT; CODE } \
+        case  4: { constexpr int INDEX =  3 % COUNT; CODE } \
+        case  3: { constexpr int INDEX =  2 % COUNT; CODE } \
+        case  2: { constexpr int INDEX =  1 % COUNT; CODE } \
+        case  1: { constexpr int INDEX =  0 % COUNT; CODE } \
     }
 // clang-format on
 
