@@ -1126,8 +1126,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
         auto render_job = [&](const int j, const int portion) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
-                unsigned old_value;
-                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+                _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
             }
 #endif
             for (int i = 0; i < portion; ++i) {
@@ -1138,9 +1137,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
         auto denoise_job_nlm = [&](const int j) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
-                unsigned old_value;
-                //_controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
-                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_INVALID, _MCW_EM);
+                _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_INVALID, _MCW_EM);
             }
 #endif
             renderer.DenoiseImage(region_contexts[j]);
@@ -1149,8 +1146,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
         auto denoise_job_unet = [&](const int pass, const int j) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
-                unsigned old_value;
-                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+                _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
             }
 #endif
             renderer.DenoiseImage(pass, region_contexts[j]);

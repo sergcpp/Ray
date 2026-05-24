@@ -196,10 +196,11 @@ int main(int argc, char *argv[]) {
     g_minimal_output = true;
 
 #if defined(_WIN32) && !defined(__clang__)
-    const bool enable_fp_exceptions = !nocpu || full_tests;
+    bool enable_fp_exceptions = !nocpu || full_tests;
+    // Workaround for Intel SDE crash
+    enable_fp_exceptions &= !preferred_arch[0] || strcmp(preferred_arch[0], "AVX") != 0;
     if (enable_fp_exceptions) {
-        unsigned old_value;
-        _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+        _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
         g_catch_flt_exceptions = true;
     }
 #endif
