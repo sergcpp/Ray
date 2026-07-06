@@ -220,8 +220,9 @@ struct ray_hash_t {
 
 struct cache_voxel_t {
     vec3 radiance;
-    uint sample_count;
+    float sample_count;
     uint frame_count;
+    uint stale_count;
 };
 
 struct cache_grid_params_t {

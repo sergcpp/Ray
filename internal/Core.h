@@ -302,6 +302,41 @@ force_inline int popcount(unsigned x) {
     return c;
 }
 
+static inline uint16_t float_to_half(const float f) {
+    uint32_t x;
+    memcpy(&x, &f, sizeof(uint32_t));
+
+    const uint32_t sign = (x >> 16) & 0x8000;
+    const int exp = ((x >> 23) & 0xff) - 127 + 15;
+    if (exp <= 0) {
+        return uint16_t(sign);
+    }
+    const uint32_t mant = (x >> 13) & 0x3ff;
+
+    return uint16_t(sign | (exp << 10) | mant);
+}
+
+static inline float half_to_float(uint16_t h) {
+    const uint32_t sign = (uint32_t(h & 0x8000) << 16);
+    const uint32_t exp = ((h >> 10) & 0x1f) - 15 + 127;
+    const uint32_t mant = (h & 0x3ff) << 13;
+
+    const uint32_t bits = sign | (exp << 23) | mant;
+
+    float ret;
+    memcpy(&ret, &bits, sizeof(float));
+    return ret;
+}
+
+static inline uint32_t packHalf2x16(const float x, const float y) {
+    return uint32_t(float_to_half(x)) | (uint32_t(float_to_half(y)) << 16);
+}
+
+static inline void unpackHalf2x16(const uint32_t packed, float &x, float &y) {
+    x = half_to_float(uint16_t(packed));
+    y = half_to_float(uint16_t(packed >> 16));
+}
+
 // Creates struct of precomputed triangle data for faster Plucker intersection test
 bool PreprocessTri(const float *p, int stride, tri_accel_t *out_acc);
 
@@ -475,8 +510,9 @@ static_assert(sizeof(pass_info_t) == 20, "!");*/
 
 struct cache_voxel_t {
     float radiance[3] = {};
-    uint32_t sample_count = 0;
+    float sample_count = 0;
     uint32_t frame_count = 0;
+    uint32_t stale_count = 0;
 };
 
 struct packed_cache_voxel_t {
@@ -485,11 +521,10 @@ struct packed_cache_voxel_t {
 
 inline cache_voxel_t unpack_voxel_data(const packed_cache_voxel_t &v) {
     cache_voxel_t ret;
-    ret.radiance[0] = float(v.v[0]) / RAD_CACHE_RADIANCE_SCALE;
-    ret.radiance[1] = float(v.v[1]) / RAD_CACHE_RADIANCE_SCALE;
-    ret.radiance[2] = float(v.v[2]) / RAD_CACHE_RADIANCE_SCALE;
-    ret.sample_count = (v.v[3] >> 0) & RAD_CACHE_SAMPLE_COUNTER_BIT_MASK;
-    ret.frame_count = (v.v[3] >> RAD_CACHE_SAMPLE_COUNTER_BIT_NUM) & RAD_CACHE_FRAME_COUNTER_BIT_MASK;
+    unpackHalf2x16(v.v[0], ret.radiance[0], ret.radiance[1]);
+    unpackHalf2x16(v.v[1], ret.radiance[2], ret.sample_count);
+    ret.frame_count = (v.v[2] >> RAD_CACHE_FRAME_COUNTER_BIT_OFFSET) & RAD_CACHE_FRAME_COUNTER_BIT_MASK;
+    ret.stale_count = (v.v[2] >> RAD_CACHE_STALE_COUNTER_BIT_OFFSET) & RAD_CACHE_STALE_COUNTER_BIT_MASK;
     return ret;
 }
 

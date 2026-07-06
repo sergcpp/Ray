@@ -104,11 +104,10 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
 
 void Ray::NS::Renderer::kernel_MixIncremental(CommandBuffer cmd_buf, const float mix_factor,
                                               const float half_mix_factor, const rect_t &rect, int iteration,
-                                              const float exposure, const Image &temp_img,
-                                              const Image &temp_base_color, const Image &temp_depth_normals,
-                                              const Image &req_samples, const Image &out_full_img,
-                                              const Image &out_half_img, const Image &out_base_color,
-                                              const Image &out_depth_normals) {
+                                              const float exposure, const Image &temp_img, const Image &temp_base_color,
+                                              const Image &temp_depth_normals, const Image &req_samples,
+                                              const Image &out_full_img, const Image &out_half_img,
+                                              const Image &out_base_color, const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {
         {&temp_img, eResState::UnorderedAccess},           {&temp_base_color, eResState::UnorderedAccess},
         {&req_samples, eResState::UnorderedAccess},        {&out_full_img, eResState::UnorderedAccess},
@@ -504,10 +503,10 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
 void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2,
                                                  int out_channels, const Buffer &input_buf1, uint32_t input_offset1,
                                                  int input_stride1, bool upscale1, const Image &img_buf1,
-                                                 const Image &img_buf2, const Image &img_buf3,
-                                                 const Sampler &sampler, const rect_t &rect, int w, int h,
-                                                 const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
-                                                 const Buffer &out_buf, uint32_t output_offset, int output_stride,
+                                                 const Image &img_buf2, const Image &img_buf3, const Sampler &sampler,
+                                                 const rect_t &rect, int w, int h, const Buffer &weights,
+                                                 uint32_t weights_offset, uint32_t biases_offset, const Buffer &out_buf,
+                                                 uint32_t output_offset, int output_stride,
                                                  const Image &out_debug_img) {
     const TransitionInfo res_transitions[] = {{&img_buf1, eResState::ShaderResource},
                                               {&img_buf2, eResState::ShaderResource},
@@ -775,7 +774,6 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
     CacheUpdate::Params uniform_params = {};
     memcpy(&uniform_params.cam_pos_curr[0], params.cam_pos_curr, 3 * sizeof(float));
     uniform_params.cache_w = (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR);
-    uniform_params.entries_count = inout_entries.size() / sizeof(uint64_t);
     uniform_params.exposure = params.exposure;
 
     DispatchComputeIndirect(cmd_buf, pi_.spatial_cache_update, indir_args,
@@ -785,28 +783,28 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
 
 void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const cache_grid_params_t &params,
                                                    const Buffer &inout_entries, const Buffer &inout_voxels_curr,
-                                                   const Buffer &voxels_prev) {
-    const TransitionInfo res_transitions[] = {{&voxels_prev, eResState::ShaderResource},
+                                                   const Buffer &inout_voxels_prev) {
+    const TransitionInfo res_transitions[] = {{&inout_voxels_prev, eResState::ShaderResource},
                                               {&inout_entries, eResState::UnorderedAccess},
                                               {&inout_voxels_curr, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {
-        {eBindTarget::SBufRO, CacheResolve::CACHE_VOXELS_PREV_BUF_SLOT, voxels_prev},
-        {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries},
+        {eBindTarget::SBufRO, CacheResolve::IN_CACHE_VOXELS_PREV_BUF_SLOT, inout_voxels_prev},
+        {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries}, 
         {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_VOXELS_CURR_BUF_SLOT, inout_voxels_curr}};
 
     CacheResolve::Params uniform_params = {};
     memcpy(&uniform_params.cam_pos_curr[0], params.cam_pos_curr, 3 * sizeof(float));
     memcpy(&uniform_params.cam_pos_prev[0], params.cam_pos_prev, 3 * sizeof(float));
     uniform_params.cache_w = (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR);
-    uniform_params.entries_count = inout_entries.size() / sizeof(uint64_t);
+    const uint32_t entries_count = inout_entries.size() / sizeof(uint64_t);
     const bool cam_moved =
         length2(Ref::make_fvec3(params.cam_pos_curr) - Ref::make_fvec3(params.cam_pos_prev)) > FLT_EPS;
     uniform_params.cam_moved = cam_moved ? 1.0f : 0.0f;
 
-    assert((uniform_params.entries_count % CacheResolve::LOCAL_GROUP_SIZE_X) == 0);
-    const uint32_t grp_count[3] = {uniform_params.entries_count / CacheResolve::LOCAL_GROUP_SIZE_X, 1, 1};
+    assert((entries_count % CacheResolve::LOCAL_GROUP_SIZE_X) == 0);
+    const uint32_t grp_count[3] = {entries_count / CacheResolve::LOCAL_GROUP_SIZE_X, 1, 1};
     DispatchCompute(cmd_buf, pi_.spatial_cache_resolve, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
@@ -815,8 +813,7 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
                                                const environment_t &env, const Buffer &indir_args,
                                                const int indir_args_index, const Buffer &hits, const Buffer &rays,
                                                const Buffer &ray_indices, const Buffer &counters,
-                                               const scene_data_t &sc_data, const int iteration,
-                                               const Image &out_img) {
+                                               const scene_data_t &sc_data, const int iteration, const Image &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},

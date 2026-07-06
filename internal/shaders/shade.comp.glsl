@@ -75,17 +75,13 @@ layout(std430, binding = CACHE_VOXELS_BUF_SLOT) readonly buffer CacheVoxels {
     uvec4 g_cache_voxels[];
 };
 
-bool hash_map_find(const uint64_t hash_key, inout uint cache_entry) {
-    const uint hash = hash64(hash_key);
-    const uint slot = hash % HASH_GRID_CACHE_ENTRIES_COUNT;
-    const uint base_slot = hash_map_base_slot(slot);
-    for (uint bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
+bool hash_map_find(const uint64_t hash_key, inout uint cache_entry, out uint bucket_offset) {
+    const uint base_slot = hash_map_base_slot(hash_key);
+    for (bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
         const uint64_t stored_hash_key = (uint64_t(g_cache_entries[base_slot + bucket_offset].y) << 32u) | g_cache_entries[base_slot + bucket_offset].x;
         if (stored_hash_key == hash_key) {
             cache_entry = base_slot + bucket_offset;
             return true;
-        } else if (HASH_GRID_ALLOW_COMPACTION && stored_hash_key == HASH_GRID_INVALID_HASH_KEY) {
-            return false;
         }
     }
     return false;
@@ -93,8 +89,8 @@ bool hash_map_find(const uint64_t hash_key, inout uint cache_entry) {
 
 uint find_entry(const vec3 p, const vec3 n, const cache_grid_params_t params) {
     const uint64_t hash_key = compute_hash(p, n, params);
-    uint cache_entry = HASH_GRID_INVALID_CACHE_ENTRY;
-    hash_map_find(hash_key, cache_entry);
+    uint cache_entry = HASH_GRID_INVALID_CACHE_ENTRY, collisions_count;
+    hash_map_find(hash_key, cache_entry, collisions_count);
     return cache_entry;
 }
 
@@ -2218,8 +2214,8 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
             if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
                 const uvec4 voxel = g_cache_voxels[cache_entry];
                 const cache_voxel_t unpacked = unpack_voxel_data(voxel);
-                if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
-                    vec3 color = unpacked.radiance / float(unpacked.sample_count);
+                if (unpacked.sample_count > RAD_CACHE_SAMPLE_COUNT_THRESHOLD) {
+                    vec3 color = unpacked.radiance;
                     color /= params.exposure;
                     color *= vec3(ray.c[0], ray.c[1], ray.c[2]);
                     return color;

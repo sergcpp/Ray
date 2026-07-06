@@ -9,13 +9,12 @@ struct Params {
     vec4 cam_pos_curr;
     vec4 cam_pos_prev;
     uint cache_w;
-    uint entries_count;
     float cam_moved;
+    uint _pad[2];
 };
 
 const int LOCAL_GROUP_SIZE_X = 256;
 
-const int CACHE_VOXELS_PREV_BUF_SLOT = 3;
 const int HITS_BUF_SLOT = 4;
 const int RAYS_BUF_SLOT = 5;
 const int COUNTERS_BUF_SLOT = 6;
@@ -23,8 +22,9 @@ const int RADIANCE_TEX_SLOT = 7;
 const int DEPTH_NORMAL_TEX_SLOT = 8;
 
 const int INOUT_CACHE_ENTRIES_BUF_SLOT = 0;
-const int INOUT_CACHE_VOXELS_CURR_BUF_SLOT = 1;
-const int INOUT_CACHE_LOCK_BUF_SLOT = 2;
+const int IN_CACHE_VOXELS_PREV_BUF_SLOT = 1;
+const int INOUT_CACHE_VOXELS_CURR_BUF_SLOT = 2;
+const int INOUT_CACHE_LOCK_BUF_SLOT = 3;
 
 INTERFACE_END
 

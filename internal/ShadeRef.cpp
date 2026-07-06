@@ -177,7 +177,7 @@ fvec4 SampleGGX_VNDF_Bounded(const fvec4 &Ve, fvec2 alpha, fvec2 rand) {
 }
 
 float GGX_VNDF_Reflection_Bounded_PDF(const float D, const fvec4 &view_dir_ts, const fvec2 alpha) {
-    const fvec2 ai = alpha * fvec2{view_dir_ts.get<0>(), view_dir_ts.get<1>()};
+    const fvec2 ai = alpha *fvec2{view_dir_ts.get<0>(), view_dir_ts.get<1>()};
     const float len2 = dot(ai, ai);
     const float t = sqrtf(len2 + view_dir_ts.get<2>() * view_dir_ts.get<2>());
     if (view_dir_ts.get<2>() >= 0.0f) {
@@ -1390,8 +1390,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
             if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
                 const packed_cache_voxel_t &voxel = sc.spatial_cache_voxels[cache_entry];
                 const cache_voxel_t unpacked = unpack_voxel_data(voxel);
-                if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
-                    fvec4 color = make_fvec3(unpacked.radiance) / float(unpacked.sample_count);
+                if (unpacked.sample_count > RAD_CACHE_SAMPLE_COUNT_THRESHOLD) {
+                    fvec4 color = make_fvec3(unpacked.radiance);
                     color /= sc.spatial_cache_grid.exposure;
                     color *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
                     return color_rgba_t{color.get<0>(), color.get<1>(), color.get<2>(), color.get<3>()};

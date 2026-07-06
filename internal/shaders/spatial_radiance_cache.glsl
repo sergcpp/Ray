@@ -7,9 +7,12 @@
 
 cache_voxel_t unpack_voxel_data(const uvec4 v) {
     cache_voxel_t ret;
-    ret.radiance = vec3(v.xyz) / RAD_CACHE_RADIANCE_SCALE;
-    ret.sample_count = (v.w >> 0) & RAD_CACHE_SAMPLE_COUNTER_BIT_MASK;
-    ret.frame_count = (v.w >> RAD_CACHE_SAMPLE_COUNTER_BIT_NUM) & RAD_CACHE_FRAME_COUNTER_BIT_MASK;
+    ret.radiance.xy = unpackHalf2x16(v.x);
+    const vec2 temp = unpackHalf2x16(v.y);
+    ret.radiance.z = temp.x;
+    ret.sample_count = temp.y;
+    ret.frame_count = (v.z >> RAD_CACHE_FRAME_COUNTER_BIT_OFFSET) & RAD_CACHE_FRAME_COUNTER_BIT_MASK;
+    ret.stale_count = (v.z >> RAD_CACHE_STALE_COUNTER_BIT_OFFSET) & RAD_CACHE_STALE_COUNTER_BIT_MASK;
     return ret;
 }
 
@@ -31,9 +34,9 @@ uint hash64(const uint64_t hash_key) {
 float log_base(const float x, const float base) { return log(x) / log(base); }
 
 uint calc_grid_level(const vec3 p, const cache_grid_params_t params) {
-    const float distance = length(params.cam_pos_curr - p);
+    const float distance2 = length2(params.cam_pos_curr - p);
     const float ret =
-        clamp(floor(log_base(distance, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0, HASH_GRID_LEVEL_BIT_MASK);
+        clamp(floor(0.5 * log_base(distance2, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0, HASH_GRID_LEVEL_BIT_MASK);
     return uint(ret);
 }
 
@@ -41,7 +44,9 @@ float calc_voxel_size(uint grid_level, const cache_grid_params_t params) {
     return pow(params.log_base, grid_level) / (params.scale * pow(params.log_base, HASH_GRID_LEVEL_BIAS));
 }
 
-ivec4 calc_grid_position_log(const vec3 p, const cache_grid_params_t params) {
+ivec4 calc_grid_position_log(vec3 p, const cache_grid_params_t params) {
+    p += HASH_GRID_POSITION_BIAS;
+
     const uint grid_level = calc_grid_level(p, params);
     const float voxel_size = calc_voxel_size(grid_level, params);
     ivec4 grid_position;
@@ -50,26 +55,27 @@ ivec4 calc_grid_position_log(const vec3 p, const cache_grid_params_t params) {
     return grid_position;
 }
 
-uint hash_map_base_slot(const uint slot) {
-    if (HASH_GRID_ALLOW_COMPACTION) {
-        return (slot / HASH_GRID_HASH_MAP_BUCKET_SIZE) * HASH_GRID_HASH_MAP_BUCKET_SIZE;
-    } else {
-        return slot;
-    }
+uint hash_map_base_slot(const uint64_t hash_key) {
+    const uint hash = hash64(hash_key);
+    const uint slot = hash % HASH_GRID_CACHE_ENTRIES_COUNT;
+
+    return min(slot, HASH_GRID_CACHE_ENTRIES_COUNT - HASH_GRID_HASH_MAP_BUCKET_SIZE);
 }
 
 uint64_t compute_hash(const vec3 p, const vec3 n, const cache_grid_params_t params) {
     const uvec4 grid_pos = uvec4(calc_grid_position_log(p, params));
 
     uint64_t hash_key =
-        ((uint64_t(grid_pos.x) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 0)) |
-        ((uint64_t(grid_pos.y) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 1)) |
-        ((uint64_t(grid_pos.z) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 2)) |
-        ((uint64_t(grid_pos.w) & HASH_GRID_LEVEL_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 3));
+        ((uint64_t(grid_pos.x) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 0)) |
+        ((uint64_t(grid_pos.y) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 1)) |
+        ((uint64_t(grid_pos.z) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 2)) |
+        ((uint64_t(grid_pos.w) & HASH_GRID_LEVEL_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 3));
 
     if (HASH_GRID_USE_NORMALS) {
-        const uint normal_bits = (n.x >= 0 ? 1 : 0) + (n.y >= 0 ? 2 : 0) + (n.z >= 0 ? 4 : 0);
-        hash_key |= (uint64_t(normal_bits) << (HASH_GRID_POSITION_BIT_NUM * 3 + HASH_GRID_LEVEL_BIT_NUM));
+        const uint normal_bits = (n.x + HASH_GRID_NORMAL_BIAS >= 0 ? 0 : 1) +
+                                 (n.y + HASH_GRID_NORMAL_BIAS >= 0 ? 0 : 2) +
+                                 (n.z + HASH_GRID_NORMAL_BIAS >= 0 ? 0 : 4);
+        hash_key |= (uint64_t(normal_bits) << (HASH_GRID_POSITION_BIT_COUNT * 3 + HASH_GRID_LEVEL_BIT_COUNT));
     }
 
     return hash_key;
@@ -93,20 +99,20 @@ vec3 hash_grid_debug(const vec3 p, const vec3 n, const cache_grid_params_t param
 }
 
 uint64_t get_adjacent_level_hash(const uint64_t hash_key, const cache_grid_params_t params) {
-    const uint NegativeBit = 1u << (HASH_GRID_POSITION_BIT_NUM - 1);
-    const uint NegativeMask = ~((1u << HASH_GRID_POSITION_BIT_NUM) - 1);
+    const int SignBit = int(1u << (HASH_GRID_POSITION_BIT_COUNT - 1u));
+    const int SignMask = int(~((1u << HASH_GRID_POSITION_BIT_COUNT) - 1u));
 
     ivec3 grid_pos;
-    grid_pos.x = int((hash_key >> HASH_GRID_POSITION_BIT_NUM * 0) & HASH_GRID_POSITION_BIT_MASK);
-    grid_pos.y = int((hash_key >> HASH_GRID_POSITION_BIT_NUM * 1) & HASH_GRID_POSITION_BIT_MASK);
-    grid_pos.z = int((hash_key >> HASH_GRID_POSITION_BIT_NUM * 2) & HASH_GRID_POSITION_BIT_MASK);
+    grid_pos.x = int((hash_key >> (HASH_GRID_POSITION_BIT_COUNT * 0)) & HASH_GRID_POSITION_BIT_MASK);
+    grid_pos.y = int((hash_key >> (HASH_GRID_POSITION_BIT_COUNT * 1)) & HASH_GRID_POSITION_BIT_MASK);
+    grid_pos.z = int((hash_key >> (HASH_GRID_POSITION_BIT_COUNT * 2)) & HASH_GRID_POSITION_BIT_MASK);
 
     // Fix negative coordinates
-    grid_pos.x = int((grid_pos.x & NegativeBit) != 0 ? grid_pos.x | NegativeMask : grid_pos.x);
-    grid_pos.y = int((grid_pos.y & NegativeBit) != 0 ? grid_pos.y | NegativeMask : grid_pos.y);
-    grid_pos.z = int((grid_pos.z & NegativeBit) != 0 ? grid_pos.z | NegativeMask : grid_pos.z);
+    grid_pos.x = int((grid_pos.x & SignBit) != 0 ? grid_pos.x | SignMask : grid_pos.x);
+    grid_pos.y = int((grid_pos.y & SignBit) != 0 ? grid_pos.y | SignMask : grid_pos.y);
+    grid_pos.z = int((grid_pos.z & SignBit) != 0 ? grid_pos.z | SignMask : grid_pos.z);
 
-    int level = int((hash_key >> (HASH_GRID_POSITION_BIT_NUM * 3)) & HASH_GRID_LEVEL_BIT_MASK);
+    int level = int((hash_key >> (HASH_GRID_POSITION_BIT_COUNT * 3)) & HASH_GRID_LEVEL_BIT_MASK);
 
     const float voxel_size = calc_voxel_size(level, params);
     const ivec3 camera_grid_pos_curr = ivec3(floor(params.cam_pos_curr / voxel_size));
@@ -126,14 +132,14 @@ uint64_t get_adjacent_level_hash(const uint64_t hash_key, const cache_grid_param
     }
 
     uint64_t modified_hash_key =
-        ((uint64_t(grid_pos.x) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 0)) |
-        ((uint64_t(grid_pos.y) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 1)) |
-        ((uint64_t(grid_pos.z) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 2)) |
-        ((uint64_t(level) & HASH_GRID_LEVEL_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 3));
+        ((uint64_t(grid_pos.x) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 0)) |
+        ((uint64_t(grid_pos.y) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 1)) |
+        ((uint64_t(grid_pos.z) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 2)) |
+        ((uint64_t(level) & HASH_GRID_LEVEL_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 3));
 
     if (HASH_GRID_USE_NORMALS) {
         modified_hash_key |= hash_key & (uint64_t(HASH_GRID_NORMAL_BIT_MASK)
-                                         << (HASH_GRID_POSITION_BIT_NUM * 3 + HASH_GRID_LEVEL_BIT_NUM));
+                                         << (HASH_GRID_POSITION_BIT_COUNT * 3 + HASH_GRID_LEVEL_BIT_COUNT));
     }
 
     return modified_hash_key;

@@ -28,9 +28,9 @@ Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_co
     SceneBase::log_ = log;
     SetEnvironment({});
     if (use_spatial_cache) {
-        spatial_cache_entries_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, 0);
-        spatial_cache_voxels_curr_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, {});
-        spatial_cache_voxels_prev_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, {});
+        spatial_cache_entries_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, 0);      // 32mb
+        spatial_cache_voxels_curr_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, {}); // 64mb
+        spatial_cache_voxels_prev_.resize(HASH_GRID_CACHE_ENTRIES_COUNT, {}); // 64mb
     }
 }
 

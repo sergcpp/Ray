@@ -1521,6 +1521,16 @@ template <int S> force_inline fvec<S> distance(const fvec<S> p1[3], const float 
     return length(temp);
 }
 
+template <int S> force_inline fvec<S> distance2(const fvec<S> p1[3], const fvec<S> p2[3]) {
+    const fvec<S> temp[3] = {p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]};
+    return length2(temp);
+}
+
+template <int S> force_inline fvec<S> distance2(const fvec<S> p1[3], const float p2[3]) {
+    const fvec<S> temp[3] = {p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]};
+    return length2(temp);
+}
+
 template <int S> force_inline fvec<S> pow(const float base, const fvec<S> exponent) {
     fvec<S> ret;
     UNROLLED_FOR_S(i, S, { ret.template set<i>(powf(base, exponent[i])); })
@@ -2813,9 +2823,9 @@ template <int S> void calc_lnode_importance(const light_cwbvh_node_t &n, const f
 }
 
 template <int S> uvec<S> calc_grid_level(const fvec<S> p[3], const cache_grid_params_t &params) {
-    const fvec<S> dist = distance(p, params.cam_pos_curr);
+    const fvec<S> dist2 = distance2(p, params.cam_pos_curr);
     const fvec<S> ret =
-        clamp(floor(log_base(dist, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0f, HASH_GRID_LEVEL_BIT_MASK);
+        clamp(floor(0.5 * log_base(dist2, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0f, HASH_GRID_LEVEL_BIT_MASK);
     return uvec<S>(ret);
 }
 
@@ -7626,9 +7636,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                 if (cache_entry != HASH_GRID_INVALID_CACHE_ENTRY) {
                     const packed_cache_voxel_t &voxel = sc.spatial_cache_voxels[cache_entry];
                     const cache_voxel_t unpacked = unpack_voxel_data(voxel);
-                    if (unpacked.sample_count >= RAD_CACHE_SAMPLE_COUNT_MIN) {
-                        fvec4 color = fvec4{unpacked.radiance[0], unpacked.radiance[1], unpacked.radiance[2], 0.0f} /
-                                      float(unpacked.sample_count);
+                    if (unpacked.sample_count > RAD_CACHE_SAMPLE_COUNT_THRESHOLD) {
+                        fvec4 color = fvec4{unpacked.radiance[0], unpacked.radiance[1], unpacked.radiance[2], 0.0f};
                         color /= sc.spatial_cache_grid.exposure;
                         color *= fvec4{ray.c[0][i], ray.c[1][i], ray.c[2][i], 0.0f};
 
@@ -8327,7 +8336,9 @@ uint32_t calc_grid_level(const fvec4 &p, const cache_grid_params_t &params) {
     return uint32_t(ret);
 }
 
-ivec4 calc_grid_position_log(const fvec4 &p, const cache_grid_params_t &params) {
+ivec4 calc_grid_position_log(fvec4 p, const cache_grid_params_t &params) {
+    p += HASH_GRID_POSITION_BIAS;
+
     const uint32_t grid_level = calc_grid_level(p, params);
     const float voxel_size = calc_voxel_size(grid_level, params);
     ivec4 grid_position = ivec4(floor(p / voxel_size));
@@ -8339,33 +8350,31 @@ uint64_t compute_hash(const fvec4 &p, const fvec4 &n, const cache_grid_params_t 
     const uvec4 grid_pos = uvec4(calc_grid_position_log(p, params));
 
     uint64_t hash_key =
-        ((uint64_t(grid_pos.get<0>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 0)) |
-        ((uint64_t(grid_pos.get<1>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 1)) |
-        ((uint64_t(grid_pos.get<2>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 2)) |
-        ((uint64_t(grid_pos.get<3>()) & HASH_GRID_LEVEL_BIT_MASK) << (HASH_GRID_POSITION_BIT_NUM * 3));
+        ((uint64_t(grid_pos.get<0>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 0)) |
+        ((uint64_t(grid_pos.get<1>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 1)) |
+        ((uint64_t(grid_pos.get<2>()) & HASH_GRID_POSITION_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 2)) |
+        ((uint64_t(grid_pos.get<3>()) & HASH_GRID_LEVEL_BIT_MASK) << (HASH_GRID_POSITION_BIT_COUNT * 3));
 
     if (HASH_GRID_USE_NORMALS) {
-        const uint32_t normal_bits = (n.get<0>() >= 0 ? 1 : 0) + (n.get<1>() >= 0 ? 2 : 0) + (n.get<2>() >= 0 ? 4 : 0);
-        hash_key |= (uint64_t(normal_bits) << (HASH_GRID_POSITION_BIT_NUM * 3 + HASH_GRID_LEVEL_BIT_NUM));
+        const uint32_t normal_bits = (n.get<0>() + HASH_GRID_NORMAL_BIAS >= 0 ? 0 : 1) +
+                                     (n.get<1>() + HASH_GRID_NORMAL_BIAS >= 0 ? 0 : 2) +
+                                     (n.get<2>() + HASH_GRID_NORMAL_BIAS >= 0 ? 0 : 4);
+        hash_key |= (uint64_t(normal_bits) << (HASH_GRID_POSITION_BIT_COUNT * 3 + HASH_GRID_LEVEL_BIT_COUNT));
     }
 
     return hash_key;
 }
 
-force_inline uint32_t hash_map_base_slot(const uint32_t slot) {
-    if (HASH_GRID_ALLOW_COMPACTION) {
-        return (slot / HASH_GRID_HASH_MAP_BUCKET_SIZE) * HASH_GRID_HASH_MAP_BUCKET_SIZE;
-    } else {
-        return slot;
-    }
+force_inline uint32_t hash_map_base_slot(const uint64_t hash_key) {
+    const uint32_t hash = hash64(hash_key);
+    const uint32_t slot = hash % HASH_GRID_CACHE_ENTRIES_COUNT;
+
+    return std::min(slot, HASH_GRID_CACHE_ENTRIES_COUNT - HASH_GRID_HASH_MAP_BUCKET_SIZE);
 }
 
 bool hash_map_insert(Span<uint64_t> entries, const uint64_t hash_key, uint32_t &cache_entry) {
-    const uint32_t hash = hash64(hash_key);
-    const uint32_t slot = hash % entries.size();
-    const uint32_t base_slot = hash_map_base_slot(slot);
-    for (uint32_t bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE && base_slot < entries.size();
-         ++bucket_offset) {
+    const uint32_t base_slot = hash_map_base_slot(hash_key);
+    for (uint32_t bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
         const uint64_t prev_hash_key =
             Ray_InterlockedCompareExchange64(&entries[base_slot + bucket_offset], hash_key, HASH_GRID_INVALID_HASH_KEY);
         if (prev_hash_key == HASH_GRID_INVALID_HASH_KEY || prev_hash_key == hash_key) {
@@ -8373,21 +8382,17 @@ bool hash_map_insert(Span<uint64_t> entries, const uint64_t hash_key, uint32_t &
             return true;
         }
     }
-    cache_entry = 0;
     return false;
 }
 
-bool hash_map_find(Span<const uint64_t> entries, const uint64_t hash_key, uint32_t &cache_entry) {
-    const uint32_t hash = hash64(hash_key);
-    const uint32_t slot = hash % entries.size();
-    const uint32_t base_slot = hash_map_base_slot(slot);
-    for (uint32_t bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
+bool hash_map_find(Span<const uint64_t> entries, const uint64_t hash_key, uint32_t &cache_entry,
+                   uint32_t &bucket_offset) {
+    const uint32_t base_slot = hash_map_base_slot(hash_key);
+    for (bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
         const uint64_t stored_hash_key = entries[base_slot + bucket_offset];
         if (stored_hash_key == hash_key) {
             cache_entry = base_slot + bucket_offset;
             return true;
-        } else if (HASH_GRID_ALLOW_COMPACTION && stored_hash_key == HASH_GRID_INVALID_HASH_KEY) {
-            return false;
         }
     }
     return false;
@@ -8402,8 +8407,8 @@ uint32_t insert_entry(Span<uint64_t> entries, const fvec4 &p, const fvec4 &n, co
 
 uint32_t find_entry(Span<const uint64_t> entries, const fvec4 &p, const fvec4 &n, const cache_grid_params_t &params) {
     const uint64_t hash_key = compute_hash(p, n, params);
-    uint32_t cache_entry = HASH_GRID_INVALID_CACHE_ENTRY;
-    hash_map_find(entries, hash_key, cache_entry);
+    uint32_t cache_entry = HASH_GRID_INVALID_CACHE_ENTRY, collisions_count;
+    hash_map_find(entries, hash_key, cache_entry, collisions_count);
     return cache_entry;
 }
 

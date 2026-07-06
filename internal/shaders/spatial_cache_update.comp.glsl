@@ -50,7 +50,7 @@ layout(std430, binding = INOUT_CACHE_LOCK_BUF_SLOT) buffer InOutLockBuffer {
 
 uint64_t AtomicCompSwapEntry(const uint i, const uint64_t compare, const uint64_t data) {
 #if !NO_64BIT_ATOMICS
-    uint64_t ret = atomicCompSwap(g_inout_cache_entries[i], compare, data);
+    const uint64_t ret = atomicCompSwap(g_inout_cache_entries[i], compare, data);
 #else
     const uint Retries = 8;
     uint fuse = 0;
@@ -74,18 +74,14 @@ uint64_t AtomicCompSwapEntry(const uint i, const uint64_t compare, const uint64_
 }
 
 bool hash_map_insert(const uint64_t hash_key, out uint cache_entry) {
-    const uint hash = hash64(hash_key);
-    const uint slot = hash % g_params.entries_count;
-    const uint base_slot = hash_map_base_slot(slot);
-    for (uint bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE && base_slot < g_params.entries_count;
-         ++bucket_offset) {
+    const uint base_slot = hash_map_base_slot(hash_key);
+    for (uint bucket_offset = 0; bucket_offset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucket_offset) {
         const uint64_t prev_hash_key = AtomicCompSwapEntry(base_slot + bucket_offset, HASH_GRID_INVALID_HASH_KEY, hash_key);
         if (prev_hash_key == HASH_GRID_INVALID_HASH_KEY || prev_hash_key == hash_key) {
             cache_entry = base_slot + bucket_offset;
             return true;
         }
     }
-    cache_entry = 0;
     return false;
 }
 

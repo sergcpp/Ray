@@ -8,8 +8,8 @@ INTERFACE_START(CacheUpdate)
 struct Params {
     vec4 cam_pos_curr;
     uint cache_w;
-    uint entries_count;
     float exposure;
+    uint _pad[2];
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
