@@ -151,7 +151,7 @@ void accumulate_cache_voxel(packed_cache_voxel_t &voxel, const fvec4 &r, const u
 
 uint32_t Ray::Ref::calc_grid_level(const fvec4 &p, const cache_grid_params_t &params) {
     const float distance2 = length2(make_fvec3(params.cam_pos_curr) - p);
-    const float ret = Ray::clamp(floorf(0.5 * log_base(distance2, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0f,
+    const float ret = Ray::clamp(floorf(0.5f * log_base(distance2, params.log_base) + HASH_GRID_LEVEL_BIAS), 1.0f,
                                  HASH_GRID_LEVEL_BIT_MASK);
     return uint32_t(ret);
 }
@@ -260,7 +260,7 @@ void Ray::Ref::SpatialCacheResolve(const cache_grid_params_t &params, Span<uint6
         if (sample_count_prev == 0.0f) {
             for (uint32_t j = i + 1; j < i + 1 + RAD_CACHE_LINEAR_PROBE_WINDOW; ++j) {
                 const uint32_t slot_index = j % HASH_GRID_CACHE_ENTRIES_COUNT;
-                const uint32_t hash_key_old = entries[slot_index];
+                const uint64_t hash_key_old = entries[slot_index];
                 if (hash_key_old == hash_key) {
                     voxel_prev = unpack_voxel_data(voxels_prev[slot_index]);
                     sample_count_prev = voxel_prev.sample_count;
