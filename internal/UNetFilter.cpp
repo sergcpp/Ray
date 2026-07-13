@@ -195,7 +195,7 @@ int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, cons
                    resources[rhs].size * (resources[rhs].lifetime[1] - resources[rhs].lifetime[0]);
         });
 
-        std::vector<int> heap_tops(UNetFilterPasses, 0);
+        std::vector<int> heap_tops(UNetFilterPasses, 0), peak_live(UNetFilterPasses, 0);
 
         for (int i = 0; i < resource_count; ++i) {
             const resource_t &r = resources[placement_order[i]];
@@ -210,12 +210,12 @@ int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, cons
 
             for (int j = r.lifetime[0]; j <= r.lifetime[1]; ++j) {
                 heap_tops[j] = heap_top;
+                peak_live[j] += r.size;
             }
         }
 
-        for (int i = 0; i < UNetFilterPasses; ++i) {
-            required_memory = std::max(required_memory, heap_tops[i]);
-        }
+        required_memory = *std::max_element(begin(heap_tops), end(heap_tops));
+        assert(required_memory == *std::max_element(begin(peak_live), end(peak_live)));
 
         for (int i = UNetFilterPasses - 1; i >= 0; --i) {
             const pass_t &pass = passes[i];
