@@ -210,22 +210,19 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial_nolock(const shading_node_desc_
     material_t mat = {};
 
     mat.type = m.type;
-    mat.textures[BASE_TEXTURE] = m.base_texture._index;
+    mat.textures[BASE_TEXTURE] = m.base_color.texture._index;
     mat.roughness_unorm = pack_unorm_16(clamp(m.roughness, 0.0f, 1.0f));
     mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
-    memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
+    memcpy(&mat.base_color[0], &m.base_color.color[0], 3 * sizeof(float));
     mat.ior = m.ior;
     mat.tangent_rotation = 0.0f;
     mat.flags = 0;
 
     if (m.type == eShadingNode::Diffuse) {
-        mat.sheen_unorm = pack_unorm_16(clamp(0.5f * m.sheen, 0.0f, 1.0f));
-        mat.sheen_tint_unorm = pack_unorm_16(clamp(m.tint, 0.0f, 1.0f));
-        mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
     } else if (m.type == eShadingNode::Glossy) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
-        mat.tint_unorm = pack_unorm_16(clamp(m.tint, 0.0f, 1.0f));
+        // mat.specular_tint_unorm = pack_unorm_16(clamp(m.tint, 0.0f, 1.0f));
     } else if (m.type == eShadingNode::Refractive) {
     } else if (m.type == eShadingNode::Emissive) {
         mat.strength = m.strength;
@@ -253,27 +250,33 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
     material_t main_mat = {};
 
     main_mat.type = eShadingNode::Principled;
-    main_mat.textures[BASE_TEXTURE] = m.base_texture._index;
-    memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
-    main_mat.sheen_unorm = pack_unorm_16(clamp(0.5f * m.sheen, 0.0f, 1.0f));
-    main_mat.sheen_tint_unorm = pack_unorm_16(clamp(m.sheen_tint, 0.0f, 1.0f));
-    main_mat.roughness_unorm = pack_unorm_16(clamp(m.roughness, 0.0f, 1.0f));
-    main_mat.tangent_rotation = 2.0f * PI * clamp(m.anisotropic_rotation, 0.0f, 1.0f);
-    main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
-    main_mat.metallic_unorm = pack_unorm_16(clamp(m.metallic, 0.0f, 1.0f));
-    main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
-    main_mat.ior = m.ior;
+    main_mat.textures[BASE_TEXTURE] = m.base_color.texture._index;
+    memcpy(&main_mat.base_color[0], &m.base_color.color[0], 3 * sizeof(float));
     main_mat.flags = 0;
-    main_mat.transmission_unorm = pack_unorm_16(clamp(m.transmission, 0.0f, 1.0f));
-    main_mat.transmission_roughness_unorm = pack_unorm_16(clamp(m.transmission_roughness, 0.0f, 1.0f));
-    main_mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
-    main_mat.normal_map_strength_unorm = pack_unorm_16(clamp(m.normal_map_intensity, 0.0f, 1.0f));
-    main_mat.anisotropic_unorm = pack_unorm_16(clamp(m.anisotropic, 0.0f, 1.0f));
-    main_mat.specular_unorm = pack_unorm_16(clamp(m.specular, 0.0f, 1.0f));
-    main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture._index;
-    main_mat.specular_tint_unorm = pack_unorm_16(clamp(m.specular_tint, 0.0f, 1.0f));
-    main_mat.clearcoat_unorm = pack_unorm_16(clamp(m.clearcoat, 0.0f, 1.0f));
-    main_mat.clearcoat_roughness_unorm = pack_unorm_16(clamp(m.clearcoat_roughness, 0.0f, 1.0f));
+    main_mat.sheen_unorm = pack_unorm_16(clamp(m.sheen.weight, 0.0f, 1.0f));
+    main_mat.sheen_roughness_unorm = pack_unorm_16(clamp(m.sheen.roughness, 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm[0] = pack_unorm_16(clamp(m.sheen.tint.color[0], 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm[1] = pack_unorm_16(clamp(m.sheen.tint.color[1], 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm[2] = pack_unorm_16(clamp(m.sheen.tint.color[2], 0.0f, 1.0f));
+    main_mat.roughness_unorm = pack_unorm_16(clamp(m.roughness.value, 0.0f, 1.0f));
+    main_mat.textures[ROUGH_TEXTURE] = m.roughness.texture._index;
+    main_mat.tangent_rotation = 2.0f * PI * clamp(m.specular.anisotropic_rotation, 0.0f, 1.0f);
+    main_mat.metallic_unorm = pack_unorm_16(clamp(m.metallic.value, 0.0f, 1.0f));
+    main_mat.textures[METALLIC_TEXTURE] = m.metallic.texture._index;
+    main_mat.ior = m.ior;
+    main_mat.diffuse_roughness_unorm = pack_unorm_16(clamp(m.diffuse.roughness, 0.0f, 1.0f));
+    main_mat.transmission_unorm = pack_unorm_16(clamp(m.transmission.weight, 0.0f, 1.0f));
+    main_mat.textures[NORMALS_TEXTURE] = m.normal_map.texture._index;
+    main_mat.normal_map_strength_unorm = pack_unorm_16(clamp(m.normal_map.value, 0.0f, 1.0f));
+    main_mat.anisotropic_unorm = pack_unorm_16(clamp(m.specular.anisotropic, 0.0f, 1.0f));
+    main_mat.ior_level_unorm = pack_unorm_16(clamp(m.specular.ior_level.value, 0.0f, 1.0f));
+    main_mat.textures[IOR_LEVEL_TEXTURE] = m.specular.ior_level.texture._index;
+    main_mat.specular_tint_unorm[0] = pack_unorm_16(clamp(m.specular.tint.color[0], 0.0f, 1.0f));
+    main_mat.specular_tint_unorm[1] = pack_unorm_16(clamp(m.specular.tint.color[1], 0.0f, 1.0f));
+    main_mat.specular_tint_unorm[2] = pack_unorm_16(clamp(m.specular.tint.color[2], 0.0f, 1.0f));
+    main_mat.coat_weight_unorm = pack_unorm_16(clamp(m.coat.weight, 0.0f, 1.0f));
+    main_mat.coat_roughness_unorm = pack_unorm_16(clamp(m.coat.roughness, 0.0f, 1.0f));
+    main_mat.coat_ior = m.coat.ior;
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
@@ -281,20 +284,20 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
     auto root_node = MaterialHandle{rn.first, rn.second};
     MaterialHandle emissive_node = InvalidMaterialHandle, transparent_node = InvalidMaterialHandle;
 
-    if (m.emission_strength > 0.0f &&
-        (m.emission_color[0] > 0.0f || m.emission_color[1] > 0.0f || m.emission_color[2] > 0.0f)) {
+    if (m.emission.strength > 0.0f &&
+        (m.emission.color.color[0] > 0.0f || m.emission.color.color[1] > 0.0f || m.emission.color.color[2] > 0.0f)) {
         shading_node_desc_t emissive_desc;
         emissive_desc.type = eShadingNode::Emissive;
 
-        memcpy(emissive_desc.base_color, m.emission_color, 3 * sizeof(float));
-        emissive_desc.base_texture = m.emission_texture;
-        emissive_desc.strength = m.emission_strength;
-        emissive_desc.importance_sample = m.importance_sample;
+        memcpy(emissive_desc.base_color.color, m.emission.color.color, 3 * sizeof(float));
+        emissive_desc.base_color.texture = m.emission.color.texture;
+        emissive_desc.strength = m.emission.strength;
+        emissive_desc.importance_sample = m.emission.importance_sample;
 
         emissive_node = AddMaterial_nolock(emissive_desc);
     }
 
-    if (m.alpha != 1.0f || m.alpha_texture != InvalidTextureHandle) {
+    if (m.alpha.value != 1.0f || m.alpha.texture != InvalidTextureHandle) {
         shading_node_desc_t transparent_desc;
         transparent_desc.type = eShadingNode::Transparent;
 
@@ -307,7 +310,7 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
         } else {
             shading_node_desc_t mix_node;
             mix_node.type = eShadingNode::Mix;
-            mix_node.base_texture = InvalidTextureHandle;
+            mix_node.base_color.texture = InvalidTextureHandle;
             mix_node.strength = 0.5f;
             mix_node.ior = 0.0f;
             mix_node.mix_add = true;
@@ -320,13 +323,13 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
     }
 
     if (transparent_node != InvalidMaterialHandle) {
-        if (root_node == InvalidMaterialHandle || m.alpha == 0.0f) {
+        if (root_node == InvalidMaterialHandle || m.alpha.value == 0.0f) {
             root_node = transparent_node;
         } else {
             shading_node_desc_t mix_node;
             mix_node.type = eShadingNode::Mix;
-            mix_node.base_texture = m.alpha_texture;
-            mix_node.strength = m.alpha;
+            mix_node.base_color.texture = m.alpha.texture;
+            mix_node.strength = m.alpha.value;
             mix_node.ior = 0.0f;
 
             mix_node.mix_materials[0] = transparent_node;

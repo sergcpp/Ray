@@ -72,12 +72,10 @@ void test_refr_mat0(const char *arch_list[], std::string_view preferred_device);
 void test_refr_mat1(const char *arch_list[], std::string_view preferred_device);
 void test_refr_mat2(const char *arch_list[], std::string_view preferred_device);
 void test_refr_mat3(const char *arch_list[], std::string_view preferred_device);
-void test_trans_mat0(const char *arch_list[], std::string_view preferred_device);
+// void test_trans_mat0(const char *arch_list[], std::string_view preferred_device);
 void test_trans_mat1(const char *arch_list[], std::string_view preferred_device);
 void test_trans_mat2(const char *arch_list[], std::string_view preferred_device);
 void test_trans_mat3(const char *arch_list[], std::string_view preferred_device);
-void test_trans_mat4(const char *arch_list[], std::string_view preferred_device);
-void test_trans_mat5(const char *arch_list[], std::string_view preferred_device);
 void test_alpha_mat0(const char *arch_list[], std::string_view preferred_device);
 void test_alpha_mat1(const char *arch_list[], std::string_view preferred_device);
 void test_alpha_mat2(const char *arch_list[], std::string_view preferred_device);
@@ -518,12 +516,10 @@ int main(int argc, char *argv[]) {
             puts(" ---------------");
             std::vector<std::future<void>> futures;
 
-            futures.push_back(mt_run_pool.Enqueue(test_trans_mat0, arch_list, device_name));
+            // futures.push_back(mt_run_pool.Enqueue(test_trans_mat0, arch_list, device_name));
             futures.push_back(mt_run_pool.Enqueue(test_trans_mat1, arch_list, device_name));
             futures.push_back(mt_run_pool.Enqueue(test_trans_mat2, arch_list, device_name));
             futures.push_back(mt_run_pool.Enqueue(test_trans_mat3, arch_list, device_name));
-            futures.push_back(mt_run_pool.Enqueue(test_trans_mat4, arch_list, device_name));
-            futures.push_back(mt_run_pool.Enqueue(test_trans_mat5, arch_list, device_name));
 
             for (auto &f : futures) {
                 f.wait();

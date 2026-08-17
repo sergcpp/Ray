@@ -30,10 +30,10 @@ const uint TEX_SRGB_BIT = (1u << 24);           // 0b00000001
 const uint TEX_RECONSTRUCT_Z_BIT = (2u << 24);  // 0b00000010
 const uint TEX_YCOCG_BIT = (4u << 24);          // 0b00000100
 
-const uint TEXTURES_SAMPLER_SLOT = 22;
-const uint TEXTURES_SIZE_SLOT = 23;
-const uint TEXTURES_BUF_SLOT = 24;
-const uint TEXTURE_ATLASES_SLOT = 25;
+const uint TEXTURES_SAMPLER_SLOT = 29;
+const uint TEXTURES_SIZE_SLOT = 30;
+const uint TEXTURES_BUF_SLOT = 31;
+const uint TEXTURE_ATLASES_SLOT = 32;
 
 const int FILTER_BOX = 0;
 const int FILTER_GAUSSIAN = 1;
@@ -193,14 +193,17 @@ struct material_t {
     uint flags;
     uint type;
     float tangent_rotation_or_strength;
-    uint roughness_and_anisotropic;
+    uint roughness_and_anisotropic;             // roughness_unorm | anisotropic_unorm
     float ior;
-    uint sheen_and_sheen_tint;
-    uint tint_and_metallic;
-    uint transmission_and_transmission_roughness;
-    uint specular_and_specular_tint;
-    uint clearcoat_and_clearcoat_roughness;
-    uint normal_map_strength_unorm;
+    uint diffuse_and_sheen;                     // diffuse_roughness_unorm | sheen_unorm
+    uint sheen_roughness_and_sheen_tint0;       // sheen_roughness_unorm | sheen_tint_unorm[0]
+    uint sheen_tint12;                          // sheen_tint_unorm[1] | sheen_tint_unorm[2]
+    uint metallic_and_transmission;             // metallic_unorm | transmission_unorm
+    uint ior_level_and_specular_tint0;          // ior_level_unorm | specular_tint_unorm[0]
+    uint specular_tint12;                       // specular_tint_unorm[1] | specular_tint_unorm[2]
+    uint coat_weight_and_coat_roughness;        // coat_weight_unorm | coat_roughness_unorm
+    uint normal_map_strength_unorm;             // normal_map_strength_unorm | (padding)
+    float coat_ior;
 };
 
 struct atlas_texture_t {

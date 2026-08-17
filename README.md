@@ -19,7 +19,7 @@ Features:
 <details>
   <summary>Images</summary>
 
-  - Rendered with time limit of 15 seconds on RTX 3080.
+  - Rendered with time limit of 15 seconds on RX 9070 XT.
   - Links to the original scenes:  \
     Staircase, Coffee maker - https://benedikt-bitterli.me/resources/  \
     Italian flat - https://www.blender.org/download/demo-files/  \

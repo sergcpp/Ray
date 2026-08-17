@@ -293,6 +293,7 @@ force_inline float clamp(const float val, const float min, const float max) {
 force_inline float saturate(const float val) { return clamp(val, 0.0f, 1.0f); }
 
 force_inline float sqr(const float x) { return x * x; }
+force_inline fvec4 sqr(const fvec4 &x) { return x * x; }
 
 force_inline fvec4 world_from_tangent(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &V) {
     return V.get<0>() * T + V.get<1>() * B + V.get<2>() * N;
@@ -305,6 +306,9 @@ force_inline fvec4 tangent_from_world(const fvec4 &T, const fvec4 &B, const fvec
 float portable_cos(float a);
 float portable_sin(float a);
 fvec2 portable_sincos(float a);
+
+float portable_asinf(float x);
+float portable_acosf(float x);
 
 fvec2 get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const int sample, const uint32_t rand_seq[]);
 

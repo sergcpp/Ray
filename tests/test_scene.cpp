@@ -19,7 +19,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_d
         return;
     }
 
-    if (mat_desc.base_texture != Ray::InvalidTextureHandle && textures[0]) {
+    if (mat_desc.base_color.texture != Ray::InvalidTextureHandle && textures[0]) {
         int img_w, img_h;
         auto img_data = LoadTGA(textures[0], true /* flip_y */, img_w, img_h);
         require(!img_data.empty());
@@ -39,7 +39,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_d
         tex_desc.generate_mipmaps = true;
         tex_desc.is_srgb = true;
 
-        mat_desc.base_texture = scene.AddTexture(tex_desc);
+        mat_desc.base_color.texture = scene.AddTexture(tex_desc);
     }
 }
 
@@ -48,14 +48,14 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         return;
     }
 
-    if (mat_desc.base_texture != Ray::InvalidTextureHandle && textures[mat_desc.base_texture._index]) {
+    if (mat_desc.base_color.texture != Ray::InvalidTextureHandle && textures[mat_desc.base_color.texture._index]) {
         int img_w = 0, img_h = 0, mips = 1;
         Ray::eTextureFormat format = Ray::eTextureFormat::RGB888;
         Ray::eTextureConvention convention = Ray::eTextureConvention::OGL;
         std::vector<uint8_t> img_data;
 
-        if (strstr(textures[mat_desc.base_texture._index], ".tga")) {
-            img_data = LoadTGA(textures[mat_desc.base_texture._index], true /* flip_y */, img_w, img_h);
+        if (strstr(textures[mat_desc.base_color.texture._index], ".tga")) {
+            img_data = LoadTGA(textures[mat_desc.base_color.texture._index], true /* flip_y */, img_w, img_h);
             require(!img_data.empty());
 
             // drop alpha channel
@@ -64,9 +64,9 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
                 img_data[3 * i + 1] = img_data[4 * i + 1];
                 img_data[3 * i + 2] = img_data[4 * i + 2];
             }
-        } else if (strstr(textures[mat_desc.base_texture._index], ".dds")) {
+        } else if (strstr(textures[mat_desc.base_color.texture._index], ".dds")) {
             int channels = 0;
-            img_data = LoadDDS(textures[mat_desc.base_texture._index], img_w, img_h, mips, channels);
+            img_data = LoadDDS(textures[mat_desc.base_color.texture._index], img_w, img_h, mips, channels);
             require_fatal(channels == 3);
             format = Ray::eTextureFormat::BC1;
             convention = Ray::eTextureConvention::DX;
@@ -82,17 +82,17 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.generate_mipmaps = true;
         tex_desc.is_srgb = true;
 
-        mat_desc.base_texture = scene.AddTexture(tex_desc);
+        mat_desc.base_color.texture = scene.AddTexture(tex_desc);
     }
 
-    if (mat_desc.normal_map != Ray::InvalidTextureHandle && textures[mat_desc.normal_map._index]) {
+    if (mat_desc.normal_map.texture != Ray::InvalidTextureHandle && textures[mat_desc.normal_map.texture._index]) {
         int img_w = 0, img_h = 0, mips = 1;
         Ray::eTextureFormat format = Ray::eTextureFormat::RGB888;
         Ray::eTextureConvention convention = Ray::eTextureConvention::OGL;
         std::vector<uint8_t> img_data;
 
-        if (strstr(textures[mat_desc.normal_map._index], ".tga")) {
-            img_data = LoadTGA(textures[mat_desc.normal_map._index], true /* flip_y */, img_w, img_h);
+        if (strstr(textures[mat_desc.normal_map.texture._index], ".tga")) {
+            img_data = LoadTGA(textures[mat_desc.normal_map.texture._index], true /* flip_y */, img_w, img_h);
             require(!img_data.empty());
 
             // drop alpha channel
@@ -101,9 +101,9 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
                 img_data[3 * i + 1] = img_data[4 * i + 1];
                 img_data[3 * i + 2] = img_data[4 * i + 2];
             }
-        } else if (strstr(textures[mat_desc.normal_map._index], ".dds")) {
+        } else if (strstr(textures[mat_desc.normal_map.texture._index], ".dds")) {
             int channels = 0;
-            img_data = LoadDDS(textures[mat_desc.normal_map._index], img_w, img_h, mips, channels);
+            img_data = LoadDDS(textures[mat_desc.normal_map.texture._index], img_w, img_h, mips, channels);
             require_fatal(channels == 2);
             format = Ray::eTextureFormat::BC5;
             convention = Ray::eTextureConvention::DX;
@@ -119,26 +119,26 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.generate_mipmaps = false;
         tex_desc.is_srgb = false;
 
-        mat_desc.normal_map = scene.AddTexture(tex_desc);
+        mat_desc.normal_map.texture = scene.AddTexture(tex_desc);
     }
 
-    if (mat_desc.roughness_texture != Ray::InvalidTextureHandle && textures[mat_desc.roughness_texture._index]) {
+    if (mat_desc.roughness.texture != Ray::InvalidTextureHandle && textures[mat_desc.roughness.texture._index]) {
         int img_w = 0, img_h = 0, mips = 1;
         Ray::eTextureFormat format = Ray::eTextureFormat::R8;
         Ray::eTextureConvention convention = Ray::eTextureConvention::OGL;
         std::vector<uint8_t> img_data;
 
-        if (strstr(textures[mat_desc.roughness_texture._index], ".tga")) {
-            img_data = LoadTGA(textures[mat_desc.roughness_texture._index], true /* flip_y */, img_w, img_h);
+        if (strstr(textures[mat_desc.roughness.texture._index], ".tga")) {
+            img_data = LoadTGA(textures[mat_desc.roughness.texture._index], true /* flip_y */, img_w, img_h);
             require(!img_data.empty());
 
             // use only red channel
             for (int i = 0; i < img_w * img_h; ++i) {
                 img_data[i] = img_data[4 * i + 0];
             }
-        } else if (strstr(textures[mat_desc.roughness_texture._index], ".dds")) {
+        } else if (strstr(textures[mat_desc.roughness.texture._index], ".dds")) {
             int channels = 0;
-            img_data = LoadDDS(textures[mat_desc.roughness_texture._index], img_w, img_h, mips, channels);
+            img_data = LoadDDS(textures[mat_desc.roughness.texture._index], img_w, img_h, mips, channels);
             require_fatal(channels == 1);
             format = Ray::eTextureFormat::BC4;
             convention = Ray::eTextureConvention::DX;
@@ -153,26 +153,26 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.generate_mipmaps = true;
         tex_desc.is_srgb = false;
 
-        mat_desc.roughness_texture = scene.AddTexture(tex_desc);
+        mat_desc.roughness.texture = scene.AddTexture(tex_desc);
     }
 
-    if (mat_desc.metallic_texture != Ray::InvalidTextureHandle && textures[mat_desc.metallic_texture._index]) {
+    if (mat_desc.metallic.texture != Ray::InvalidTextureHandle && textures[mat_desc.metallic.texture._index]) {
         int img_w = 0, img_h = 0, mips = 1;
         Ray::eTextureFormat format = Ray::eTextureFormat::R8;
         Ray::eTextureConvention convention = Ray::eTextureConvention::OGL;
         std::vector<uint8_t> img_data;
 
-        if (strstr(textures[mat_desc.metallic_texture._index], ".tga")) {
-            img_data = LoadTGA(textures[mat_desc.metallic_texture._index], true /* flip_y */, img_w, img_h);
+        if (strstr(textures[mat_desc.metallic.texture._index], ".tga")) {
+            img_data = LoadTGA(textures[mat_desc.metallic.texture._index], true /* flip_y */, img_w, img_h);
             require(!img_data.empty());
 
             // use only red channel
             for (int i = 0; i < img_w * img_h; ++i) {
                 img_data[i] = img_data[4 * i + 0];
             }
-        } else if (strstr(textures[mat_desc.metallic_texture._index], ".dds")) {
+        } else if (strstr(textures[mat_desc.metallic.texture._index], ".dds")) {
             int channels = 0;
-            img_data = LoadDDS(textures[mat_desc.metallic_texture._index], img_w, img_h, mips, channels);
+            img_data = LoadDDS(textures[mat_desc.metallic.texture._index], img_w, img_h, mips, channels);
             require_fatal(channels == 1);
             format = Ray::eTextureFormat::BC4;
             convention = Ray::eTextureConvention::DX;
@@ -187,26 +187,26 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.generate_mipmaps = true;
         tex_desc.is_srgb = false;
 
-        mat_desc.metallic_texture = scene.AddTexture(tex_desc);
+        mat_desc.metallic.texture = scene.AddTexture(tex_desc);
     }
 
-    if (mat_desc.alpha_texture != Ray::InvalidTextureHandle && textures[mat_desc.alpha_texture._index]) {
+    if (mat_desc.alpha.texture != Ray::InvalidTextureHandle && textures[mat_desc.alpha.texture._index]) {
         int img_w = 0, img_h = 0, mips = 1;
         Ray::eTextureFormat format = Ray::eTextureFormat::R8;
         Ray::eTextureConvention convention = Ray::eTextureConvention::OGL;
         std::vector<uint8_t> img_data;
 
-        if (strstr(textures[mat_desc.alpha_texture._index], ".tga")) {
-            img_data = LoadTGA(textures[mat_desc.alpha_texture._index], true /* flip_y */, img_w, img_h);
+        if (strstr(textures[mat_desc.alpha.texture._index], ".tga")) {
+            img_data = LoadTGA(textures[mat_desc.alpha.texture._index], true /* flip_y */, img_w, img_h);
             require(!img_data.empty());
 
             // use only red channel
             for (int i = 0; i < img_w * img_h; ++i) {
                 img_data[i] = img_data[4 * i + 0];
             }
-        } else if (strstr(textures[mat_desc.alpha_texture._index], ".dds")) {
+        } else if (strstr(textures[mat_desc.alpha.texture._index], ".dds")) {
             int channels = 0;
-            img_data = LoadDDS(textures[mat_desc.alpha_texture._index], img_w, img_h, mips, channels);
+            img_data = LoadDDS(textures[mat_desc.alpha.texture._index], img_w, img_h, mips, channels);
             require_fatal(channels == 1);
             format = Ray::eTextureFormat::BC4;
             convention = Ray::eTextureConvention::DX;
@@ -221,17 +221,17 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.generate_mipmaps = false;
         tex_desc.is_srgb = false;
 
-        mat_desc.alpha_texture = scene.AddTexture(tex_desc);
+        mat_desc.alpha.texture = scene.AddTexture(tex_desc);
     }
 
-    if (mat_desc.emission_texture != Ray::InvalidTextureHandle && textures[mat_desc.emission_texture._index]) {
+    if (mat_desc.emission.color.texture != Ray::InvalidTextureHandle && textures[mat_desc.emission.color.texture._index]) {
         int img_w = 0, img_h = 0, mips = 1;
         Ray::eTextureFormat format = Ray::eTextureFormat::RGB888;
         Ray::eTextureConvention convention = Ray::eTextureConvention::OGL;
         std::vector<uint8_t> img_data;
 
-        if (strstr(textures[mat_desc.emission_texture._index], ".tga")) {
-            img_data = LoadTGA(textures[mat_desc.emission_texture._index], true /* flip_y */, img_w, img_h);
+        if (strstr(textures[mat_desc.emission.color.texture._index], ".tga")) {
+            img_data = LoadTGA(textures[mat_desc.emission.color.texture._index], true /* flip_y */, img_w, img_h);
             require(!img_data.empty());
 
             // drop alpha channel
@@ -240,9 +240,9 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
                 img_data[3 * i + 1] = img_data[4 * i + 1];
                 img_data[3 * i + 2] = img_data[4 * i + 2];
             }
-        } else if (strstr(textures[mat_desc.emission_texture._index], ".dds")) {
+        } else if (strstr(textures[mat_desc.emission.color.texture._index], ".dds")) {
             int channels = 0;
-            img_data = LoadDDS(textures[mat_desc.emission_texture._index], img_w, img_h, mips, channels);
+            img_data = LoadDDS(textures[mat_desc.emission.color.texture._index], img_w, img_h, mips, channels);
             require_fatal(channels == 3);
             format = Ray::eTextureFormat::BC1;
             convention = Ray::eTextureConvention::DX;
@@ -258,7 +258,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.generate_mipmaps = true;
         tex_desc.is_srgb = true;
 
-        mat_desc.emission_texture = scene.AddTexture(tex_desc);
+        mat_desc.emission.color.texture = scene.AddTexture(tex_desc);
     }
 }
 
@@ -348,66 +348,54 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
     MaterialHandle floor_mat;
     {
         principled_mat_desc_t floor_mat_desc;
-        floor_mat_desc.base_color[0] = 0.75f;
-        floor_mat_desc.base_color[1] = 0.75f;
-        floor_mat_desc.base_color[2] = 0.75f;
-        floor_mat_desc.roughness = 0.0f;
-        floor_mat_desc.specular = 0.0f;
+        floor_mat_desc.base_color = {{0.75f, 0.75f, 0.75f}};
+        floor_mat_desc.roughness = {0.0f};
+        floor_mat_desc.specular.ior_level = {0.0f};
         floor_mat = scene.AddMaterial(floor_mat_desc);
     }
 
     MaterialHandle walls_mat;
     {
         principled_mat_desc_t walls_mat_desc;
-        walls_mat_desc.base_color[0] = 0.5f;
-        walls_mat_desc.base_color[1] = 0.5f;
-        walls_mat_desc.base_color[2] = 0.5f;
-        walls_mat_desc.roughness = 0.0f;
-        walls_mat_desc.specular = 0.0f;
+        walls_mat_desc.base_color = {{0.5f, 0.5f, 0.5f}};
+        walls_mat_desc.roughness = {0.0f};
+        walls_mat_desc.specular.ior_level = {0.0f};
         walls_mat = scene.AddMaterial(walls_mat_desc);
     }
 
     MaterialHandle white_mat;
     {
         principled_mat_desc_t white_mat_desc;
-        white_mat_desc.base_color[0] = 0.64f;
-        white_mat_desc.base_color[1] = 0.64f;
-        white_mat_desc.base_color[2] = 0.64f;
-        white_mat_desc.roughness = 0.0f;
-        white_mat_desc.specular = 0.0f;
+        white_mat_desc.base_color = {{0.64f, 0.64f, 0.64f}};
+        white_mat_desc.roughness = {0.0f};
+        white_mat_desc.specular.ior_level = {0.0f};
         white_mat = scene.AddMaterial(white_mat_desc);
     }
 
     MaterialHandle light_grey_mat;
     {
         principled_mat_desc_t light_grey_mat_desc;
-        light_grey_mat_desc.base_color[0] = 0.32f;
-        light_grey_mat_desc.base_color[1] = 0.32f;
-        light_grey_mat_desc.base_color[2] = 0.32f;
-        light_grey_mat_desc.roughness = 0.0f;
-        light_grey_mat_desc.specular = 0.0f;
+        light_grey_mat_desc.base_color = {{0.32f, 0.32f, 0.32f}};
+        light_grey_mat_desc.roughness = {0.0f};
+        light_grey_mat_desc.specular.ior_level = {0.0f};
         light_grey_mat = scene.AddMaterial(light_grey_mat_desc);
     }
 
     MaterialHandle mid_grey_mat;
     {
         principled_mat_desc_t mid_grey_mat_desc;
-        mid_grey_mat_desc.base_color[0] = 0.16f;
-        mid_grey_mat_desc.base_color[1] = 0.16f;
-        mid_grey_mat_desc.base_color[2] = 0.16f;
-        mid_grey_mat_desc.roughness = 0.0f;
-        mid_grey_mat_desc.specular = 0.0f;
+        mid_grey_mat_desc.base_color = {{0.16f, 0.16f, 0.16f}};
+        mid_grey_mat_desc.roughness = {0.0f};
+        mid_grey_mat_desc.specular.ior_level = {0.0f};
         mid_grey_mat = scene.AddMaterial(mid_grey_mat_desc);
     }
 
     MaterialHandle dark_grey_mat;
     {
         principled_mat_desc_t dark_grey_mat_desc;
-        dark_grey_mat_desc.base_color[0] = 0.08f;
-        dark_grey_mat_desc.base_color[1] = 0.08f;
-        dark_grey_mat_desc.base_color[2] = 0.08f;
-        dark_grey_mat_desc.roughness = 0.0f;
-        dark_grey_mat_desc.specular = 0.0f;
+        dark_grey_mat_desc.base_color = {{0.08f, 0.08f, 0.08f}};
+        dark_grey_mat_desc.roughness = {0.0f};
+        dark_grey_mat_desc.specular.ior_level = {0.0f};
         dark_grey_mat = scene.AddMaterial(dark_grey_mat_desc);
     }
 
@@ -417,9 +405,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         square_light_mat_desc.type = eShadingNode::Emissive;
         square_light_mat_desc.strength = 20.3718f;
         square_light_mat_desc.importance_sample = true;
-        square_light_mat_desc.base_color[0] = 1.0f;
-        square_light_mat_desc.base_color[1] = 1.0f;
-        square_light_mat_desc.base_color[2] = 1.0f;
+        square_light_mat_desc.base_color = {{1.0f, 1.0f, 1.0f}};
         square_light_mat = scene.AddMaterial(square_light_mat_desc);
     }
 
@@ -429,9 +415,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         disc_light_mat_desc.type = eShadingNode::Emissive;
         disc_light_mat_desc.strength = 81.4873f;
         disc_light_mat_desc.importance_sample = true;
-        disc_light_mat_desc.base_color[0] = 1.0f;
-        disc_light_mat_desc.base_color[1] = 1.0f;
-        disc_light_mat_desc.base_color[2] = 1.0f;
+        disc_light_mat_desc.base_color = {{1.0f, 1.0f, 1.0f}};
         disc_light_mat = scene.AddMaterial(disc_light_mat_desc);
     }
 
@@ -439,13 +423,13 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
     {
         shading_node_desc_t glossy_mat_desc;
         glossy_mat_desc.type = eShadingNode::Glossy;
-        glossy_mat_desc.base_color[0] = 1.0f;
-        glossy_mat_desc.base_color[1] = glossy_mat_desc.base_color[2] = 0.0f;
+        glossy_mat_desc.base_color.color[0] = 1.0f;
+        glossy_mat_desc.base_color.color[1] = glossy_mat_desc.base_color.color[2] = 0.0f;
 
         glossy_red = scene.AddMaterial(glossy_mat_desc);
 
-        glossy_mat_desc.base_color[1] = 1.0f;
-        glossy_mat_desc.base_color[0] = glossy_mat_desc.base_color[2] = 0.0f;
+        glossy_mat_desc.base_color.color[1] = 1.0f;
+        glossy_mat_desc.base_color.color[0] = glossy_mat_desc.base_color.color[2] = 0.0f;
 
         glossy_green = scene.AddMaterial(glossy_mat_desc);
     }
@@ -453,8 +437,8 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
     MaterialHandle refr_mat_flags;
     {
         principled_mat_desc_t refr_mat_flags_desc;
-        refr_mat_flags_desc.roughness = 0.0f;
-        refr_mat_flags_desc.transmission = 1.0f;
+        refr_mat_flags_desc.roughness = {0.0f};
+        refr_mat_flags_desc.transmission = {1.0f};
         refr_mat_flags_desc.ior = 2.3f;
         refr_mat_flags = scene.AddMaterial(refr_mat_flags_desc);
     }
@@ -463,20 +447,16 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
     if (test_scene == eTestScene::Standard_GlassBall0) {
         shading_node_desc_t glassball_mat0_desc;
         glassball_mat0_desc.type = eShadingNode::Refractive;
-        glassball_mat0_desc.base_color[0] = 1.0f;
-        glassball_mat0_desc.base_color[1] = 1.0f;
-        glassball_mat0_desc.base_color[2] = 1.0f;
+        glassball_mat0_desc.base_color = {{1.0f, 1.0f, 1.0f}};
         glassball_mat0_desc.roughness = 0.0f;
         glassball_mat0_desc.ior = 1.45f;
         glassball_mat0 = scene.AddMaterial(glassball_mat0_desc);
     } else {
         principled_mat_desc_t glassball_mat0_desc;
-        glassball_mat0_desc.base_color[0] = 1.0f;
-        glassball_mat0_desc.base_color[1] = 1.0f;
-        glassball_mat0_desc.base_color[2] = 1.0f;
-        glassball_mat0_desc.roughness = 0.0f;
+        glassball_mat0_desc.base_color = {{1.0f, 1.0f, 1.0f}};
+        glassball_mat0_desc.roughness = {0.0f};
         glassball_mat0_desc.ior = 1.45f;
-        glassball_mat0_desc.transmission = 1.0f;
+        glassball_mat0_desc.transmission = {1.0f};
         glassball_mat0 = scene.AddMaterial(glassball_mat0_desc);
     }
 
@@ -484,30 +464,24 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
     if (test_scene == eTestScene::Standard_GlassBall0) {
         shading_node_desc_t glassball_mat1_desc;
         glassball_mat1_desc.type = eShadingNode::Refractive;
-        glassball_mat1_desc.base_color[0] = 1.0f;
-        glassball_mat1_desc.base_color[1] = 1.0f;
-        glassball_mat1_desc.base_color[2] = 1.0f;
+        glassball_mat1_desc.base_color = {{1.0f, 1.0f, 1.0f}};
         glassball_mat1_desc.roughness = 0.0f;
         glassball_mat1_desc.ior = 1.0f;
         glassball_mat1 = scene.AddMaterial(glassball_mat1_desc);
     } else {
         principled_mat_desc_t glassball_mat1_desc;
-        glassball_mat1_desc.base_color[0] = 1.0f;
-        glassball_mat1_desc.base_color[1] = 1.0f;
-        glassball_mat1_desc.base_color[2] = 1.0f;
-        glassball_mat1_desc.roughness = 0.0f;
+        glassball_mat1_desc.base_color = {{1.0f, 1.0f, 1.0f}};
+        glassball_mat1_desc.roughness = {0.0f};
         glassball_mat1_desc.ior = 1.0f;
-        glassball_mat1_desc.transmission = 1.0f;
+        glassball_mat1_desc.transmission = {1.0f};
         glassball_mat1 = scene.AddMaterial(glassball_mat1_desc);
     }
 
     MaterialHandle two_sided_back;
     {
         principled_mat_desc_t back_mat_desc;
-        back_mat_desc.base_color[0] = 0.0f;
-        back_mat_desc.base_color[1] = 0.0f;
-        back_mat_desc.base_color[2] = 0.5f;
-        back_mat_desc.roughness = 0.0f;
+        back_mat_desc.base_color = {{0.0f, 0.0f, 0.5f}};
+        back_mat_desc.roughness = {0.0f};
         two_sided_back = scene.AddMaterial(back_mat_desc);
     }
 
@@ -918,7 +892,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 new_light.color[1] = 80.0f;
                 new_light.color[2] = 80.0f;
 
-                new_light.radius = 0.005f;
+                new_light.radius = 0.01f;
                 new_light.height = 0.2592f;
 
                 scene.AddLight(new_light, xform);
@@ -943,9 +917,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
             { // spot light
                 spot_light_desc_t new_light;
 
-                new_light.color[0] = 10.1321182f;
-                new_light.color[1] = 10.1321182f;
-                new_light.color[2] = 10.1321182f;
+                new_light.color[0] = 101.321182f;
+                new_light.color[1] = 101.321182f;
+                new_light.color[2] = 101.321182f;
 
                 new_light.position[0] = -0.436484f;
                 new_light.position[1] = 0.187179f;
@@ -963,9 +937,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
             }
         } else if (test_scene == eTestScene::Standard_AreaSpread) {
             { // rect light
-                static const float xform[16] = {1.00000000f, 0.00000000f, 0.00000000f, 0.00000000f,
-                                                0.00000000f, 1.00000000f, 0.00000000f, 0.00000000f,
-                                                0.00000000f, 0.00000000f, 1.00000000f, 0.00000000f,
+                static const float xform[16] = {1.00000000f,  0.00000000f, 0.00000000f, 0.00000000f,
+                                                0.00000000f,  1.00000000f, 0.00000000f, 0.00000000f,
+                                                0.00000000f,  0.00000000f, 1.00000000f, 0.00000000f,
                                                 -0.40000000f, 0.50000000f, 0.00000000f, 1.00000000f};
 
                 rect_light_desc_t new_light;
@@ -982,9 +956,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                 scene.AddLight(new_light, xform);
             }
             { // disk light
-                static const float xform[16] = {1.00000000f,  0.00000000f, 0.00000000f, 0.00000000f,
-                                                0.00000000f,  1.00000000f, 0.00000000f, 0.00000000f,
-                                                0.00000000f,  0.00000000f, 1.00000000f, 0.00000000f,
+                static const float xform[16] = {1.00000000f, 0.00000000f, 0.00000000f,  0.00000000f,
+                                                0.00000000f, 1.00000000f, 0.00000000f,  0.00000000f,
+                                                0.00000000f, 0.00000000f, 1.00000000f,  0.00000000f,
                                                 0.00000000f, 0.50000000f, -0.40000000f, 1.00000000f};
 
                 disk_light_desc_t new_light;

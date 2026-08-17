@@ -1321,7 +1321,7 @@ float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos,
     // compute internal angles (gamma_i)
     const fvec4 diff = fvec4{x0, y1, x1, y0} - fvec4{x1, y0, x0, y1};
     fvec4 nz = fvec4{y0, x1, y1, x0} * diff;
-    nz = nz / sqrt(z0 * z0 * diff * diff + nz * nz);
+    nz = nz / sqrt(max(z0 * z0 * diff * diff + nz * nz, FLT_EPS));
     const float g0 = portable_acosf(clamp(-nz.get<0>() * nz.get<1>(), -1.0f, 1.0f));
     const float g1 = portable_acosf(clamp(-nz.get<1>() * nz.get<2>(), -1.0f, 1.0f));
     const float g2 = portable_acosf(clamp(-nz.get<2>() * nz.get<3>(), -1.0f, 1.0f));
@@ -3503,20 +3503,20 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         fvec4 light_u = normalize(cross(center_to_surface, light_dir));
         fvec4 light_v = cross(light_u, light_dir);
 
-        const float phi = PI * r1;
+        const float phi = -PI * r1;
         const fvec2 sincos_phi = portable_sincos(phi);
         const fvec4 normal = sincos_phi.get<1>() * light_u + sincos_phi.get<0>() * light_v;
 
         const fvec4 lp = light_pos + normal * l.line.radius + (r2 - 0.5f) * light_dir * l.line.height;
 
-        ls.lp = lp;
+        ls.lp = offset_ray(lp, normal);
         float ls_dist;
         ls.L = normalize_len(lp - P, ls_dist);
-        ls.area = l.line.area;
+        ls.area = 0.5f * l.line.area;
         ls.ray_flags = l.ray_visibility;
 
-        const float cos_theta = 1.0f - fabsf(dot(ls.L, light_dir));
-        if (cos_theta != 0.0f) {
+        const float cos_theta = -dot(ls.L, normal);
+        if (cos_theta > 0.0f) {
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
@@ -3778,13 +3778,13 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                             }
                             if (accept) {
                                 inout_inter.v = 0.0f;
-                                inout_inter.obj_index = -int(light_index) - 1;
+                                inout_inter.obj_index = -light_index - 1;
                                 inout_inter.t = t1;
                                 inout_inter.u = cur.factor;
                             }
                         } else if (t2 > HIT_EPS && (t2 < inout_inter.t || no_shadow)) {
                             inout_inter.v = 0.0f;
-                            inout_inter.obj_index = -int(light_index) - 1;
+                            inout_inter.obj_index = -light_index - 1;
                             inout_inter.t = t2;
                             inout_inter.u = cur.factor;
                         }
@@ -3794,7 +3794,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                     const float cos_theta = dot(rd, light_dir);
                     if ((inout_inter.v < 0.0f || no_shadow) && cos_theta > l.dir.cos_angle) {
                         inout_inter.v = 0.0f;
-                        inout_inter.obj_index = -int(light_index) - 1;
+                        inout_inter.obj_index = -light_index - 1;
                         inout_inter.t = 1.0f / cos_theta;
                         inout_inter.u = cur.factor;
                     }
@@ -3820,7 +3820,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                             if (a2 >= -0.5f && a2 <= 0.5f) {
                                 if (tan_angle(-rd, light_forward) < l.rect.tan_half_spread) {
                                     inout_inter.v = 0.0f;
-                                    inout_inter.obj_index = -int(light_index) - 1;
+                                    inout_inter.obj_index = -light_index - 1;
                                     inout_inter.t = t;
                                     inout_inter.u = cur.factor;
                                 }
@@ -3849,7 +3849,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         if (sqrtf(a1 * a1 + a2 * a2) <= 0.5f &&
                             tan_angle(-rd, light_forward) < l.disk.tan_half_spread) {
                             inout_inter.v = 0.0f;
-                            inout_inter.obj_index = -int(light_index) - 1;
+                            inout_inter.obj_index = -light_index - 1;
                             inout_inter.t = t;
                             inout_inter.u = cur.factor;
                         }
@@ -3875,14 +3875,14 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                         const fvec4 p = _ro + t * _rd;
                         if (fabsf(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
                             inout_inter.v = 0.0f;
-                            inout_inter.obj_index = -int(light_index) - 1;
+                            inout_inter.obj_index = -light_index - 1;
                             inout_inter.t = t;
                             inout_inter.u = cur.factor;
                         }
                     }
                 } else if (l.type == LIGHT_TYPE_ENV && inout_inter.v < 0.0f) {
                     // NOTE: mask remains empty
-                    inout_inter.obj_index = -int(light_index) - 1;
+                    inout_inter.obj_index = -light_index - 1;
                     inout_inter.u = cur.factor;
                 }
             }

@@ -46,24 +46,18 @@ int main() {
     // Add diffuse materials
     Ray::shading_node_desc_t mat_desc1;
     mat_desc1.type = Ray::eShadingNode::Diffuse;
-    mat_desc1.base_texture = checker_tex;
+    mat_desc1.base_color.texture = checker_tex;
     const Ray::MaterialHandle mat0 = scene->AddMaterial(mat_desc1);
 
     Ray::shading_node_desc_t mat_desc2;
     mat_desc2.type = Ray::eShadingNode::Diffuse;
-    mat_desc2.base_color[0] = 0.5f;
-    mat_desc2.base_color[1] = 0.5f;
-    mat_desc2.base_color[2] = 0.5f;
+    mat_desc2.base_color = {{0.5f, 0.5f, 0.5f}};
     const Ray::MaterialHandle mat1 = scene->AddMaterial(mat_desc2);
 
-    mat_desc2.base_color[0] = 0.5f;
-    mat_desc2.base_color[1] = 0.0f;
-    mat_desc2.base_color[2] = 0.0f;
+    mat_desc2.base_color = {{0.5f, 0.0f, 0.0f}};
     const Ray::MaterialHandle mat2 = scene->AddMaterial(mat_desc2);
 
-    mat_desc2.base_color[0] = 0.0f;
-    mat_desc2.base_color[1] = 0.5f;
-    mat_desc2.base_color[2] = 0.0f;
+    mat_desc2.base_color = {{0.0f, 0.5f, 0.0f}};
     const Ray::MaterialHandle mat3 = scene->AddMaterial(mat_desc2);
 
     // Add emissive material

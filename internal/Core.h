@@ -176,20 +176,20 @@ struct material_t {
     uint16_t roughness_unorm;
     uint16_t anisotropic_unorm;
     float ior;
+    uint16_t diffuse_roughness_unorm;
     uint16_t sheen_unorm;
-    uint16_t sheen_tint_unorm;
-    uint16_t tint_unorm;
+    uint16_t sheen_roughness_unorm;
+    uint16_t sheen_tint_unorm[3];
     uint16_t metallic_unorm;
     uint16_t transmission_unorm;
-    uint16_t transmission_roughness_unorm;
-    uint16_t specular_unorm;
-    uint16_t specular_tint_unorm;
-    uint16_t clearcoat_unorm;
-    uint16_t clearcoat_roughness_unorm;
+    uint16_t ior_level_unorm;
+    uint16_t specular_tint_unorm[3];
+    uint16_t coat_weight_unorm;
+    uint16_t coat_roughness_unorm;
     uint16_t normal_map_strength_unorm;
-    uint16_t _pad;
+    float coat_ior;
 };
-static_assert(sizeof(material_t) == 76, "!");
+static_assert(sizeof(material_t) == 88, "!");
 
 struct light_t {
     uint32_t type : 3;

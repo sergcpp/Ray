@@ -42,57 +42,76 @@ enum class ePrimType {
 /// Mesh region material type
 enum class eShadingNode : uint32_t { Diffuse, Glossy, Refractive, Emissive, Mix, Transparent, Principled };
 
-/// Shading node descriptor struct
-struct shading_node_desc_t {
-    eShadingNode type;                                         ///< Material type
-    float base_color[3] = {1, 1, 1};                           ///< Base color
-    TextureHandle base_texture = InvalidTextureHandle;         ///< Base texture index
-    TextureHandle normal_map = InvalidTextureHandle;           ///< Normal map index
-    float normal_map_intensity = 1.0f;                         ///< Normal map intensity
-    MaterialHandle mix_materials[2] = {InvalidMaterialHandle}; ///< Indices for two materials for mixing
-    float roughness = 0;                                       ///< Roughness
-    TextureHandle roughness_texture = InvalidTextureHandle;    ///< Roughness texture
-    float anisotropic = 0;                                     ///< Amount of anisotropy [0; 1]
-    float anisotropic_rotation = 0;                            ///< Anisotropy rotation [-PI; +PI]
-    float sheen = 0;                                           ///< Sheen
-    float specular = 0;                                        ///< Specular
-    float strength = 1;                                        ///< Strength of emissive material
-    float fresnel = 1;                                         ///< Fresnel factor of mix material
-    float ior = 1;                                             ///< IOR for reflective or refractive material
-    float tint = 0;                                            ///< Specular tint
-    TextureHandle metallic_texture = InvalidTextureHandle;     ///< Metalness texture
-    bool importance_sample = false;                            ///< Enable explicit emissive geometry sampling
-    bool mix_add = false;                                      ///< Enable additive mixing
+struct scalar_input_t {
+    float value = 0;
+    TextureHandle texture = InvalidTextureHandle;
 };
 
-/// Printcipled material descriptor struct (metallicness workflow)
+struct color_input_t {
+    float color[3] = {};
+    TextureHandle texture = InvalidTextureHandle;
+};
+
+/// Shading node descriptor struct
+struct shading_node_desc_t {
+    eShadingNode type;                                            ///< Material type
+    color_input_t base_color = {{1, 1, 1}, InvalidTextureHandle}; ///< Base color
+    TextureHandle normal_map = InvalidTextureHandle;              ///< Normal map index
+    float normal_map_intensity = 1.0f;                            ///< Normal map intensity
+    MaterialHandle mix_materials[2] = {InvalidMaterialHandle};    ///< Indices for two materials for mixing
+    float roughness = 0;                                          ///< Roughness
+    TextureHandle roughness_texture = InvalidTextureHandle;       ///< Roughness texture
+    float anisotropic = 0;                                        ///< Amount of anisotropy [0; 1]
+    float anisotropic_rotation = 0;                               ///< Anisotropy rotation [-PI; +PI]
+    // float sheen = 0;                                           ///< Sheen
+    // float sheen_roughness = 0.5f;                              ///< Sheen roughness
+    float specular = 0;                                    ///< Specular
+    float strength = 1;                                    ///< Strength of emissive material
+    float fresnel = 1;                                     ///< Fresnel factor of mix material
+    float ior = 1;                                         ///< IOR for reflective or refractive material
+    float tint = 0;                                        ///< Specular/Diffuse tint
+    TextureHandle metallic_texture = InvalidTextureHandle; ///< Metalness texture
+    bool importance_sample = false;                        ///< Enable explicit emissive geometry sampling
+    bool mix_add = false;                                  ///< Enable additive mixing
+};
+
+/// Principled material descriptor struct (metallic workflow)
 struct principled_mat_desc_t {
-    float base_color[3] = {1, 1, 1};                        ///< Base color
-    TextureHandle base_texture = InvalidTextureHandle;      ///< Base color texture
-    float metallic = 0;                                     ///< Metalness value
-    TextureHandle metallic_texture = InvalidTextureHandle;  ///< Metalness texture
-    float specular = 0.5f;                                  ///< Specular value [0; 1]
-    TextureHandle specular_texture = InvalidTextureHandle;  ///< Specular texture
-    float specular_tint = 0;                                ///< Specular tint
-    float roughness = 0.5f;                                 ///< Roughness value
-    TextureHandle roughness_texture = InvalidTextureHandle; ///< Roughness texture
-    float anisotropic = 0;                                  ///< Amount of anisotropy [0; 1]
-    float anisotropic_rotation = 0;                         ///< Anisotropy rotation [-PI; +PI]
-    float sheen = 0;                                        ///< Sheen
-    float sheen_tint = 0.5f;                                ///< Sheen tint
-    float clearcoat = 0;                                    ///< Weight of clearcoat layer
-    float clearcoat_roughness = 0;                          ///< Clearcoat layer roughness
-    float ior = 1.45f;                                      ///< IOR
-    float transmission = 0;                                 ///< Transmission amount
-    float transmission_roughness = 0;                       ///< Transmission roughness
-    float emission_color[3] = {0, 0, 0};                    ///< Emissive color
-    TextureHandle emission_texture = InvalidTextureHandle;  ///< Emissive texture
-    float emission_strength = 1;                            ///< Emission strength
-    float alpha = 1;                                        ///< Material transparency (alpha blending)
-    TextureHandle alpha_texture = InvalidTextureHandle;     ///< Transparency texture
-    TextureHandle normal_map = InvalidTextureHandle;        ///< Material normalmap
-    float normal_map_intensity = 1;                         ///< Normalmap intensity
-    bool importance_sample = false;                         ///< Enable explicit emissive geometry sampling
+    color_input_t base_color = {{1, 1, 1},
+                                InvalidTextureHandle};   ///< Color of material used in diffuse/metallic/transmission
+    scalar_input_t metallic = {0, InvalidTextureHandle}; ///< Blends between dielectric and metallic material models
+    scalar_input_t roughness = {0.5f, InvalidTextureHandle}; ///< Roughness value (affects specular and transmission)
+    float ior = 1.45f;                                       ///< IOR
+    scalar_input_t alpha = {1, InvalidTextureHandle};        ///< Material transparency (alpha blending)
+    scalar_input_t normal_map = {1, InvalidTextureHandle};   ///< Material normalmap with intensity
+    struct {
+        float roughness = 0; ///< Diffuse roughness
+    } diffuse;
+    struct {
+        scalar_input_t ior_level = {0.5f, InvalidTextureHandle}; ///< IOR adjustment [0; 1], 0.5 - no adjustment
+        color_input_t tint = {{1, 1, 1}, InvalidTextureHandle};  ///< Specular tint color
+        float anisotropic = 0;                                   ///< Amount of anisotropy [0; 1]
+        float anisotropic_rotation = 0;                          ///< Anisotropy rotation [-PI; +PI]
+    } specular;
+    struct {
+        float weight = 0; ///< Blend between transmission and other layers
+    } transmission;
+    struct {
+        float weight = 0;                                       ///< Weight of clearcoat layer
+        float roughness = 0.03f;                                ///< Clearcoat layer roughness
+        float ior = 1.5f;                                       ///< IOR of clearcoat layer
+        color_input_t tint = {{1, 1, 1}, InvalidTextureHandle}; ///< Clearcoat tint color
+    } coat;
+    struct {
+        float weight = 0;                                       ///< Sheen weight
+        float roughness = 0.5f;                                 ///< Sheen roughness
+        color_input_t tint = {{1, 1, 1}, InvalidTextureHandle}; ///< Sheen tint color
+    } sheen;
+    struct {
+        color_input_t color = {{0, 0, 0}, InvalidTextureHandle}; ///< Emissive color
+        float strength = 1;                                      ///< Emission strength
+        bool importance_sample = false;                          ///< Enable explicit emissive geometry sampling
+    } emission;
 };
 
 /// Defines mesh region with specific material
@@ -195,7 +214,7 @@ struct tex_desc_t {
 struct directional_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float direction[3] = {0.0f, -1.0f, 0.0f}, angle = 0.0f;
-    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
+    bool multiple_importance = true; ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -207,7 +226,7 @@ struct sphere_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float position[3] = {0.0f, 0.0f, 0.0f};
     float radius = 1.0f;
-    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
+    bool multiple_importance = true; ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -222,7 +241,7 @@ struct spot_light_desc_t {
     float spot_size = 45.0f;
     float spot_blend = 0.15f;
     float radius = 1.0f;
-    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
+    bool multiple_importance = true; ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -236,7 +255,7 @@ struct rect_light_desc_t {
     float spread_angle = 180.0f;
     bool doublesided = false;
     bool sky_portal = false;
-    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
+    bool multiple_importance = true; ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -250,7 +269,7 @@ struct disk_light_desc_t {
     float spread_angle = 180.0f;
     bool doublesided = false;
     bool sky_portal = false;
-    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
+    bool multiple_importance = true; ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays
@@ -262,7 +281,7 @@ struct line_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float radius = 1.0f, height = 1.0f;
     bool sky_portal = false;
-    bool multiple_importance = true;   ///< Use combination of explicit and implicit light sampling
+    bool multiple_importance = true; ///< Use combination of explicit and implicit light sampling
     bool cast_shadow = true;
     bool diffuse_visibility = true;    ///< Light visibility to diffuse rays
     bool specular_visibility = true;   ///< Light visibility to specular rays

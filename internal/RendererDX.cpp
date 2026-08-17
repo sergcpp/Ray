@@ -247,6 +247,8 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log,
         tonemap_lut_ = Image{"Tonemap LUT", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
     }
 
+    InitEnergyCompensationLUTs();
+
     Renderer::Resize(s.w, s.h);
 }
 
@@ -1815,23 +1817,31 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
                                               {&out_depth_normals, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    SmallVector<Binding, 32> bindings = {{eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
-                                         {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
-                                         {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
-                                         {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
-                                         {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
-                                         {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
-                                         {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
-                                         {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-                                         {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
-                                         {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-                                         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
-                                         {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
-                                         {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
-                                         {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
-                                         {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
-                                         {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
-                                         {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
+        {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
+        {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
+        {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
+        {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+        {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
+        {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+        {eBindTarget::TexSampled, Shade::SHEEN_LTC_LUT_SLOT, sheen_ltc_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_E_LUT_SLOT, ggx_e_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_EAVG_LUT_SLOT, ggx_eavg_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_E_GLASS_LUT_SLOT, ggx_e_glass_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_E_GLASS_INV_LUT_SLOT, ggx_e_glass_inv_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_LUT_SLOT, ggx_eavg_glass_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_INV_LUT_SLOT, ggx_eavg_glass_inv_lut_},
+        {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
+        {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
+        {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
+        {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
     if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
         bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
     }
@@ -1913,9 +1923,9 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, float clamp_direct,
     const environment_t &env, const Buffer &indir_args, const int indir_args_index, const Buffer &hits,
     const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
-    const int iteration, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Image &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays,
-    const Buffer &inout_counters, const Image &out_depth_normals) {
+    const int iteration, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Image &out_img,
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
+    const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {
         {&indir_args, eResState::IndirectArgument},   {&hits, eResState::ShaderResource},
         {&rays, eResState::ShaderResource},           {&rand_seq, eResState::ShaderResource},
@@ -1941,6 +1951,13 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
                                          {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
                                          {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::SHEEN_LTC_LUT_SLOT, sheen_ltc_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_E_LUT_SLOT, ggx_e_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_EAVG_LUT_SLOT, ggx_eavg_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_E_GLASS_LUT_SLOT, ggx_e_glass_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_E_GLASS_INV_LUT_SLOT, ggx_e_glass_inv_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_LUT_SLOT, ggx_eavg_glass_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_INV_LUT_SLOT, ggx_eavg_glass_inv_lut_);
     if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
         bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
     }

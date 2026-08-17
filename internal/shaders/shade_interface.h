@@ -52,6 +52,14 @@ const int ENV_QTREE_TEX_SLOT = 19;
 const int CACHE_ENTRIES_BUF_SLOT = 20;
 const int CACHE_VOXELS_BUF_SLOT = 21;
 
+const int SHEEN_LTC_LUT_SLOT = 22;
+const int GGX_E_LUT_SLOT = 23;
+const int GGX_EAVG_LUT_SLOT = 24;
+const int GGX_E_GLASS_LUT_SLOT = 25;
+const int GGX_E_GLASS_INV_LUT_SLOT = 26;
+const int GGX_EAVG_GLASS_LUT_SLOT = 27;
+const int GGX_EAVG_GLASS_INV_LUT_SLOT = 28;
+
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAYS_BUF_SLOT = 1;
 const int OUT_SH_RAYS_BUF_SLOT = 2;

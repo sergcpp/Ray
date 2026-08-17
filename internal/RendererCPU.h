@@ -363,11 +363,172 @@ Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
     log->Info("============================================================================");
 
     Resize(s.w, s.h);
+
+#if 0 // Prepare GGX energy compensation LUTs
+    float ggx_E[32][32] = {};
+    std::string ggx_E_str;
+
+    float ggx_Eavg[32] = {};
+    std::string ggx_Eavg_str;
+
+    static const int SampleCountSqrt = 128;
+    float eavg_accum[32] = {};
+    for (int y = 0; y < 32; ++y) {
+        ggx_E_str += "{ ";
+        for (int x = 0; x < 32; ++x) {
+            const float rough = Ref::clamp(float(x) / 31.0f, 0.001f, 1.0f);
+            const float ndotv = Ref::clamp(float(y) / 31.0f, 0.001f, 1.0f);
+
+            const Ref::fvec2 alpha = Ref::sqr(rough);
+
+            float result = 0.0f;
+            for (int j = 0; j < SampleCountSqrt; ++j) {
+                for (int i = 0; i < SampleCountSqrt; ++i) {
+                    const Ref::fvec2 rand = {(i + 0.5f) / SampleCountSqrt, (j + 0.5f) / SampleCountSqrt};
+
+                    const Ref::fvec4 T = Ref::fvec4{1.0f, 0.0f, 0.0f, 0.0f};
+                    const Ref::fvec4 B = Ref::fvec4{0.0f, 1.0f, 0.0f, 0.0f};
+                    const Ref::fvec4 N = Ref::fvec4{0.0f, 0.0f, 1.0f, 0.0f};
+                    const Ref::fvec4 I = -Ref::fvec4{sqrtf(1.0f - sqr(ndotv)), 0.0f, ndotv, 0.0f};
+
+                    Ref::fvec4 V;
+                    Ref::fvec4 res = Ref::Sample_GGXSpecular_BSDF(T, B, N, I, alpha, 0.99f, 0.04f, Ref::fvec4{1.0f},
+                                                                  Ref::fvec4{1.0f}, rand, 0.0f, Ref::fvec4{0.0f},
+                                                                  Ref::fvec4{0.0f}, false, V);
+                    if (res.get<3>() > 0.0f) {
+                        res /= res.get<3>();
+                        result += res.get<0>();
+                    }
+                }
+            }
+            ggx_E[y][x] = Ref::clamp(result / (SampleCountSqrt * SampleCountSqrt), 0.0f, 1.0f);
+
+            ggx_E_str += std::to_string(ggx_E[y][x]);
+            ggx_E_str += "f, ";
+
+            // Eavg(rough) = 2 * Integral[0,1] E(ndotv, rough) * ndotv d(ndotv) (Kulla & Conty), reusing the
+            // E(ndotv, rough) samples computed above on the same ndotv grid instead of a separate MC pass.
+            eavg_accum[x] += 2.0f * ndotv * ggx_E[y][x];
+        }
+        ggx_E_str += "},\n";
+    }
+    for (int x = 0; x < 32; ++x) {
+        ggx_Eavg[x] = Ref::clamp(eavg_accum[x] / 32.0f, 0.0f, 1.0f);
+
+        ggx_Eavg_str += std::to_string(ggx_Eavg[x]);
+        ggx_Eavg_str += "f, ";
+    }
+
+    float ggx_E_glass[16][16][16] = {}, ggx_E_glass_inv[16][16][16];
+    std::string ggx_E_glass_str, ggx_E_glass_inv_str;
+
+    float ggx_Eavg_glass[16][16] = {}, ggx_Eavg_glass_inv[16][16] = {};
+    std::string ggx_Eavg_glass_str, ggx_Eavg_glass_inv_str;
+
+    for (int z = 0; z < 16; ++z) {
+        const float sqrt_f0 = sqr(Ref::clamp(float(z) / 15.0f, 0.0001f, 0.99f));
+        const float ior = (1.0f + sqrt_f0) / (1.0f - sqrt_f0);
+
+        // Eavg(rough, z) = 2 * Integral[0,1] E(ndotv, rough, z) * ndotv d(ndotv) (Kulla & Conty),
+        // reusing the E(ndotv, rough, z) samples computed below on the same ndotv grid.
+        float eavg_accum[16] = {}, eavg_accum_inv[16] = {};
+
+        ggx_E_glass_str += "{\n";
+        ggx_E_glass_inv_str += "{\n";
+        for (int y = 0; y < 16; ++y) {
+            ggx_E_glass_str += "    { ";
+            ggx_E_glass_inv_str += "    { ";
+            for (int x = 0; x < 16; ++x) {
+                const float rough = Ref::clamp(float(x) / 15.0f, 0.001f, 1.0f);
+                const float ndotv = Ref::clamp(float(y) / 15.0f, 0.001f, 1.0f);
+
+                const Ref::fvec2 alpha = Ref::sqr(rough);
+
+                float result = 0.0f, result_inv = 0.0f;
+                for (int j = 0; j < SampleCountSqrt; ++j) {
+                    for (int i = 0; i < SampleCountSqrt; ++i) {
+                        const Ref::fvec2 rand = {(i + 0.5f) / SampleCountSqrt, (j + 0.5f) / SampleCountSqrt};
+
+                        const Ref::fvec4 T = Ref::fvec4{1.0f, 0.0f, 0.0f, 0.0f};
+                        const Ref::fvec4 B = Ref::fvec4{0.0f, 1.0f, 0.0f, 0.0f};
+                        const Ref::fvec4 N = Ref::fvec4{0.0f, 0.0f, 1.0f, 0.0f};
+                        const Ref::fvec4 I = -Ref::fvec4{sqrtf(1.0f - sqr(ndotv)), 0.0f, ndotv, 0.0f};
+
+                        // NOTE: Fresnel split for reflection/refraction is already accounted inside of sampling
+                        // functions
+
+                        Ref::fvec4 V;
+                        Ref::fvec4 F =
+                            Ref::Sample_GGXRefractionSpecular_BSDF(T, B, N, I, alpha, ior, Ref::sqr(sqrt_f0),
+                                                                   Ref::fvec4{1.0f}, Ref::fvec4{1.0f}, rand, false, V);
+                        if (F.get<3>() > 0.0f) {
+                            F /= F.get<3>();
+                            result += F.get<0>();
+                        }
+
+                        F = Ref::Sample_GGXRefraction_BSDF(T, B, N, I, alpha, 1.0f / ior, Ref::fvec4{1.0f}, rand, true,
+                                                           false, V);
+                        if (F.get<3>() > 0.0f) {
+                            F /= F.get<3>();
+                            result += F.get<0>();
+                        }
+
+                        //
+
+                        const float inv_ior = 1.0f / ior;
+                        const float f0 = Ref::sqr((inv_ior - 1.0f) / (inv_ior + 1.0f));
+                        F = Ref::Sample_GGXRefractionSpecular_BSDF(T, B, N, I, alpha, inv_ior, f0, Ref::fvec4{1.0f},
+                                                                   Ref::fvec4{1.0f}, rand, false, V);
+                        if (F.get<3>() > 0.0f) {
+                            F /= F.get<3>();
+                            result_inv += F.get<0>();
+                        }
+
+                        F = Ref::Sample_GGXRefraction_BSDF(T, B, N, I, alpha, 1.0f / inv_ior, Ref::fvec4{1.0f}, rand,
+                                                           true, false, V);
+                        if (F.get<3>() > 0.0f) {
+                            F /= F.get<3>();
+                            result_inv += F.get<0>();
+                        }
+                    }
+                }
+                ggx_E_glass[z][y][x] = Ref::saturate(result / (SampleCountSqrt * SampleCountSqrt));
+                ggx_E_glass_inv[z][y][x] = Ref::saturate(result_inv / (SampleCountSqrt * SampleCountSqrt));
+
+                ggx_E_glass_str += std::to_string(ggx_E_glass[z][y][x]);
+                ggx_E_glass_str += "f, ";
+                ggx_E_glass_inv_str += std::to_string(ggx_E_glass_inv[z][y][x]);
+                ggx_E_glass_inv_str += "f, ";
+
+                eavg_accum[x] += 2.0f * ndotv * ggx_E_glass[z][y][x];
+                eavg_accum_inv[x] += 2.0f * ndotv * ggx_E_glass_inv[z][y][x];
+            }
+            ggx_E_glass_str += "},\n";
+            ggx_E_glass_inv_str += "},\n";
+        }
+        ggx_E_glass_str += "},\n";
+        ggx_E_glass_inv_str += "},\n";
+
+        ggx_Eavg_glass_str += "{ ";
+        ggx_Eavg_glass_inv_str += "{ ";
+        for (int x = 0; x < 16; ++x) {
+            ggx_Eavg_glass[z][x] = Ref::saturate(eavg_accum[x] / 16.0f);
+            ggx_Eavg_glass_inv[z][x] = Ref::saturate(eavg_accum_inv[x] / 16.0f);
+
+            ggx_Eavg_glass_str += std::to_string(ggx_Eavg_glass[z][x]);
+            ggx_Eavg_glass_str += "f, ";
+            ggx_Eavg_glass_inv_str += std::to_string(ggx_Eavg_glass_inv[z][x]);
+            ggx_Eavg_glass_inv_str += "f, ";
+        }
+        ggx_Eavg_glass_str += "},\n";
+        ggx_Eavg_glass_inv_str += "},\n";
+    }
+#endif
 }
 
 template <typename SIMDPolicy> Ray::SceneBase *Ray::Cpu::Renderer<SIMDPolicy>::CreateScene() {
-    return new Cpu::Scene(log_, type() != eRendererType::Reference /* use_wide_bvh */, use_tex_compression_,
-                          use_spatial_cache_);
+    const bool use_wide_bvh = (type() != eRendererType::Reference);
+    return new Cpu::Scene(log_, use_wide_bvh, use_tex_compression_, use_spatial_cache_);
 }
 
 template <typename SIMDPolicy>

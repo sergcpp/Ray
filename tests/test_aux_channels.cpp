@@ -46,13 +46,11 @@ void test_aux_channels(const char *arch_list[], std::string_view preferred_devic
     //
 
     principled_mat_desc_t mat_desc;
-    mat_desc.base_texture = TextureHandle{0};
-    mat_desc.roughness = 1.0f;
-    mat_desc.roughness_texture = TextureHandle{2};
-    mat_desc.metallic = 1.0f;
-    mat_desc.metallic_texture = TextureHandle{3};
-    mat_desc.normal_map = TextureHandle{1};
-    mat_desc.alpha_texture = TextureHandle{4};
+    mat_desc.base_color.texture = TextureHandle{0};
+    mat_desc.roughness = {1.0f, TextureHandle{2}};
+    mat_desc.metallic = {1.0f, TextureHandle{3}};
+    mat_desc.normal_map = {1.0f, TextureHandle{1}};
+    mat_desc.alpha.texture = TextureHandle{4};
 
     const char *textures[] = {
         "test_data/textures/Fence007A_2K_Color.tga", "test_data/textures/Fence007A_2K_NormalGL.tga",

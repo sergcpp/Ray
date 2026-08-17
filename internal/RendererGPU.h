@@ -1,4 +1,15 @@
 
+namespace Ray {
+// Energy-compensation / sheen LUTs (defined once in Core.cpp via __ggx_energy_compensation.inl / __sheen_ltc.inl)
+extern const float __sheen_ltc_lut[32][32][4];
+extern const float ggx_E[][32];
+extern const float ggx_Eavg[32];
+extern const float ggx_E_glass[][16][16];
+extern const float ggx_E_glass_inv[][16][16];
+extern const float ggx_Eavg_glass[][16];
+extern const float ggx_Eavg_glass_inv[][16];
+} // namespace Ray
+
 namespace Ray::NS {
 class ImageAtlas;
 class AccStructure;
@@ -123,6 +134,9 @@ class Renderer : public RendererBase {
     Image tonemap_lut_;
     eViewTransform loaded_view_transform_ = eViewTransform::Standard;
 
+    Image sheen_ltc_lut_, ggx_e_lut_, ggx_eavg_lut_, ggx_e_glass_lut_, ggx_e_glass_inv_lut_, ggx_eavg_glass_lut_,
+        ggx_eavg_glass_inv_lut_;
+
     Buffer random_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2],
         count_table_buf_, reduce_table_buf_;
     Buffer counters_buf_, indir_args_buf_[2];
@@ -144,6 +158,8 @@ class Renderer : public RendererBase {
     SmallVector<int, 2> unet_alias_dependencies_[UNetFilterPasses];
     bool InitUNetFilterPipelines(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
     void UpdateUNetFilterMemory(CommandBuffer cmd_buf);
+
+    void InitEnergyCompensationLUTs();
 
     struct {
         eViewTransform view_transform;
@@ -195,8 +211,7 @@ class Renderer : public RendererBase {
                                      int indir_args_index, const Buffer &counters, const scene_data_t &sc_data,
                                      const Buffer &rand_seq, uint32_t rand_seed, int iteration, uint32_t node_index,
                                      float clamp_val, Span<const ImageAtlas> tex_atlases,
-                                     const BindlessTexData &bindless_tex, const Buffer &sh_rays,
-                                     const Image &out_img);
+                                     const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Image &out_img);
     void kernel_IntersectAreaLights(CommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(CommandBuffer cmd_buf, const pass_settings_t &ps, eSpatialCacheMode cache,
@@ -205,8 +220,8 @@ class Renderer : public RendererBase {
                                  const Buffer &rand_seq, uint32_t rand_seed, int iteration, const rect_t &rect,
                                  Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                  const Image &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
-                                 const Buffer &out_sky_rays, const Buffer &inout_counters,
-                                 const Image &out_base_color, const Image &out_depth_normals);
+                                 const Buffer &out_sky_rays, const Buffer &inout_counters, const Image &out_base_color,
+                                 const Image &out_depth_normals);
     void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &ps, eSpatialCacheMode cache_usage,
                                    float clamp_direct, const environment_t &env, const Buffer &indir_args,
                                    int indir_args_index, const Buffer &hits, const Buffer &rays,
@@ -231,23 +246,22 @@ class Renderer : public RendererBase {
     void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(CommandBuffer cmd_buf, float mix_factor, float half_mix_factor, const rect_t &rect,
                                int iteration, float exposure, const Image &temp_img, const Image &temp_base_color,
-                               const Image &temp_depth_normals, const Image &req_samples,
-                               const Image &out_full_img, const Image &out_half_img, const Image &out_base_color,
-                               const Image &out_depth_normals);
+                               const Image &temp_depth_normals, const Image &req_samples, const Image &out_full_img,
+                               const Image &out_half_img, const Image &out_base_color, const Image &out_depth_normals);
     void kernel_Postprocess(CommandBuffer cmd_buf, const Image &full_buf, const Image &half_buf, float inv_gamma,
                             const rect_t &rect, float variance_threshold, int iteration, const Image &out_pixels,
                             const Image &out_variance, const Image &out_req_samples) const;
     void kernel_FilterVariance(CommandBuffer cmd_buf, const Image &img_buf, const rect_t &rect,
                                float variance_threshold, int iteration, const Image &out_variance,
                                const Image &out_req_samples);
-    void kernel_NLMFilter(CommandBuffer cmd_buf, const Image &img_buf, const Image &var_buf, float alpha,
-                          float damping, const Image &base_color_img, float base_color_weight,
-                          const Image &depth_normals_img, float depth_normals_weight, const Image &out_raw_img,
-                          eViewTransform view_transform, float inv_gamma, const rect_t &rect, const Image &out_img);
+    void kernel_NLMFilter(CommandBuffer cmd_buf, const Image &img_buf, const Image &var_buf, float alpha, float damping,
+                          const Image &base_color_img, float base_color_weight, const Image &depth_normals_img,
+                          float depth_normals_weight, const Image &out_raw_img, eViewTransform view_transform,
+                          float inv_gamma, const rect_t &rect, const Image &out_img);
     void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Image &img_buf1,
-                            const Image &img_buf2, const Image &img_buf3, const Sampler &sampler,
-                            const rect_t &rect, int w, int h, const Buffer &weights, uint32_t weights_offset,
-                            uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset, int output_stride,
+                            const Image &img_buf2, const Image &img_buf3, const Sampler &sampler, const rect_t &rect,
+                            int w, int h, const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
+                            const Buffer &out_buf, uint32_t output_offset, int output_stride,
                             const Image &out_debug_img = {});
     void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Buffer &input_buf,
                             uint32_t input_offset, int input_stride, const rect_t &rect, int w, int h,
@@ -302,6 +316,7 @@ class Renderer : public RendererBase {
                                     const Buffer &voxels_prev);
 
     void TransitionSceneResources(CommandBuffer cmd_buf, const scene_data_t &sc_data) const;
+
     void RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
                    const Buffer &counters, const Buffer &reduce_table);
 
@@ -399,8 +414,7 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
         base_color_buf_ = Image{"Base Color Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
         temp_depth_normals_buf_ =
             Image{"Temp Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
-        depth_normals_buf_ =
-            Image{"Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+        depth_normals_buf_ = Image{"Depth-Normals Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
         final_buf_ = Image{"Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
         raw_filtered_buf_ =
             Image{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
@@ -751,6 +765,53 @@ inline void Ray::NS::Renderer::TransitionSceneResources(CommandBuffer cmd_buf, c
     }
 
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+}
+
+inline void Ray::NS::Renderer::InitEnergyCompensationLUTs() {
+    auto upload_lut = [&](Image &img, const char *name, const float *data, const int w, const int h, const int d,
+                          const eFormat format) {
+        ImgParams params = {};
+        params.w = w;
+        params.h = h;
+        params.d = (d == 1) ? 0 : d;
+        params.format = format;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.sampling.filter = eFilter::Bilinear; // hardware linear filtering (trilinear for the 3D tables)
+        params.sampling.wrap = eWrap::ClampToEdge;
+
+        img = Image{name, ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+
+        const int bpp = (format == eFormat::RGBA32F) ? 16 : 4;
+        const int row_len = w * bpp;
+        const int row_pitch = round_up(row_len, ImageDataPitchAlignment);
+        const int data_len = row_pitch * h * d;
+
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+
+        Buffer stage_buf{name, ctx_.get(), eBufType::Upload, uint32_t(data_len)};
+        uint8_t *mapped_ptr = stage_buf.Map();
+        const uint8_t *src = reinterpret_cast<const uint8_t *>(data);
+        for (int row = 0; row < h * d; ++row) {
+            memcpy(&mapped_ptr[row * row_pitch], &src[row * row_len], row_len);
+        }
+        stage_buf.Unmap();
+
+        img.SetSubImage(0, 0, 0, 0, w, h, d, format, stage_buf, cmd_buf, 0, row_len * h * d);
+
+        const TransitionInfo res_transitions[] = {{&img, eResState::ShaderResource}};
+        TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        stage_buf.FreeImmediate();
+    };
+
+    upload_lut(sheen_ltc_lut_, "Sheen LTC LUT", &__sheen_ltc_lut[0][0][0], 32, 32, 1, eFormat::RGBA32F);
+    upload_lut(ggx_e_lut_, "GGX E LUT", &ggx_E[0][0], 32, 32, 1, eFormat::R32F);
+    upload_lut(ggx_eavg_lut_, "GGX Eavg LUT", &ggx_Eavg[0], 32, 1, 1, eFormat::R32F);
+    upload_lut(ggx_e_glass_lut_, "GGX E Glass LUT", &ggx_E_glass[0][0][0], 16, 16, 16, eFormat::R32F);
+    upload_lut(ggx_e_glass_inv_lut_, "GGX E Glass Inv LUT", &ggx_E_glass_inv[0][0][0], 16, 16, 16, eFormat::R32F);
+    upload_lut(ggx_eavg_glass_lut_, "GGX Eavg Glass LUT", &ggx_Eavg_glass[0][0], 16, 16, 1, eFormat::R32F);
+    upload_lut(ggx_eavg_glass_inv_lut_, "GGX Eavg Glass Inv LUT", &ggx_Eavg_glass_inv[0][0], 16, 16, 1, eFormat::R32F);
 }
 
 inline void Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
