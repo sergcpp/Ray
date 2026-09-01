@@ -216,95 +216,6 @@ vec2 LutTransmittanceParamsToUv(const float view_height, const float view_zenith
     return vec2(x_mu, x_r);
 }
 
-vec3 IntegrateScatteringMain(const vec3 ray_start, const vec3 ray_dir, float ray_length, float rand_offset, const int sample_count, inout vec3 inout_transmittance) {
-    const vec2 atm_intersection = AtmosphereIntersection(ray_start, ray_dir);
-    ray_length = min(ray_length, atm_intersection.y);
-    const vec2 planet_intersection = PlanetIntersection(ray_start, ray_dir);
-    if (planet_intersection.x > 0) {
-        ray_length = min(ray_length, planet_intersection.x);
-    }
-
-    const float costh = dot(ray_dir, g_params.light_dir.xyz);
-    const float phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh, 0.85);
-
-    const float moon_costh = dot(ray_dir, g_atmosphere_params.moon_dir.xyz);
-    const float moon_phase_r = PhaseRayleigh(moon_costh), moon_phase_m = PhaseMie(moon_costh, 0.85);
-
-    vec3 radiance = vec3(0.0), multiscat_as_1 = vec3(0.0);
-
-    const float step_size = ray_length / float(sample_count);
-    float ray_time = 0.1 * rand_offset * step_size;
-    for (int i = 0; i < sample_count; ++i) {
-        const vec3 local_position = ray_start + ray_dir * ray_time;
-        vec3 up_vector;
-        const float local_height = AtmosphereHeight(local_position, up_vector);
-        const atmosphere_medium_t medium = SampleAtmosphereMedium(local_height);
-        const vec3 optical_depth = medium.extinction * step_size;
-        const vec3 local_transmittance = exp(-optical_depth);
-
-        vec3 S = vec3(0.0);
-
-        if (g_params.light_dir.y > -0.025) {
-            // main light contribution
-            const float view_zenith_cos_angle = dot(g_params.light_dir.xyz, up_vector);
-            const vec2 uv = LutTransmittanceParamsToUv(local_height + g_atmosphere_params.planet_radius, view_zenith_cos_angle);
-            const vec3 light_transmittance = textureLod(g_trasmittance_lut, uv, 0.0).xyz;
-
-            const vec2 planet_intersection = PlanetIntersection(local_position, g_params.light_dir.xyz);
-            const float planet_shadow = planet_intersection.x > 0 ? 0.0 : 1.0;
-
-            vec2 uv2 = saturate(vec2(view_zenith_cos_angle * 0.5 + 0.5, local_height / g_atmosphere_params.atmosphere_height));
-            uv2 = vec2(from_unit_to_sub_uvs(uv2.x, SKY_MULTISCATTER_LUT_RES), from_unit_to_sub_uvs(uv2.y, SKY_MULTISCATTER_LUT_RES));
-            const vec3 multiscattered_lum = textureLod(g_multiscatter_lut, uv2, 0.0).xyz;
-
-            const vec3 phase_times_scattering = medium.scattering_ray * phase_r + medium.scattering_mie * phase_m;
-            S += (planet_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col_point.xyz;
-        } else if (g_atmosphere_params.moon_radius > 0.0) {
-            // moon reflection contribution  (totally fake)
-            const float view_zenith_cos_angle = dot(g_atmosphere_params.moon_dir.xyz, up_vector);
-            const vec2 uv = LutTransmittanceParamsToUv(local_height + g_atmosphere_params.planet_radius, view_zenith_cos_angle);
-            const vec3 light_transmittance = textureLod(g_trasmittance_lut, uv, 0.0).xyz;
-
-            vec2 uv2 = saturate(vec2(view_zenith_cos_angle * 0.5 + 0.5, local_height / g_atmosphere_params.atmosphere_height));
-            uv2 = vec2(from_unit_to_sub_uvs(uv2.x, SKY_MULTISCATTER_LUT_RES), from_unit_to_sub_uvs(uv2.y, SKY_MULTISCATTER_LUT_RES));
-            const vec3 multiscattered_lum = textureLod(g_multiscatter_lut, uv2, 0.0).xyz;
-
-            const vec3 phase_times_scattering = medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
-            S += SKY_MOON_SUN_RELATION * (light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col_point.xyz;
-        }
-
-        // 1 is the integration of luminance over the 4pi of a sphere, and assuming an isotropic phase function
-        // of 1.0/(4*PI)
-        const vec3 MS = medium.scattering * 1.0;
-        const vec3 MS_int = (MS - MS * local_transmittance) / medium.extinction;
-        multiscat_as_1 += inout_transmittance * MS_int;
-
-        const vec3 S_int = (S - S * local_transmittance) / medium.extinction;
-        radiance += inout_transmittance * S_int;
-
-        inout_transmittance *= local_transmittance;
-
-        ray_time += step_size;
-    }
-
-    //
-    // Ground 'floor'
-    //
-    if (planet_intersection.x > 0.0) {
-        const vec3 local_position = ray_start + ray_dir * planet_intersection.x;
-        vec3 up_vector;
-        const float local_height = AtmosphereHeight(local_position, up_vector);
-
-        const float view_zenith_cos_angle = dot(g_params.light_dir.xyz, up_vector);
-        const vec2 uv = LutTransmittanceParamsToUv(local_height + g_atmosphere_params.planet_radius, view_zenith_cos_angle);
-        const vec3 light_transmittance = textureLod(g_trasmittance_lut, uv, 0.0).xyz;
-        radiance += g_atmosphere_params.ground_albedo.xyz * saturate(dot(up_vector, g_params.light_dir.xyz)) *
-                    inout_transmittance * light_transmittance * g_params.light_col_point.xyz;
-    }
-
-    return radiance;
-}
-
 // https://www.shadertoy.com/view/NtsBzB
 vec3 stars_hash(vec3 p) {
     p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6)));
@@ -391,13 +302,13 @@ float GetCloudsDensity(vec3 local_position, out float out_local_height, out floa
            remap(cloud_coverage, 0.6 * noise_read);
 }
 
-float TraceCloudShadow(const uint rand_hash, vec3 ray_start, const vec3 ray_dir) {
+float TraceCloudShadow(const float rand_offset, vec3 ray_start, const vec3 ray_dir) {
     const vec4 clouds_intersection = CloudsIntersection(ray_start, ray_dir);
     if (clouds_intersection.w > 0) {
         const int SampleCount = 24;
 
         const float StepSize = 16.0;
-        vec3 pos = ray_start + construct_float(rand_hash) * ray_dir * StepSize;
+        vec3 pos = ray_start + (max(clouds_intersection.y, 0.0) + rand_offset * StepSize) * ray_dir;
 
         float ret = 0.0;
         for (int i = 0; i < SampleCount; ++i) {
@@ -410,7 +321,105 @@ float TraceCloudShadow(const uint rand_hash, vec3 ray_start, const vec3 ray_dir)
 
         return ret * StepSize;
     }
-    return 1.0;
+    return 0.0;
+}
+
+vec3 IntegrateScatteringMain(const vec3 ray_start, const vec3 ray_dir, float ray_length, const float rand_offset_main, const float rand_offset_shadow, const int sample_count, const bool use_clouds_shadow, inout vec3 inout_transmittance) {
+    const vec2 atm_intersection = AtmosphereIntersection(ray_start, ray_dir);
+    ray_length = min(ray_length, atm_intersection.y);
+    const vec2 planet_intersection = PlanetIntersection(ray_start, ray_dir);
+    if (planet_intersection.x > 0) {
+        ray_length = min(ray_length, planet_intersection.x);
+    }
+
+    const float costh = dot(ray_dir, g_params.light_dir.xyz);
+    const float phase_r = PhaseRayleigh(costh), phase_m = PhaseMie(costh, 0.85);
+
+    const float moon_costh = dot(ray_dir, g_atmosphere_params.moon_dir.xyz);
+    const float moon_phase_r = PhaseRayleigh(moon_costh), moon_phase_m = PhaseMie(moon_costh, 0.85);
+
+    vec3 radiance = vec3(0.0), multiscat_as_1 = vec3(0.0);
+
+    const float step_size = ray_length / float(sample_count);
+    float ray_time = rand_offset_main * step_size;
+    for (int i = 0; i < sample_count; ++i) {
+        const vec3 local_position = ray_start + ray_dir * ray_time;
+        vec3 up_vector;
+        const float local_height = AtmosphereHeight(local_position, up_vector);
+        const atmosphere_medium_t medium = SampleAtmosphereMedium(local_height);
+        const vec3 optical_depth = medium.extinction * step_size;
+        const vec3 local_transmittance = exp(-optical_depth);
+
+        vec3 S = vec3(0.0);
+
+        if (g_params.light_dir.y > -0.025) {
+            // main light contribution
+            const float view_zenith_cos_angle = dot(g_params.light_dir.xyz, up_vector);
+            const vec2 uv = LutTransmittanceParamsToUv(local_height + g_atmosphere_params.planet_radius, view_zenith_cos_angle);
+            const vec3 light_transmittance = textureLod(g_trasmittance_lut, uv, 0.0).xyz;
+
+            const vec2 planet_intersection = PlanetIntersection(local_position, g_params.light_dir.xyz);
+            float planet_shadow = planet_intersection.x > 0 ? 0.0 : 1.0;
+            if (use_clouds_shadow && planet_shadow > 0.0) {
+                const float mask = saturate(-0.2 - dot(ray_dir, g_params.light_dir.xyz));
+                planet_shadow *= mix(exp(-TraceCloudShadow(rand_offset_shadow, local_position, g_params.light_dir.xyz)), 1.0, mask);
+            }
+
+            vec2 uv2 = saturate(vec2(view_zenith_cos_angle * 0.5 + 0.5, local_height / g_atmosphere_params.atmosphere_height));
+            uv2 = vec2(from_unit_to_sub_uvs(uv2.x, SKY_MULTISCATTER_LUT_RES), from_unit_to_sub_uvs(uv2.y, SKY_MULTISCATTER_LUT_RES));
+            const vec3 multiscattered_lum = textureLod(g_multiscatter_lut, uv2, 0.0).xyz;
+
+            const vec3 phase_times_scattering = medium.scattering_ray * phase_r + medium.scattering_mie * phase_m;
+            S += (planet_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col_point.xyz;
+        } else if (g_atmosphere_params.moon_radius > 0.0) {
+            // moon reflection contribution  (totally fake)
+            const float view_zenith_cos_angle = dot(g_atmosphere_params.moon_dir.xyz, up_vector);
+            const vec2 uv = LutTransmittanceParamsToUv(local_height + g_atmosphere_params.planet_radius, view_zenith_cos_angle);
+            const vec3 light_transmittance = textureLod(g_trasmittance_lut, uv, 0.0).xyz;
+
+            float cloud_shadow = 1.0;
+            if (use_clouds_shadow) {
+                cloud_shadow = exp(-TraceCloudShadow(rand_offset_shadow, local_position, g_atmosphere_params.moon_dir.xyz));
+            }
+
+            vec2 uv2 = saturate(vec2(view_zenith_cos_angle * 0.5 + 0.5, local_height / g_atmosphere_params.atmosphere_height));
+            uv2 = vec2(from_unit_to_sub_uvs(uv2.x, SKY_MULTISCATTER_LUT_RES), from_unit_to_sub_uvs(uv2.y, SKY_MULTISCATTER_LUT_RES));
+            const vec3 multiscattered_lum = textureLod(g_multiscatter_lut, uv2, 0.0).xyz;
+
+            const vec3 phase_times_scattering = medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
+            S += SKY_MOON_SUN_RELATION * (cloud_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * g_params.light_col_point.xyz;
+        }
+
+        // 1 is the integration of luminance over the 4pi of a sphere, and assuming an isotropic phase function
+        // of 1.0/(4*PI)
+        const vec3 MS = medium.scattering * 1.0;
+        const vec3 MS_int = (MS - MS * local_transmittance) / medium.extinction;
+        multiscat_as_1 += inout_transmittance * MS_int;
+
+        const vec3 S_int = (S - S * local_transmittance) / medium.extinction;
+        radiance += inout_transmittance * S_int;
+
+        inout_transmittance *= local_transmittance;
+
+        ray_time += step_size;
+    }
+
+    //
+    // Ground 'floor'
+    //
+    if (planet_intersection.x > 0.0) {
+        const vec3 local_position = ray_start + ray_dir * planet_intersection.x;
+        vec3 up_vector;
+        const float local_height = AtmosphereHeight(local_position, up_vector);
+
+        const float view_zenith_cos_angle = dot(g_params.light_dir.xyz, up_vector);
+        const vec2 uv = LutTransmittanceParamsToUv(local_height + g_atmosphere_params.planet_radius, view_zenith_cos_angle);
+        const vec3 light_transmittance = textureLod(g_trasmittance_lut, uv, 0.0).xyz;
+        radiance += g_atmosphere_params.ground_albedo.xyz * saturate(dot(up_vector, g_params.light_dir.xyz)) *
+                    inout_transmittance * light_transmittance * g_params.light_col_point.xyz;
+    }
+
+    return radiance;
 }
 
 vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, uint rand_hash) {
@@ -448,16 +457,17 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
 
     const vec4 clouds_intersection = CloudsIntersection(ray_start, ray_dir);
 
+    const float rand_offset_main = construct_float(rand_hash);
+    rand_hash = hash(rand_hash);
+    const float rand_offset_shadow = construct_float(rand_hash);
+
     //
     // Atmosphere before clouds
     //
     if (clouds_intersection.y > 0.0 && light_brightness > 0.0) {
         const float pre_atmosphere_ray_length = min(ray_length, clouds_intersection.y);
 
-        const float rand_offset = construct_float(rand_hash);
-        rand_hash = hash(rand_hash);
-
-        total_radiance += IntegrateScatteringMain(ray_start, ray_dir, pre_atmosphere_ray_length, rand_offset, SKY_PRE_ATMOSPHERE_SAMPLE_COUNT, total_transmittance);
+        total_radiance += IntegrateScatteringMain(ray_start, ray_dir, pre_atmosphere_ray_length, rand_offset_main, rand_offset_shadow, SKY_PRE_ATMOSPHERE_SAMPLE_COUNT, true, total_transmittance);
     }
 
     //
@@ -474,9 +484,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
         if (clouds_ray_length > 0.0) {
             const float step_size = clouds_ray_length / float(SKY_CLOUDS_SAMPLE_COUNT);
 
-            vec3 local_position = clouds_ray_start + ray_dir * construct_float(rand_hash) * step_size;
-            rand_hash = hash(rand_hash);
-
+            vec3 local_position = clouds_ray_start + (rand_offset_main * step_size) * ray_dir;
             vec3 clouds = vec3(0.0);
 
             // NOTE: We assume transmittance is constant along the clouds range (~500m)
@@ -520,7 +528,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
                         // main light contribution
                         const vec2 planet_intersection = PlanetIntersection(local_position, g_params.light_dir.xyz);
                         const float planet_shadow = planet_intersection.x > 0 ? 0.0 : 1.0;
-                        const float cloud_shadow = TraceCloudShadow(rand_hash, local_position, g_params.light_dir.xyz);
+                        const float cloud_shadow = TraceCloudShadow(rand_offset_shadow, local_position, g_params.light_dir.xyz);
 
                         clouds += total_transmittance *
                                 (planet_shadow * GetLightEnergy(cloud_shadow, local_density, phase_w) +
@@ -528,7 +536,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
                                 (1.0 - local_transmittance) * light_transmittance;
                     } else if (g_atmosphere_params.moon_radius > 0.0) {
                         // moon reflection contribution (totally fake)
-                        const float cloud_shadow = TraceCloudShadow(rand_hash, local_position, moon_dir);
+                        const float cloud_shadow = TraceCloudShadow(rand_offset_shadow, local_position, moon_dir);
 
                         clouds += SKY_MOON_SUN_RELATION * total_transmittance *
                                 (GetLightEnergy(cloud_shadow, local_density, moon_phase_w) +
@@ -614,10 +622,7 @@ vec3 IntegrateScattering(vec3 ray_start, const vec3 ray_dir, float ray_length, u
         vec3 main_ray_start = ray_start + ray_dir * clouds_intersection.w;
         main_ray_length -= clouds_intersection.y;
 
-        const float rand_offset = construct_float(rand_hash);
-        rand_hash = hash(rand_hash);
-
-        total_radiance += IntegrateScatteringMain(main_ray_start, ray_dir, main_ray_length, rand_offset, SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT, total_transmittance);
+        total_radiance += IntegrateScatteringMain(main_ray_start, ray_dir, main_ray_length, 0.5 /* no random offset */, 0.5, SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT, false, total_transmittance);
     }
 
     //

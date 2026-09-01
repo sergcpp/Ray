@@ -356,14 +356,14 @@ float GetCloudsDensity(const atmosphere_params_t &params, fvec4 local_position, 
            remap(cloud_coverage, 0.6f * noise_read);
 }
 
-float TraceCloudShadow(const atmosphere_params_t &params, const uint32_t rand_hash, fvec4 ray_start,
+float TraceCloudShadow(const atmosphere_params_t &params, const float rand_offset, fvec4 ray_start,
                        const fvec4 &ray_dir) {
     const fvec4 clouds_intersection = CloudsIntersection(params, ray_start, ray_dir);
     if (clouds_intersection.get<3>() > 0) {
         const int SampleCount = 24;
 
         const float StepSize = 16.0f;
-        fvec4 pos = ray_start + construct_float(rand_hash) * ray_dir * StepSize;
+        fvec4 pos = ray_start + (fmaxf(clouds_intersection.get<1>(), 0.0f) + rand_offset * StepSize) * ray_dir;
 
         float ret = 0.0f;
         for (int i = 0; i < SampleCount; ++i) {
@@ -376,7 +376,7 @@ float TraceCloudShadow(const atmosphere_params_t &params, const uint32_t rand_ha
 
         return ret * StepSize;
     }
-    return 1.0f;
+    return 0.0f;
 }
 
 // https://www.shadertoy.com/view/NtsBzB
@@ -480,7 +480,8 @@ template <bool UniformPhase>
 std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
     const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &ray_dir, float ray_length,
     const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &light_color, Span<const float> transmittance_lut,
-    Span<const float> multiscatter_lut, const float rand_offset, const int sample_count, fvec4 &inout_transmittance) {
+    Span<const float> multiscatter_lut, const float rand_offset_main, const float rand_offset_shadow,
+    const int sample_count, const bool use_clouds_shadow, fvec4 &inout_transmittance) {
     const fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     const fvec2 planet_intersection = PlanetIntersection(params, ray_start, ray_dir);
@@ -502,7 +503,7 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
     // Atmosphere
     //
     const float step_size = ray_length / float(sample_count);
-    float ray_time = 0.1f * rand_offset * step_size;
+    float ray_time = rand_offset_main * step_size;
     for (int i = 0; i < sample_count; ++i) {
         const fvec4 local_position = ray_start + ray_dir * ray_time;
         fvec4 up_vector;
@@ -521,7 +522,12 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
             const fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
             const fvec2 _planet_intersection = PlanetIntersection(params, local_position, light_dir);
-            const float planet_shadow = _planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
+            float planet_shadow = _planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
+            if (use_clouds_shadow && planet_shadow > 0.0f) {
+                const float mask = saturate(-0.2f - dot(ray_dir, light_dir));
+                planet_shadow *= Ray::mix(
+                    expf(-TraceCloudShadow(params, rand_offset_shadow, local_position, light_dir)), 1.0f, mask);
+            }
 
             fvec4 multiscattered_lum = 0.0f;
             if (!multiscatter_lut.empty()) {
@@ -546,6 +552,11 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
                 LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
             const fvec4 light_transmittance = SampleTransmittanceLUT(transmittance_lut, uv);
 
+            float cloud_shadow = 1.0f;
+            if (use_clouds_shadow) {
+                cloud_shadow = expf(-TraceCloudShadow(params, rand_offset_shadow, local_position, moon_dir));
+            }
+
             fvec4 multiscattered_lum = 0.0f;
             if (!multiscatter_lut.empty()) {
                 fvec2 _uv =
@@ -558,8 +569,10 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
 
             const fvec4 phase_times_scattering =
                 medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
-            S += SKY_MOON_SUN_RELATION *
-                 (light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) * light_color;
+            S +=
+                SKY_MOON_SUN_RELATION *
+                (cloud_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) *
+                light_color;
         }
 
         // 1 is the integration of luminance over the 4pi of a sphere, and assuming an isotropic phase function
@@ -597,11 +610,13 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
 template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain<false>(
     const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &ray_dir, float ray_length,
     const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &light_color, Span<const float> transmittance_lut,
-    Span<const float> multiscatter_lut, float rand_offset, int sample_count, fvec4 &inout_transmittance);
+    Span<const float> multiscatter_lut, float rand_offset_main, float rand_offset_shadow, int sample_count,
+    bool use_clouds_shadow, fvec4 &inout_transmittance);
 template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain<true>(
     const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &ray_dir, float ray_length,
     const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &light_color, Span<const float> transmittance_lut,
-    Span<const float> multiscatter_lut, float rand_offset, int sample_count, fvec4 &inout_transmittance);
+    Span<const float> multiscatter_lut, float rand_offset_main, float rand_offset_shadow, int sample_count,
+    bool use_clouds_shadow, fvec4 &inout_transmittance);
 
 Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params, fvec4 ray_start, const fvec4 &ray_dir,
                                               float ray_length, const fvec4 &light_dir, const float light_angle,
@@ -642,19 +657,21 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
 
     const fvec4 clouds_intersection = CloudsIntersection(params, ray_start, ray_dir);
 
+    const float rand_offset_main = construct_float(rand_hash);
+    rand_hash = hash(rand_hash);
+    const float rand_offset_shadow = construct_float(rand_hash);
+
     //
     // Atmosphere before clouds
     //
     if (clouds_intersection.get<1>() > 0 && light_brightness > 0.0f) {
         const float pre_atmosphere_ray_length = fminf(ray_length, clouds_intersection.get<1>());
 
-        const float rand_offset = construct_float(rand_hash);
-        rand_hash = hash(rand_hash);
-
-        total_radiance += IntegrateScatteringMain(params, ray_start, ray_dir, pre_atmosphere_ray_length, light_dir,
-                                                  moon_dir, light_color_point, transmittance_lut, multiscatter_lut,
-                                                  rand_offset, SKY_PRE_ATMOSPHERE_SAMPLE_COUNT, total_transmittance)
-                              .first;
+        total_radiance +=
+            IntegrateScatteringMain(params, ray_start, ray_dir, pre_atmosphere_ray_length, light_dir, moon_dir,
+                                    light_color_point, transmittance_lut, multiscatter_lut, rand_offset_main,
+                                    rand_offset_shadow, SKY_PRE_ATMOSPHERE_SAMPLE_COUNT, true, total_transmittance)
+                .first;
     }
 
     //
@@ -670,7 +687,7 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
         if (clouds_ray_length > 0.0f) {
             const float step_size = clouds_ray_length / float(SKY_CLOUDS_SAMPLE_COUNT);
 
-            fvec4 local_position = clouds_ray_start + 1.0f * ray_dir * construct_float(rand_hash) * step_size;
+            fvec4 local_position = clouds_ray_start + (rand_offset_main * step_size) * ray_dir;
             rand_hash = hash(rand_hash);
 
             fvec4 clouds = 0.0f;
@@ -727,7 +744,8 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
                         // main light contribution
                         const fvec2 _planet_intersection = PlanetIntersection(params, local_position, light_dir);
                         const float planet_shadow = _planet_intersection.get<0>() > 0 ? 0.0f : 1.0f;
-                        const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, light_dir);
+                        const float cloud_shadow =
+                            TraceCloudShadow(params, rand_offset_shadow, local_position, light_dir);
 
                         clouds += total_transmittance *
                                   (planet_shadow * GetLightEnergy(cloud_shadow, local_density, phase_w) +
@@ -735,7 +753,8 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
                                   (1.0f - local_transmittance) * light_transmittance;
                     } else if (params.moon_radius > 0.0f) {
                         // moon reflection contribution (totally fake)
-                        const float cloud_shadow = TraceCloudShadow(params, rand_hash, local_position, moon_dir);
+                        const float cloud_shadow =
+                            TraceCloudShadow(params, rand_offset_shadow, local_position, moon_dir);
 
                         clouds += SKY_MOON_SUN_RELATION * total_transmittance *
                                   (GetLightEnergy(cloud_shadow, local_density, moon_phase_w) +
@@ -830,13 +849,11 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
         fvec4 main_ray_start = ray_start + ray_dir * clouds_intersection.get<3>();
         main_ray_length -= clouds_intersection.get<1>();
 
-        const float rand_offset = construct_float(rand_hash);
-        rand_hash = hash(rand_hash);
-
-        total_radiance += IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir,
-                                                  light_color_point, transmittance_lut, multiscatter_lut, rand_offset,
-                                                  SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT, total_transmittance)
-                              .first;
+        total_radiance +=
+            IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir,
+                                    light_color_point, transmittance_lut, multiscatter_lut, 0.5f /* no random offset */,
+                                    rand_offset_shadow, SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT, false, total_transmittance)
+                .first;
     }
 
     //

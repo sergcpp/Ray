@@ -1700,9 +1700,9 @@ void test_complex_mat5_dir_light(const char *arch_list[], std::string_view prefe
 }
 
 void test_complex_mat5_sun_light(const char *arch_list[], std::string_view preferred_device) {
-    const int SampleCount = 15;
+    const int SampleCount = 18;
     const double MinPSNR = 24.25;
-    const int PixThres = 4920;
+    const int PixThres = 4605;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1722,7 +1722,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], std::string_view prefe
 
 void test_complex_mat5_moon_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 14;
-    const int PixThres = 320;
+    const int PixThres = 290;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};

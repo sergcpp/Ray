@@ -258,7 +258,8 @@ void Ray::SceneCommon::UpdateMultiscatterLUT(const atmosphere_params_t &params) 
                     Ref::fvec4 transmittance = 1.0f;
                     const std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> res =
                         Ref::IntegrateScatteringMain<true>(_params, world_pos, world_dir, MAX_DIST, sun_dir, {}, 1.0f,
-                                                           sky_transmittance_lut_, {}, 0.0f, 32, transmittance);
+                                                           sky_transmittance_lut_, {}, 0.0f, 0.0f, 32, false,
+                                                           transmittance);
 
                     total_res.first += res.first;
                     total_res.second += res.second;

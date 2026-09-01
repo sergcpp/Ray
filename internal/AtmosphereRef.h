@@ -12,7 +12,8 @@ std::pair<fvec4, fvec4> IntegrateScatteringMain(const atmosphere_params_t &param
                                                 const fvec4 &ray_dir, float ray_length, const fvec4 &light_dir,
                                                 const fvec4 &moon_dir, const fvec4 &light_color,
                                                 Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
-                                                float rand_offset, int sample_count, fvec4 &inout_transmittance);
+                                                float rand_offset_main, float rand_offset_shadow, int sample_count,
+                                                bool use_clouds_shadow, fvec4 &inout_transmittance);
 
 fvec4 IntegrateScattering(const atmosphere_params_t &params, fvec4 ray_start, const fvec4 &ray_dir, float ray_length,
                           const fvec4 &light_dir, float light_angle, const fvec4 &light_color,
