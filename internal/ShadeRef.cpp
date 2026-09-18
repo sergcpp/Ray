@@ -1371,7 +1371,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             } else {
                 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, alpha, trans.eta, sqrt(diff.base_color), rand,
                                               true, true, V);
-                F.set<3>(F.get<3>() * (1.0 - trans_fresnel));
+                F.set<3>(F.get<3>() * (1.0f - trans_fresnel));
 
                 new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
                 new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
