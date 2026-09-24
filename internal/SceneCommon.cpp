@@ -178,8 +178,7 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
 // #define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
-int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
-            const char **err);
+int stbi_write_hdr(const char *filename, int w, int h, int comp, const float *data);
 }
 #endif
 
@@ -256,10 +255,9 @@ void Ray::SceneCommon::UpdateMultiscatterLUT(const atmosphere_params_t &params) 
                     world_dir.set<2>(-sin_theta * sin_phi);
 
                     Ref::fvec4 transmittance = 1.0f;
-                    const std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> res =
-                        Ref::IntegrateScatteringMain<true>(_params, world_pos, world_dir, MAX_DIST, sun_dir, {}, 1.0f,
-                                                           sky_transmittance_lut_, {}, 0.0f, 0.0f, 32, false,
-                                                           transmittance);
+                    const std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> res = Ref::IntegrateScatteringMain<true>(
+                        _params, world_pos, world_dir, MAX_DIST, sun_dir, {}, {}, 1.0f, sky_transmittance_lut_, {},
+                        0.0f, 0.0f, 32, false, transmittance);
 
                     total_res.first += res.first;
                     total_res.second += res.second;
@@ -292,18 +290,37 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
     std::vector<color_rgb_t> rgb_pixels(res[0] * res[1]);
 #endif
 
+    // Disc position/size as seen from the bake ray origin, incl. viewpoint parallax
+    const Ref::fvec4 view_pos{0.0f, params.viewpoint_height, 0.0f, 0.0f};
+    Ref::fvec4 moon_center_dir = 0.0f;
+    float moon_rho = 0.0f;
+    if (params.moon_radius > 0.0f) {
+        const Ref::fvec4 moon_dir{params.moon_dir[0], params.moon_dir[1], params.moon_dir[2], 0.0f};
+        const Ref::fvec4 rel_moon = moon_dir * params.moon_distance - view_pos;
+        moon_center_dir = normalize(rel_moon);
+        moon_rho = Ref::portable_asinf(params.moon_radius / rel_moon.length());
+    }
+
+    const float d_theta = PI / float(res[1]), d_phi = 2.0f * PI / float(res[0]);
+
     parallel_for(0, res[1], [&](const int y) {
         const float theta = PI * float(y) / float(res[1]);
+        // AA cells are centered on the lookup knot (texel y sits at theta = y*d_theta), clamped at the poles
+        const float theta0 = fmaxf(theta - 0.5f * d_theta, 0.0f), theta1 = fminf(theta + 0.5f * d_theta, PI);
         for (int x = 0; x < res[0]; ++x) {
             const uint32_t px_hash = Ref::hash((x << 16) | y);
 
             const float phi = 2.0f * PI * (x + 0.5f) / float(res[0]);
+            const float phi0 = phi - 0.5f * d_phi, phi1 = phi + 0.5f * d_phi;
 
             const Ref::fvec2 sincos_theta = Ref::portable_sincos(theta);
             const Ref::fvec2 sincos_phi = Ref::portable_sincos(phi);
 
             auto ray_dir = Ref::fvec4{sincos_theta.get<0>() * sincos_phi.get<1>(), sincos_theta.get<1>(),
                                       sincos_theta.get<0>() * sincos_phi.get<0>(), 0.0f};
+
+            // Analytic sphere AA: the moon disc contributes its cell-average radiance over the exact covered region
+            const Ref::moon_disc_aa_t moon_aa{moon_center_dir, moon_rho, theta0, theta1, phi0, phi1};
 
             Ref::fvec4 color = 0.0f;
 
@@ -324,18 +341,24 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
                         light_col = light_col_point / div;
                     }
 
-                    color += IntegrateScattering(params, Ref::fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f}, ray_dir,
-                                                 MAX_DIST, light_dir, l.dir.angle, light_col, light_col_point,
-                                                 sky_transmittance_lut_, sky_multiscatter_lut_, px_hash);
+                    const float sun_cov =
+                        l.dir.angle > 0.0f
+                            ? Ref::SphericalCapCellCoverage(light_dir, fmaxf(l.dir.angle, SKY_SUN_MIN_ANGLE), theta0,
+                                                            theta1, phi0, phi1)
+                            : 0.0f;
+
+                    color += IntegrateScattering(params, view_pos, ray_dir, MAX_DIST, light_dir, l.dir.angle, light_col,
+                                                 light_col_point, sky_transmittance_lut_, sky_multiscatter_lut_,
+                                                 px_hash, sun_cov, moon_rho > 0.0f ? &moon_aa : nullptr);
                 }
             } else if (params.stars_brightness > 0.0f) {
                 // Use fake lightsource (to light up the moon)
                 const Ref::fvec4 light_dir = {0.0f, -1.0f, 0.0f, 0.0f},
                                  light_col = {144809.859f, 129443.617f, 127098.89f, 0.0f};
 
-                color += IntegrateScattering(params, Ref::fvec4{0.0f, params.viewpoint_height, 0.0f, 0.0f}, ray_dir,
-                                             MAX_DIST, light_dir, 0.0f, light_col, light_col, sky_transmittance_lut_,
-                                             sky_multiscatter_lut_, px_hash);
+                color += IntegrateScattering(params, view_pos, ray_dir, MAX_DIST, light_dir, 0.0f, light_col, light_col,
+                                             sky_transmittance_lut_, sky_multiscatter_lut_, px_hash, 0.0f,
+                                             moon_rho > 0.0f ? &moon_aa : nullptr);
             }
 
 #ifdef DUMP_SKY_ENV
@@ -354,8 +377,7 @@ Ray::SceneCommon::CalcSkyEnvTexture(const atmosphere_params_t &params, const int
     });
 
 #ifdef DUMP_SKY_ENV
-    const char *err = nullptr;
-    SaveEXR(&rgb_pixels[0].v[0], res[0], res[1], 3, 0, "sky.exr", &err);
+    stbi_write_hdr("sky.hdr", res[0], res[1], 3, &rgb_pixels[0].v[0]);
 #endif
 
     return rgbe_pixels;

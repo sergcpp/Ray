@@ -137,13 +137,14 @@ template <int S> force_inline fvec<S> portable_asinf(const fvec<S> &x) {
     return ret;
 }
 
-// atan2 for y >= 0 via portable_asinf (shared polynomial family); (0,0) -> 0 so callers gate on the result
+// atan2 for arbitrary y (odd in y) via portable_asinf (shared polynomial family); (0,0) -> 0
 template <int S> force_inline fvec<S> portable_atan2f(const fvec<S> &y, const fvec<S> &x) {
-    const fvec<S> r = sqrt(x * x + y * y);
+    const fvec<S> ay = abs(y);
+    const fvec<S> r = sqrt(x * x + ay * ay);
     const fvec<S> r_safe = select(r != 0.0f, r, fvec<S>{1.0f});
     const fvec<S> ax = abs(x);
-    const fvec<S> h = select(y <= ax, portable_asinf(y / r_safe), (PI / 2) - portable_asinf(ax / r_safe));
+    const fvec<S> h = select(ay <= ax, portable_asinf(ay / r_safe), (PI / 2) - portable_asinf(ax / r_safe));
     const fvec<S> res = select(x >= 0.0f, h, PI - h);
-    return select(r != 0.0f, res, fvec<S>{0.0f});
+    return select(r != 0.0f, select(y >= 0.0f, res, -res), fvec<S>{0.0f});
 }
 } // namespace Ray::NS

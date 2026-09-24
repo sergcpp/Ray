@@ -1766,8 +1766,7 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
 // #define DUMP_SKY_ENV
 #ifdef DUMP_SKY_ENV
 extern "C" {
-int SaveEXR(const float *data, int width, int height, int components, const int save_as_fp16, const char *outfilename,
-            const char **err);
+int stbi_write_hdr(const char *filename, int w, int h, int comp, const float *data);
 }
 #endif
 
@@ -1875,8 +1874,16 @@ inline std::vector<Ray::color_rgba8_t> Ray::NS::Scene::CalcSkyEnvTexture(const a
 
     const float *f32_data = reinterpret_cast<const float *>(temp_readback_buf.Map());
 #ifdef DUMP_SKY_ENV
-    const char *err = nullptr;
-    SaveEXR(f32_data, res[0], res[1], 4, 0, "sky.exr", &err);
+    { // Drop the alpha channel and save the linear HDR environment map
+        std::vector<float> hdr_pixels(3 * res[0] * res[1]);
+        for (int i = 0; i < res[0] * res[1]; ++i) {
+            const Ref::fvec4 color(&f32_data[4 * i]);
+            hdr_pixels[3 * i + 0] = color.get<0>();
+            hdr_pixels[3 * i + 1] = color.get<1>();
+            hdr_pixels[3 * i + 2] = color.get<2>();
+        }
+        stbi_write_hdr("sky.hdr", res[0], res[1], 3, &hdr_pixels[0]);
+    }
 #endif
     for (int i = 0; i < res[0] * res[1]; ++i) {
         Ref::fvec4 color(&f32_data[4 * i]);

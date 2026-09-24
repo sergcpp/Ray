@@ -148,13 +148,15 @@ float portable_acosf(float x) {
     }
 }
 
-// atan2 for y >= 0 via portable_asinf (shared polynomial family); (0,0) -> 0 so callers gate on the result
+// atan2 for arbitrary y (odd in y) via portable_asinf (shared polynomial family); (0,0) -> 0
 float portable_atan2f(const float y, const float x) {
-    const float r = sqrt(x * x + y * y);
+    const float ay = abs(y);
+    const float r = sqrt(x * x + ay * ay);
     if (r == 0.0) return 0.0;
     const float ax = abs(x);
-    const float h = (y <= ax) ? portable_asinf(y / r) : (PI / 2) - portable_asinf(ax / r);
-    return (x >= 0.0) ? h : (PI - h);
+    const float h = (ay <= ax) ? portable_asinf(ay / r) : (PI / 2) - portable_asinf(ax / r);
+    const float res = (x >= 0.0) ? h : (PI - h);
+    return y >= 0.0 ? res : -res;
 }
 
 #endif // TRIG_GLSL

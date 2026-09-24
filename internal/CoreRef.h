@@ -275,7 +275,7 @@ fvec2 portable_sincos(float a);
 
 float portable_asinf(float x);
 float portable_acosf(float x);
-float portable_atan2f(float y, float x); // y >= 0; (0,0) -> 0
+float portable_atan2f(float y, float x); // arbitrary y (odd in y); (0,0) -> 0
 
 fvec2 get_scrambled_2d_rand(uint32_t dim, uint32_t seed, int sample, const uint32_t rand_seq[]);
 

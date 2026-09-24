@@ -293,6 +293,7 @@ struct atmosphere_params_t {
     float _unused2;
     //
     vec4 moon_dir;
+    vec4 moon_albedo;
     vec4 rayleigh_scattering;
     vec4 mie_scattering;
     vec4 mie_extinction;

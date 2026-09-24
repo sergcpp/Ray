@@ -162,7 +162,9 @@ const int SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT = 12;
 const int SKY_CLOUDS_SAMPLE_COUNT = 48;
 const float SKY_CLOUDS_HORIZON_CUTOFF = 0.005f;
 const float SKY_CLOUDS_OFFSET_SCALE = 0.00007f;
-const float SKY_MOON_SUN_RELATION = 0.0000001f;
+// Normalizes the mean linear value of the moon texture (~0.318) to the physical lunar albedo (~0.113), so that
+// shading the textured disc matches the analytical MoonIrradiance() term that uses moon_albedo directly
+const float SKY_MOON_TEX_SCALE = 0.356f;
 const float SKY_STARS_THRESHOLD = 14.0f;
 const float SKY_SUN_BLEND_VAL = 0.000005f;
 const float SKY_SUN_MIN_ANGLE = 0.0005f;

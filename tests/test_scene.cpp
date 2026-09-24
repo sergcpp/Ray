@@ -330,7 +330,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         } else if (test_scene == eTestScene::Standard_SunLight) {
             cam_desc.exposure = -14.0f;
         } else if (test_scene == eTestScene::Standard_MoonLight) {
-            cam_desc.exposure = 8.0f;
+            cam_desc.exposure = 2.5f;
         }
 
         cam_desc.min_total_depth = 4;

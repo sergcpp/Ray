@@ -5,7 +5,8 @@
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #define NS Sse2
 #define USE_SSE2
-// clang-format off -- simd.h must precede Trig.h (Trig.h needs the fvec aliases)
+// clang-format off
+// simd.h must precede Trig.h (Trig.h needs the fvec aliases)
 #include "../internal/simd/simd.h"
 #include "../internal/Trig.h"
 // clang-format on
@@ -14,7 +15,8 @@
 #else
 #define NS Neon
 #define USE_NEON
-// clang-format off -- simd.h must precede Trig.h (Trig.h needs the fvec aliases)
+// clang-format off
+// simd.h must precede Trig.h (Trig.h needs the fvec aliases)
 #include "../internal/simd/simd.h"
 #include "../internal/Trig.h"
 // clang-format on
@@ -46,9 +48,9 @@ void test_trig() {
         }
         require(max_error < 6.25e-07);
     }
-    { // Reference version portable_atan2f (y >= 0)
+    { // Reference version portable_atan2f (arbitrary y)
         double max_error = 0.0;
-        for (float y = 0.0f; y <= 4.0f; y += 0.01f) {
+        for (float y = -4.0f; y <= 4.0f; y += 0.01f) {
             for (float x = -4.0f; x <= 4.0f; x += 0.01f) {
                 const double ref_atan2 = std::atan2(double(y), double(x));
                 max_error = std::max(max_error, std::abs(ref_atan2 - double(Ref::portable_atan2f(y, x))));
@@ -92,9 +94,9 @@ void test_trig() {
         }
         require(max_error < 6.417e-07);
     }
-    { // Sse2 portable_atan2f (y >= 0)
+    { // Sse2 portable_atan2f (arbitrary y)
         double max_error = 0.0;
-        for (float y = 0.0f; y <= 4.0f; y += 0.04f) {
+        for (float y = -4.0f; y <= 4.0f; y += 0.04f) {
             for (float x = -4.0f; x <= 4.0f; x += 0.004f) {
                 const float fyy[4] = {y, y, y, y};
                 const float fxx[4] = {x, x + 0.001f, x + 0.002f, x + 0.003f};
@@ -147,9 +149,9 @@ void test_trig() {
         }
         require(max_error < 6.417e-07);
     }
-    { // Neon portable_atan2f (y >= 0)
+    { // Neon portable_atan2f (arbitrary y)
         double max_error = 0.0;
-        for (float y = 0.0f; y <= 4.0f; y += 0.04f) {
+        for (float y = -4.0f; y <= 4.0f; y += 0.04f) {
             for (float x = -4.0f; x <= 4.0f; x += 0.004f) {
                 const float fyy[4] = {y, y, y, y};
                 const float fxx[4] = {x, x + 0.001f, x + 0.002f, x + 0.003f};

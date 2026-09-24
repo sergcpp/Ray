@@ -359,8 +359,11 @@ struct atmosphere_params_t {
     float atmosphere_density = 1.0f;                   ///< Atmosphere density multiplier
     float stars_brightness = 1.0f;                     ///< Brightness of the stars in the sky (set to 0.0 to disable)
     float moon_radius = 1737400.0f;                    ///< Moon radius (set to 0.0 to disable)
-    float moon_distance = 100000000.0f;                // 363100000.0f; ///< Distance from Earth to the Moon
+    float moon_distance = 363100000.0f;                ///< Distance from Earth to the Moon
     alignas(16) float moon_dir[4] = {0.707f, 0.707f, 0.0f, 0.0f};
+    alignas(16) float moon_albedo[4] = {
+        0.12f, 0.115f, 0.105f,
+        0.0f}; ///< Color albedo of the moon surface (matches the scaled mean of the moon texture)
     alignas(16) float rayleigh_scattering[4] = {5.802f * 1e-6f, 13.558f * 1e-6f, 33.100f * 1e-6f, 0.0f};
     alignas(16) float mie_scattering[4] = {3.996f * 1e-6f, 3.996f * 1e-6f, 3.996f * 1e-6f, 0.0f};
     alignas(16) float mie_extinction[4] = {4.440f * 1e-6f, 4.440f * 1e-6f, 4.440f * 1e-6f, 0.0f};

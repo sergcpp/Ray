@@ -83,6 +83,128 @@ fvec2 MoonIntersection(const atmosphere_params_t &params, const fvec4 &ray_start
     return SphereIntersection(ray_start, ray_dir, planet_center, params.moon_radius);
 }
 
+// Lambert moon lit by the sun; normalized so a full moon overhead yields albedo * sun_irradiance * 2*r^2/(3*d^2)
+fvec4 MoonIrradiance(const atmosphere_params_t &params, const fvec4 &light_dir, const fvec4 &moon_dir,
+                     const fvec4 &sun_irradiance) {
+    if (params.moon_radius <= 0.0f) {
+        return fvec4{0.0f};
+    }
+
+    // Phase angle: angle at the moon between the directions to the sun and to earth
+    const float cos_alpha = clamp(-dot(light_dir, moon_dir), -1.0f, 1.0f);
+    const float alpha = portable_acosf(cos_alpha);
+
+    // Lambert sphere phase law, normalized to 1.0 at full moon
+    const float lunar_phase = (portable_sin(alpha) + (PI - alpha) * cos_alpha) / PI;
+
+    const float r = params.moon_radius / params.moon_distance;
+    const float scale = (2.0f / 3.0f) * r * r * lunar_phase;
+
+    return sun_irradiance * fvec4{params.moon_albedo, vector_aligned} * scale;
+}
+
+namespace {
+
+constexpr int GL_N = 16;
+constexpr float gl_nodes[GL_N] = {
+    -0.9894009349916499f, -0.9445750230732326f, -0.8656312023878318f, -0.7554044083550030f,
+    -0.6178762444026438f, -0.4580167776572274f, -0.2816035507792589f, -0.0950125098376374f,
+    0.0950125098376374f,  0.2816035507792589f,  0.4580167776572274f,  0.6178762444026438f,
+    0.7554044083550030f,  0.8656312023878318f,  0.9445750230732326f,  0.9894009349916499f};
+constexpr float gl_weights[GL_N] = {0.0271524594117541f, 0.0622535239386478f, 0.0951585116824929f, 0.1246289712555339f,
+                                    0.1495959888165768f, 0.1691565193950026f, 0.1826034150449236f, 0.1894506104550685f,
+                                    0.1894506104550685f, 0.1826034150449236f, 0.1691565193950026f, 0.1495959888165768f,
+                                    0.1246289712555339f, 0.0951585116824929f, 0.0622535239386478f, 0.0271524594117541f};
+
+struct cap_cell_span {
+    float phi, w_phi, theta_lo, theta_hi;
+};
+
+// Bounding-sphere quick test: -1 = cell entirely outside the cap, 1 = entirely inside, 0 = undecided
+int CapCellQuickTest(const fvec4 &cap_dir, const float rho, const float theta0, const float theta1, const float phi0,
+                     const float phi1) {
+    const float th_mid = 0.5f * (theta0 + theta1), ph_mid = 0.5f * (phi0 + phi1);
+    const fvec2 sc_m = portable_sincos(th_mid), sp_m = portable_sincos(ph_mid);
+    const fvec4 cell_dir{sc_m.get<0>() * sp_m.get<1>(), sc_m.get<1>(), sc_m.get<0>() * sp_m.get<0>(), 0.0f};
+    const float h_t = 0.5f * (theta1 - theta0), h_p = 0.5f * (phi1 - phi0);
+    const float dist = portable_acosf(clamp(dot(cell_dir, cap_dir), -1.0f, 1.0f));
+    if (dist > rho + sqrtf(h_t * h_t + h_p * h_p)) {
+        return -1;
+    }
+    return dist + sqrtf(h_t * h_t + h_p * h_p) < rho ? 1 : 0;
+}
+
+// Along each GL8 meridian the cap spans [psi - alpha, psi + alpha] (spherical law of cosines), clipped to the cell;
+// w_phi folds in the GL weight and the ph_half Jacobian
+int CollectCapCellSpans(const fvec4 &cap_dir, const float rho, const float theta0, const float theta1, const float phi0,
+                        const float phi1, cap_cell_span spans[GL_N]) {
+    const float theta_c = portable_acosf(clamp(cap_dir.get<1>(), -1.0f, 1.0f)), phi_c = [&] {
+        float p = portable_atan2f(cap_dir.get<2>(), cap_dir.get<0>());
+        if (p < 0.0f) {
+            p += 2.0f * PI;
+        }
+        return p;
+    }();
+
+    const float cos_rho = portable_cos(rho), ct = portable_cos(theta_c), st = portable_sin(theta_c);
+    const float ph_mid = 0.5f * (phi0 + phi1), ph_half = 0.5f * (phi1 - phi0);
+    int count = 0;
+    for (int i = 0; i < GL_N; ++i) {
+        const float phi = ph_mid + ph_half * gl_nodes[i];
+        const float bb = st * portable_cos(phi - phi_c);
+        const float rr = sqrtf(ct * ct + bb * bb);
+        if (rr < cos_rho) {
+            continue;
+        }
+        const float psi = portable_atan2f(bb, ct);
+        const float alpha = portable_acosf(fminf(1.0f, cos_rho / rr));
+        const float lo = fmaxf(theta0, psi - alpha), hi = fminf(theta1, psi + alpha);
+        if (hi > lo) {
+            spans[count++] = {phi, gl_weights[i] * ph_half, lo, hi};
+        }
+    }
+    return count;
+}
+
+// True when the cap overlaps the cell at all (exact span test only in the undecided quick-test band)
+bool CapCellIntersects(const fvec4 &cap_dir, const float rho, const float theta0, const float theta1, const float phi0,
+                       const float phi1) {
+    const int quick = CapCellQuickTest(cap_dir, rho, theta0, theta1, phi0, phi1);
+    if (quick != 0) {
+        return quick > 0;
+    }
+    cap_cell_span spans[GL_N];
+    return CollectCapCellSpans(cap_dir, rho, theta0, theta1, phi0, phi1, spans) > 0;
+}
+
+} // namespace
+
+// Fraction of the lat-long cell [theta0,theta1]x[phi0,phi1] covered by a cap of angular radius rho around cap_dir
+float SphericalCapCellCoverage(const fvec4 &cap_dir, const float rho, const float theta0, const float theta1,
+                               const float phi0, const float phi1) {
+    if (rho <= 0.0f) {
+        return 0.0f;
+    }
+
+    const int quick = CapCellQuickTest(cap_dir, rho, theta0, theta1, phi0, phi1);
+    if (quick < 0) {
+        return 0.0f;
+    }
+    if (quick > 0) {
+        return 1.0f;
+    }
+
+    cap_cell_span spans[GL_N];
+    const int span_count = CollectCapCellSpans(cap_dir, rho, theta0, theta1, phi0, phi1, spans);
+    float area = 0.0f;
+    for (int i = 0; i < span_count; ++i) {
+        area += spans[i].w_phi * (portable_cos(spans[i].theta_lo) - portable_cos(spans[i].theta_hi));
+    }
+
+    const float omega_cell = (portable_cos(theta0) - portable_cos(theta1)) * (phi1 - phi0);
+    return clamp(area / omega_cell, 0.0f, 1.0f);
+}
+
 // Phase functions
 float PhaseRayleigh(const float costh) { return 3 * (1 + costh * costh) / (16 * PI); }
 float PhaseMie(const float costh, float g = 0.85f) {
@@ -452,6 +574,49 @@ fvec4 SampleCirrusTex(fvec4 uv) {
 
     return srgb_to_linear((m1 * k.get<1>() + m0 * (1.0f - k.get<1>())) * (1.0f / 255.0f));
 }
+// Bake AA: cell-average moon radiance = integral of the surface radiance over the cap/cell intersection (tensor GL8
+// over meridian spans and mu=cos(theta)) divided by the cell solid angle
+fvec4 MoonDiskRadiance(const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &light_dir,
+                       const fvec4 &light_color_point, const moon_disc_aa_t &aa) {
+    cap_cell_span spans[GL_N];
+    const int span_count =
+        CollectCapCellSpans(aa.cap_dir, aa.ang_radius, aa.theta0, aa.theta1, aa.phi0, aa.phi1, spans);
+
+    const fvec4 moon_center = fvec4{params.moon_dir, vector_aligned} * params.moon_distance;
+    const fvec4 moon_surface_radiance = light_color_point * (SKY_MOON_TEX_SCALE / PI);
+
+    fvec4 integral = 0.0f;
+    for (int i = 0; i < span_count; ++i) {
+        const fvec2 sincos_phi = portable_sincos(spans[i].phi);
+        const float mu_beg = portable_cos(spans[i].theta_hi), mu_end = portable_cos(spans[i].theta_lo);
+        const float mu_mid = 0.5f * (mu_beg + mu_end), mu_half = 0.5f * (mu_end - mu_beg);
+        for (int j = 0; j < GL_N; ++j) {
+            const float mu = mu_mid + mu_half * gl_nodes[j];
+            const float sin_theta = sqrtf(fmaxf(1.0f - mu * mu, 0.0f));
+            const fvec4 dir{sin_theta * sincos_phi.get<1>(), mu, sin_theta * sincos_phi.get<0>(), 0.0f};
+
+            float t = MoonIntersection(params, ray_start, dir).get<0>();
+            if (t <= 0.0f) { // directions inside the cap hit the moon sphere; nearest-point guard only
+                t = fmaxf(dot(moon_center - ray_start, dir), 0.0f);
+            }
+            const fvec4 moon_normal = normalize(ray_start + t * dir - moon_center);
+
+            const float theta = portable_acosf(clamp(moon_normal.get<1>(), -1.0f, 1.0f)) / PI;
+            float phi = portable_atan2f(moon_normal.get<2>(), moon_normal.get<0>());
+            if (phi < 0.0f) {
+                phi += 2.0f * PI;
+            }
+
+            const fvec4 albedo = SampleMoonTex(fvec4(fract(0.5f * phi / PI), theta, 0, 0));
+            const float w = spans[i].w_phi * gl_weights[j] * mu_half;
+            integral += fmaxf(dot(moon_normal, light_dir), 0.0f) * albedo * moon_surface_radiance * w;
+        }
+    }
+
+    const float omega_cell = (portable_cos(aa.theta0) - portable_cos(aa.theta1)) * (aa.phi1 - aa.phi0);
+    return integral / fmaxf(omega_cell, 1e-12f);
+}
+
 } // namespace Ref
 
 } // namespace Ray
@@ -479,9 +644,9 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateOpticalDepth(const atmosphere_params_t &param
 template <bool UniformPhase>
 std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
     const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &ray_dir, float ray_length,
-    const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &light_color, Span<const float> transmittance_lut,
-    Span<const float> multiscatter_lut, const float rand_offset_main, const float rand_offset_shadow,
-    const int sample_count, const bool use_clouds_shadow, fvec4 &inout_transmittance) {
+    const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &moon_irradiance, const fvec4 &light_color,
+    Span<const float> transmittance_lut, Span<const float> multiscatter_lut, const float rand_offset_main,
+    const float rand_offset_shadow, const int sample_count, const bool use_clouds_shadow, fvec4 &inout_transmittance) {
     const fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     const fvec2 planet_intersection = PlanetIntersection(params, ray_start, ray_dir);
@@ -546,7 +711,7 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
                   multiscattered_lum * medium.scattering) *
                  light_color;
         } else if (params.moon_radius > 0.0f) {
-            // moon reflection contribution  (totally fake)
+            // moon reflection contribution
             const float view_zenith_cos_angle = dot(moon_dir, up_vector);
             const fvec2 uv =
                 LutTransmittanceParamsToUv(params, local_height + params.planet_radius, view_zenith_cos_angle);
@@ -569,10 +734,8 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
 
             const fvec4 phase_times_scattering =
                 medium.scattering_ray * moon_phase_r + medium.scattering_mie * moon_phase_m;
-            S +=
-                SKY_MOON_SUN_RELATION *
-                (cloud_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering) *
-                light_color;
+            S += moon_irradiance *
+                 (cloud_shadow * light_transmittance * phase_times_scattering + multiscattered_lum * medium.scattering);
         }
 
         // 1 is the integration of luminance over the 4pi of a sphere, and assuming an isotropic phase function
@@ -609,20 +772,20 @@ std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain(
 
 template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain<false>(
     const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &ray_dir, float ray_length,
-    const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &light_color, Span<const float> transmittance_lut,
-    Span<const float> multiscatter_lut, float rand_offset_main, float rand_offset_shadow, int sample_count,
-    bool use_clouds_shadow, fvec4 &inout_transmittance);
+    const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &moon_irradiance, const fvec4 &light_color,
+    Span<const float> transmittance_lut, Span<const float> multiscatter_lut, float rand_offset_main,
+    float rand_offset_shadow, int sample_count, bool use_clouds_shadow, fvec4 &inout_transmittance);
 template std::pair<Ray::Ref::fvec4, Ray::Ref::fvec4> Ray::Ref::IntegrateScatteringMain<true>(
     const atmosphere_params_t &params, const fvec4 &ray_start, const fvec4 &ray_dir, float ray_length,
-    const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &light_color, Span<const float> transmittance_lut,
-    Span<const float> multiscatter_lut, float rand_offset_main, float rand_offset_shadow, int sample_count,
-    bool use_clouds_shadow, fvec4 &inout_transmittance);
-
+    const fvec4 &light_dir, const fvec4 &moon_dir, const fvec4 &moon_irradiance, const fvec4 &light_color,
+    Span<const float> transmittance_lut, Span<const float> multiscatter_lut, float rand_offset_main,
+    float rand_offset_shadow, int sample_count, bool use_clouds_shadow, fvec4 &inout_transmittance);
 Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params, fvec4 ray_start, const fvec4 &ray_dir,
                                               float ray_length, const fvec4 &light_dir, const float light_angle,
                                               const fvec4 &light_color, const fvec4 &light_color_point,
                                               Span<const float> transmittance_lut, Span<const float> multiscatter_lut,
-                                              uint32_t rand_hash) {
+                                              uint32_t rand_hash, float sun_disc_coverage,
+                                              const moon_disc_aa_t *moon_disc_aa) {
     const fvec2 atm_intersection = AtmosphereIntersection(params, ray_start, ray_dir);
     ray_length = fminf(ray_length, atm_intersection.get<1>());
     if (atm_intersection.get<0>() > 0) {
@@ -643,6 +806,8 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
     const fvec2 moon_intersection = MoonIntersection(params, ray_start, ray_dir);
     fvec4 moon_dir = fvec4{params.moon_dir, vector_aligned};
     const fvec4 moon_point = moon_dir * params.moon_distance + 0.5f * light_dir * params.moon_radius;
+    const fvec4 moon_irradiance =
+        MoonIrradiance(params, light_dir, fvec4{params.moon_dir, vector_aligned}, light_color_point);
     moon_dir = normalize(moon_point);
 
     const float costh = dot(ray_dir, light_dir);
@@ -667,11 +832,11 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
     if (clouds_intersection.get<1>() > 0 && light_brightness > 0.0f) {
         const float pre_atmosphere_ray_length = fminf(ray_length, clouds_intersection.get<1>());
 
-        total_radiance +=
-            IntegrateScatteringMain(params, ray_start, ray_dir, pre_atmosphere_ray_length, light_dir, moon_dir,
-                                    light_color_point, transmittance_lut, multiscatter_lut, rand_offset_main,
-                                    rand_offset_shadow, SKY_PRE_ATMOSPHERE_SAMPLE_COUNT, true, total_transmittance)
-                .first;
+        total_radiance += IntegrateScatteringMain(params, ray_start, ray_dir, pre_atmosphere_ray_length, light_dir,
+                                                  moon_dir, moon_irradiance, light_color_point, transmittance_lut,
+                                                  multiscatter_lut, rand_offset_main, rand_offset_shadow,
+                                                  SKY_PRE_ATMOSPHERE_SAMPLE_COUNT, true, total_transmittance)
+                              .first;
     }
 
     //
@@ -750,13 +915,13 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
                         clouds += total_transmittance *
                                   (planet_shadow * GetLightEnergy(cloud_shadow, local_density, phase_w) +
                                    ambient_visibility * multiscattered_lum) *
-                                  (1.0f - local_transmittance) * light_transmittance;
+                                  (1.0f - local_transmittance) * light_transmittance * light_color_point;
                     } else if (params.moon_radius > 0.0f) {
-                        // moon reflection contribution (totally fake)
+                        // moon reflection contribution
                         const float cloud_shadow =
                             TraceCloudShadow(params, rand_offset_shadow, local_position, moon_dir);
 
-                        clouds += SKY_MOON_SUN_RELATION * total_transmittance *
+                        clouds += moon_irradiance * total_transmittance *
                                   (GetLightEnergy(cloud_shadow, local_density, moon_phase_w) +
                                    ambient_visibility * moon_multiscattered_lum) *
                                   (1.0f - local_transmittance) * moon_transmittance;
@@ -774,7 +939,7 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
             float cloud_blend = linstep(SKY_CLOUDS_HORIZON_CUTOFF + 0.25f, SKY_CLOUDS_HORIZON_CUTOFF, ray_dir.get<1>());
             cloud_blend = 1.0f - powf(cloud_blend, 5.0f);
 
-            total_radiance += cloud_blend * clouds * light_color_point;
+            total_radiance += cloud_blend * clouds;
             total_transmittance = mix(transmittance_before, total_transmittance, cloud_blend);
         }
     }
@@ -831,8 +996,8 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
             total_radiance += total_transmittance * GetLightEnergy(0.002f, dC, phase_w) * light_transmittance * dC *
                               light_color_point;
         } else if (params.moon_radius > 0.0f) {
-            total_radiance += SKY_MOON_SUN_RELATION * total_transmittance * GetLightEnergy(0.002f, dC, moon_phase_w) *
-                              moon_transmittance * dC * light_color_point;
+            total_radiance += moon_irradiance * total_transmittance * GetLightEnergy(0.002f, dC, moon_phase_w) *
+                              moon_transmittance * dC;
         }
         total_transmittance *= expf(-dC * 0.002f * 1000.0f);
     }
@@ -849,28 +1014,39 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
         fvec4 main_ray_start = ray_start + ray_dir * clouds_intersection.get<3>();
         main_ray_length -= clouds_intersection.get<1>();
 
-        total_radiance +=
-            IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir,
-                                    light_color_point, transmittance_lut, multiscatter_lut, 0.5f /* no random offset */,
-                                    rand_offset_shadow, SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT, false, total_transmittance)
-                .first;
+        total_radiance += IntegrateScatteringMain(params, main_ray_start, ray_dir, main_ray_length, light_dir, moon_dir,
+                                                  moon_irradiance, light_color_point, transmittance_lut,
+                                                  multiscatter_lut, 0.5f /* no random offset */, rand_offset_shadow,
+                                                  SKY_MAIN_ATMOSPHERE_SAMPLE_COUNT, false, total_transmittance)
+                              .first;
     }
 
     //
     // Sun disk (bake directional light into the texture)
     //
     if (light_angle > 0.0f && planet_intersection.get<0>() < 0.0f && light_brightness > 0.0f) {
-        const float cos_theta = cosf(fmaxf(light_angle, SKY_SUN_MIN_ANGLE));
-        const float smooth_blend_val = fminf(SKY_SUN_BLEND_VAL, 1.0f - cos_theta);
-        const fvec4 sun_disk =
-            total_transmittance * smoothstep(cos_theta - smooth_blend_val, cos_theta + smooth_blend_val, costh);
-        total_radiance += sun_disk * light_color;
+        // Bake: analytic cap/cell coverage replaces the smoothstep edge hack
+        float sun_coeff;
+        if (sun_disc_coverage >= 0.0f) {
+            sun_coeff = sun_disc_coverage;
+        } else {
+            const float cos_theta = cosf(fmaxf(light_angle, SKY_SUN_MIN_ANGLE));
+            const float smooth_blend_val = fminf(SKY_SUN_BLEND_VAL, 1.0f - cos_theta);
+            sun_coeff = smoothstep(cos_theta - smooth_blend_val, cos_theta + smooth_blend_val, costh);
+        }
+        total_radiance += total_transmittance * sun_coeff * light_color;
     }
+
+    // Bake AA: does the moon disc overlap this cell (drives star suppression and the moon term)
+    const bool moon_cell_hit = moon_disc_aa != nullptr &&
+                               CapCellIntersects(moon_disc_aa->cap_dir, moon_disc_aa->ang_radius, moon_disc_aa->theta0,
+                                                 moon_disc_aa->theta1, moon_disc_aa->phi0, moon_disc_aa->phi1);
 
     //
     // Stars
     //
-    if (params.stars_brightness > 0.0f && planet_intersection.get<0>() < 0 && moon_intersection.get<0>() < 0) {
+    if (params.stars_brightness > 0.0f && planet_intersection.get<0>() < 0 && moon_intersection.get<0>() < 0 &&
+        !moon_cell_hit) {
         total_radiance +=
             total_transmittance *
             (powf(clamp(stars_noise(ray_dir * 400.0f), 0.0f, 1.0f), SKY_STARS_THRESHOLD) * params.stars_brightness);
@@ -879,27 +1055,37 @@ Ray::Ref::fvec4 Ray::Ref::IntegrateScattering(const atmosphere_params_t &params,
     //
     // Moon
     //
-    if (planet_intersection.get<0>() < 0 && moon_intersection.get<0>() > 0 && params.moon_radius > 0.0f &&
-        light_brightness > 0.0f) {
-        const fvec4 moon_center = fvec4{params.moon_dir, vector_aligned} * params.moon_distance;
-        const fvec4 moon_normal = normalize(ray_start + moon_intersection.get<0>() * ray_dir - moon_center);
+    if (planet_intersection.get<0>() < 0 && params.moon_radius > 0.0f && light_brightness > 0.0f) {
+        if (moon_cell_hit) {
+            // Bake: cell-average moon radiance over the exact covered region
+            total_radiance +=
+                total_transmittance * MoonDiskRadiance(params, ray_start, light_dir, light_color_point, *moon_disc_aa);
+        } else if (moon_intersection.get<0>() > 0) {
+            const fvec4 moon_center = fvec4{params.moon_dir, vector_aligned} * params.moon_distance;
+            const fvec4 moon_normal = normalize(ray_start + moon_intersection.get<0>() * ray_dir - moon_center);
 
-        const float theta = acosf(clamp(moon_normal.get<1>(), -1.0f, 1.0f)) / PI;
+            const float theta = portable_acosf(clamp(moon_normal.get<1>(), -1.0f, 1.0f)) / PI;
 
-        float phi = atan2f(moon_normal.get<2>(), moon_normal.get<0>());
-        if (phi < 0) {
-            phi += 2 * PI;
+            float phi = portable_atan2f(moon_normal.get<2>(), moon_normal.get<0>());
+            if (phi < 0) {
+                phi += 2 * PI;
+            }
+            if (phi > 2 * PI) {
+                phi -= 2 * PI;
+            }
+
+            const float u = fract(0.5f * phi / PI);
+
+            const fvec4 uvs = fvec4(u, theta, 0, 0);
+            const fvec4 albedo = SampleMoonTex(uvs);
+
+            // Lambert reflection of the sunlight by the lunar surface (the texture is the albedo, scaled to
+            // absolute reflectance): radiance = albedo * sun_irradiance * cos(incidence_angle) / PI
+            const fvec4 moon_surface_radiance = light_color_point * (SKY_MOON_TEX_SCALE / PI);
+
+            total_radiance +=
+                total_transmittance * fmaxf(dot(moon_normal, light_dir), 0.0f) * albedo * moon_surface_radiance;
         }
-        if (phi > 2 * PI) {
-            phi -= 2 * PI;
-        }
-
-        const float u = fract(0.5f * phi / PI);
-
-        const fvec4 uvs = fvec4(u, theta, 0, 0);
-        const fvec4 albedo = SampleMoonTex(uvs);
-
-        total_radiance += total_transmittance * fmaxf(dot(moon_normal, light_dir), 0.0f) * albedo;
     }
 
     return total_radiance;
@@ -962,7 +1148,8 @@ void Ray::Ref::ShadeSky(const pass_settings_t &ps, const float limit, Span<const
 
         float pdf_factor;
         if (USE_HIERARCHICAL_NEE) {
-            // inter.u == 0 on no-sky-pick lanes: keep pdf_factor finite, IEEE inf would poison cos_theta*pdf (0*inf)
+            // inter.u == 0 on no-sky-pick lanes: keep pdf_factor finite, IEEE inf would poison cos_theta*pdf
+            // (0*inf)
             pdf_factor =
                 (get_total_depth(r.depth) < ps.max_total_depth) ? 1.0f / (inter.u > 0.0f ? inter.u : FLT_EPS) : -1.0f;
         } else {

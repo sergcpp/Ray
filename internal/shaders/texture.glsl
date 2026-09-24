@@ -160,7 +160,8 @@ vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotatio
     }
 
     const float u = fract(0.5 * phi / PI);
-    vec2 uvs = TransformUV(vec2(u, theta), rand - 0.5, t, 0);
+    // jitter phase and wrap must match the CPU/bindless fetch: [0,1) texels + Repeat wrap, computed in texel space
+    vec2 uvs = TransformUV(vec2(u, theta), rand, t, 0);
     const int page = int(t.page[0] & 0xff);
 
 #if USE_STOCH_TEXTURE_FILTERING
