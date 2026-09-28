@@ -357,5 +357,12 @@ void test_hashset() {
         require(d.Find(std::string("hello")) != nullptr);
     }
 
+    { // Erase on an empty container is safe
+        HashSet32<int> empty_cont;
+        require(!empty_cont.Erase(1));
+        require(empty_cont.Find(1) == nullptr);
+        require(empty_cont.size() == 0u);
+    }
+
     printf("OK\n");
 }

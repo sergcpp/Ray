@@ -11,8 +11,7 @@
 #pragma warning(disable : 6294) // Ill-defined for-loop
 #pragma warning(disable : 6201) // Index is out of valid index range
 
-namespace Ray {
-namespace Cpu {
+namespace Ray::Cpu {
 class TexStorageBase {
   public:
     virtual ~TexStorageBase() = default;
@@ -616,7 +615,6 @@ extern template class TexStorageBCn<2>;
 extern template class TexStorageBCn<3>;
 extern template class TexStorageBCn<4>;
 
-} // namespace Cpu
-} // namespace Ray
+} // namespace Ray::Cpu
 
 #pragma warning(pop)

@@ -243,8 +243,8 @@ void test_span() {
             std::vector<int> v = {0, 1, 2, 3, 4, 5};
             Span<const int> s(v);
 
-            require(s.size() == v.size());
-            require(s.data() == v.data());
+            require(s.size() == std::size(v));
+            require(s.data() == std::data(v));
 
             require(s[0] == v[0]);
             require(s[1] == v[1]);
@@ -257,8 +257,8 @@ void test_span() {
             const std::vector<int> v = {0, 1, 2, 3, 4, 5};
             Span<const int> s(v);
 
-            require(s.size() == v.size());
-            require(s.data() == v.data());
+            require(s.size() == std::size(v));
+            require(s.data() == std::data(v));
 
             require(s[0] == v[0]);
             require(s[1] == v[1]);
@@ -280,8 +280,8 @@ void test_span() {
             {
                 int a[] = {0, 1, 2, 3, 4, 5};
 
-                require(f1(a) == 6);
-                require(f2(a) == 6);
+                require(f1(a) == std::size(a));
+                require(f2(a) == std::size(a));
             }
         }
     }
@@ -359,6 +359,17 @@ void test_span() {
             require(dynamic_span[5] == 8);
             require(dynamic_span[6] == 9);
         }
+    }
+
+    { // reverse iterator arithmetic operators
+        const int arr[5] = {0, 1, 2, 3, 4};
+        Span<const int> s(arr);
+        auto it = s.rbegin();
+        require(*it == 4);
+        it += 2;
+        require(*it == 2);
+        it -= 1;
+        require(*it == 3);
     }
 
     printf("OK\n");

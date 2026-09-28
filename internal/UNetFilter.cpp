@@ -1,8 +1,11 @@
 #include "UNetFilter.h"
 
+#include "../Span.h"
+
 #include <cstring>
 
 #include <algorithm>
+#include <vector>
 
 namespace Ray {
 float f16_to_f32(uint16_t h);

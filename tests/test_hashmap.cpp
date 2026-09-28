@@ -399,5 +399,23 @@ void test_hashmap() {
         require(sv && *sv == "world");
     }
 
+    { // operator[] value-initializes missing values
+        HashMap32<int, int> cont;
+        require(cont.size() == 0u);
+        // A freshly inserted value must be value-initialized, not uninitialized garbage.
+        require(cont[42] == 0);
+        require(cont.size() == 1u);
+        cont[7] = 5;
+        require(cont[7] == 5);
+        require(cont[42] == 0);
+    }
+
+    { // Erase on an empty container is safe
+        HashMap32<int, int> empty_cont;
+        require(!empty_cont.Erase(1));
+        require(empty_cont.Find(1) == nullptr);
+        require(empty_cont.size() == 0u);
+    }
+
     printf("OK\n");
 }

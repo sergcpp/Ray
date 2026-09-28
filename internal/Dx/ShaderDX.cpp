@@ -16,8 +16,7 @@
 #include "../ScopeExit.h"
 #include "ContextDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 // extern const VkShaderStageFlagBits g_shader_stages_vk[] = {
 //     VK_SHADER_STAGE_VERTEX_BIT,                  // Vert
 //     VK_SHADER_STAGE_FRAGMENT_BIT,                // Frag
@@ -78,8 +77,7 @@ namespace Dx {
     ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
     ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };*/
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx
 
 Ray::Dx::Shader::Shader(std::string_view name, Context *ctx, Span<const uint8_t> shader_code, const eShaderType type,
                         ILog *log) {

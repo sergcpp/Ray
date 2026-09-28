@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "../../Span.h"
 #include "../SmallVector.h"
 
 struct ID3D12Device;

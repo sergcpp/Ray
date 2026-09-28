@@ -1,7 +1,6 @@
 #include "RadCacheRef.h"
 
-namespace Ray {
-namespace Ref {
+namespace Ray::Ref {
 // Based on logarithmic caching by Johannes Jendersie
 ivec4 calc_grid_position_log(fvec4 p, const cache_grid_params_t &params) {
     p += HASH_GRID_POSITION_BIAS;
@@ -146,8 +145,7 @@ void accumulate_cache_voxel(packed_cache_voxel_t &voxel, const fvec4 &r, const u
         Ray_InterlockedExchangeAdd(&voxel.v[3], sample_data);
     }
 }
-} // namespace Ref
-} // namespace Ray
+} // namespace Ray::Ref
 
 uint32_t Ray::Ref::calc_grid_level(const fvec4 &p, const cache_grid_params_t &params) {
     const float distance2 = length2(make_fvec3(params.cam_pos_curr) - p);

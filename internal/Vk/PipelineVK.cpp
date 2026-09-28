@@ -7,8 +7,7 @@
 #include "RenderPassVK.h"
 #include "VertexInputVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 extern const VkShaderStageFlagBits g_shader_stages_vk[];
 
 const VkCullModeFlagBits g_cull_modes_vk[] = {
@@ -57,8 +56,7 @@ static_assert(std::size(g_blend_factor_vk) == int(eBlendFactor::_Count), "!");
 uint32_t align_up(const uint32_t size, const uint32_t alignment) { return (size + alignment - 1) & ~(alignment - 1); }
 
 static_assert(sizeof(TraceRaysIndirectCommand) == sizeof(VkTraceRaysIndirectCommandKHR), "!");
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 Ray::Vk::Pipeline &Ray::Vk::Pipeline::operator=(Pipeline &&rhs) noexcept {
     if (this == &rhs) {
@@ -336,7 +334,8 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
                 subpass_index, log);
 }
 
-bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log, const int subgroup_size, const bool require_full_subgroup) {
+bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log, const int subgroup_size,
+                             const bool require_full_subgroup) {
     Destroy();
 
     ePipelineType type = ePipelineType::Undefined;

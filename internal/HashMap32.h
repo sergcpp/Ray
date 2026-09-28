@@ -8,8 +8,8 @@ template <int A, int B> constexpr int max_value = (A > B) ? A : B;
 template <typename K, typename V, typename HashFunc = Hash<K>, typename KeyEqual = Equal<K>,
           typename Allocator = aligned_allocator<uint8_t, max_value<alignof(K), alignof(V)>>>
 class HashMap32 : HashFunc, KeyEqual, Allocator {
-    static const uint8_t OccupiedBit = 0b10000000;
-    static const uint8_t HashMask = 0b01111111;
+    static constexpr uint8_t OccupiedBit = 0b10000000;
+    static constexpr uint8_t HashMask = 0b01111111;
 
   public:
     struct Node {
@@ -143,6 +143,10 @@ class HashMap32 : HashFunc, KeyEqual, Allocator {
     }
 
     bool Erase(const K &key) {
+        if (!capacity_) {
+            return false;
+        }
+
         const uint32_t hash = HashFunc::operator()(key);
         const uint8_t ctrl_to_find = OccupiedBit | (hash & HashMask);
 
@@ -360,20 +364,24 @@ class HashMap32 : HashFunc, KeyEqual, Allocator {
             Node *old_nodes = nodes_;
             uint32_t old_capacity = capacity_;
 
-            if (!capacity_) {
-                capacity_ = 8;
+            uint32_t new_capacity = capacity_ ? capacity_ : 8;
+            while (new_capacity < desired_capacity) {
+                new_capacity *= 2;
             }
-            while (capacity_ < desired_capacity) {
-                capacity_ *= 2;
-            }
-            size_ = 0;
 
-            ctrl_ = this->allocate(mem_size(capacity_));
-            if (!ctrl_) {
+            // Allocate the new storage before touching any member, so a failed
+            // allocation leaves the container untouched.
+            uint8_t *new_ctrl = this->allocate(mem_size(new_capacity));
+            if (!new_ctrl) {
                 return;
             }
-            nodes_ = reinterpret_cast<Node *>(&ctrl_[ctrl_size(capacity_)]);
-            memset(ctrl_, 0, capacity_);
+            Node *new_nodes = reinterpret_cast<Node *>(&new_ctrl[ctrl_size(new_capacity)]);
+            memset(new_ctrl, 0, new_capacity);
+
+            ctrl_ = new_ctrl;
+            nodes_ = new_nodes;
+            capacity_ = new_capacity;
+            size_ = 0;
 
             for (uint32_t i = 0; i < old_capacity; ++i) {
                 if (old_ctrl[i] & OccupiedBit) {
@@ -397,7 +405,7 @@ class HashMap32 : HashFunc, KeyEqual, Allocator {
         ctrl_[i] = OccupiedBit | (hash & HashMask);
         nodes_[i].hash = hash;
         new (&nodes_[i].key) K(key);
-        new (&nodes_[i].val) V;
+        new (&nodes_[i].val) V();
 
         return &nodes_[i].val;
     }

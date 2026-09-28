@@ -11,8 +11,7 @@
 #include "TextureUtils.h"
 #include "Time_.h"
 
-namespace Ray {
-namespace Cpu {
+namespace Ray::Cpu {
 template <typename T> T clamp(T val, T min, T max) { return (val < min ? min : (val > max ? max : val)); }
 
 Ref::fvec4 cross(const Ref::fvec4 &v1, const Ref::fvec4 &v2) {
@@ -20,8 +19,7 @@ Ref::fvec4 cross(const Ref::fvec4 &v1, const Ref::fvec4 &v2) {
                       v1.get<2>() * v2.get<0>() - v1.get<0>() * v2.get<2>(),
                       v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
 }
-} // namespace Cpu
-} // namespace Ray
+} // namespace Ray::Cpu
 
 Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_compression, const bool use_spatial_cache)
     : use_wide_bvh_(use_wide_bvh), use_tex_compression_(use_tex_compression) {

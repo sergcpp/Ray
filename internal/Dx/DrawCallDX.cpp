@@ -17,11 +17,9 @@
 #include "ImageDX.h"
 #include "PipelineDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 extern const DXGI_FORMAT g_formats_dx[];
-}
-} // namespace Ray
+} // namespace Ray::Dx
 
 void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_buf, Span<const Binding> bindings,
                                  const void *uniform_data, const int uniform_data_len, const Program *prog,

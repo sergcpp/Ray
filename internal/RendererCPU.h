@@ -324,8 +324,7 @@ using Renderer = Cpu::Renderer<Ref::SIMDPolicy>;
 }
 } // namespace Ray
 
-namespace Ray {
-namespace Cpu {
+namespace Ray::Cpu {
 template <typename SIMDPolicy> struct PassData {
     aligned_vector<typename SIMDPolicy::RayDataType> primary_rays;
     aligned_vector<typename SIMDPolicy::RayDataType> secondary_rays;
@@ -351,8 +350,7 @@ template <typename SIMDPolicy> PassData<SIMDPolicy> &get_per_thread_pass_data() 
     static thread_local PassData<SIMDPolicy> per_thread_pass_data;
     return per_thread_pass_data;
 }
-} // namespace Cpu
-} // namespace Ray
+} // namespace Ray::Cpu
 
 template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)

@@ -25,7 +25,7 @@ template <typename T> class SparseStorage {
         }
     }
 
-    ~SparseStorage() { aligned_free(data_); }
+    ~SparseStorage() { Ray::aligned_free(data_); }
 
     force_inline uint32_t size() const { return size_; }
     force_inline uint32_t capacity() const { return capacity_; }
@@ -46,7 +46,7 @@ template <typename T> class SparseStorage {
             alloc_->ResizePool(0, new_capacity);
         }
 
-        T *new_data = (T *)aligned_malloc(new_capacity * sizeof(T), alignof(T));
+        T *new_data = (T *)Ray::aligned_malloc(new_capacity * sizeof(T), alignof(T));
 
         // move old data
         FreelistAlloc::Range r = alloc_->GetFirstOccupiedBlock(0);
@@ -58,7 +58,7 @@ template <typename T> class SparseStorage {
             r = alloc_->GetNextOccupiedBlock(r.block);
         }
 
-        aligned_free(data_);
+        Ray::aligned_free(data_);
         data_ = new_data;
         capacity_ = new_capacity;
     }

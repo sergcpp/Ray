@@ -3,8 +3,7 @@
 #include "../../Log.h"
 #include "ContextVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 #define X(_0, _1, _2, _3) _1,
 extern const VkFilter g_min_mag_filter_vk[] = {
 #include "../Filter.inl"
@@ -30,8 +29,7 @@ extern const VkCompareOp g_compare_ops_vk[] = {
 #undef X
 
 extern const float AnisotropyLevel = 4.0f;
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 Ray::Vk::Sampler &Ray::Vk::Sampler::operator=(Sampler &&rhs) noexcept {
     if (&rhs == this) {

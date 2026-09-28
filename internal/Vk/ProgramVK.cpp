@@ -10,11 +10,9 @@
 #pragma warning(disable : 4996)
 #endif
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 extern const VkShaderStageFlagBits g_shader_stages_vk[];
-}
-} // namespace Ray
+} // namespace Ray::Vk
 
 Ray::Vk::Program::Program(std::string_view name, Context *ctx, Shader *vs_ref, Shader *fs_ref, Shader *tcs_ref,
                           Shader *tes_ref, ILog *log)

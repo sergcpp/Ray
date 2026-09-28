@@ -9,7 +9,7 @@ void test_small_vector() {
 
     printf("Test small_vector       | ");
 
-    static_assert(sizeof(SmallVectorImpl<int>) <= 16, "!");
+    static_assert(sizeof(SmallVectorImpl<int>) <= 16);
 
     { // basic usage with trivial type
         SmallVector<int, 16> vec;
@@ -381,6 +381,34 @@ void test_small_vector() {
         require(longer > shorter);
         require(shorter <= same);
         require(shorter >= same);
+    }
+
+    { // insert into empty vector and self-inserting ranges
+        SmallVector<int, 4> empty_vec;
+        auto it = empty_vec.insert(empty_vec.begin(), 7);
+        require(empty_vec.size() == 1);
+        require(*it == 7 && empty_vec[0] == 7);
+
+        // Self-inserting range that forces reallocation: the source iterators
+        // must not dangle and must not be clobbered by the shift.
+        SmallVector<int, 2> v = {1, 2, 3};
+        require(v.is_on_heap() == true);
+        v.insert(v.begin() + 1, v.begin(), v.begin() + 2);
+        require(v.size() == 5);
+        require(v[0] == 1 && v[1] == 1 && v[2] == 2 && v[3] == 2 && v[4] == 3);
+
+        SmallVector<std::string, 2> s = {"a", "b", "c"};
+        s.insert(s.begin() + 1, s.begin(), s.end());
+        require(s.size() == 6);
+        require(s[0] == "a" && s[1] == "a" && s[2] == "b");
+        require(s[3] == "c" && s[4] == "b" && s[5] == "c");
+
+        // Inserting an empty range is a no-op.
+        SmallVector<int, 8> w = {1, 2, 3};
+        auto before = w.size();
+        w.insert(w.begin() + 1, w.begin(), w.begin());
+        require(w.size() == before);
+        require(w[0] == 1 && w[1] == 2 && w[2] == 3);
     }
 
     printf("OK\n");

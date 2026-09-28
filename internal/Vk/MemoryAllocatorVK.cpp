@@ -5,8 +5,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4996) // function or variable may be unsafe
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size) {
     for (uint32_t i = search_from; i < 32; i++) {
@@ -24,8 +23,7 @@ uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProper
     }
     return 0xffffffff;
 }
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 void Ray::Vk::MemAllocation::Release() {
     if (owner) {

@@ -1,7 +1,6 @@
 #include "VertexInputDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 /*const VkFormat g_attrib_formats_vk[][4] = {
     {}, // Undefined
     {VK_FORMAT_R16_SFLOAT, VK_FORMAT_R16G16_SFLOAT, VK_FORMAT_R16G16B16_SFLOAT,
@@ -32,9 +31,8 @@ static_assert(std::size(g_attrib_formats_vk) == int(eType::_Count), "!");*/
 };
 static_assert(std::size(g_type_sizes) == int(eType::_Count), "!");*/
 
-//const int MaxVertexInputAttributeOffset = 16; // 16 seems to be supported by all implementations
-} // namespace Vk
-} // namespace Ray
+// const int MaxVertexInputAttributeOffset = 16; // 16 seems to be supported by all implementations
+} // namespace Ray::Dx
 
 Ray::Dx::VertexInput::VertexInput() = default;
 

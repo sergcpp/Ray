@@ -20,15 +20,15 @@ template <typename F> class AtScopeExit {
 
     inline void Execute() {
         if (engaged_) {
+            // Disarm before invoking, so a throwing callback cannot run twice.
+            engaged_ = false;
             func_();
         }
-        Dismiss();
     }
 };
-template <typename F> AtScopeExit<F> make_scope_exit(F &&f) { return AtScopeExit<F>(std::forward<F>(f)); }
 } // namespace Ray
 
-#define SCOPE_EXIT_INTERNAL2(aname, ...) auto aname = Ray::make_scope_exit([&]() { __VA_ARGS__; });
+#define SCOPE_EXIT_INTERNAL2(aname, ...) auto aname = Ray::AtScopeExit([&]() { __VA_ARGS__; });
 
 #define SCOPE_EXIT_CONCAT(x, y) SCOPE_EXIT_##x##y
 

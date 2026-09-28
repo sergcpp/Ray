@@ -1,4 +1,4 @@
-﻿#include "BufferVK.h"
+#include "BufferVK.h"
 
 #include <algorithm>
 #include <cassert>
@@ -7,8 +7,7 @@
 #include "../../Log.h"
 #include "ContextVK.h"
 
-namespace Ray {
-namespace Vk {
+namespace Ray::Vk {
 VkBufferUsageFlags GetVkBufferUsageFlags(const Context *ctx, const eBufType type) {
     VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
@@ -52,8 +51,7 @@ VkMemoryPropertyFlags GetVkMemoryPropertyFlags(const eBufType type) {
 
 uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
                         uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
-} // namespace Vk
-} // namespace Ray
+} // namespace Ray::Vk
 
 int Ray::Vk::Buffer::g_GenCounter = 0;
 

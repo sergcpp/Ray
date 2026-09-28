@@ -91,7 +91,7 @@ template <typename T, size_t Alignment> class aligned_allocator {
         if (n > max_size()) {
             throw std::length_error("aligned_allocator<T>::allocate() - Integer overflow.");
         }
-        void *const pv = aligned_malloc(n * sizeof(T), Alignment);
+        void *const pv = Ray::aligned_malloc(n * sizeof(T), Alignment);
         if (pv == nullptr) {
             throw std::bad_alloc();
         }
@@ -99,7 +99,7 @@ template <typename T, size_t Alignment> class aligned_allocator {
     }
 
     void deallocate(T *const p, const size_t) const {
-        aligned_free(p);
+        Ray::aligned_free(p);
     }
 
     aligned_allocator &operator=(const aligned_allocator &) = delete;

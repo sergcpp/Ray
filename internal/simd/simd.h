@@ -122,7 +122,7 @@ template <typename T, int S> class fixed_size_simd {
         UNROLLED_FOR_S(i, S, { comp_[i] = f; })
     }
     template <typename... Tail>
-    force_inline fixed_size_simd(typename std::enable_if<sizeof...(Tail) + 1 == S, T>::type head, Tail... tail)
+    force_inline fixed_size_simd(std::enable_if_t<sizeof...(Tail) + 1 == S, T> head, Tail... tail)
         : comp_{head, T(tail)...} {}
     force_inline explicit fixed_size_simd(const T *f) { memcpy(&comp_, f, S * sizeof(T)); }
     force_inline fixed_size_simd(const T *_f, vector_aligned_tag) {

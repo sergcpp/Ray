@@ -5,8 +5,8 @@
 #include <type_traits>
 
 namespace Ray {
-template <class enum_type, typename = typename std::enable_if<std::is_enum<enum_type>::value>::type> class Bitmask {
-    using underlying_type = typename std::underlying_type<enum_type>::type;
+template <class enum_type, typename = std::enable_if_t<std::is_enum_v<enum_type>>> class Bitmask {
+    using underlying_type = std::underlying_type_t<enum_type>;
 
     static constexpr underlying_type to_mask(const enum_type e) {
         assert(static_cast<underlying_type>(e) >= 0 &&
@@ -57,5 +57,4 @@ template <class enum_type, typename = typename std::enable_if<std::is_enum<enum_
   private:
     underlying_type mask_;
 };
-
 } // namespace Ray

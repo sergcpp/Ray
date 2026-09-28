@@ -11,8 +11,7 @@
 #include "../../Log.h"
 #include "ContextDX.h"
 
-namespace Ray {
-namespace Dx {
+namespace Ray::Dx {
 #define X(_0, _1, _2, _3) _3,
 extern const D3D12_FILTER g_filter_dx[] = {
 #include "../Filter.inl"
@@ -32,8 +31,7 @@ extern const D3D12_COMPARISON_FUNC g_compare_func_dx[] = {
 #undef X
 
 extern const float AnisotropyLevel = 4.0f;
-} // namespace Dx
-} // namespace Ray
+} // namespace Ray::Dx
 
 Ray::Dx::Sampler &Ray::Dx::Sampler::operator=(Sampler &&rhs) noexcept {
     if (&rhs == this) {

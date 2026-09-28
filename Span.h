@@ -9,6 +9,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "internal/SmallVector.h"
+
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
 #endif
@@ -20,11 +22,11 @@ namespace Ray {
 template <typename T> struct remove_all_const : std::remove_const<T> {};
 
 template <typename T> struct remove_all_const<T *> {
-    typedef typename remove_all_const<T>::type *type;
+    using type = typename remove_all_const<T>::type *;
 };
 
 template <typename T> struct remove_all_const<T *const> {
-    typedef typename remove_all_const<T>::type *type;
+    using type = typename remove_all_const<T>::type *;
 };
 
 template <typename T> class Span {
@@ -42,22 +44,32 @@ template <typename T> class Span {
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
 
     template <size_t N>
-    Span(const std::array<typename remove_all_const<T>::type, N> &arr) : Span(static_cast<T *>(arr.data()), arr.size()) {}
+    Span(const std::array<typename remove_all_const<T>::type, N> &arr)
+        : Span(static_cast<T *>(arr.data()), arr.size()) {}
     template <size_t N>
     Span(const std::array<const typename remove_all_const<T>::type, N> &arr) : Span(arr.data(), arr.size()) {}
-    template <size_t N> Span(std::array<typename std::remove_cv<T>::type, N> &arr) : Span(static_cast<T *>(arr.data()), arr.size()) {}
+    template <size_t N>
+    Span(std::array<std::remove_cv_t<T>, N> &arr) : Span(static_cast<T *>(arr.data()), arr.size()) {}
 
     template <typename Alloc>
-    Span(const std::vector<typename remove_all_const<T>::type, Alloc> &v) : Span(static_cast<T *>(v.data()), v.size()) {}
+    Span(const std::vector<typename remove_all_const<T>::type, Alloc> &v)
+        : Span(static_cast<T *>(v.data()), v.size()) {}
     template <typename Alloc>
     Span(const std::vector<const typename remove_all_const<T>::type, Alloc> &v) : Span(v.data(), v.size()) {}
     template <typename Alloc>
-    Span(std::vector<typename std::remove_cv<T>::type, Alloc> &v) : Span(static_cast<T *>(v.data()), v.size()) {}
+    Span(std::vector<std::remove_cv_t<T>, Alloc> &v) : Span(static_cast<T *>(v.data()), v.size()) {}
+
+    template <typename Alloc>
+    Span(const SmallVectorImpl<typename remove_all_const<T>::type, Alloc> &v)
+        : Span(static_cast<T *>(v.data()), v.size()) {}
+    template <typename Alloc>
+    Span(const SmallVectorImpl<const typename remove_all_const<T>::type, Alloc> &v) : Span(v.data(), v.size()) {}
+    template <typename Alloc>
+    Span(SmallVectorImpl<std::remove_cv_t<T>, Alloc> &v) : Span(static_cast<T *>(v.data()), v.size()) {}
 
     template <size_t N> Span(T (&arr)[N]) : Span(arr, N) {}
 
-    template <typename U = typename remove_all_const<T>::type,
-              typename = typename std::enable_if<!std::is_same<T, U>::value>::type>
+    template <typename U = typename remove_all_const<T>::type, typename = std::enable_if_t<!std::is_same_v<T, U>>>
     Span(const Span<U> &rhs) : Span(rhs.data(), rhs.size()) {}
 
     Span(const Span &rhs) = default;
@@ -132,13 +144,13 @@ template <typename T> class Span {
         }
 
         reverse_iterator_t operator+(ptrdiff_t n) const { return reverse_iterator_t(iter_ - n); }
-        reverse_iterator_t &operator+=(ptrdiff_t n) const {
+        reverse_iterator_t &operator+=(ptrdiff_t n) {
             iter_ -= n;
             return *this;
         }
 
         reverse_iterator_t operator-(ptrdiff_t n) const { return reverse_iterator_t(iter_ + n); }
-        reverse_iterator_t &operator-=(ptrdiff_t n) const {
+        reverse_iterator_t &operator-=(ptrdiff_t n) {
             iter_ += n;
             return *this;
         }
