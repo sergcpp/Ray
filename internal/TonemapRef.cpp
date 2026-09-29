@@ -38,10 +38,12 @@ force_inline fvec4 FetchLUT(const eViewTransform view_transform, const int ix, c
 
 Ray::Ref::fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform view_transform, fvec4 color) {
     const fvec4 encoded = color / (color + 1.0f);
-    const fvec4 uv = encoded * float(LUT_DIMS - 1);
-    const ivec4 xyz = ivec4(uv);
-    const fvec4 f = fract(uv);
-    const ivec4 xyz_next = min(xyz + 1, ivec4{LUT_DIMS - 1});
+    const fvec4 uv = encoded * float(LUT_DIMS) - 0.5f;
+    const fvec4 uv_floor = floor(uv);
+    const fvec4 f = uv - uv_floor;
+    const ivec4 base = ivec4(uv_floor);
+    const ivec4 xyz = clamp(base, ivec4{0}, ivec4{LUT_DIMS - 1});
+    const ivec4 xyz_next = clamp(base + 1, ivec4{0}, ivec4{LUT_DIMS - 1});
 
     const int ix = xyz.get<0>(), iy = xyz.get<1>(), iz = xyz.get<2>();
     const int jx = xyz_next.get<0>(), jy = xyz_next.get<1>(), jz = xyz_next.get<2>();

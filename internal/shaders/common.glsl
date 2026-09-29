@@ -292,11 +292,7 @@ vec4 TonemapStandard(float inv_gamma, vec4 col) {
 vec3 TonemapLUT(sampler3D lut, float inv_gamma, vec3 col) {
     const vec3 encoded = col / (col + 1.0);
 
-    // Align the encoded range to texel centers
-    const float LUT_DIMS = 48.0;
-    const vec3 uv = (encoded + (0.5 / LUT_DIMS)) * ((LUT_DIMS - 1.0) / LUT_DIMS);
-
-    vec3 ret = textureLod(lut, uv, 0.0).xyz;
+    vec3 ret = textureLod(lut, encoded, 0.0).xyz;
     if (inv_gamma != 1.0) {
         ret = pow(ret, vec3(inv_gamma));
     }
