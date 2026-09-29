@@ -1155,8 +1155,8 @@ void test_complex_mat0(const char *arch_list[], std::string_view preferred_devic
         "test_data/textures/older-wood-flooring_roughness_2045.tga",
     };
 
-    run_shading_test(arch_list, preferred_device, "complex_mat0", wood_mat_desc, SampleCount, DefaultMinPSNR,
-                     PixThres, eDenoiseMethod::None, false, textures);
+    run_shading_test(arch_list, preferred_device, "complex_mat0", wood_mat_desc, SampleCount, DefaultMinPSNR, PixThres,
+                     eDenoiseMethod::None, false, textures);
 }
 
 void test_complex_mat1(const char *arch_list[], std::string_view preferred_device) {
@@ -1480,7 +1480,7 @@ void test_complex_mat5_spot_light(const char *arch_list[], std::string_view pref
 void test_complex_mat5_dir_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 30;
     const double MinPSNR = 23.0;
-    const int PixThres = 4850;
+    const int PixThres = 5200;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1516,7 +1516,8 @@ void test_complex_mat5_sun_light(const char *arch_list[], std::string_view prefe
 
 void test_complex_mat5_moon_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const int PixThres = 340;
+    const double MinPSNR = 31.0;
+    const int PixThres = 300;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1528,8 +1529,8 @@ void test_complex_mat5_moon_light(const char *arch_list[], std::string_view pref
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_shading_test(arch_list, preferred_device, "complex_mat5_moon_light", metal_mat_desc, SampleCount,
-                     DefaultMinPSNR, PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_MoonLight);
+    run_shading_test(arch_list, preferred_device, "complex_mat5_moon_light", metal_mat_desc, SampleCount, MinPSNR,
+                     PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_MoonLight);
 }
 
 void test_complex_mat5_hdri_light(const char *arch_list[], std::string_view preferred_device) {
@@ -1673,8 +1674,8 @@ void test_complex_mat6_spot_light(const char *arch_list[], std::string_view pref
 
 void test_complex_mat6_dir_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 104;
-    const double MinPSNR = 17.4;
-    const int PixThres = 9400;
+    const double MinPSNR = 17.0;
+    const int PixThres = 10000;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};

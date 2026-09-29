@@ -28,13 +28,13 @@ force_inline fvec4 vectorcall TonemapStandard(fvec4 c) {
     return c;
 }
 
-fvec4 vectorcall TonemapFilmic(eViewTransform view_transform, fvec4 color);
+fvec4 vectorcall TonemapLUT(eViewTransform view_transform, fvec4 color);
 
 force_inline fvec4 vectorcall Tonemap(const tonemap_params_t &params, fvec4 c) {
     if (params.view_transform == eViewTransform::Standard) {
         c = TonemapStandard(c);
     } else {
-        c = TonemapFilmic(params.view_transform, c);
+        c = TonemapLUT(params.view_transform, c);
     }
 
     if (params.inv_gamma != 1.0f) {
