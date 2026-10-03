@@ -28,17 +28,17 @@ void test_aux_channels(const char *arch_list[], std::string_view preferred_devic
     //
 
     int test_img_w, test_img_h;
-    const auto base_color_ref = LoadTGA("test_data/aux_channels/base_color_ref.tga", test_img_w, test_img_h);
-    require_return(!base_color_ref.empty());
+    const auto base_color_gold = LoadTGA("test_data/aux_channels/base_color_gold.tga", test_img_w, test_img_h);
+    require_return(!base_color_gold.empty());
 
     int normals_img_w, normals_img_h;
-    const auto normals_ref = LoadTGA("test_data/aux_channels/normals_ref.tga", normals_img_w, normals_img_h);
-    require_return(!normals_ref.empty());
+    const auto normals_gold = LoadTGA("test_data/aux_channels/normals_gold.tga", normals_img_w, normals_img_h);
+    require_return(!normals_gold.empty());
     require_return(normals_img_w == test_img_w && normals_img_h == test_img_h);
 
     int depth_img_w, depth_img_h;
-    const auto depth_ref = LoadTGA("test_data/aux_channels/depth_ref.tga", depth_img_w, depth_img_h);
-    require_return(!depth_ref.empty());
+    const auto depth_gold = LoadTGA("test_data/aux_channels/depth_gold.tga", depth_img_w, depth_img_h);
+    require_return(!depth_gold.empty());
     require_return(depth_img_w == test_img_w && depth_img_h == test_img_h);
 
     //
@@ -140,9 +140,9 @@ void test_aux_channels(const char *arch_list[], std::string_view preferred_devic
                         base_color_data_u8[3 * (j * test_img_w + i) + 1] = g;
                         base_color_data_u8[3 * (j * test_img_w + i) + 2] = b;
 
-                        const uint8_t diff_r = std::abs(r - base_color_ref[4 * (j * test_img_w + i) + 0]);
-                        const uint8_t diff_g = std::abs(g - base_color_ref[4 * (j * test_img_w + i) + 1]);
-                        const uint8_t diff_b = std::abs(b - base_color_ref[4 * (j * test_img_w + i) + 2]);
+                        const uint8_t diff_r = std::abs(r - base_color_gold[4 * (j * test_img_w + i) + 0]);
+                        const uint8_t diff_g = std::abs(g - base_color_gold[4 * (j * test_img_w + i) + 1]);
+                        const uint8_t diff_b = std::abs(b - base_color_gold[4 * (j * test_img_w + i) + 2]);
 
                         base_color_mse += diff_r * diff_r;
                         base_color_mse += diff_g * diff_g;
@@ -159,9 +159,9 @@ void test_aux_channels(const char *arch_list[], std::string_view preferred_devic
                         normals_data_u8[3 * (j * test_img_w + i) + 1] = g;
                         normals_data_u8[3 * (j * test_img_w + i) + 2] = b;
 
-                        const uint8_t diff_r = std::abs(r - normals_ref[4 * (j * test_img_w + i) + 0]);
-                        const uint8_t diff_g = std::abs(g - normals_ref[4 * (j * test_img_w + i) + 1]);
-                        const uint8_t diff_b = std::abs(b - normals_ref[4 * (j * test_img_w + i) + 2]);
+                        const uint8_t diff_r = std::abs(r - normals_gold[4 * (j * test_img_w + i) + 0]);
+                        const uint8_t diff_g = std::abs(g - normals_gold[4 * (j * test_img_w + i) + 1]);
+                        const uint8_t diff_b = std::abs(b - normals_gold[4 * (j * test_img_w + i) + 2]);
 
                         normals_mse += diff_r * diff_r;
                         normals_mse += diff_g * diff_g;
@@ -176,7 +176,7 @@ void test_aux_channels(const char *arch_list[], std::string_view preferred_devic
                         depth_data_u8[3 * (j * test_img_w + i) + 1] = u8;
                         depth_data_u8[3 * (j * test_img_w + i) + 2] = u8;
 
-                        const uint8_t diff_d = std::abs(u8 - depth_ref[4 * (j * test_img_w + i) + 0]);
+                        const uint8_t diff_d = std::abs(u8 - depth_gold[4 * (j * test_img_w + i) + 0]);
 
                         depth_mse += diff_d * diff_d;
                     }

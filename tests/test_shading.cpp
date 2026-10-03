@@ -41,7 +41,7 @@ void run_shading_test(const char *arch_list[], std::string_view preferred_device
     using namespace Ray;
 
     char name_buf[1024];
-    snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_name);
+    snprintf(name_buf, sizeof(name_buf), "test_data/%s/gold.tga", test_name);
 
     int test_img_w, test_img_h;
     const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
@@ -288,14 +288,14 @@ void assemble_shading_test_images(const char *arch_list[]) {
             for (int j = 0; j < ImgCountH; ++j) {
                 for (int i = 0; i < ImgCountW && test_names[j][i]; ++i) {
                     { // reference image
-                        snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_names[j][i]);
+                        snprintf(name_buf, sizeof(name_buf), "test_data/%s/gold.tga", test_names[j][i]);
 
                         int test_img_w, test_img_h;
-                        const auto img_ref = LoadTGA(name_buf, test_img_w, test_img_h);
-                        if (!img_ref.empty()) {
+                        const auto img_gold = LoadTGA(name_buf, test_img_w, test_img_h);
+                        if (!img_gold.empty()) {
                             for (int k = 0; k < test_img_h; ++k) {
                                 memcpy(&material_refs[((j * 256 + k) * OutImageW + i * 256) * 4],
-                                       &img_ref[k * test_img_w * 4], test_img_w * 4);
+                                       &img_gold[k * test_img_w * 4], test_img_w * 4);
                             }
                         }
 
