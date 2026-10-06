@@ -526,7 +526,8 @@ Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
 
 template <typename SIMDPolicy> Ray::SceneBase *Ray::Cpu::Renderer<SIMDPolicy>::CreateScene() {
     const bool use_wide_bvh = (type() != eRendererType::Reference);
-    return new Cpu::Scene(log_, use_wide_bvh, use_tex_compression_, use_spatial_cache_);
+    const bool use_compact_bvh = (type() != eRendererType::Reference);
+    return new Cpu::Scene(log_, use_wide_bvh, use_compact_bvh, use_tex_compression_, use_spatial_cache_);
 }
 
 template <typename SIMDPolicy>
@@ -553,6 +554,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
                                   s.vertices_.empty() ? nullptr : &s.vertices_[0],
                                   s.nodes_.empty() ? nullptr : &s.nodes_[0],
                                   s.wnodes_.empty() ? nullptr : &s.wnodes_[0],
+                                  s.cwnodes_.empty() ? nullptr : &s.cwnodes_[0],
+                                  s.leaf_prims_.empty() ? nullptr : &s.leaf_prims_[0],
                                   s.tris_.empty() ? nullptr : &s.tris_[0],
                                   s.tri_indices_.empty() ? nullptr : &s.tri_indices_[0],
                                   s.mtris_.data(),
@@ -565,6 +568,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
                                   s.blocker_lights_count_,
                                   {s.light_nodes_},
                                   {s.light_cwnodes_},
+                                  {s.light_leaf_prims_},
                                   {s.sky_transmittance_lut_},
                                   {s.sky_multiscatter_lut_},
                                   cache_grid_params,
@@ -1194,6 +1198,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
                                   s.vertices_.empty() ? nullptr : &s.vertices_[0],
                                   s.nodes_.empty() ? nullptr : &s.nodes_[0],
                                   s.wnodes_.empty() ? nullptr : &s.wnodes_[0],
+                                  s.cwnodes_.empty() ? nullptr : &s.cwnodes_[0],
+                                  s.leaf_prims_.empty() ? nullptr : &s.leaf_prims_[0],
                                   s.tris_.empty() ? nullptr : &s.tris_[0],
                                   s.tri_indices_.empty() ? nullptr : &s.tri_indices_[0],
                                   s.mtris_.data(),
@@ -1206,6 +1212,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
                                   s.blocker_lights_count_,
                                   {s.light_nodes_},
                                   {s.light_cwnodes_},
+                                  {},
                                   {},
                                   {},
                                   cache_grid_params,

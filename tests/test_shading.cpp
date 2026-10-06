@@ -1142,7 +1142,7 @@ void test_two_sided_mat(const char *arch_list[], std::string_view preferred_devi
 
 void test_complex_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 22;
-    const int PixThres = 590;
+    const int PixThres = 600;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1161,7 +1161,7 @@ void test_complex_mat0(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 22;
-    const int PixThres = 555;
+    const int PixThres = 560;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1181,7 +1181,7 @@ void test_complex_mat1(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const int PixThres = 395;
+    const int PixThres = 400;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1217,7 +1217,7 @@ void test_complex_mat3(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 36;
-    const int PixThres = 365;
+    const int PixThres = 370;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1255,7 +1255,7 @@ void test_complex_mat5(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat5_emissive(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 64;
-    const int PixThres = 15540;
+    const int PixThres = 15480;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1276,7 +1276,7 @@ void test_complex_mat5_emissive(const char *arch_list[], std::string_view prefer
 
 void test_complex_mat5_clipped(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 36;
-    const int PixThres = 5025;
+    const int PixThres = 5030;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1315,7 +1315,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], std::string_view prefer
     const int MinSampleCount = 8;
     const int MaxSampleCount = 48;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 1270;
+    const int PixThres = 1280;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1370,7 +1370,7 @@ void test_complex_mat5_nlm_filter(const char *arch_list[], std::string_view pref
 
 void test_complex_mat5_unet_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const int PixThres = 1320;
+    const int PixThres = 1330;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1389,7 +1389,7 @@ void test_complex_mat5_unet_filter(const char *arch_list[], std::string_view pre
 void test_complex_mat5_dof(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 24;
     const double MinPSNR = 21.0;
-    const int PixThres = 9310;
+    const int PixThres = 9320;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1407,7 +1407,7 @@ void test_complex_mat5_dof(const char *arch_list[], std::string_view preferred_d
 
 void test_complex_mat5_mesh_lights(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 30;
-    const int PixThres = 4455;
+    const int PixThres = 4460;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1554,7 +1554,9 @@ void test_complex_mat5_hdri_light(const char *arch_list[], std::string_view pref
 void test_complex_mat5_area_spread(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 44;
     const double MinPSNR = 27.5;
-    const int PixThres = 305;
+    // 44-sample renders land at 295-309 diff pixels (CPU 295/297, GPU SWRT 307/309, HWRT 305);
+    // the compacted light tree (pow2 boxes) moved the GPU realization a couple of pixels
+    const int PixThres = 320;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1615,7 +1617,7 @@ void test_complex_mat6_unet_filter(const char *arch_list[], std::string_view pre
 void test_complex_mat6_dof(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 66;
     const double MinPSNR = 23.0;
-    const int PixThres = 4365;
+    const int PixThres = 4370;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};

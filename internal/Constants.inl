@@ -1,8 +1,7 @@
 //
 // Global constants
 //
-const int MAX_STACK_SIZE = 48;
-const int MAX_LTREE_STACK_SIZE = 16;
+const int MAX_STACK_SIZE = 64;
 const int MAX_BOUNCES = 128;
 
 const float HIT_BIAS = 0.00001f;

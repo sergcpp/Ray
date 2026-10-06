@@ -509,6 +509,19 @@ template <> class fixed_size_simd<int, 4> {
 
     force_inline operator fixed_size_simd<float, 4>() const { return vcvtq_f32_s32(vec_); }
 
+    // Load 4 bytes and expand each into a separate 32-bit lane
+    static force_inline fixed_size_simd<int, 4> vectorcall load_u8x4(const uint8_t *p) {
+        const uint8x8_t b = vreinterpret_u8_u32(vld1_dup_u32((const uint32_t *)p));
+        const uint32x4_t w = vmovl_u16(vget_low_u16(vmovl_u8(b)));
+        return fixed_size_simd<int, 4>(vreinterpretq_s32_u32(w));
+    }
+
+    // Load 4 16-bit values and expand each into a separate 32-bit lane
+    static force_inline fixed_size_simd<int, 4> vectorcall load_u16x4(const uint16_t *p) {
+        const uint32x4_t w = vmovl_u16(vld1_u16(p));
+        return fixed_size_simd<int, 4>(vreinterpretq_s32_u32(w));
+    }
+
     force_inline operator fixed_size_simd<unsigned, 4>() const;
 
     force_inline int hsum() const {
@@ -1021,7 +1034,7 @@ template <> class fixed_size_simd<unsigned, 4> {
     }
 
     friend force_inline fixed_size_simd<unsigned, 4> vectorcall srli(const fixed_size_simd<unsigned, 4> v1,
-                                                                      const unsigned v2) {
+                                                                     const unsigned v2) {
         return vshlq_u32(v1.vec_, vdupq_n_s32(-(int)v2));
     }
 

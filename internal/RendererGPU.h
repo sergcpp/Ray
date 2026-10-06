@@ -22,6 +22,7 @@ struct scene_data_t {
     const Buffer &vtx_indices;
     const Buffer &vertices;
     const Buffer &nodes;
+    const Buffer &leaf_prims;
     const Buffer &tris;
     const Buffer &tri_indices;
     const Buffer &tri_materials;
@@ -35,6 +36,7 @@ struct scene_data_t {
     const uint32_t visible_lights_count;
     const uint32_t blocker_lights_count;
     const Buffer &light_cwnodes;
+    const Buffer &light_leaf_prims;
     const AccStructure &rt_tlas;
     const Image &env_qtree;
     int env_qtree_levels;
@@ -714,6 +716,9 @@ inline void Ray::NS::Renderer::TransitionSceneResources(CommandBuffer cmd_buf, c
     }
     if (sc_data.nodes && sc_data.nodes.resource_state != eResState::ShaderResource) {
         res_transitions.emplace_back(&sc_data.nodes, eResState::ShaderResource);
+    }
+    if (sc_data.leaf_prims && sc_data.leaf_prims.resource_state != eResState::ShaderResource) {
+        res_transitions.emplace_back(&sc_data.leaf_prims, eResState::ShaderResource);
     }
     if (sc_data.tris && sc_data.tris.resource_state != eResState::ShaderResource) {
         res_transitions.emplace_back(&sc_data.tris, eResState::ShaderResource);

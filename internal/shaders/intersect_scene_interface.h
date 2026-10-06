@@ -33,6 +33,7 @@ const int RAYS_BUF_SLOT = 9;
 const int TLAS_SLOT = 10;
 const int COUNTERS_BUF_SLOT = 11;
 const int RANDOM_SEQ_BUF_SLOT = 12;
+const int LEAF_PRIMS_BUF_SLOT = 13;
 
 const int OUT_HITS_BUF_SLOT = 0;
 

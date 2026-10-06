@@ -90,6 +90,8 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
     const Binding bindings[] = {{eBindTarget::SBufRO, IntersectAreaLights::RAYS_BUF_SLOT, rays},
                                 {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
                                 {eBindTarget::SBufRO, IntersectAreaLights::CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+                                {eBindTarget::SBufRO, IntersectAreaLights::LIGHT_LEAF_PRIMS_BUF_SLOT,
+                                 sc_data.light_leaf_prims},
                                 {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
                                 {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
 

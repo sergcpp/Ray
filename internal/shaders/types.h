@@ -87,6 +87,20 @@ struct bvh2_node_t {
     uvec4 child;    // x - left child, y - right child
 };
 
+// Layout mirror of Ray::cwbvh_node_t (see Core.h, 80 B): the shader reads bbox_min,
+// ch_bbox_min/max, ch_exp, child_base_imask, prim_base and meta4_*. Child slots are addressed
+// implicitly and leaf payloads come from g_leaf_prims - there is no child[] and no node bbox_max.
+struct cwbvh_node_t {
+    float bbox_min[3];
+    uint ch_bbox_min[3][2]; // per axis, 8 quantized bytes packed as 2 uints
+    uint ch_bbox_max[3][2];
+    uint ch_exp;           // 4 packed int8 quantization-step exponents
+    uint child_base_imask; // low 24 bits child_base, high 8 bits internal-child slot mask
+    uint prim_base;        // meta4 leaf payload base
+    uint meta4_0;          // meta4 bytes for slots 0..3
+    uint meta4_1;          // meta4 bytes for slots 4..7
+};
+
 struct light_bvh_node_t {
     float bbox_min[3];
     uint left_child;
@@ -110,14 +124,17 @@ struct light_wbvh_node_t {
 
 struct light_cwbvh_node_t {
     float bbox_min[3];
-    float bbox_max[3];
-    uint ch_bitmask[2];
     uint ch_bbox_min[3][2];
     uint ch_bbox_max[3][2];
-    uint child[8];
-    float flux[8];
-    uint axis[8];
-    uint cos_omega_ne[8];
+    uint ch_exp;
+    uint child_base_imask;
+    uint prim_base;
+    uint meta4_0;
+    uint meta4_1;
+    uint ch_bitmask[2];   // 8 bytes packed as 2 uints - child light-type filter, not validity
+    uint flux[2];         // 8 bytes packed as 2 uints - fraction of the parent's flux, cube-coded
+    uint axis[4];         // 8 packed (x, y) 8-bit snorm octahedral pairs
+    uint cos_omega_ne[4]; // 8 packed (cos omega_n, cos omega_e) 8-bit snorm pairs
 };
 
 struct vertex_t {
@@ -130,6 +147,7 @@ struct mesh_t {
     uint tris_index, tris_block, tris_count;
     uint vert_index, vert_block, vert_count;
     uint vert_data_index, vert_data_block;
+    uint leaf_prims_index, leaf_prims_block;
 };
 
 struct mesh_instance_t {

@@ -47,10 +47,12 @@ class Scene : public SceneCommon {
     friend class Cpu::Renderer<Avx512::SIMDPolicy>;
     friend class Cpu::Renderer<Neon::SIMDPolicy>;
 
-    bool use_wide_bvh_, use_tex_compression_;
+    bool use_wide_bvh_, use_compact_bvh_, use_tex_compression_;
 
     SparseStorage<bvh2_node_t> nodes_;
     SparseStorage<wbvh_node_t> wnodes_;
+    SparseStorage<cwbvh_node_t> cwnodes_;
+    SparseStorage<uint32_t> leaf_prims_;
     SparseStorage<tri_accel_t> tris_;
     SparseStorage<uint32_t> tri_indices_;
     SparseStorage<mtri_accel_t> mtris_;
@@ -82,6 +84,8 @@ class Scene : public SceneCommon {
     std::vector<light_bvh_node_t> light_nodes_;
     aligned_vector<light_wbvh_node_t> light_wnodes_;
     aligned_vector<light_cwbvh_node_t> light_cwnodes_;
+    float light_bounds_min_[3], light_bounds_max_[3];
+    std::vector<uint32_t> light_leaf_prims_;
 
     LightHandle env_map_light_ = InvalidLightHandle;
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;
@@ -96,6 +100,9 @@ class Scene : public SceneCommon {
     mutable float spatial_cache_cam_pos_prev_[3] = {};
 
     uint32_t tlas_root_ = 0xffffffff, tlas_block_ = 0xffffffff;
+    float scene_bounds_min_[3] = {MAX_DIST, MAX_DIST, MAX_DIST};
+    float scene_bounds_max_[3] = {-MAX_DIST, -MAX_DIST, -MAX_DIST};
+    uint32_t tlas_leaf_prims_block_ = 0xffffffff;
 
     void RemoveMesh_nolock(MeshHandle m);
     void RemoveMeshInstance_nolock(MeshInstanceHandle i);
@@ -109,7 +116,7 @@ class Scene : public SceneCommon {
     void SetMeshInstanceTransform_nolock(MeshInstanceHandle mi, const float *xform);
 
   public:
-    Scene(ILog *log, bool use_wide_bvh, bool use_tex_compression, bool use_spatial_cache);
+    Scene(ILog *log, bool use_wide_bvh, bool use_compact_bvh, bool use_tex_compression, bool use_spatial_cache);
     ~Scene() override;
 
     TextureHandle AddTexture(const tex_desc_t &t) override;
@@ -165,6 +172,9 @@ class Scene : public SceneCommon {
     }
     uint32_t node_count() const override {
         std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+        if (use_compact_bvh_) {
+            return uint32_t(cwnodes_.size());
+        }
         return use_wide_bvh_ ? uint32_t(wnodes_.size()) : uint32_t(nodes_.size());
     }
 };

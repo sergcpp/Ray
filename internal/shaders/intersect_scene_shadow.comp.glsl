@@ -5,6 +5,9 @@
 #endif
 #if SUBGROUP
 #extension GL_KHR_shader_subgroup_vote : require
+#else
+#define subgroupAll(x) (x)
+#define subgroupAny(x) (x)
 #endif
 
 #include "intersect_scene_shadow_interface.h"
@@ -33,7 +36,11 @@ layout(std430, binding = MATERIALS_BUF_SLOT) readonly buffer Materials {
 };
 
 layout(std430, binding = NODES_BUF_SLOT) readonly buffer Nodes {
-    bvh2_node_t g_nodes[];
+    cwbvh_node_t g_nodes[];
+};
+
+layout(std430, binding = LEAF_PRIMS_BUF_SLOT) readonly buffer LeafPrims {
+    uint g_leaf_prims[];
 };
 
 layout(std430, binding = MESH_INSTANCES_BUF_SLOT) readonly buffer MeshInstances {
@@ -64,6 +71,10 @@ layout(std430, binding = LIGHT_CWNODES_BUF_SLOT) readonly buffer LightCWNodes {
     light_cwbvh_node_t g_light_cwnodes[];
 };
 
+layout(std430, binding = LIGHT_LEAF_PRIMS_BUF_SLOT) readonly buffer LightLeafPrims {
+    uint g_light_leaf_prims[];
+};
+
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
     uint g_random_seq[];
 };
@@ -88,71 +99,63 @@ vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
 #define FETCH_TRI(j) g_tris[j]
 #include "traverse_bvh.glsl"
 
+const uint SM_STACK_SIZE = 8;
+shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
+uint g_stack_spill[MAX_STACK_SIZE - SM_STACK_SIZE]; // expected to be placed into scratch memory
+shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
+float g_stack_factors_spill[MAX_STACK_SIZE - SM_STACK_SIZE]; // expected to be placed into scratch memory
+
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
-#if HWRT
-shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_LTREE_STACK_SIZE];
-#else
-shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
-#endif
+bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index, uint stack_size, inout hit_data_t inter) {
+    const vec3 neg_inv_do = -inv_d * ro;
+    const uint flip_bits = (rd.x < 0.0 ? 1u : 0u) | (rd.y < 0.0 ? 2u : 0u) | (rd.z < 0.0 ? 4u : 0u);
 
-bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index, uint stack_size,
-                                  inout hit_data_t inter) {
-    vec3 neg_inv_do = -inv_d * ro;
+    const uint initial_stack_size = stack_size;
+    STACK_PUSH(node_index);
 
-    uint initial_stack_size = stack_size;
-    g_stack[gl_LocalInvocationIndex][stack_size++] = 0x1fffffffu;
+    uint index = 0u;
+    while (true) {
+        while (true) {
+            if ((index & LEAF_NODE_BIT) == 0 && stack_size != initial_stack_size) {
+                STACK_POP(index);
+                [[flatten]] if ((index & LEAF_NODE_BIT) != 0) {
+                    continue;
+                }
 
-    uint cur = node_index;
-    while (stack_size != initial_stack_size) {
-        uint leaf_node = 0;
-        while (stack_size != initial_stack_size && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
-            const bvh2_node_t n = g_nodes[cur];
+                const cwbvh_node_t n = g_nodes[index];
 
-            uvec2 children = n.child.xy;
+                uint mask = cwbvh_child_hit_mask(n, inv_d, neg_inv_do, inter.t, flip_bits);
+                while (mask != 0u) {
+                    const uint key = uint(findMSB(mask));
+                    mask ^= 1u << key;
 
-            const vec3 ch0_min = vec3(n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]);
-            const vec3 ch0_max = vec3(n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]);
-
-            const vec3 ch1_min = vec3(n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]);
-            const vec3 ch1_max = vec3(n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]);
-
-            float ch0_dist, ch1_dist;
-            const bool ch0_res = bbox_test(inv_d, neg_inv_do, inter.t, ch0_min, ch0_max, ch0_dist);
-            const bool ch1_res = bbox_test(inv_d, neg_inv_do, inter.t, ch1_min, ch1_max, ch1_dist);
-
-            if (!ch0_res && !ch1_res) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            } else {
-                cur = ch0_res ? children[0] : children[1];
-                if (ch0_res && ch1_res) {
-                    if (ch1_dist < ch0_dist) {
-                        const uint temp = cur;
-                        cur = children[1];
-                        children[1] = temp;
+                    const uint i = key ^ flip_bits;
+                    const uint meta = cwbvh_meta(n, i);
+                    if ((meta & 0x80u) != 0u) {
+                        STACK_PUSH(cwbvh_internal_child(n, i));
+                    } else {
+                        // leaf child: meta4 rank -> the parent's payload block (8-triangle block base)
+                        const uint tri_start = (n.prim_base + (meta & 0x3fu)) | LEAF_NODE_BIT;
+                        if ((index & LEAF_NODE_BIT) == 0) {
+                            index = tri_start;
+                        } else {
+                            STACK_PUSH(tri_start);
+                        }
                     }
-                    g_stack[gl_LocalInvocationIndex][stack_size++] = children[1];
                 }
             }
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
-                leaf_node = cur;
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            }
-#if SUBGROUP
-            if (subgroupAll((leaf_node & BVH2_PRIM_COUNT_BITS) != 0)) {
-                break;
-            }
-#else
-            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-                break;
-            }
-#endif
-        }
-        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-            const int tri_start = int(leaf_node & BVH2_PRIM_INDEX_BITS),
-                      tri_end = int(tri_start + ((leaf_node & BVH2_PRIM_COUNT_BITS) >> 29) + 1);
 
-            const bool hit_found = IntersectTris_AnyHit(ro, rd, tri_start, tri_end, obj_index, inter);
+            if (subgroupAll((index & LEAF_NODE_BIT) != 0 || stack_size == initial_stack_size)) {
+                break;
+            }
+        }
+
+        if ((index & LEAF_NODE_BIT) != 0) {
+            const int tri_start = int(g_leaf_prims[index & PRIM_INDEX_BITS]);
+            index = 0u;
+
+            const bool hit_found = IntersectTris_AnyHit(ro, rd, tri_start, tri_start + 8, obj_index, inter);
             if (hit_found) {
                 const bool is_backfacing = (inter.prim_index < 0);
                 const uint prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
@@ -166,11 +169,10 @@ bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
                     return true;
                 }
             }
+        }
 
-            leaf_node = cur;
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            }
+        if (subgroupAll((index & LEAF_NODE_BIT) == 0u && stack_size == initial_stack_size)) {
+            break;
         }
     }
 
@@ -178,72 +180,50 @@ bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
 }
 
 bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint node_index, inout hit_data_t inter) {
-    vec3 orig_neg_inv_do = -orig_inv_rd * orig_ro;
+    const vec3 orig_neg_inv_do = -orig_inv_rd * orig_ro;
+    const uint flip_bits = (orig_rd.x < 0.0 ? 1u : 0u) | (orig_rd.y < 0.0 ? 2u : 0u) | (orig_rd.z < 0.0 ? 4u : 0u);
 
     uint stack_size = 0;
-    g_stack[gl_LocalInvocationIndex][stack_size++] = 0x1fffffffu;
+    STACK_PUSH(node_index);
 
-    uint cur = node_index;
     while (stack_size != 0) {
-        uint leaf_node = 0;
-        while (stack_size != 0 && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
-            const bvh2_node_t n = g_nodes[cur];
+        uint index;
+        STACK_POP(index);
 
-            uvec2 children = n.child.xy;
-
-            const vec3 ch0_min = vec3(n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]);
-            const vec3 ch0_max = vec3(n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]);
-
-            const vec3 ch1_min = vec3(n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]);
-            const vec3 ch1_max = vec3(n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]);
-
-            float ch0_dist, ch1_dist;
-            const bool ch0_res = bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, ch0_min, ch0_max, ch0_dist);
-            const bool ch1_res = bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, ch1_min, ch1_max, ch1_dist);
-
-            if (!ch0_res && !ch1_res) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            } else {
-                cur = ch0_res ? children[0] : children[1];
-                if (ch0_res && ch1_res) {
-                    if (ch1_dist < ch0_dist) {
-                        const uint temp = cur;
-                        cur = children[1];
-                        children[1] = temp;
-                    }
-                    g_stack[gl_LocalInvocationIndex][stack_size++] = children[1];
-                }
-            }
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
-                leaf_node = cur;
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            }
-#if SUBGROUP
-            if (subgroupAll((leaf_node & BVH2_PRIM_COUNT_BITS) != 0)) {
-                break;
-            }
-#else
-            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-                break;
-            }
-#endif
-        }
-        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-            const uint mi_index = (leaf_node & BVH2_PRIM_INDEX_BITS);
+        if ((index & LEAF_NODE_BIT) != 0) {
+            const uint mi_index = g_leaf_prims[index & PRIM_INDEX_BITS];
             const mesh_instance_t mi = g_mesh_instances[mi_index];
             if ((mi.data.w & RAY_TYPE_SHADOW_BIT) != 0) {
                 const vec3 ro = (mi.inv_xform * vec4(orig_ro, 1.0)).xyz;
                 const vec3 rd = (mi.inv_xform * vec4(orig_rd, 0.0)).xyz;
                 const vec3 inv_d = safe_invert(rd);
 
-                const bool solid_hit_found = Traverse_BLAS_WithStack(ro, rd, inv_d, int(mi_index), mi.data.y, stack_size, inter);
+                const bool solid_hit_found =
+                    Traverse_BLAS_WithStack(ro, rd, inv_d, int(mi_index), mi.data.y, stack_size, inter);
                 if (solid_hit_found) {
                     return true;
                 }
             }
-            leaf_node = cur;
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
+            continue;
+        }
+
+        const cwbvh_node_t n = g_nodes[index];
+
+        // Children are in morton order; the hit mask is kept in direction key space (slot ^ flip)
+        // so draining it with findMSB() visits the octant closest to the ray origin first.
+        uint mask = cwbvh_child_hit_mask(n, orig_inv_rd, orig_neg_inv_do, inter.t, flip_bits);
+
+        while (mask != 0u) {
+            const uint key = uint(findMSB(mask));
+            mask ^= 1u << key;
+
+            const uint i = key ^ flip_bits;
+            const uint meta = cwbvh_meta(n, i);
+            if ((meta & 0x80u) != 0u) {
+                STACK_PUSH(cwbvh_internal_child(n, i));
+            } else {
+                // leaf child: TLAS leaves are single mesh instances (meta4 rank -> payload slot)
+                STACK_PUSH((n.prim_base + (meta & 0x3fu)) | LEAF_NODE_BIT);
             }
         }
     }
@@ -298,17 +278,19 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         const vec2 sh_uvs =
             vec2(v1.t[0], v1.t[1]) * w + vec2(v2.t[0], v2.t[1]) * sh_inter.u + vec2(v3.t[0], v3.t[1]) * sh_inter.v;
 
-        // reuse traversal stack
-        g_stack[gl_LocalInvocationIndex][0] = mat_index;
-        g_stack[gl_LocalInvocationIndex][1] = floatBitsToUint(1.0);
-        int stack_size = 1;
+        // mix-material stack of (material index, weight) pairs
+        uint stack_size = 0;
+        STACK_PUSH2(mat_index, 1.0);
 
         const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
 
         vec3 throughput = vec3(0.0);
-        while (stack_size-- != 0) {
-            material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
-            float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
+        while (stack_size != 0u) {
+            uint mat_index;
+            float weight;
+            STACK_POP2(mat_index, weight);
+
+            const material_t mat = g_materials[mat_index];
 
             // resolve mix material
             if (mat.type == MixNode) {
@@ -317,12 +299,8 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
                     mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand, true /* YCoCg */, true /* SRGB */).r;
                 }
 
-                g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];
-                g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * (1.0 - mix_val));
-                ++stack_size;
-                g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT2];
-                g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * mix_val);
-                ++stack_size;
+                STACK_PUSH2(mat.textures[MIX_MAT1], weight * (1.0 - mix_val));
+                STACK_PUSH2(mat.textures[MIX_MAT2], weight * mix_val);
             } else if (mat.type == TransparentNode) {
                 throughput += weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
             }
@@ -386,17 +364,19 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             const float w = 1.0 - uv.x - uv.y;
             const vec2 sh_uvs = vec2(v1.t[0], v1.t[1]) * w + vec2(v2.t[0], v2.t[1]) * uv.x + vec2(v3.t[0], v3.t[1]) * uv.y;
 
-            // reuse traversal stack
-            g_stack[gl_LocalInvocationIndex][0] = mat_index;
-            g_stack[gl_LocalInvocationIndex][1] = floatBitsToUint(1.0);
-            int stack_size = 1;
+            // mix-material stack of (material index, weight) pairs
+            uint stack_size = 0;
+            STACK_PUSH2(mat_index, 1.0);
 
             const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
 
             vec3 throughput = vec3(0.0);
-            while (stack_size-- != 0) {
-                material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
-                float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
+            while (stack_size != 0u) {
+                uint mat_index;
+                float weight;
+                STACK_POP2(mat_index, weight);
+
+                const material_t mat = g_materials[mat_index];
 
                 // resolve mix material
                 if (mat.type == MixNode) {
@@ -405,12 +385,8 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
                         mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand, true /* YCoCg */, true /* SRGB */).r;
                     }
 
-                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];
-                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * (1.0 - mix_val));
-                    ++stack_size;
-                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT2];
-                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * mix_val);
-                    ++stack_size;
+                    STACK_PUSH2(mat.textures[MIX_MAT1], weight * (1.0 - mix_val));
+                    STACK_PUSH2(mat.textures[MIX_MAT2], weight * mix_val);
                 } else if (mat.type == TransparentNode) {
                     throughput += weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
                 }
@@ -442,49 +418,83 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
 
     vec3 inv_d = safe_invert(rd);
     vec3 neg_inv_do = -inv_d * ro;
+    const uint flip_bits = (rd.x < 0.0 ? 1u : 0u) | (rd.y < 0.0 ? 2u : 0u) | (rd.z < 0.0 ? 4u : 0u);
 
     uint stack_size = 0;
-    g_stack[gl_LocalInvocationIndex][stack_size++] = g_params.lights_node_index;
+    STACK_PUSH(g_params.lights_node_index);
 
     const uint LightTypesMask = (1u << LIGHT_TYPE_RECT) | (1u << LIGHT_TYPE_DISK);
 
-    while (stack_size != 0) {
-        uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
+    uint index = 0u;
+    while (true) {
+        while (true) {
+            if ((index & LEAF_NODE_BIT) == 0 && stack_size != 0u) {
+                STACK_POP(index);
+                [[flatten]] if ((index & LEAF_NODE_BIT) != 0) {
+                    continue;
+                }
 
-        if ((cur & LEAF_NODE_BIT) == 0) {
-            const light_cwbvh_node_t n = g_light_cwnodes[cur];
+                const light_cwbvh_node_t n = g_light_cwnodes[index];
 
-            // Unpack bounds
-            const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0,
-                                  (n.bbox_max[1] - n.bbox_min[1]) / 255.0,
-                                  (n.bbox_max[2] - n.bbox_min[2]) / 255.0};
-            float bbox_min[3][8], bbox_max[3][8];
-            for (int i = 0; i < 8; ++i) {
-                bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
-                bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
-                if (((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0xff ||
-                    ((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0) {
-                    bbox_min[0][i] = n.bbox_min[0] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[0];
-                    bbox_min[1][i] = n.bbox_min[1] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[1];
-                    bbox_min[2][i] = n.bbox_min[2] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[2];
+                // Unpack bounds (pow2 quantization step stored in ch_exp)
+                const float step[3] = {cwbvh_step(n.ch_exp, 0u), cwbvh_step(n.ch_exp, 1u), cwbvh_step(n.ch_exp, 2u)};
+                float bbox_min[3][8], bbox_max[3][8];
+                for (int i = 0; i < 8; ++i) {
+                    bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
+                    bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
+                    if (((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0xff ||
+                        ((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) != 0) {
+                        bbox_min[0][i] = n.bbox_min[0] + float((n.ch_bbox_min[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[0];
+                        bbox_min[1][i] = n.bbox_min[1] + float((n.ch_bbox_min[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[1];
+                        bbox_min[2][i] = n.bbox_min[2] + float((n.ch_bbox_min[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[2];
 
-                    bbox_max[0][i] = n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[0];
-                    bbox_max[1][i] = n.bbox_min[1] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[1];
-                    bbox_max[2][i] = n.bbox_min[2] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * ext[2];
+                        bbox_max[0][i] = n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[0];
+                        bbox_max[1][i] = n.bbox_min[1] + float((n.ch_bbox_max[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[1];
+                        bbox_max[2][i] = n.bbox_min[2] + float((n.ch_bbox_max[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[2];
+                    }
+                }
+
+                // Build the hit mask in direction key space (slot ^ flip), then drain it with findMSB()
+                // so the octant closest to the ray origin is visited first.
+                uint mask = 0u;
+                for (uint j = 0; j < 8; ++j) {
+                    if ((n.ch_bitmask[j / 4] & (LightTypesMask << (8u * (j % 4u)))) != 0 &&
+                        bbox_test(inv_d, neg_inv_do, rdist,
+                                  vec3(bbox_min[0][j], bbox_min[1][j], bbox_min[2][j]),
+                                  vec3(bbox_max[0][j], bbox_max[1][j], bbox_max[2][j]))) {
+                        mask |= 1u << (j ^ flip_bits);
+                    }
+                }
+
+                while (mask != 0u) {
+                    const uint key = uint(findMSB(mask));
+                    mask ^= 1u << key;
+
+                    const uint j = key ^ flip_bits;
+                    const uint meta = cwbvh_meta(n, j);
+                    if ((meta & 0x80u) != 0u) {
+                        STACK_PUSH(cwbvh_internal_child(n, j));
+                    } else {
+                        // leaf light: meta4 rank -> the parent's contiguous payload block
+                        const uint light_ref = (n.prim_base + (meta & 0x3fu)) | LEAF_NODE_BIT;
+                        if ((index & LEAF_NODE_BIT) == 0) {
+                            index = light_ref;
+                        } else {
+                            STACK_PUSH(light_ref);
+                        }
+                    }
                 }
             }
 
-            // TODO: loop in morton order based on ray direction
-            for (int j = 0; j < 8; ++j) {
-                if ((n.ch_bitmask[j / 4] & (LightTypesMask << (8u * (j % 4u)))) != 0 &&
-                    bbox_test(inv_d, neg_inv_do, rdist,
-                              vec3(bbox_min[0][j], bbox_min[1][j], bbox_min[2][j]),
-                              vec3(bbox_max[0][j], bbox_max[1][j], bbox_max[2][j]))) {
-                    g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
-                }
+            if (subgroupAll((index & LEAF_NODE_BIT) != 0 || stack_size == 0u)) {
+                break;
             }
-        } else {
-            const int light_index = int(cur & PRIM_INDEX_BITS);
+        }
+
+        if ((index & LEAF_NODE_BIT) != 0) {
+            const int light_index = int(g_light_leaf_prims[index & PRIM_INDEX_BITS] & PRIM_INDEX_BITS);
+            index = 0u;
+
             light_t l = g_lights[light_index];
             [[dont_flatten]] if ((LIGHT_RAY_VISIBILITY(l) & RAY_TYPE_SHADOW_BIT) == 0) {
                 // Skip non-blocking light
@@ -545,6 +555,10 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
                     }
                 }
             }
+        }
+
+        if (subgroupAll((index & LEAF_NODE_BIT) == 0u && stack_size == 0u)) {
+            break;
         }
     }
 

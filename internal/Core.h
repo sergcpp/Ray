@@ -32,8 +32,8 @@
 #define Ray_InterlockedCompareExchange(x, y, z) _InterlockedCompareExchange((long *)(x), y, z)
 #define Ray_InterlockedCompareExchange64(x, y, z) _InterlockedCompareExchange64((long long *)(x), y, z)
 
-static_assert(sizeof(long) == 4, "!");
-static_assert(sizeof(long long) == 8, "!");
+static_assert(sizeof(long) == 4);
+static_assert(sizeof(long long) == 8);
 
 #ifdef _M_IX86
 // Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls
@@ -74,14 +74,14 @@ struct alignas(16) tri_accel_t {
     float u_plane[4];
     float v_plane[4];
 };
-static_assert(sizeof(tri_accel_t) == 48, "!");
+static_assert(sizeof(tri_accel_t) == 48);
 
 struct alignas(32) mtri_accel_t {
     float n_plane[4][8];
     float u_plane[4][8];
     float v_plane[4][8];
 };
-static_assert(sizeof(mtri_accel_t) == 384, "!");
+static_assert(sizeof(mtri_accel_t) == 384);
 
 struct bvh_node_t {
     float bbox_min[3];
@@ -95,7 +95,7 @@ struct bvh_node_t {
         uint32_t right_child;
     };
 };
-static_assert(sizeof(bvh_node_t) == 32, "!");
+static_assert(sizeof(bvh_node_t) == 32);
 
 struct light_bvh_node_t : public bvh_node_t {
     float flux;
@@ -104,7 +104,7 @@ struct light_bvh_node_t : public bvh_node_t {
     float omega_e;    // emission angle around each normal
     uint32_t bitmask; // contained light types
 };
-static_assert(sizeof(light_bvh_node_t) == 60, "!");
+static_assert(sizeof(light_bvh_node_t) == 60);
 
 struct bvh2_node_t {
     float ch_data0[4];    // [ ch0.min.x, ch0.max.x, ch0.min.y, ch0.max.y ]
@@ -114,38 +114,63 @@ struct bvh2_node_t {
     uint32_t right_child; // First three bits identify primitive count in leaf nodes
     uint32_t _unused0, _unused1;
 };
-static_assert(sizeof(bvh2_node_t) == 64, "!");
+static_assert(sizeof(bvh2_node_t) == 64);
 
 struct alignas(32) wbvh_node_t {
     float bbox_min[3][8];
     float bbox_max[3][8];
     uint32_t child[8];
 };
-static_assert(sizeof(wbvh_node_t) == 224, "!");
+static_assert(sizeof(wbvh_node_t) == 224);
 
 struct light_wbvh_node_t : public wbvh_node_t {
     float flux[8];
     uint32_t axis[8];
     uint32_t cos_omega_ne[8];
 };
-static_assert(sizeof(light_wbvh_node_t) == 320, "!");
+static_assert(sizeof(light_wbvh_node_t) == 320);
 
 struct alignas(16) cwbvh_node_t {
     float bbox_min[3];
-    float bbox_max[3];
-    uint8_t ch_bitmask[8];
     uint8_t ch_bbox_min[3][8];
     uint8_t ch_bbox_max[3][8];
-    uint32_t child[8];
+    int8_t ch_exp[4];
+    uint32_t child_base_imask;
+    uint32_t prim_base;
+    uint32_t meta4[2];
 };
-static_assert(sizeof(cwbvh_node_t) == 112, "!");
+static_assert(sizeof(cwbvh_node_t) == 80);
 
+// NOTE: the field order below is load-bearing - REF's calc_lnode_importance() reads flux, axis and
+// cos_omega_ne with 16-byte vector loads, so each must start on a 16-byte boundary right after the
+// 80-byte base. offsetof() cannot be asserted here: light_cwbvh_node_t is not standard-layout (both
+// it and its base have data members), which clang/gcc diagnose.
 struct light_cwbvh_node_t : public cwbvh_node_t {
-    float flux[8];
-    uint32_t axis[8];
-    uint32_t cos_omega_ne[8];
+    uint8_t ch_bitmask[8];
+    uint8_t flux[8];
+    uint16_t axis[8];
+    uint16_t cos_omega_ne[8];
 };
-static_assert(sizeof(light_cwbvh_node_t) == 208, "!");
+static_assert(sizeof(light_cwbvh_node_t) == 128);
+
+// popcount for small (<= 8 bit) masks; SWAR so it stays valid in the SSE4.1 & REF TUs
+force_inline uint32_t popc8(uint32_t x) {
+    x -= (x >> 1) & 0x55u;
+    x = (x & 0x33u) + ((x >> 2) & 0x33u);
+    return (x + (x >> 4)) & 0x0fu;
+}
+
+// Compact node helpers - the CPU mirror of the GLSL ones in shaders/common.glsl
+force_inline uint32_t cwbvh_child_base(const cwbvh_node_t &n) { return n.child_base_imask & 0x00FFFFFFu; }
+force_inline uint8_t cwbvh_internal_mask(const cwbvh_node_t &n) { return uint8_t(n.child_base_imask >> 24); }
+
+force_inline uint8_t cwbvh_meta(const cwbvh_node_t &n, const int slot) {
+    return uint8_t((n.meta4[slot >> 2] >> (8 * (slot & 3))) & 0xFFu);
+}
+
+force_inline uint32_t cwbvh_internal_child(const cwbvh_node_t &n, const int slot) {
+    return cwbvh_child_base(n) + popc8(uint32_t(cwbvh_internal_mask(n)) & ((1u << slot) - 1u));
+}
 
 struct atlas_texture_t {
     uint16_t width;
@@ -154,7 +179,7 @@ struct atlas_texture_t {
     uint8_t page[NUM_MIP_LEVELS];
     uint16_t pos[NUM_MIP_LEVELS][2];
 };
-static_assert(sizeof(atlas_texture_t) == 68, "!");
+static_assert(sizeof(atlas_texture_t) == 68);
 
 const uint32_t TEX_SRGB_BIT = (0b00000001u << 24);
 const uint32_t TEX_RECONSTRUCT_Z_BIT = (0b00000010u << 24);
@@ -189,7 +214,7 @@ struct material_t {
     uint16_t normal_map_strength_unorm;
     float coat_ior;
 };
-static_assert(sizeof(material_t) == 88, "!");
+static_assert(sizeof(material_t) == 88);
 
 struct light_t {
     uint32_t type : 3;
@@ -234,7 +259,7 @@ struct light_t {
         } dir;
     };
 };
-static_assert(sizeof(light_t) == 64, "!");
+static_assert(sizeof(light_t) == 64);
 
 struct prim_t;
 
@@ -362,10 +387,22 @@ uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t>
                                std::vector<uint32_t> &out_indices);
 
 uint32_t FlattenBVH_r(Span<const bvh_node_t> nodes, uint32_t node_index, aligned_vector<wbvh_node_t> &out_nodes);
+struct compact_leaf_gather_t {
+    Span<const uint32_t> in_tri_indices;
+    Span<const mtri_accel_t> in_mtris;
+    std::vector<uint32_t> out_tri_indices;
+    aligned_vector<mtri_accel_t> out_mtris;
+};
+template <typename NodeT>
+uint32_t FlattenCompactBVH_r(Span<const bvh_node_t> nodes, uint32_t node_index, aligned_vector<NodeT> &out_nodes,
+                             std::vector<uint32_t> &out_leaf_prims, compact_leaf_gather_t *gather = nullptr,
+                             int at_index = -1, uint32_t depth = 0);
 uint32_t FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, uint32_t node_index,
                            aligned_vector<light_wbvh_node_t> &out_nodes);
-uint32_t FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, uint32_t node_index,
-                           aligned_vector<light_cwbvh_node_t> &out_nodes);
+template <typename NodeT>
+uint32_t FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, uint32_t node_index, aligned_vector<NodeT> &out_nodes,
+                           std::vector<uint32_t> &out_leaf_lights, int at_index = -1, uint32_t depth = 0,
+                           bool pow2_quant = false);
 
 uint32_t ConvertToBVH2(Span<const bvh_node_t> nodes, std::vector<bvh2_node_t> &out_nodes);
 
@@ -405,7 +442,7 @@ const int RAND_DIMS_COUNT = __pmj02_dims_count;
 struct vertex_t {
     float p[3], n[3], b[3], t[2];
 };
-static_assert(sizeof(vertex_t) == 44, "!");
+static_assert(sizeof(vertex_t) == 44);
 
 struct mesh_t {
     float bbox_min[3], bbox_max[3];
@@ -413,8 +450,9 @@ struct mesh_t {
     uint32_t tris_index, tris_block, tris_count;
     uint32_t vert_index, vert_block, vert_count;
     uint32_t vert_data_index, vert_data_block;
+    uint32_t leaf_prims_index, leaf_prims_block;
 };
-static_assert(sizeof(mesh_t) == 64, "!");
+static_assert(sizeof(mesh_t) == 72);
 
 struct mesh_instance_t {
     uint32_t mesh_index;
@@ -423,7 +461,7 @@ struct mesh_instance_t {
     uint32_t ray_visibility; // upper 24 bits identify lights_block
     float xform[16], inv_xform[16];
 };
-static_assert(sizeof(mesh_instance_t) == 144, "!");
+static_assert(sizeof(mesh_instance_t) == 144);
 
 struct environment_t {
     float env_col[3];
@@ -463,6 +501,7 @@ void CanonicalToDir(const float p[2], float y_rotation, float out_d[3]);
 void DirToCanonical(const float d[3], float y_rotation, float out_p[2]);
 
 uint32_t EncodeOctDir(const float d[3]);
+uint16_t EncodeOctDir8(const float d[3]);
 
 extern const uint8_t morton_table_16[];
 extern const int morton_table_256[];
@@ -506,7 +545,7 @@ enum class ePreOp { None, Upsample, HDRTransfer, PositiveNormalize };
         return ((settings.flags & OutputSH) && bounce <= 2);
     }
 };
-static_assert(sizeof(pass_info_t) == 20, "!");*/
+static_assert(sizeof(pass_info_t) == 20);*/
 
 struct cache_voxel_t {
     float radiance[3] = {};
@@ -551,6 +590,8 @@ struct scene_data_t {
     const vertex_t *vertices;
     const bvh2_node_t *nodes;
     const wbvh_node_t *wnodes;
+    const cwbvh_node_t *cwnodes;
+    const uint32_t *leaf_prims;
     const tri_accel_t *tris;
     const uint32_t *tri_indices;
     const mtri_accel_t *mtris;
@@ -563,6 +604,7 @@ struct scene_data_t {
     uint32_t blocker_lights_count;
     Span<const light_bvh_node_t> light_nodes;
     Span<const light_cwbvh_node_t> light_cwnodes;
+    Span<const uint32_t> light_leaf_prims;
     Span<const float> sky_transmittance_lut, sky_multiscatter_lut;
     const cache_grid_params_t &spatial_cache_grid;
     Span<const uint64_t> spatial_cache_entries;

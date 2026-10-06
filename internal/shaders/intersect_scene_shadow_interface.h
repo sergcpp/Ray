@@ -32,6 +32,8 @@ const int LIGHTS_BUF_SLOT = 11;
 const int LIGHT_CWNODES_BUF_SLOT = 12;
 const int RANDOM_SEQ_BUF_SLOT = 13;
 const int TLAS_SLOT = 14;
+const int LEAF_PRIMS_BUF_SLOT = 15;
+const int LIGHT_LEAF_PRIMS_BUF_SLOT = 16;
 
 const int INOUT_IMG_SLOT = 0;
 

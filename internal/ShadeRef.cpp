@@ -1875,7 +1875,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
             if (USE_HIERARCHICAL_NEE) {
                 // TODO: maybe this can be done more efficiently
                 if (!sc.light_cwnodes.empty()) {
-                    pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_cwnodes);
+                    pdf_factor =
+                        EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_cwnodes, sc.light_leaf_prims);
                 } else {
                     pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_nodes);
                 }

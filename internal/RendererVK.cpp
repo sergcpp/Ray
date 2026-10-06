@@ -28,40 +28,48 @@
 #define DISABLE_SORTING 0
 #define ENABLE_RT_PIPELINE 0
 
-static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
-static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
-static_assert(sizeof(Types::bvh2_node_t) == sizeof(Ray::bvh2_node_t), "!");
-static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t), "!");
-static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t), "!");
-static_assert(sizeof(Types::light_cwbvh_node_t) == sizeof(Ray::light_cwbvh_node_t), "!");
-static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t), "!");
-static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t), "!");
-static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t), "!");
-static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t), "!");
-static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t), "!");
-static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t), "!");
-static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t), "!");
-static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t), "!");
-static_assert(sizeof(Types::atmosphere_params_t) == sizeof(Ray::atmosphere_params_t), "!");
+static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t));
+static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t));
+static_assert(sizeof(Types::bvh2_node_t) == sizeof(Ray::bvh2_node_t));
+static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t));
+static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t));
+static_assert(sizeof(Types::cwbvh_node_t) == sizeof(Ray::cwbvh_node_t));
+static_assert(offsetof(Types::cwbvh_node_t, ch_bbox_min) == offsetof(Ray::cwbvh_node_t, ch_bbox_min));
+static_assert(offsetof(Types::cwbvh_node_t, ch_bbox_max) == offsetof(Ray::cwbvh_node_t, ch_bbox_max));
+static_assert(offsetof(Types::cwbvh_node_t, ch_exp) == offsetof(Ray::cwbvh_node_t, ch_exp));
+static_assert(offsetof(Types::cwbvh_node_t, child_base_imask) == offsetof(Ray::cwbvh_node_t, child_base_imask));
+static_assert(offsetof(Types::cwbvh_node_t, prim_base) == offsetof(Ray::cwbvh_node_t, prim_base));
+static_assert(offsetof(Types::cwbvh_node_t, meta4_0) == offsetof(Ray::cwbvh_node_t, meta4[0]));
+static_assert(offsetof(Types::cwbvh_node_t, meta4_1) == offsetof(Ray::cwbvh_node_t, meta4[1]));
+static_assert(sizeof(Types::light_cwbvh_node_t) == sizeof(Ray::light_cwbvh_node_t));
+static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t));
+static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t));
+static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t));
+static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t));
+static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t));
+static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t));
+static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t));
+static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t));
+static_assert(sizeof(Types::atmosphere_params_t) == sizeof(Ray::atmosphere_params_t));
 
-static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE, "!");
-static_assert(Types::LIGHT_TYPE_DIR == Ray::LIGHT_TYPE_DIR, "!");
-static_assert(Types::LIGHT_TYPE_LINE == Ray::LIGHT_TYPE_LINE, "!");
-static_assert(Types::LIGHT_TYPE_RECT == Ray::LIGHT_TYPE_RECT, "!");
-static_assert(Types::LIGHT_TYPE_DISK == Ray::LIGHT_TYPE_DISK, "!");
-static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI, "!");
-static_assert(Types::FILTER_BOX == int(Ray::ePixelFilter::Box), "!");
-static_assert(Types::FILTER_GAUSSIAN == int(Ray::ePixelFilter::Gaussian), "!");
-static_assert(Types::FILTER_BLACKMAN_HARRIS == int(Ray::ePixelFilter::BlackmanHarris), "!");
-static_assert(Types::FILTER_TABLE_SIZE == Ray::FILTER_TABLE_SIZE, "!");
+static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE);
+static_assert(Types::LIGHT_TYPE_DIR == Ray::LIGHT_TYPE_DIR);
+static_assert(Types::LIGHT_TYPE_LINE == Ray::LIGHT_TYPE_LINE);
+static_assert(Types::LIGHT_TYPE_RECT == Ray::LIGHT_TYPE_RECT);
+static_assert(Types::LIGHT_TYPE_DISK == Ray::LIGHT_TYPE_DISK);
+static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI);
+static_assert(Types::FILTER_BOX == int(Ray::ePixelFilter::Box));
+static_assert(Types::FILTER_GAUSSIAN == int(Ray::ePixelFilter::Gaussian));
+static_assert(Types::FILTER_BLACKMAN_HARRIS == int(Ray::ePixelFilter::BlackmanHarris));
+static_assert(Types::FILTER_TABLE_SIZE == Ray::FILTER_TABLE_SIZE);
 
-static_assert(int(Ray::eGPUResState::RenderTarget) == int(Ray::Vk::eResState::RenderTarget), "!");
-static_assert(int(Ray::eGPUResState::UnorderedAccess) == int(Ray::Vk::eResState::UnorderedAccess), "!");
-static_assert(int(Ray::eGPUResState::DepthRead) == int(Ray::Vk::eResState::DepthRead), "!");
-static_assert(int(Ray::eGPUResState::DepthWrite) == int(Ray::Vk::eResState::DepthWrite), "!");
-static_assert(int(Ray::eGPUResState::ShaderResource) == int(Ray::Vk::eResState::ShaderResource), "!");
-static_assert(int(Ray::eGPUResState::CopyDst) == int(Ray::Vk::eResState::CopyDst), "!");
-static_assert(int(Ray::eGPUResState::CopySrc) == int(Ray::Vk::eResState::CopySrc), "!");
+static_assert(int(Ray::eGPUResState::RenderTarget) == int(Ray::Vk::eResState::RenderTarget));
+static_assert(int(Ray::eGPUResState::UnorderedAccess) == int(Ray::Vk::eResState::UnorderedAccess));
+static_assert(int(Ray::eGPUResState::DepthRead) == int(Ray::Vk::eResState::DepthRead));
+static_assert(int(Ray::eGPUResState::DepthWrite) == int(Ray::Vk::eResState::DepthWrite));
+static_assert(int(Ray::eGPUResState::ShaderResource) == int(Ray::Vk::eResState::ShaderResource));
+static_assert(int(Ray::eGPUResState::CopyDst) == int(Ray::Vk::eResState::CopyDst));
+static_assert(int(Ray::eGPUResState::CopySrc) == int(Ray::Vk::eResState::CopySrc));
 
 namespace Ray {
 extern const int LUT_DIMS;
@@ -514,6 +522,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                   s.vtx_indices_.gpu_buf(),
                                   s.vertices_.gpu_buf(),
                                   s.nodes_.gpu_buf(),
+                                  s.leaf_prims_.gpu_buf(),
                                   s.tris_.gpu_buf(),
                                   s.tri_indices_.gpu_buf(),
                                   s.tri_materials_.gpu_buf(),
@@ -527,6 +536,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   s.light_cwnodes_.buf(),
+                                  s.light_leaf_prims_.buf(),
                                   s.rt_tlas_,
                                   s.env_map_qtree_.tex,
                                   int(s.env_map_qtree_.mips.size()),
@@ -1295,6 +1305,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   s.vtx_indices_.gpu_buf(),
                                   s.vertices_.gpu_buf(),
                                   s.nodes_.gpu_buf(),
+                                  s.leaf_prims_.gpu_buf(),
                                   s.tris_.gpu_buf(),
                                   s.tri_indices_.gpu_buf(),
                                   s.tri_materials_.gpu_buf(),
@@ -1308,6 +1319,7 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   s.light_cwnodes_.buf(),
+                                  s.light_leaf_prims_.buf(),
                                   s.rt_tlas_,
                                   s.env_map_qtree_.tex,
                                   int(s.env_map_qtree_.mips.size()),
@@ -2013,6 +2025,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
     }
 
@@ -2128,6 +2141,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
     }
 
@@ -2208,23 +2222,25 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                                               {&out_depth_normals, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    SmallVector<Binding, 32> bindings = {{eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
-                                         {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
-                                         {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
-                                         {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
-                                         {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
-                                         {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
-                                         {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
-                                         {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-                                         {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
-                                         {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-                                         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
-                                         {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
-                                         {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
-                                         {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
-                                         {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
-                                         {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
-                                         {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
+        {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
+        {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
+        {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
+        {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+        {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
+        {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, Shade::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
+        {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+        {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
+        {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
+        {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
+        {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
     bindings.emplace_back(eBindTarget::TexSampled, Shade::SHEEN_LTC_LUT_SLOT, sheen_ltc_lut_);
     bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_E_LUT_SLOT, ggx_e_lut_);
     bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_EAVG_LUT_SLOT, ggx_eavg_lut_);
@@ -2344,6 +2360,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
         {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, Shade::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
         {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
         {eBindTarget::TexSampled, Shade::SHEEN_LTC_LUT_SLOT, sheen_ltc_lut_},
         {eBindTarget::TexSampled, Shade::GGX_E_LUT_SLOT, ggx_e_lut_},
@@ -2445,6 +2462,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBufRO, IntersectSceneShadow::MATERIALS_BUF_SLOT, sc_data.materials},
         {eBindTarget::SBufRO, IntersectSceneShadow::NODES_BUF_SLOT, sc_data.nodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims},
         {eBindTarget::SBufRO, IntersectSceneShadow::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
         {eBindTarget::SBufRO, IntersectSceneShadow::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBufRO, IntersectSceneShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
@@ -2452,6 +2470,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
         {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 
@@ -2714,63 +2733,65 @@ bool Ray::Vk::Renderer::InitPipelines(ILog *log,
     prog_.spatial_cache_update = Program{"Spatial Cache Update", ctx_.get(), &sh_.spatial_cache_update, log};
     prog_.spatial_cache_resolve = Program{"Spatial Cache Resolve", ctx_.get(), &sh_.spatial_cache_resolve, log};
 
-    SmallVector<std::tuple<Pipeline &, Program &, bool>, 32> pipelines_to_init = {
-        {pi_.prim_rays_gen_simple, prog_.prim_rays_gen_simple, false},
-        {pi_.prim_rays_gen_adaptive, prog_.prim_rays_gen_adaptive, false},
-        {pi_.intersect_scene, prog_.intersect_scene, false},
-        {pi_.intersect_scene_indirect, prog_.intersect_scene_indirect, false},
-        {pi_.intersect_area_lights, prog_.intersect_area_lights, false},
-        {pi_.shade_primary, prog_.shade_primary, false},
-        {pi_.shade_primary_sky, prog_.shade_primary_sky, false},
-        {pi_.shade_secondary, prog_.shade_secondary, false},
-        {pi_.shade_secondary_sky, prog_.shade_secondary_sky, false},
-        {pi_.shade_sky, prog_.shade_sky, false},
-        {pi_.intersect_scene_shadow, prog_.intersect_scene_shadow, false},
-        {pi_.prepare_indir_args, prog_.prepare_indir_args, false},
-        {pi_.mix_incremental, prog_.mix_incremental, false},
-        {pi_.postprocess, prog_.postprocess, false},
-        {pi_.filter_variance, prog_.filter_variance, false},
-        {pi_.nlm_filter, prog_.nlm_filter, false},
-        {pi_.sort_hash_rays, prog_.sort_hash_rays, false},
-        {pi_.sort_reorder_rays, prog_.sort_reorder_rays, false}};
+    SmallVector<std::tuple<Pipeline &, Program &, int, bool>, 32> pipelines_to_init = {
+        {pi_.prim_rays_gen_simple, prog_.prim_rays_gen_simple, -1, false},
+        {pi_.prim_rays_gen_adaptive, prog_.prim_rays_gen_adaptive, -1, false},
+        {pi_.intersect_scene, prog_.intersect_scene, -1, false},
+        {pi_.intersect_scene_indirect, prog_.intersect_scene_indirect, -1, false},
+        {pi_.intersect_area_lights, prog_.intersect_area_lights, -1, false},
+        {pi_.shade_primary, prog_.shade_primary, -1, false},
+        {pi_.shade_primary_sky, prog_.shade_primary_sky, -1, false},
+        {pi_.shade_secondary, prog_.shade_secondary, -1, false},
+        {pi_.shade_secondary_sky, prog_.shade_secondary_sky, -1, false},
+        {pi_.shade_sky, prog_.shade_sky, -1, false},
+        {pi_.intersect_scene_shadow, prog_.intersect_scene_shadow, -1, false},
+        {pi_.prepare_indir_args, prog_.prepare_indir_args, -1, false},
+        {pi_.mix_incremental, prog_.mix_incremental, -1, false},
+        {pi_.postprocess, prog_.postprocess, -1, false},
+        {pi_.filter_variance, prog_.filter_variance, -1, false},
+        {pi_.nlm_filter, prog_.nlm_filter, -1, false},
+        {pi_.sort_hash_rays, prog_.sort_hash_rays, -1, false},
+        {pi_.sort_reorder_rays, prog_.sort_reorder_rays, -1, false}};
     if (use_hwrt_) {
         if (ENABLE_RT_PIPELINE) {
-            pipelines_to_init.emplace_back(pi_.intersect_scene_rtpipe, prog_.intersect_scene_rtpipe, false);
+            pipelines_to_init.emplace_back(pi_.intersect_scene_rtpipe, prog_.intersect_scene_rtpipe, -1, false);
             pipelines_to_init.emplace_back(pi_.intersect_scene_indirect_rtpipe, prog_.intersect_scene_indirect_rtpipe,
-                                           false);
+                                           -1, false);
         }
-        pipelines_to_init.emplace_back(pi_.debug_rt, prog_.debug_rt, false);
+        pipelines_to_init.emplace_back(pi_.debug_rt, prog_.debug_rt, -1, false);
     }
     if (use_subgroup_) {
-        pipelines_to_init.emplace_back(pi_.sort_init_count_table, prog_.sort_init_count_table, false);
-        pipelines_to_init.emplace_back(pi_.sort_reduce, prog_.sort_reduce, false);
-        pipelines_to_init.emplace_back(pi_.sort_scan, prog_.sort_scan, false);
-        pipelines_to_init.emplace_back(pi_.sort_scan_add, prog_.sort_scan_add, false);
-        pipelines_to_init.emplace_back(pi_.sort_scatter, prog_.sort_scatter, false);
+        pipelines_to_init.emplace_back(pi_.sort_init_count_table, prog_.sort_init_count_table, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_reduce, prog_.sort_reduce, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_scan, prog_.sort_scan, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_scan_add, prog_.sort_scan_add, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_scatter, prog_.sort_scatter, -1, false);
     }
     if (use_spatial_cache_) {
-        pipelines_to_init.emplace_back(pi_.shade_primary_cache_update, prog_.shade_primary_cache_update, false);
-        pipelines_to_init.emplace_back(pi_.shade_primary_cache_query, prog_.shade_primary_cache_query, false);
-        pipelines_to_init.emplace_back(pi_.shade_primary_cache_query_sky, prog_.shade_primary_cache_query_sky, false);
-
-        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_update, prog_.shade_secondary_cache_update, false);
-        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_query, prog_.shade_secondary_cache_query, false);
-        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_query_sky, prog_.shade_secondary_cache_query_sky,
+        pipelines_to_init.emplace_back(pi_.shade_primary_cache_update, prog_.shade_primary_cache_update, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_primary_cache_query, prog_.shade_primary_cache_query, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_primary_cache_query_sky, prog_.shade_primary_cache_query_sky, -1,
                                        false);
 
-        pipelines_to_init.emplace_back(pi_.spatial_cache_update, prog_.spatial_cache_update, false);
-        pipelines_to_init.emplace_back(pi_.spatial_cache_resolve, prog_.spatial_cache_resolve, false);
+        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_update, prog_.shade_secondary_cache_update, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_query, prog_.shade_secondary_cache_query, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_query_sky, prog_.shade_secondary_cache_query_sky, -1,
+                                       false);
+
+        pipelines_to_init.emplace_back(pi_.spatial_cache_update, prog_.spatial_cache_update, -1, false);
+        pipelines_to_init.emplace_back(pi_.spatial_cache_resolve, prog_.spatial_cache_resolve, -1, false);
     }
     parallel_for(0, int(pipelines_to_init.size()), [&](const int i) {
-        std::get<2>(pipelines_to_init[i]) =
-            std::get<0>(pipelines_to_init[i]).Init(ctx_.get(), &std::get<1>(pipelines_to_init[i]), log);
+        std::get<3>(pipelines_to_init[i]) =
+            std::get<0>(pipelines_to_init[i])
+                .Init(ctx_.get(), &std::get<1>(pipelines_to_init[i]), log, std::get<2>(pipelines_to_init[i]));
     });
 
     // Release shader modules
     sh_ = {};
 
     for (const auto &pi : pipelines_to_init) {
-        result &= std::get<2>(pi);
+        result &= std::get<3>(pi);
     }
 
     return result;

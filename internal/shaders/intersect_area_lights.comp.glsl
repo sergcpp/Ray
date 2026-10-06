@@ -18,6 +18,10 @@ layout(std430, binding = CWNODES_BUF_SLOT) readonly buffer CWNodes {
     light_cwbvh_node_t g_light_cwnodes[];
 };
 
+layout(std430, binding = LIGHT_LEAF_PRIMS_BUF_SLOT) readonly buffer LightLeafPrims {
+    uint g_light_leaf_prims[];
+};
+
 layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
     ray_data_t g_rays[];
 };
@@ -49,8 +53,11 @@ bool quadratic(float a, float b, float c, out float t0, out float t1) {
     return true;
 }
 
-shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_LTREE_STACK_SIZE];
-shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_LTREE_STACK_SIZE];
+const uint SM_STACK_SIZE = 8;
+shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
+uint g_stack_spill[MAX_STACK_SIZE - SM_STACK_SIZE];
+shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
+float g_stack_factors_spill[MAX_STACK_SIZE - SM_STACK_SIZE];
 
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
@@ -86,16 +93,16 @@ void main() {
     vec3 neg_inv_do = -inv_d * ro;
 
     uint stack_size = 0;
-    g_stack[gl_LocalInvocationIndex][stack_size] = g_params.node_index;
-    g_stack_factors[gl_LocalInvocationIndex][stack_size++] = 1.0;
+    STACK_PUSH2(g_params.node_index, 1.0);
 
     // NOTE: triangle lights are processed separately
     const uint LightTypesMask = (1u << LIGHT_TYPE_SPHERE) | (1u << LIGHT_TYPE_DIR) | (1u << LIGHT_TYPE_LINE) |
                                 (1u << LIGHT_TYPE_RECT) | (1u << LIGHT_TYPE_DISK) | (1u << LIGHT_TYPE_ENV);
 
     while (stack_size != 0) {
-        uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-        float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
+        uint cur = 0;
+        float cur_factor = 0.0;
+        STACK_POP2(cur, cur_factor);
 
         if ((cur & LEAF_NODE_BIT) == 0) {
             const light_cwbvh_node_t n = g_light_cwnodes[cur];
@@ -103,11 +110,26 @@ void main() {
             float importance[8];
             const float total_importance = calc_lnode_importance(n, ro, inv_d, neg_inv_do, inter.t, LightTypesMask, importance);
 
-            // TODO: loop in morton order based on ray direction
-            for (int j = 0; j < 8; ++j) {
+            // Drain the candidate mask with findLSB() so only the non-zero-importance children are
+            // visited (slot order preserved).
+            uint cand_mask = 0u;
+            for (uint j = 0; j < 8; ++j) {
                 if (importance[j] > 0.0) {
-                    g_stack_factors[gl_LocalInvocationIndex][stack_size] = cur_factor * importance[j] / total_importance;
-                    g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
+                    cand_mask |= 1u << j;
+                }
+            }
+
+            while (cand_mask != 0u) {
+                const uint j = uint(findLSB(cand_mask)); // findLSB() returns a signed int - cast it
+                cand_mask &= cand_mask - 1u;             // clears the lowest set bit in one op
+
+                const float child_factor = cur_factor * importance[j] / total_importance;
+                const uint meta = cwbvh_meta(n, j);
+                if ((meta & 0x80u) != 0u) {
+                    STACK_PUSH2(cwbvh_internal_child(n, j), child_factor);
+                } else {
+                    // leaf light: meta4 rank -> the parent's contiguous payload block
+                    STACK_PUSH2(g_light_leaf_prims[n.prim_base + (meta & 0x3fu)], child_factor);
                 }
             }
         } else {

@@ -92,13 +92,33 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
     }
 }
 
-uint16_t encode_snorm_u16(const float f) { return uint16_t(std::round(clamp((f + 1) / 2.0f, 0.0f, 1.0f) * 65535.0f)); }
+uint16_t encode_snorm_u16(const float f) { return uint16_t(roundf(clamp((f + 1) / 2.0f, 0.0f, 1.0f) * 65535.0f)); }
+
+uint8_t encode_snorm_u8(const float f) { return uint8_t(roundf(clamp((f + 1) / 2.0f, 0.0f, 1.0f) * 255.0f)); }
 
 uint32_t encode_cosines(const float cos_a, const float cos_b) {
     // NOTE: 65534 was chosen for precise 0.0 representation
-    const uint32_t a = uint32_t(std::floor(65534.0f * ((cos_a + 1.0f) / 2.0f)));
-    const uint32_t b = uint32_t(std::floor(65534.0f * ((cos_b + 1.0f) / 2.0f)));
+    const uint32_t a = uint32_t(floorf(65534.0f * ((cos_a + 1.0f) / 2.0f)));
+    const uint32_t b = uint32_t(floorf(65534.0f * ((cos_b + 1.0f) / 2.0f)));
     return (a << 16) | b;
+}
+
+uint16_t encode_cosines8(const float cos_a, const float cos_b) {
+    // NOTE: 254 was chosen for precise 0.0 representation
+    const uint16_t a = uint16_t(floorf(254.0f * ((cos_a + 1.0f) / 2.0f)));
+    const uint16_t b = uint16_t(floorf(254.0f * ((cos_b + 1.0f) / 2.0f)));
+    return uint16_t((a << 8) | b);
+}
+
+// Child flux stored as an 8-bit fraction of the parent's flux, on a cube curve so that faint children
+// stay representable - a sqrt curve leaves children that land on single-digit codes ~19% short of
+// their real importance, which under-samples small bright lights. Every consumer normalizes
+// importance inside the node, so the per-node scale cancels and only the ratio matters.
+uint8_t encode_flux(const float flux, const float parent_flux) {
+    if (flux <= 0.0f || parent_flux <= 0.0f) {
+        return 0;
+    }
+    return uint8_t(int(fmaxf(1.0f, roundf(255.0f * cbrtf(clamp(flux / parent_flux, 0.0f, 1.0f))))));
 }
 
 float quantize(const float v, const float min, const float max) {
@@ -106,6 +126,23 @@ float quantize(const float v, const float min, const float max) {
         return 0.0f;
     }
     return clamp(255.0f * (v - min) / (max - min), 0.0f, 255.0f);
+}
+
+// Expand the max corner so that the quantization step becomes a power of two (CWBVH-style
+// implicit exponent encoding). The inflated extent is >= the real one, keeping boxes conservative.
+// out_exp receives the per-axis log2 of the quantization step (stored in the node).
+static void pow2Extents(const float min[3], float max[3], int8_t out_exp[3]) {
+    for (int i = 0; i < 3; ++i) {
+        const float ext = max[i] - min[i];
+        if (ext > 0.0f) {
+            const int e = (int)ceilf(log2f(ext / 255.0f));
+            assert(e >= -126 && e <= 127);
+            out_exp[i] = int8_t(e);
+            max[i] = min[i] + 255.0f * exp2f(float(e));
+        } else {
+            out_exp[i] = 0;
+        }
+    }
 }
 } // namespace Ray
 
@@ -155,6 +192,20 @@ uint32_t Ray::EncodeOctDir(const float d[3]) {
     const uint16_t x = encode_snorm_u16(v[0]);
     const uint16_t y = encode_snorm_u16(v[1]);
     return (uint32_t(x) << 16) | y;
+}
+
+// Same octahedral packing, 8 bits per component (compact light trees)
+uint16_t Ray::EncodeOctDir8(const float d[3]) {
+    const float denom = fabsf(d[0]) + fabsf(d[1]) + fabsf(d[2]);
+    const float v[3] = {d[0] / denom, d[1] / denom, d[2] / denom};
+    if (v[2] < 0.0f) {
+        const uint8_t x = encode_snorm_u8((1.0f - fabsf(v[1])) * copysignf(1.0f, v[0]));
+        const uint8_t y = encode_snorm_u8((1.0f - fabsf(v[0])) * copysignf(1.0f, v[1]));
+        return (uint16_t(x) << 8) | y;
+    }
+    const uint8_t x = encode_snorm_u8(v[0]);
+    const uint8_t y = encode_snorm_u8(v[1]);
+    return (uint16_t(x) << 8) | y;
 }
 
 // Used to convert 16x16 sphere sector coordinates to single value
@@ -858,6 +909,240 @@ uint32_t Ray::FlattenBVH_r(Span<const bvh_node_t> nodes, const uint32_t node_ind
     return new_node_index;
 }
 
+// Copy one leaf's 8-triangle block into the gather output (contiguous per parent).
+static void gather_leaf_block(Ray::compact_leaf_gather_t &g, const uint32_t prim_index) {
+    const uint32_t src = prim_index & Ray::PRIM_INDEX_BITS;
+    assert(src % 8 == 0);
+    assert(src + 8 <= g.in_tri_indices.size());
+    assert(src / 8 < g.in_mtris.size());
+    for (int k = 0; k < 8; ++k) {
+        g.out_tri_indices.push_back(g.in_tri_indices[src + k]);
+    }
+    g.out_mtris.push_back(g.in_mtris[src / 8]);
+}
+
+template <typename NodeT>
+uint32_t Ray::FlattenCompactBVH_r(Span<const bvh_node_t> nodes, const uint32_t node_index,
+                                  aligned_vector<NodeT> &out_nodes, std::vector<uint32_t> &out_leaf_prims,
+                                  Ray::compact_leaf_gather_t *gather, const int at_index, const uint32_t depth) {
+    const bvh_node_t &cur_node = nodes[node_index];
+
+    // The compressed traversal stack (REF) holds at most one entry per level of the path and
+    // TraversalStack allows StackSize-1 entries - catch too-deep trees at build time instead
+    // of relying on a ray hitting the overflow assert during rendering.
+    assert(depth < uint32_t(MAX_STACK_SIZE) && "cwbvh tree too deep for the compressed traversal stack");
+
+    // allocate new node (or use the slot pre-reserved by our parent for contiguous children)
+    uint32_t new_node_index;
+    if (at_index >= 0) {
+        new_node_index = uint32_t(at_index);
+    } else {
+        new_node_index = uint32_t(out_nodes.size());
+        out_nodes.emplace_back();
+    }
+
+    if (cur_node.prim_index & LEAF_NODE_BIT) {
+        // Single leaf tree - wrap it into a regular internal node to make sure root node is never a leaf
+        NodeT &new_node = out_nodes[new_node_index];
+        new_node.child_base_imask = 0;
+        if (gather) {
+            new_node.prim_base = uint32_t(gather->out_tri_indices.size());
+            gather_leaf_block(*gather, cur_node.prim_index);
+        } else {
+            new_node.prim_base = uint32_t(out_leaf_prims.size());
+            out_leaf_prims.push_back(cur_node.prim_index);
+        }
+        new_node.meta4[0] = 0x40u; // slot 0: leaf child, rank 0
+        new_node.meta4[1] = 0;
+        memcpy(new_node.bbox_min, cur_node.bbox_min, 3 * sizeof(float));
+        for (int j = 0; j < 3; ++j) {
+            new_node.ch_bbox_min[j][0] = 0;
+            new_node.ch_bbox_max[j][0] = 0xff;
+        }
+        for (int j = 1; j < 8; ++j) {
+            // Init as infinite bounding box
+            new_node.ch_bbox_min[0][j] = new_node.ch_bbox_min[1][j] = new_node.ch_bbox_min[2][j] = 0xff;
+            new_node.ch_bbox_max[0][j] = new_node.ch_bbox_max[1][j] = new_node.ch_bbox_max[2][j] = 0;
+        }
+        return new_node_index;
+    }
+
+    // Gather children 2 levels deep
+
+    uint32_t children[8];
+    int children_count = 0;
+
+    const bvh_node_t &child0 = nodes[cur_node.left_child];
+
+    if (child0.prim_index & LEAF_NODE_BIT) {
+        children[children_count++] = cur_node.left_child & LEFT_CHILD_BITS;
+    } else {
+        const bvh_node_t &child00 = nodes[child0.left_child];
+        const bvh_node_t &child01 = nodes[child0.right_child & RIGHT_CHILD_BITS];
+
+        if (child00.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child0.left_child & LEFT_CHILD_BITS;
+        } else {
+            children[children_count++] = child00.left_child;
+            children[children_count++] = child00.right_child & RIGHT_CHILD_BITS;
+        }
+
+        if (child01.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child0.right_child & RIGHT_CHILD_BITS;
+        } else {
+            children[children_count++] = child01.left_child;
+            children[children_count++] = child01.right_child & RIGHT_CHILD_BITS;
+        }
+    }
+
+    const bvh_node_t &child1 = nodes[cur_node.right_child & RIGHT_CHILD_BITS];
+
+    if (child1.prim_index & LEAF_NODE_BIT) {
+        children[children_count++] = cur_node.right_child & RIGHT_CHILD_BITS;
+    } else {
+        const bvh_node_t &child10 = nodes[child1.left_child];
+        const bvh_node_t &child11 = nodes[child1.right_child & RIGHT_CHILD_BITS];
+
+        if (child10.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child1.left_child & LEFT_CHILD_BITS;
+        } else {
+            children[children_count++] = child10.left_child;
+            children[children_count++] = child10.right_child & RIGHT_CHILD_BITS;
+        }
+
+        if (child11.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child1.right_child & RIGHT_CHILD_BITS;
+        } else {
+            children[children_count++] = child11.left_child;
+            children[children_count++] = child11.right_child & RIGHT_CHILD_BITS;
+        }
+    }
+
+    // Sort children in morton order
+    Ref::fvec3 children_centers[8], whole_box_min = {FLT_MAX}, whole_box_max = {-FLT_MAX};
+    for (int i = 0; i < children_count; i++) {
+        children_centers[i] =
+            0.5f * (Ref::fvec3{nodes[children[i]].bbox_min} + Ref::fvec3{nodes[children[i]].bbox_max});
+        whole_box_min = min(whole_box_min, children_centers[i]);
+        whole_box_max = max(whole_box_max, children_centers[i]);
+    }
+
+    whole_box_max += Ref::fvec3{0.001f};
+
+    const Ref::fvec3 scale = 2.0f / (whole_box_max - whole_box_min);
+
+    uint32_t sorted_children[8] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+                                   0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
+    for (int i = 0; i < children_count; i++) {
+        Ref::fvec3 code = (children_centers[i] - whole_box_min) * scale;
+
+        const auto x = uint32_t(code[0]), y = uint32_t(code[1]), z = uint32_t(code[2]);
+
+        uint32_t mort = (z << 2) | (y << 1) | (x << 0);
+
+        while (sorted_children[mort] != 0xffffffff) {
+            mort = (mort + 1) % 8;
+        }
+
+        sorted_children[mort] = children[i];
+    }
+
+    // NOTE: 'new_node' must not be held across recursive calls - out_nodes can reallocate!
+    float node_min[3], node_max[3];
+    int8_t node_exp[3];
+    memcpy(node_min, cur_node.bbox_min, 3 * sizeof(float));
+    memcpy(node_max, cur_node.bbox_max, 3 * sizeof(float));
+    pow2Extents(node_min, node_max, node_exp);
+
+    uint8_t new_ch_min[3][8], new_ch_max[3][8];
+
+    // Implicit child addressing (CWBVH paper): pre-reserve contiguous slots for the internal
+    // children, in slot order, so child i resolves to child_base + popc(internal slots below i).
+    uint8_t internal_mask = 0;
+    int internal_count = 0;
+    for (int i = 0; i < 8; i++) {
+        if (sorted_children[i] != 0xffffffff && !(nodes[sorted_children[i]].prim_index & LEAF_NODE_BIT)) {
+            internal_mask |= uint8_t(1 << i);
+            ++internal_count;
+        }
+    }
+    const uint32_t child_base = uint32_t(out_nodes.size());
+    out_nodes.resize(size_t(child_base) + size_t(internal_count));
+
+    // meta4 packing (CWBVH paper): leaf primitive references go to out_leaf_prims, contiguous
+    // per parent in slot order; with a gather, the leaf 8-triangle blocks are copied into
+    // out_tri_indices/out_mtris instead and child refs become prim_base + 8 * rank.
+    const uint32_t prim_base = gather ? uint32_t(gather->out_tri_indices.size()) : uint32_t(out_leaf_prims.size());
+    uint8_t meta_bytes[8] = {};
+    int leaf_rank = 0;
+    for (int i = 0; i < 8; i++) {
+        if (sorted_children[i] == 0xffffffff) {
+            continue;
+        }
+        if (nodes[sorted_children[i]].prim_index & LEAF_NODE_BIT) {
+            if (gather) {
+                gather_leaf_block(*gather, nodes[sorted_children[i]].prim_index);
+            } else {
+                out_leaf_prims.push_back(nodes[sorted_children[i]].prim_index);
+            }
+            meta_bytes[i] = uint8_t(0x40 | leaf_rank++);
+        } else {
+            meta_bytes[i] = uint8_t(0x80 | i);
+        }
+    }
+    assert(leaf_rank <= 0x3f);
+
+    for (int i = 0; i < 8; i++) {
+        if (sorted_children[i] == 0xffffffff) {
+            // Init as infinite bounding box
+            new_ch_min[0][i] = new_ch_min[1][i] = new_ch_min[2][i] = 0xff;
+            new_ch_max[0][i] = new_ch_max[1][i] = new_ch_max[2][i] = 0;
+            continue;
+        }
+
+        const bvh_node_t &child = nodes[sorted_children[i]];
+
+        for (int j = 0; j < 3; ++j) {
+            new_ch_min[j][i] = uint8_t(floorf(quantize(child.bbox_min[j], node_min[j], node_max[j])));
+            new_ch_max[j][i] = uint8_t(ceilf(quantize(child.bbox_max[j], node_min[j], node_max[j])));
+            // valid scene children always have finite boxes - the compacted traversal relies on
+            // this (no degenerate 0xff/0x00 'infinite box' encoding outside the light tree)
+            assert(new_ch_min[j][i] <= new_ch_max[j][i]);
+        }
+    }
+
+    // Recurse after this node's children arrays are laid out; the internal-child slots were
+    // pre-reserved above, so the recursion cannot move them (never hold a reference across it).
+    int child_rank = 0;
+    for (int i = 0; i < 8; i++) {
+        if (sorted_children[i] != 0xffffffff && !(nodes[sorted_children[i]].prim_index & LEAF_NODE_BIT)) {
+            FlattenCompactBVH_r(nodes, sorted_children[i], out_nodes, out_leaf_prims, gather,
+                                int(child_base + child_rank), depth + 1);
+            ++child_rank;
+        }
+    }
+
+    NodeT &new_node = out_nodes[new_node_index];
+    assert(child_rank == internal_count);
+    // child_base lives in the low 24 bits of the packed word
+    assert(child_base < (1u << 24));
+    new_node.child_base_imask = child_base | (uint32_t(internal_mask) << 24);
+    new_node.prim_base = prim_base;
+    new_node.meta4[0] = uint32_t(meta_bytes[0]) | (uint32_t(meta_bytes[1]) << 8) | (uint32_t(meta_bytes[2]) << 16) |
+                        (uint32_t(meta_bytes[3]) << 24);
+    new_node.meta4[1] = uint32_t(meta_bytes[4]) | (uint32_t(meta_bytes[5]) << 8) | (uint32_t(meta_bytes[6]) << 16) |
+                        (uint32_t(meta_bytes[7]) << 24);
+    memcpy(new_node.bbox_min, node_min, 3 * sizeof(float));
+    memcpy(new_node.ch_exp, node_exp, 3);
+    new_node.ch_exp[3] = 0;
+    for (int j = 0; j < 3; ++j) {
+        memcpy(new_node.ch_bbox_min[j], new_ch_min[j], 8);
+        memcpy(new_node.ch_bbox_max[j], new_ch_max[j], 8);
+    }
+
+    return new_node_index;
+}
+
 uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32_t node_index,
                                 aligned_vector<light_wbvh_node_t> &out_nodes) {
     const light_bvh_node_t &cur_node = nodes[node_index];
@@ -1008,24 +1293,46 @@ uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32
     return new_node_index;
 }
 
+template <typename NodeT>
 uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32_t node_index,
-                                aligned_vector<light_cwbvh_node_t> &out_nodes) {
+                                aligned_vector<NodeT> &out_nodes, std::vector<uint32_t> &out_leaf_lights,
+                                const int at_index, const uint32_t depth, const bool pow2_quant) {
     const light_bvh_node_t &cur_node = nodes[node_index];
 
-    // allocate new node
-    const auto new_node_index = uint32_t(out_nodes.size());
-    out_nodes.emplace_back();
+    assert(depth < uint32_t(MAX_STACK_SIZE) && "light tree too deep for the compressed traversal stack");
+
+    // allocate new node (or use the slot pre-reserved by our parent for contiguous children)
+    uint32_t new_node_index;
+    if (at_index >= 0) {
+        new_node_index = uint32_t(at_index);
+    } else {
+        new_node_index = uint32_t(out_nodes.size());
+        out_nodes.emplace_back();
+    }
 
     if (cur_node.prim_index & LEAF_NODE_BIT) {
-        light_cwbvh_node_t &new_node = out_nodes[new_node_index];
+        // Single light tree - wrap the light into a root node so the root is never a leaf reference;
+        // everywhere else the leaf level is collapsed by the parent (see below)
+        NodeT &new_node = out_nodes[new_node_index];
+
+        new_node.child_base_imask = 0;
+        new_node.prim_base = uint32_t(out_leaf_lights.size());
+        out_leaf_lights.push_back(cur_node.prim_index);
+        new_node.meta4[0] = 0x40u; // slot 0: leaf, rank 0
+        new_node.meta4[1] = 0;
+        if (pow2_quant && cur_node.bbox_min[0] > -MAX_DIST) {
+            // the whole-box child encoding (0/255) must decode conservatively under the pow2 step
+            float bmin[3], bmax[3];
+            memcpy(bmin, cur_node.bbox_min, 3 * sizeof(float));
+            memcpy(bmax, cur_node.bbox_max, 3 * sizeof(float));
+            pow2Extents(bmin, bmax, new_node.ch_exp);
+        } else {
+            memset(new_node.ch_exp, 0, sizeof(new_node.ch_exp));
+        }
 
         new_node.bbox_min[0] = cur_node.bbox_min[0];
         new_node.bbox_min[1] = cur_node.bbox_min[1];
         new_node.bbox_min[2] = cur_node.bbox_min[2];
-
-        new_node.bbox_max[0] = cur_node.bbox_max[0];
-        new_node.bbox_max[1] = cur_node.bbox_max[1];
-        new_node.bbox_max[2] = cur_node.bbox_max[2];
 
         if (cur_node.bbox_min[0] > -MAX_DIST) {
             // Init as whole bounding box
@@ -1037,13 +1344,21 @@ uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32
             new_node.ch_bbox_max[0][0] = new_node.ch_bbox_max[1][0] = new_node.ch_bbox_max[2][0] = 0;
         }
 
-        new_node.child[0] = cur_node.prim_index;
-        new_node.child[1] = cur_node.prim_count;
+        for (int j = 1; j < 8; ++j) {
+            // Init as invalid bounding box
+            new_node.ch_bbox_min[0][j] = new_node.ch_bbox_min[1][j] = new_node.ch_bbox_min[2][j] = 0xff;
+            new_node.ch_bbox_max[0][j] = new_node.ch_bbox_max[1][j] = new_node.ch_bbox_max[2][j] = 0xff;
+            // Init as zero light
+            new_node.ch_bitmask[j] = 0;
+            new_node.flux[j] = 0;
+            new_node.axis[j] = 0;
+            new_node.cos_omega_ne[j] = 0;
+        }
 
         new_node.ch_bitmask[0] = cur_node.bitmask;
-        new_node.flux[0] = cur_node.flux;
-        new_node.axis[0] = EncodeOctDir(cur_node.axis);
-        new_node.cos_omega_ne[0] = encode_cosines(cosf(cur_node.omega_n), fmaxf(cosf(cur_node.omega_e), 0.0f));
+        new_node.flux[0] = encode_flux(cur_node.flux, cur_node.flux);
+        new_node.axis[0] = EncodeOctDir8(cur_node.axis);
+        new_node.cos_omega_ne[0] = encode_cosines8(cosf(cur_node.omega_n), fmaxf(cosf(cur_node.omega_e), 0.0f));
 
         return new_node_index;
     }
@@ -1133,22 +1448,86 @@ uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32
         sorted_children[mort] = children[i];
     }
 
-    uint32_t new_children[8];
+    // CWBVH-style pow2 quantization (REF light trees): expand the max corner so the per-axis
+    // quantization step is a power of two and store the exponent; the legacy ext/255 path
+    // (SIMD/GPU) keeps ch_exp zero. Infinite children keep the 0xff/0x00 sentinel either way.
+    int8_t node_exp[3] = {0, 0, 0};
+    if (pow2_quant) {
+        float bmin[3], bmax[3];
+        memcpy(bmin, value_ptr(all_box_min), 3 * sizeof(float));
+        memcpy(bmax, value_ptr(all_box_max), 3 * sizeof(float));
+        pow2Extents(bmin, bmax, node_exp);
+        all_box_min = Ref::fvec3{bmin[0], bmin[1], bmin[2]};
+        all_box_max = Ref::fvec3{bmax[0], bmax[1], bmax[2]};
+    }
+
+    // Implicit child addressing (CWBVH paper): pre-reserve contiguous slots for the internal
+    // children, in slot order, so child i resolves to child_base + popc(internal slots below i).
+    uint8_t internal_mask = 0;
+    int internal_count = 0;
     for (int i = 0; i < 8; i++) {
-        if (sorted_children[i] != 0xffffffff) {
-            new_children[i] = FlattenLightBVH_r(nodes, sorted_children[i], out_nodes);
+        if (sorted_children[i] != 0xffffffff && !(nodes[sorted_children[i]].prim_index & LEAF_NODE_BIT)) {
+            internal_mask |= uint8_t(1 << i);
+            ++internal_count;
+        }
+    }
+    const uint32_t child_base = uint32_t(out_nodes.size());
+    out_nodes.resize(size_t(child_base) + size_t(internal_count));
+
+    // meta4 packing (CWBVH paper): leaf light references go to out_leaf_lights, contiguous
+    // per parent in slot order (light_leaf_prims[prim_base + rank]).
+    const uint32_t prim_base = uint32_t(out_leaf_lights.size());
+    uint8_t meta_bytes[8] = {};
+    int leaf_rank = 0;
+
+    int child_rank = 0;
+    for (int i = 0; i < 8; i++) {
+        if (sorted_children[i] == 0xffffffff) {
+            continue;
+        }
+        const light_bvh_node_t &child = nodes[sorted_children[i]];
+        if (child.prim_index & LEAF_NODE_BIT) {
+            // Collapse leaf level - lights are referenced directly by their parents
+            // (all light leaves hold exactly one light, so no wrapper node is emitted)
+            assert(child.prim_count == 1);
+            out_leaf_lights.push_back(child.prim_index);
+            meta_bytes[i] = uint8_t(0x40 | leaf_rank++);
         } else {
-            new_children[i] = 0x7fffffff;
+            // the pre-reserved slot - the recursion below writes the node there
+            ++child_rank;
+            meta_bytes[i] = uint8_t(0x80 | i);
+        }
+    }
+    assert(leaf_rank <= 0x3f);
+    assert(child_rank == internal_count);
+
+    // Recurse after this node's children arrays are laid out; the internal-child slots were
+    // pre-reserved above, so the recursion cannot move them (never hold a reference across it).
+    child_rank = 0;
+    for (int i = 0; i < 8; i++) {
+        if (sorted_children[i] != 0xffffffff && !(nodes[sorted_children[i]].prim_index & LEAF_NODE_BIT)) {
+            FlattenLightBVH_r(nodes, sorted_children[i], out_nodes, out_leaf_lights, int(child_base + child_rank),
+                              depth + 1, pow2_quant);
+            ++child_rank;
         }
     }
 
-    light_cwbvh_node_t &new_node = out_nodes[new_node_index];
+    NodeT &new_node = out_nodes[new_node_index];
+    // child_base lives in the low 24 bits of the packed word
+    assert(child_base < (1u << 24));
+    new_node.child_base_imask = child_base | (uint32_t(internal_mask) << 24);
+    new_node.prim_base = prim_base;
+    new_node.meta4[0] = uint32_t(meta_bytes[0]) | (uint32_t(meta_bytes[1]) << 8) | (uint32_t(meta_bytes[2]) << 16) |
+                        (uint32_t(meta_bytes[3]) << 24);
+    new_node.meta4[1] = uint32_t(meta_bytes[4]) | (uint32_t(meta_bytes[5]) << 8) | (uint32_t(meta_bytes[6]) << 16) |
+                        (uint32_t(meta_bytes[7]) << 24);
     memcpy(new_node.bbox_min, value_ptr(all_box_min), 3 * sizeof(float));
-    memcpy(new_node.bbox_max, value_ptr(all_box_max), 3 * sizeof(float));
-    memcpy(new_node.child, new_children, sizeof(new_children));
+    // light trees: pow2 exponent when pow2_quant, otherwise the ext/255 dequantization (no exponent)
+    memcpy(new_node.ch_exp, node_exp, 3);
+    new_node.ch_exp[3] = 0;
 
     for (int i = 0; i < 8; i++) {
-        if (new_children[i] != 0x7fffffff) {
+        if (sorted_children[i] != 0xffffffff) {
             const light_bvh_node_t &child = nodes[sorted_children[i]];
 
             if (child.bbox_min[0] > -MAX_DIST) {
@@ -1171,16 +1550,16 @@ uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32
                 new_node.ch_bbox_max[0][i] = new_node.ch_bbox_max[1][i] = new_node.ch_bbox_max[2][i] = 0;
             }
             new_node.ch_bitmask[i] = child.bitmask;
-            new_node.flux[i] = child.flux;
-            new_node.axis[i] = EncodeOctDir(child.axis);
-            new_node.cos_omega_ne[i] = encode_cosines(cosf(child.omega_n), fmaxf(cosf(child.omega_e), 0.0f));
+            new_node.flux[i] = encode_flux(child.flux, cur_node.flux);
+            new_node.axis[i] = EncodeOctDir8(child.axis);
+            new_node.cos_omega_ne[i] = encode_cosines8(cosf(child.omega_n), fmaxf(cosf(child.omega_e), 0.0f));
         } else {
             // Init as invalid bounding box
             new_node.ch_bbox_min[0][i] = new_node.ch_bbox_min[1][i] = new_node.ch_bbox_min[2][i] = 0xff;
             new_node.ch_bbox_max[0][i] = new_node.ch_bbox_max[1][i] = new_node.ch_bbox_max[2][i] = 0xff;
             // Init as zero light
             new_node.ch_bitmask[i] = 0;
-            new_node.flux[i] = 0.0f;
+            new_node.flux[i] = 0;
             new_node.axis[i] = 0;
             new_node.cos_omega_ne[i] = 0;
         }
@@ -1188,6 +1567,15 @@ uint32_t Ray::FlattenLightBVH_r(Span<const light_bvh_node_t> nodes, const uint32
 
     return new_node_index;
 }
+
+template uint32_t Ray::FlattenCompactBVH_r<Ray::cwbvh_node_t>(Span<const Ray::bvh_node_t>, uint32_t,
+                                                              aligned_vector<Ray::cwbvh_node_t> &,
+                                                              std::vector<uint32_t> &, Ray::compact_leaf_gather_t *,
+                                                              const int, const uint32_t);
+template uint32_t Ray::FlattenLightBVH_r<Ray::light_cwbvh_node_t>(Span<const Ray::light_bvh_node_t>, uint32_t,
+                                                                  aligned_vector<Ray::light_cwbvh_node_t> &,
+                                                                  std::vector<uint32_t> &, const int, const uint32_t,
+                                                                  const bool);
 
 uint32_t Ray::ConvertToBVH2(Span<const bvh_node_t> nodes, std::vector<bvh2_node_t> &out_nodes) {
     const uint32_t out_index = uint32_t(out_nodes.size());

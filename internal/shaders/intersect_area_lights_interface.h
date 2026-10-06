@@ -19,6 +19,7 @@ const int LIGHTS_BUF_SLOT = 1;
 const int CWNODES_BUF_SLOT = 2;
 const int RAYS_BUF_SLOT = 3;
 const int COUNTERS_BUF_SLOT = 4;
+const int LIGHT_LEAF_PRIMS_BUF_SLOT = 5;
 
 const int INOUT_HITS_BUF_SLOT = 0;
 

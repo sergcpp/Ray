@@ -210,6 +210,106 @@ bool bbox_test(vec3 inv_d, vec3 neg_inv_d_o, float t, vec3 bbox_min, vec3 bbox_m
     return tmin <= tmax && tmin <= t && tmax > 0.0;
 }
 
+//
+// Compact (CWBVH-style) node helpers - mirror the CPU side (Core.h / CoreSIMD.h)
+//
+
+// Per-axis quantization step 2^ch_exp[axis] (CWBVH paper trick): sign-extend the stored int8
+// exponent and place it in the float exponent field. ch_exp is always in [-126, 127].
+float cwbvh_step(const uint ch_exp, const uint axis) {
+    const uint b = (ch_exp >> (8u * axis)) & 0xffu;
+    return uintBitsToFloat((((b ^ 0x80u) - 1u) & 0xffu) << 23u);
+}
+
+// meta4 byte of child slot i: 0 = empty slot, 0x40|rank = leaf child, 0x80|i = internal child
+uint cwbvh_meta(const cwbvh_node_t n, const uint i) {
+    return (i < 4u ? n.meta4_0 : n.meta4_1) >> (8u * (i & 3u)) & 0xffu;
+}
+
+uint cwbvh_meta(const light_cwbvh_node_t n, const uint i) {
+    return (i < 4u ? n.meta4_0 : n.meta4_1) >> (8u * (i & 3u)) & 0xffu;
+}
+
+// Internal children are stored contiguously - slot i resolves to child_base + popc(internal slots below i)
+uint cwbvh_internal_child(const cwbvh_node_t n, const uint i) {
+    const uint imask = n.child_base_imask >> 24u;
+    return (n.child_base_imask & 0x00ffffffu) + uint(bitCount(imask & ~(0xffu << i)));
+}
+
+uint cwbvh_internal_child(const light_cwbvh_node_t n, const uint i) {
+    const uint imask = n.child_base_imask >> 24u;
+    return (n.child_base_imask & 0x00ffffffu) + uint(bitCount(imask & ~(0xffu << i)));
+}
+
+// The hit mask is in *direction key space* (bit i ^ flip_bits), so draining it with findMSB()
+// visits the octant closest to the ray origin first.
+uint cwbvh_child_hit_mask(const cwbvh_node_t n, vec3 inv_d, vec3 neg_inv_do, float t, const uint flip_bits) {
+    const vec3 _step = vec3(cwbvh_step(n.ch_exp, 0u), cwbvh_step(n.ch_exp, 1u), cwbvh_step(n.ch_exp, 2u));
+
+    uint mask = 0u;
+    for (uint i = 0; i < 8; ++i) {
+        // empty slots are marked by a zero meta4 byte; scene children always have finite boxes
+        if (cwbvh_meta(n, i) == 0u) {
+            continue;
+        }
+        const vec3 bbox_min = vec3(n.bbox_min[0] + float((n.ch_bbox_min[0][i / 4u] >> (8u * (i % 4u))) & 0xffu) * _step[0],
+                                   n.bbox_min[1] + float((n.ch_bbox_min[1][i / 4u] >> (8u * (i % 4u))) & 0xffu) * _step[1],
+                                   n.bbox_min[2] + float((n.ch_bbox_min[2][i / 4u] >> (8u * (i % 4u))) & 0xffu) * _step[2]);
+        const vec3 bbox_max = vec3(n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4u] >> (8u * (i % 4u))) & 0xffu) * _step[0],
+                                   n.bbox_min[1] + float((n.ch_bbox_max[1][i / 4u] >> (8u * (i % 4u))) & 0xffu) * _step[1],
+                                   n.bbox_min[2] + float((n.ch_bbox_max[2][i / 4u] >> (8u * (i % 4u))) & 0xffu) * _step[2]);
+
+        if (bbox_test(inv_d, neg_inv_do, t, bbox_min, bbox_max)) {
+            mask |= (1u << (i ^ flip_bits));
+        }
+    }
+    return mask;
+}
+
+#define STACK_PUSH(V)                                                                      \
+    {                                                                                      \
+        if (stack_size < SM_STACK_SIZE) {                                                  \
+            g_stack[gl_LocalInvocationIndex][stack_size] = (V);                            \
+        } else {                                                                           \
+            g_stack_spill[stack_size - SM_STACK_SIZE] = (V);                               \
+        }                                                                                  \
+        ++stack_size;                                                                      \
+    }
+
+#define STACK_POP(V)                                                                       \
+    {                                                                                      \
+        --stack_size;                                                                      \
+        if (stack_size < SM_STACK_SIZE) {                                                  \
+            (V) = g_stack[gl_LocalInvocationIndex][stack_size];                            \
+        } else {                                                                           \
+            (V) = g_stack_spill[stack_size - SM_STACK_SIZE];                               \
+        }                                                                                  \
+    }
+
+#define STACK_PUSH2(V, F)                                                                  \
+    {                                                                                      \
+        if (stack_size < SM_STACK_SIZE) {                                                  \
+            g_stack[gl_LocalInvocationIndex][stack_size] = (V);                            \
+            g_stack_factors[gl_LocalInvocationIndex][stack_size] = (F);                    \
+        } else {                                                                           \
+            g_stack_spill[stack_size - SM_STACK_SIZE] = (V);                               \
+            g_stack_factors_spill[stack_size - SM_STACK_SIZE] = (F);                       \
+        }                                                                                  \
+        ++stack_size;                                                                      \
+    }
+
+#define STACK_POP2(V, F)                                                                   \
+    {                                                                                      \
+        --stack_size;                                                                      \
+        if (stack_size < SM_STACK_SIZE) {                                                  \
+            (V) = g_stack[gl_LocalInvocationIndex][stack_size];                            \
+            (F) = g_stack_factors[gl_LocalInvocationIndex][stack_size];                    \
+        } else {                                                                           \
+            (V) = g_stack_spill[stack_size - SM_STACK_SIZE];                               \
+            (F) = g_stack_factors_spill[stack_size - SM_STACK_SIZE];                       \
+        }                                                                                  \
+    }
+
 // Equivalent to acosf(dot(a, b)), but more numerically stable
 // Taken from PBRT source code
 float angle_between(const vec3 v1, const vec3 v2) {

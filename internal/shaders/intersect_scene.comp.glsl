@@ -5,6 +5,9 @@
 #endif
 #if SUBGROUP
 #extension GL_KHR_shader_subgroup_vote : require
+#else
+#define subgroupAll(x) (x)
+#define subgroupAny(x) (x)
 #endif
 
 #include "intersect_scene_interface.h"
@@ -27,7 +30,11 @@ layout(std430, binding = TRI_INDICES_BUF_SLOT) readonly buffer TriIndices {
 };
 
 layout(std430, binding = NODES_BUF_SLOT) readonly buffer Nodes {
-    bvh2_node_t g_nodes[];
+    cwbvh_node_t g_nodes[];
+};
+
+layout(std430, binding = LEAF_PRIMS_BUF_SLOT) readonly buffer LeafPrims {
+    uint g_leaf_prims[];
 };
 
 layout(std430, binding = MESH_INSTANCES_BUF_SLOT) readonly buffer MeshInstances {
@@ -84,128 +91,105 @@ vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
 #define FETCH_TRI(j) g_tris[j]
 #include "traverse_bvh.glsl"
 
-shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
+const uint SM_STACK_SIZE = 12;
+shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
+uint g_stack_spill[MAX_STACK_SIZE - SM_STACK_SIZE]; // expected to be placed into scratch memory
 
-void Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index,
-                             uint stack_size, inout hit_data_t inter) {
-    vec3 neg_inv_do = -inv_d * ro;
+void Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index, uint stack_size, inout hit_data_t inter) {
+    const vec3 neg_inv_do = -inv_d * ro;
+    const uint flip_bits = (rd.x < 0.0 ? 1u : 0u) | (rd.y < 0.0 ? 2u : 0u) | (rd.z < 0.0 ? 4u : 0u);
 
-    uint initial_stack_size = stack_size;
-    g_stack[gl_LocalInvocationIndex][stack_size++] = 0x1fffffffu;
+    const uint initial_stack_size = stack_size;
+    STACK_PUSH(node_index);
 
-    uint cur = node_index;
-    while (stack_size != initial_stack_size) {
-        uint leaf_node = 0;
-        while (stack_size != initial_stack_size && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
-            const bvh2_node_t n = g_nodes[cur];
+    uint index = 0u;
+    while (true) {
+        while (true) {
+            if ((index & LEAF_NODE_BIT) == 0 && stack_size != initial_stack_size) {
+                STACK_POP(index);
+                [[flatten]] if ((index & LEAF_NODE_BIT) != 0) {
+                    continue;
+                }
 
-            uvec2 children = n.child.xy;
+                const cwbvh_node_t n = g_nodes[index];
 
-            const vec3 ch0_min = vec3(n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]);
-            const vec3 ch0_max = vec3(n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]);
+                uint mask = cwbvh_child_hit_mask(n, inv_d, neg_inv_do, inter.t, flip_bits);
+                while (mask != 0u) {
+                    const uint key = uint(findMSB(mask));
+                    mask ^= 1u << key;
 
-            const vec3 ch1_min = vec3(n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]);
-            const vec3 ch1_max = vec3(n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]);
-
-            float ch0_dist, ch1_dist;
-            const bool ch0_res = bbox_test(inv_d, neg_inv_do, inter.t, ch0_min, ch0_max, ch0_dist);
-            const bool ch1_res = bbox_test(inv_d, neg_inv_do, inter.t, ch1_min, ch1_max, ch1_dist);
-
-            if (!ch0_res && !ch1_res) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            } else {
-                cur = ch0_res ? children[0] : children[1];
-                if (ch0_res && ch1_res) {
-                    if (ch1_dist < ch0_dist) {
-                        const uint temp = cur;
-                        cur = children[1];
-                        children[1] = temp;
+                    const uint i = key ^ flip_bits;
+                    const uint meta = cwbvh_meta(n, i);
+                    if ((meta & 0x80u) != 0u) {
+                        STACK_PUSH(cwbvh_internal_child(n, i));
+                    } else {
+                        // leaf child: meta4 rank -> the parent's payload block (8-triangle block base)
+                        const uint tri_start = (n.prim_base + (meta & 0x3fu)) | LEAF_NODE_BIT;
+                        if ((index & LEAF_NODE_BIT) == 0) {
+                            index = tri_start;
+                        } else {
+                            STACK_PUSH(tri_start);
+                        }
                     }
-                    g_stack[gl_LocalInvocationIndex][stack_size++] = children[1];
                 }
             }
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
-                leaf_node = cur;
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            }
-#if SUBGROUP
-            if (subgroupAll((leaf_node & BVH2_PRIM_COUNT_BITS) != 0)) {
+
+            if (subgroupAll((index & LEAF_NODE_BIT) != 0 || stack_size == initial_stack_size)) {
                 break;
             }
-#else
-            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-                break;
-            }
-#endif
         }
-        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-            const int tri_start = int(leaf_node & BVH2_PRIM_INDEX_BITS),
-                      tri_end = int(tri_start + ((leaf_node & BVH2_PRIM_COUNT_BITS) >> 29) + 1);
 
-            IntersectTris_ClosestHit(ro, rd, tri_start, tri_end, obj_index, inter);
+        if ((index & LEAF_NODE_BIT) != 0) {
+            const int tri_start = int(g_leaf_prims[index & PRIM_INDEX_BITS]);
+            index = 0u;
 
-            leaf_node = cur;
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            }
+            IntersectTris_ClosestHit(ro, rd, tri_start, tri_start + 8, obj_index, inter);
+        }
+
+        if (subgroupAll((index & LEAF_NODE_BIT) == 0u && stack_size == initial_stack_size)) {
+            break;
         }
     }
 }
 
-void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, uint ray_flags, vec3 orig_inv_rd, uint node_index,
-                             inout hit_data_t inter) {
-    vec3 orig_neg_inv_do = -orig_inv_rd * orig_ro;
+void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, uint ray_flags, vec3 orig_inv_rd, uint node_index, inout hit_data_t inter) {
+    const vec3 orig_neg_inv_do = -orig_inv_rd * orig_ro;
+    const uint flip_bits = (orig_rd.x < 0.0 ? 1u : 0u) | (orig_rd.y < 0.0 ? 2u : 0u) | (orig_rd.z < 0.0 ? 4u : 0u);
 
     uint stack_size = 0;
-    g_stack[gl_LocalInvocationIndex][stack_size++] = 0x1fffffffu;
+    STACK_PUSH(node_index);
 
-    uint cur = node_index;
-    while (stack_size != 0) {
-        uint leaf_node = 0;
-        while (stack_size != 0 && (cur & BVH2_PRIM_COUNT_BITS) == 0) {
-            const bvh2_node_t n = g_nodes[cur];
+    uint index = 0u;
+    while (true) {
+        while (subgroupAny((index & LEAF_NODE_BIT) == 0 && stack_size != 0u)) {
+            if ((index & LEAF_NODE_BIT) == 0 && stack_size != 0u) {
+                STACK_POP(index);
+                [[flatten]] if ((index & LEAF_NODE_BIT) != 0) {
+                    continue;
+                }
 
-            uvec2 children = n.child.xy;
+                const cwbvh_node_t n = g_nodes[index];
 
-            const vec3 ch0_min = vec3(n.ch_data0[0], n.ch_data0[2], n.ch_data2[0]);
-            const vec3 ch0_max = vec3(n.ch_data0[1], n.ch_data0[3], n.ch_data2[1]);
+                uint mask = cwbvh_child_hit_mask(n, orig_inv_rd, orig_neg_inv_do, inter.t, flip_bits);
+                while (mask != 0u) {
+                    const uint key = uint(findMSB(mask));
+                    mask ^= 1u << key;
 
-            const vec3 ch1_min = vec3(n.ch_data1[0], n.ch_data1[2], n.ch_data2[2]);
-            const vec3 ch1_max = vec3(n.ch_data1[1], n.ch_data1[3], n.ch_data2[3]);
-
-            float ch0_dist, ch1_dist;
-            const bool ch0_res = bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, ch0_min, ch0_max, ch0_dist);
-            const bool ch1_res = bbox_test(orig_inv_rd, orig_neg_inv_do, inter.t, ch1_min, ch1_max, ch1_dist);
-
-            if (!ch0_res && !ch1_res) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            } else {
-                cur = ch0_res ? children[0] : children[1];
-                if (ch0_res && ch1_res) {
-                    if (ch1_dist < ch0_dist) {
-                        const uint temp = cur;
-                        cur = children[1];
-                        children[1] = temp;
+                    const uint i = key ^ flip_bits;
+                    const uint meta = cwbvh_meta(n, i);
+                    if ((meta & 0x80u) != 0u) {
+                        STACK_PUSH(cwbvh_internal_child(n, i));
+                    } else {
+                        // leaf child: TLAS leaves are single mesh instances (meta4 rank -> payload)
+                        STACK_PUSH((n.prim_base + (meta & 0x3fu)) | LEAF_NODE_BIT);
                     }
-                    g_stack[gl_LocalInvocationIndex][stack_size++] = children[1];
                 }
             }
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0 && (leaf_node & BVH2_PRIM_COUNT_BITS) == 0) {
-                leaf_node = cur;
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            }
-#if SUBGROUP
-            if (subgroupAll((leaf_node & BVH2_PRIM_COUNT_BITS) != 0)) {
-                break;
-            }
-#else
-            if ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-                break;
-            }
-#endif
         }
-        while ((leaf_node & BVH2_PRIM_COUNT_BITS) != 0) {
-            const uint mi_index = (leaf_node & BVH2_PRIM_INDEX_BITS);
+
+        if ((index & LEAF_NODE_BIT) != 0) {
+            const uint mi_index = g_leaf_prims[index & PRIM_INDEX_BITS];
+            index = 0u;
             const mesh_instance_t mi = g_mesh_instances[mi_index];
             if ((mi.data.w & ray_flags) != 0) {
                 const vec3 ro = (mi.inv_xform * vec4(orig_ro, 1.0)).xyz;
@@ -214,10 +198,10 @@ void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, uint ray_flags, vec3 or
 
                 Traverse_BLAS_WithStack(ro, rd, inv_d, int(mi_index), mi.data.y, stack_size, inter);
             }
-            leaf_node = cur;
-            if ((cur & BVH2_PRIM_COUNT_BITS) != 0) {
-                cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-            }
+        }
+
+        if (subgroupAll(stack_size == 0u)) {
+            break;
         }
     }
 }
@@ -284,7 +268,7 @@ void main() {
                               0.0,              // tMin
                               rd,               // direction
                               inter.t           // tMax
-                             );
+                              );
         while (rayQueryProceedEXT(rq)) {
             // NOTE: All instances are opaque, no need to confirm intersection
         }

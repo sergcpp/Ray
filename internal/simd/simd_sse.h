@@ -451,6 +451,28 @@ template <> class fixed_size_simd<int, 4> {
 
     force_inline explicit vectorcall operator fixed_size_simd<float, 4>() const { return _mm_cvtepi32_ps(vec_); }
 
+    // Load 4 bytes and expand each into a separate 32-bit lane
+    static force_inline fixed_size_simd<int, 4> vectorcall load_u8x4(const uint8_t *p) {
+#if defined(USE_SSE41)
+        return _mm_cvtepu8_epi32(_mm_cvtsi32_si128(*(const int *)p));
+#else
+        const __m128i zero = _mm_setzero_si128();
+        const __m128i b = _mm_cvtsi32_si128(*(const int *)p);
+        const __m128i w = _mm_unpacklo_epi8(b, zero);
+        return _mm_unpacklo_epi16(w, zero);
+#endif
+    }
+
+    // Load 4 16-bit values and expand each into a separate 32-bit lane
+    static force_inline fixed_size_simd<int, 4> vectorcall load_u16x4(const uint16_t *p) {
+#if defined(USE_SSE41)
+        return _mm_cvtepu16_epi32(_mm_loadl_epi64((const __m128i *)p));
+#else
+        const __m128i zero = _mm_setzero_si128();
+        return _mm_unpacklo_epi16(_mm_loadl_epi64((const __m128i *)p), zero);
+#endif
+    }
+
     force_inline explicit vectorcall operator fixed_size_simd<unsigned, 4>() const;
 
     force_inline int hsum() const {
@@ -928,7 +950,7 @@ template <> class fixed_size_simd<unsigned, 4> {
     }
 
     friend force_inline fixed_size_simd<unsigned, 4> vectorcall srli(const fixed_size_simd<unsigned, 4> v1,
-                                                                      const unsigned v2) {
+                                                                     const unsigned v2) {
         return _mm_srli_epi32(v1.vec_, v2);
     }
 

@@ -38,39 +38,47 @@
 #define DISABLE_SORTING 0
 #define ENABLE_RT_PIPELINE 0
 
-static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
-static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
-static_assert(sizeof(Types::bvh2_node_t) == sizeof(Ray::bvh2_node_t), "!");
-static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t), "!");
-static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t), "!");
-static_assert(sizeof(Types::light_cwbvh_node_t) == sizeof(Ray::light_cwbvh_node_t), "!");
-static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t), "!");
-static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t), "!");
-static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t), "!");
-static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t), "!");
-static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t), "!");
-static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t), "!");
-static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t), "!");
-static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t), "!");
+static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t));
+static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t));
+static_assert(sizeof(Types::bvh2_node_t) == sizeof(Ray::bvh2_node_t));
+static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t));
+static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t));
+static_assert(sizeof(Types::cwbvh_node_t) == sizeof(Ray::cwbvh_node_t));
+static_assert(offsetof(Types::cwbvh_node_t, ch_bbox_min) == offsetof(Ray::cwbvh_node_t, ch_bbox_min));
+static_assert(offsetof(Types::cwbvh_node_t, ch_bbox_max) == offsetof(Ray::cwbvh_node_t, ch_bbox_max));
+static_assert(offsetof(Types::cwbvh_node_t, ch_exp) == offsetof(Ray::cwbvh_node_t, ch_exp));
+static_assert(offsetof(Types::cwbvh_node_t, child_base_imask) == offsetof(Ray::cwbvh_node_t, child_base_imask));
+static_assert(offsetof(Types::cwbvh_node_t, prim_base) == offsetof(Ray::cwbvh_node_t, prim_base));
+static_assert(offsetof(Types::cwbvh_node_t, meta4_0) == offsetof(Ray::cwbvh_node_t, meta4[0]));
+static_assert(offsetof(Types::cwbvh_node_t, meta4_1) == offsetof(Ray::cwbvh_node_t, meta4[1]));
+static_assert(sizeof(Types::light_cwbvh_node_t) == sizeof(Ray::light_cwbvh_node_t));
+static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t));
+static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t));
+static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t));
+static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t));
+static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t));
+static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t));
+static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t));
+static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t));
 
-static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE, "!");
-static_assert(Types::LIGHT_TYPE_DIR == Ray::LIGHT_TYPE_DIR, "!");
-static_assert(Types::LIGHT_TYPE_LINE == Ray::LIGHT_TYPE_LINE, "!");
-static_assert(Types::LIGHT_TYPE_RECT == Ray::LIGHT_TYPE_RECT, "!");
-static_assert(Types::LIGHT_TYPE_DISK == Ray::LIGHT_TYPE_DISK, "!");
-static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI, "!");
-static_assert(Types::FILTER_BOX == int(Ray::ePixelFilter::Box), "!");
-static_assert(Types::FILTER_GAUSSIAN == int(Ray::ePixelFilter::Gaussian), "!");
-static_assert(Types::FILTER_BLACKMAN_HARRIS == int(Ray::ePixelFilter::BlackmanHarris), "!");
-static_assert(Types::FILTER_TABLE_SIZE == Ray::FILTER_TABLE_SIZE, "!");
+static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE);
+static_assert(Types::LIGHT_TYPE_DIR == Ray::LIGHT_TYPE_DIR);
+static_assert(Types::LIGHT_TYPE_LINE == Ray::LIGHT_TYPE_LINE);
+static_assert(Types::LIGHT_TYPE_RECT == Ray::LIGHT_TYPE_RECT);
+static_assert(Types::LIGHT_TYPE_DISK == Ray::LIGHT_TYPE_DISK);
+static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI);
+static_assert(Types::FILTER_BOX == int(Ray::ePixelFilter::Box));
+static_assert(Types::FILTER_GAUSSIAN == int(Ray::ePixelFilter::Gaussian));
+static_assert(Types::FILTER_BLACKMAN_HARRIS == int(Ray::ePixelFilter::BlackmanHarris));
+static_assert(Types::FILTER_TABLE_SIZE == Ray::FILTER_TABLE_SIZE);
 
-static_assert(int(Ray::eGPUResState::RenderTarget) == int(Ray::Dx::eResState::RenderTarget), "!");
-static_assert(int(Ray::eGPUResState::UnorderedAccess) == int(Ray::Dx::eResState::UnorderedAccess), "!");
-static_assert(int(Ray::eGPUResState::DepthRead) == int(Ray::Dx::eResState::DepthRead), "!");
-static_assert(int(Ray::eGPUResState::DepthWrite) == int(Ray::Dx::eResState::DepthWrite), "!");
-static_assert(int(Ray::eGPUResState::ShaderResource) == int(Ray::Dx::eResState::ShaderResource), "!");
-static_assert(int(Ray::eGPUResState::CopyDst) == int(Ray::Dx::eResState::CopyDst), "!");
-static_assert(int(Ray::eGPUResState::CopySrc) == int(Ray::Dx::eResState::CopySrc), "!");
+static_assert(int(Ray::eGPUResState::RenderTarget) == int(Ray::Dx::eResState::RenderTarget));
+static_assert(int(Ray::eGPUResState::UnorderedAccess) == int(Ray::Dx::eResState::UnorderedAccess));
+static_assert(int(Ray::eGPUResState::DepthRead) == int(Ray::Dx::eResState::DepthRead));
+static_assert(int(Ray::eGPUResState::DepthWrite) == int(Ray::Dx::eResState::DepthWrite));
+static_assert(int(Ray::eGPUResState::ShaderResource) == int(Ray::Dx::eResState::ShaderResource));
+static_assert(int(Ray::eGPUResState::CopyDst) == int(Ray::Dx::eResState::CopyDst));
+static_assert(int(Ray::eGPUResState::CopySrc) == int(Ray::Dx::eResState::CopySrc));
 
 namespace Ray {
 extern const int LUT_DIMS;
@@ -434,6 +442,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                   s.vtx_indices_.gpu_buf(),
                                   s.vertices_.gpu_buf(),
                                   s.nodes_.gpu_buf(),
+                                  s.leaf_prims_.gpu_buf(),
                                   s.tris_.gpu_buf(),
                                   s.tri_indices_.gpu_buf(),
                                   s.tri_materials_.gpu_buf(),
@@ -447,6 +456,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   s.light_cwnodes_.buf(),
+                                  s.light_leaf_prims_.buf(),
                                   s.rt_tlas_,
                                   s.env_map_qtree_.tex,
                                   int(s.env_map_qtree_.mips.size()),
@@ -1132,6 +1142,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   s.vtx_indices_.gpu_buf(),
                                   s.vertices_.gpu_buf(),
                                   s.nodes_.gpu_buf(),
+                                  s.leaf_prims_.gpu_buf(),
                                   s.tris_.gpu_buf(),
                                   s.tri_indices_.gpu_buf(),
                                   s.tri_materials_.gpu_buf(),
@@ -1145,6 +1156,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   s.light_cwnodes_.buf(),
+                                  s.light_leaf_prims_.buf(),
                                   s.rt_tlas_,
                                   s.env_map_qtree_.tex,
                                   int(s.env_map_qtree_.mips.size()),
@@ -1709,6 +1721,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
     }
 
@@ -1778,6 +1791,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
     }
 
@@ -1830,6 +1844,7 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
         {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, Shade::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
         {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
         {eBindTarget::TexSampled, Shade::SHEEN_LTC_LUT_SLOT, sheen_ltc_lut_},
         {eBindTarget::TexSampled, Shade::GGX_E_LUT_SLOT, ggx_e_lut_},
@@ -1946,6 +1961,8 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                          {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
                                          {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+                                         {eBindTarget::SBufRO, Shade::LIGHT_LEAF_PRIMS_BUF_SLOT,
+                                          sc_data.light_leaf_prims},
                                          {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
@@ -2044,6 +2061,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBufRO, IntersectSceneShadow::MATERIALS_BUF_SLOT, sc_data.materials},
         {eBindTarget::SBufRO, IntersectSceneShadow::NODES_BUF_SLOT, sc_data.nodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims},
         {eBindTarget::SBufRO, IntersectSceneShadow::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
         {eBindTarget::SBufRO, IntersectSceneShadow::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBufRO, IntersectSceneShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
@@ -2051,6 +2069,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(
         {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
         {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, rand_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 

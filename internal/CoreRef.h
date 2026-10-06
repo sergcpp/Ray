@@ -359,6 +359,10 @@ bool Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], ui
                                         const wbvh_node_t *oct_nodes, uint32_t root_index,
                                         const mesh_instance_t *mesh_instances, const mtri_accel_t *mtris,
                                         const uint32_t *tri_indices, hit_data_t &inter);
+bool Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], uint32_t ray_flags,
+                                        const cwbvh_node_t *oct_nodes, uint32_t root_index, const uint32_t *leaf_prims,
+                                        const mesh_instance_t *mesh_instances, const mtri_accel_t *mtris,
+                                        const uint32_t *tri_indices, hit_data_t &inter);
 // returns whether hit was solid
 bool Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type, const bvh_node_t *nodes,
                                     uint32_t root_index, const mesh_instance_t *mesh_instances, const tri_accel_t *tris,
@@ -370,6 +374,10 @@ bool Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ra
                                     uint32_t root_index, const mesh_instance_t *mesh_instances,
                                     const mtri_accel_t *mtris, const tri_mat_data_t *materials,
                                     const uint32_t *tri_indices, hit_data_t &inter);
+bool Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type, const cwbvh_node_t *nodes,
+                                    uint32_t root_index, const uint32_t *leaf_prims,
+                                    const mesh_instance_t *mesh_instances, const mtri_accel_t *mtris,
+                                    const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t &inter);
 // traditional bvh traversal with stack for inner nodes
 bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
                                         const bvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
@@ -379,6 +387,9 @@ bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], co
                                         int obj_index, hit_data_t &inter);
 bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
                                         const wbvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
+                                        int obj_index, hit_data_t &inter);
+bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                        const cwbvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
                                         int obj_index, hit_data_t &inter);
 // returns whether hit was solid
 bool Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3], const bvh_node_t *nodes,
@@ -390,6 +401,10 @@ bool Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const 
                                     hit_data_t &inter);
 bool Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
                                     const wbvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
+                                    const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
+                                    hit_data_t &inter);
+bool Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                    const cwbvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
                                     const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
                                     hit_data_t &inter);
 
@@ -492,19 +507,20 @@ void SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fve
 
 // Account for visible lights contribution
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
-                         Span<hit_data_t> inout_inters);
+                         Span<const uint32_t> leaf_lights, Span<hit_data_t> inout_inters);
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes,
                          Span<hit_data_t> inout_inters);
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_bvh_node_t> nodes,
                          Span<hit_data_t> inout_inters);
 float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes);
-float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes);
+float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
+                          Span<const uint32_t> leaf_lights);
 float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_bvh_node_t> nodes);
 float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_wbvh_node_t> nodes);
 float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
-                         Span<const light_cwbvh_node_t> nodes);
+                         Span<const light_cwbvh_node_t> nodes, Span<const uint32_t> leaf_lights);
 
 float Evaluate_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, int qtree_levels, const fvec4 &L);
 fvec4 Sample_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, int qtree_levels, float rand, float rx,

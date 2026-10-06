@@ -64,6 +64,11 @@ layout(std430, binding = LIGHT_CWNODES_BUF_SLOT) readonly buffer CWNodes {
     light_cwbvh_node_t g_light_cwnodes[];
 };
 
+// light tree leaf payloads: meta4 rank -> light index (see light_cwbvh_node_t::prim_base)
+layout(std430, binding = LIGHT_LEAF_PRIMS_BUF_SLOT) readonly buffer LightLeafPrims {
+    uint g_light_leaf_prims[];
+};
+
 layout(binding = ENV_QTREE_TEX_SLOT) uniform texture2D g_env_qtree;
 
 layout(binding = SHEEN_LTC_LUT_SLOT) uniform sampler2D g_sheen_ltc_lut;
@@ -1255,7 +1260,14 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         }
 
         u1 = fract((u1 - importance_cdf[next]) / importance[next]);
-        cur = n.child[next];
+        // Implicit child addressing + meta4 leaf payloads (CWBVH layout): the 0x40 meta bit marks
+        // a leaf child resolved through the parent's contiguous light_leaf_prims block
+        const uint meta = cwbvh_meta(n, uint(next));
+        if ((meta & 0x40u) != 0u) {
+            cur = g_light_leaf_prims[n.prim_base + (meta & 0x3fu)];
+        } else {
+            cur = cwbvh_internal_child(n, uint(next));
+        }
         factor *= importance[next];
     }
     const uint light_index = (cur & PRIM_INDEX_BITS);
@@ -1589,17 +1601,20 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
     ls.pdf /= factor;
 }
 
-shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_LTREE_STACK_SIZE];
-shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_LTREE_STACK_SIZE];
+const uint SM_STACK_SIZE = 12;
+shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
+uint g_stack_spill[MAX_STACK_SIZE - SM_STACK_SIZE];
+shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
+float g_stack_factors_spill[MAX_STACK_SIZE - SM_STACK_SIZE];
 
 float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
     uint stack_size = 0;
-    g_stack_factors[gl_LocalInvocationIndex][stack_size] = 1.0;
-    g_stack[gl_LocalInvocationIndex][stack_size++] = 0;
+    STACK_PUSH2(0, 1.0);
 
     while (stack_size != 0) {
-        const uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
-        const float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
+        uint cur = 0;
+        float cur_factor = 0.0;
+        STACK_POP2(cur, cur_factor);
 
         if ((cur & LEAF_NODE_BIT) == 0) {
             const light_cwbvh_node_t n = g_light_cwnodes[cur];
@@ -1607,10 +1622,26 @@ float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
             float importance[8];
             const float total_importance = calc_lnode_importance(n, ro, P, importance);
 
-            for (int j = 0; j < 8; ++j) {
+            // Drain the candidate mask with findLSB() so only the non-zero-importance children are
+            // visited (slot order preserved).
+            uint cand_mask = 0u;
+            for (uint j = 0; j < 8; ++j) {
                 if (importance[j] > 0.0) {
-                    g_stack_factors[gl_LocalInvocationIndex][stack_size] = cur_factor * importance[j] / total_importance;
-                    g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
+                    cand_mask |= 1u << j;
+                }
+            }
+
+            while (cand_mask != 0u) {
+                const uint j = uint(findLSB(cand_mask)); // findLSB() returns a signed int - cast it
+                cand_mask &= cand_mask - 1u;             // clears the lowest set bit in one op
+
+                const float child_factor = cur_factor * importance[j] / total_importance;
+                const uint meta = cwbvh_meta(n, j);
+                if ((meta & 0x80u) != 0u) {
+                    STACK_PUSH2(cwbvh_internal_child(n, j), child_factor);
+                } else {
+                    // leaf light: meta4 rank -> the parent's contiguous payload block
+                    STACK_PUSH2(g_light_leaf_prims[n.prim_base + (meta & 0x3fu)], child_factor);
                 }
             }
         } else {

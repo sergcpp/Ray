@@ -392,6 +392,28 @@ template <> class fixed_size_simd<int, 8> {
         return ret;
     }
 
+    // Load 8 bytes and expand each into a separate 32-bit lane
+    static force_inline fixed_size_simd<int, 8> vectorcall load_u8x8(const uint8_t *p) {
+        fixed_size_simd<int, 8> ret;
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        ret.vec_ = _mm256_cvtepu8_epi32(_mm_loadl_epi64((const __m128i *)p));
+#else
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = p[i]; })
+#endif
+        return ret;
+    }
+
+    // Load 8 16-bit values and expand each into a separate 32-bit lane
+    static force_inline fixed_size_simd<int, 8> vectorcall load_u16x8(const uint16_t *p) {
+        fixed_size_simd<int, 8> ret;
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        ret.vec_ = _mm256_cvtepu16_epi32(_mm_loadu_si128((const __m128i *)p));
+#else
+        UNROLLED_FOR(i, 8, { ret.comp_[i] = p[i]; })
+#endif
+        return ret;
+    }
+
     force_inline explicit vectorcall operator fixed_size_simd<unsigned, 8>() const;
 
     avx2_inline int hsum() const {
@@ -1147,7 +1169,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall srli(const fixed_size_simd<unsigned, 8> v1,
-                                                                     const unsigned v2) {
+                                                                    const unsigned v2) {
         fixed_size_simd<unsigned, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);

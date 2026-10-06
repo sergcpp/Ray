@@ -59,7 +59,8 @@ class Scene : public SceneCommon {
     Context *ctx_;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
 
-    SparseStorage<bvh2_node_t, false /* Replicate */> nodes_;
+    SparseStorage<cwbvh_node_t, false /* Replicate */> nodes_;
+    SparseStorage<uint32_t, false /* Replicate */> leaf_prims_;
     SparseStorage<tri_accel_t, false /* Replicate */> tris_;
     SparseStorage<uint32_t, false /* Replicate */> tri_indices_;
     SparseStorage<tri_mat_data_t> tri_materials_;
@@ -80,6 +81,7 @@ class Scene : public SceneCommon {
     Vector<uint32_t> li_indices_;
     uint32_t visible_lights_count_ = 0, blocker_lights_count_ = 0;
     Vector<light_cwbvh_node_t> light_cwnodes_;
+    Vector<uint32_t> light_leaf_prims_;
     std::vector<uint32_t> dir_lights_; // compacted list of all directional lights
 
     Image sky_transmittance_lut_tex_, sky_multiscatter_lut_tex_;
@@ -100,6 +102,7 @@ class Scene : public SceneCommon {
     mutable float spatial_cache_cam_pos_prev_[3] = {};
 
     uint32_t tlas_root_ = 0xffffffff, tlas_block_ = 0xffffffff;
+    uint32_t tlas_leaf_prims_block_ = 0xffffffff;
 
     bvh_node_t tlas_root_node_ = {};
 
@@ -235,9 +238,10 @@ int round_up(int v, int align);
 inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless, const bool use_tex_compression,
                              const bool use_spatial_cache)
     : ctx_(ctx), use_hwrt_(use_hwrt), use_bindless_(use_bindless), use_tex_compression_(use_tex_compression),
-      nodes_(ctx, "Nodes"), tris_(ctx, "Tris"), tri_indices_(ctx, "Tri Indices"), tri_materials_(ctx, "Tri Materials"),
-      mesh_instances_(ctx, "Mesh Instances"), vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"),
-      materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
+      nodes_(ctx, "Nodes"), leaf_prims_(ctx, "Leaf Prims"), tris_(ctx, "Tris"), tri_indices_(ctx, "Tri Indices"),
+      tri_materials_(ctx, "Tri Materials"), mesh_instances_(ctx, "Mesh Instances"), vertices_(ctx, "Vertices"),
+      vtx_indices_(ctx, "Vtx Indices"), materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"),
+      bindless_tex_data_{ctx},
       tex_atlases_{{ctx, "Atlas RGBA", eFormat::RGBA8, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, "Atlas RGB", eFormat::RGB8, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, "Atlas RG", eFormat::RG8, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
@@ -247,7 +251,7 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
                    {ctx, "Atlas BC4", eFormat::BC4, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, "Atlas BC5", eFormat::BC5, eFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), light_cwnodes_(ctx, "Light CWNodes"),
-      spatial_cache_entries_(ctx, "Spatial Cache Entries"),
+      light_leaf_prims_(ctx, "Light Leaf Prims"), spatial_cache_entries_(ctx, "Spatial Cache Entries"),
       spatial_cache_voxels_curr_(ctx, "Spatial Cache Voxels (1/2)"),
       spatial_cache_voxels_prev_(ctx, "Spatial Cache Voxels (2/2)") {
     SceneBase::log_ = ctx->log();
@@ -958,7 +962,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
     s.min_primitives_in_leaf = 8;
-    s.primitive_alignment = 2;
+    s.primitive_alignment = 8;
 
     fvec4 bbox_min{FLT_MAX}, bbox_max{-FLT_MAX};
 
@@ -1091,6 +1095,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     vtx_indices_.Set(vtx_indices_index.first, uint32_t(new_vtx_indices.size()), new_vtx_indices.data());
 
     std::pair<uint32_t, uint32_t> tris_index = {}, tri_indices_index = {}, nodes_index = {0xffffffff, 0xffffffff};
+    std::pair<uint32_t, uint32_t> leaf_prims_index = {0xffffffff, 0xffffffff};
     if (use_hwrt_) {
         tris_index = trimat_index;
         nodes_index = Build_HWRT_BLAS_nolock(vtx_indices_index.first, uint32_t(new_vtx_indices.size()));
@@ -1101,27 +1106,31 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
         assert(tri_indices_index.second == tris_index.second);
         assert(trimat_index.second == tris_index.second);
 
-        std::vector<bvh2_node_t> new_bvh2_nodes;
-        ConvertToBVH2(new_nodes, new_bvh2_nodes);
+        aligned_vector<cwbvh_node_t> new_cwnodes;
+        std::vector<uint32_t> temp_leaf_prims; // meta4 leaf payloads (leaf children's prim refs)
+        new_cwnodes.reserve(new_nodes.size() / 8);
+        FlattenCompactBVH_r(new_nodes, 0, new_cwnodes, temp_leaf_prims);
 
-        nodes_index = nodes_.Allocate(nullptr, uint32_t(new_bvh2_nodes.size()));
+        // the payloads are mesh-local prim refs - offset them like the leaf child refs below
+        for (uint32_t &lp : temp_leaf_prims) {
+            lp = (lp & PRIM_INDEX_BITS) + tri_indices_index.first;
+        }
+
+        nodes_index = nodes_.Allocate(nullptr, uint32_t(new_cwnodes.size()));
+        leaf_prims_index = leaf_prims_.Allocate(temp_leaf_prims.data(), uint32_t(temp_leaf_prims.size()));
 
         // offset nodes and primitives
-        for (bvh2_node_t &n : new_bvh2_nodes) {
-            if ((n.left_child & BVH2_PRIM_COUNT_BITS) == 0) {
-                assert(n.left_child < new_bvh2_nodes.size());
-                n.left_child += nodes_index.first;
-            } else {
-                n.left_child += tri_indices_index.first;
+        for (uint32_t i = 0; i < uint32_t(new_cwnodes.size()); ++i) {
+            cwbvh_node_t &n = new_cwnodes[i];
+            if (cwbvh_internal_mask(n) != 0) {
+                // child_base is packed into 24 bits (see cwbvh_node_t)
+                assert(cwbvh_child_base(n) + nodes_index.first < (1u << 24));
+                n.child_base_imask += nodes_index.first;
             }
-            if ((n.right_child & BVH2_PRIM_COUNT_BITS) == 0) {
-                assert(n.right_child < new_bvh2_nodes.size());
-                n.right_child += nodes_index.first;
-            } else {
-                n.right_child += tri_indices_index.first;
-            }
+            // meta4 leaf drain: prim_base is the base of the node's leaf payload block
+            n.prim_base += leaf_prims_index.first;
         }
-        nodes_.Set(nodes_index.first, uint32_t(new_bvh2_nodes.size()), new_bvh2_nodes.data());
+        nodes_.Set(nodes_index.first, uint32_t(new_cwnodes.size()), new_cwnodes.data());
     }
 
     // add mesh
@@ -1140,6 +1149,9 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     m.vert_data_index = vtx_index.first;
     m.vert_data_block = vtx_index.second;
 
+    m.leaf_prims_index = leaf_prims_index.first;
+    m.leaf_prims_block = leaf_prims_index.second;
+
     const std::pair<uint32_t, uint32_t> mesh_index = meshes_.push(m);
     return MeshHandle{mesh_index.first, mesh_index.second};
 }
@@ -1150,6 +1162,7 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
     const uint32_t node_index = m.node_index, node_block = m.node_block;
     const uint32_t tris_block = m.tris_block;
     const uint32_t vert_block = m.vert_block, vert_data_block = m.vert_data_block;
+    const uint32_t leaf_prims_block = m.leaf_prims_block;
 
     meshes_.Erase(i._block);
 
@@ -1174,6 +1187,9 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
         tris_.Erase(tris_block);
         tri_indices_.Erase(tris_block);
         nodes_.Erase(node_block);
+        if (leaf_prims_block != 0xffffffff) {
+            leaf_prims_.Erase(leaf_prims_block);
+        }
     }
     tri_materials_.Erase(tris_block);
     vertices_.Erase(vert_data_block);
@@ -1603,6 +1619,10 @@ inline void Ray::NS::Scene::Finalize(const std::function<void(int, int, Parallel
 inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
     if (tlas_root_ != 0xffffffff) {
         nodes_.Erase(tlas_block_);
+        if (tlas_leaf_prims_block_ != 0xffffffff) {
+            leaf_prims_.Erase(tlas_leaf_prims_block_);
+            tlas_leaf_prims_block_ = 0xffffffff;
+        }
         tlas_root_ = tlas_block_ = 0xffffffff;
     }
 
@@ -1631,27 +1651,36 @@ inline void Ray::NS::Scene::Rebuild_SWRT_TLAS_nolock() {
     std::vector<uint32_t> mi_indices;
     PreprocessPrims_SAH(primitives, {}, s, bvh_nodes, mi_indices);
 
-    std::vector<bvh2_node_t> bvh2_nodes;
-    ConvertToBVH2(bvh_nodes, bvh2_nodes);
+    aligned_vector<cwbvh_node_t> cwnodes;
+    std::vector<uint32_t> temp_leaf_prims; // meta4 leaf payloads (mesh instance references)
+    cwnodes.reserve(bvh_nodes.size() / 8);
+    FlattenCompactBVH_r(bvh_nodes, 0, cwnodes, temp_leaf_prims);
 
-    const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, uint32_t(bvh2_nodes.size()));
-    // offset nodes
-    for (bvh2_node_t &n : bvh2_nodes) {
-        if ((n.left_child & BVH2_PRIM_COUNT_BITS) == 0) {
-            n.left_child += nodes_index.first;
-        } else {
-            n.left_child = (n.left_child & BVH2_PRIM_COUNT_BITS) | mi_indices[n.left_child & BVH2_PRIM_INDEX_BITS];
+    const std::pair<uint32_t, uint32_t> nodes_index = nodes_.Allocate(nullptr, uint32_t(cwnodes.size()));
+    const std::pair<uint32_t, uint32_t> leaf_prims_index =
+        leaf_prims_.Allocate(nullptr, uint32_t(temp_leaf_prims.size()));
+    // offset nodes and primitives
+    for (uint32_t i = 0; i < uint32_t(cwnodes.size()); ++i) {
+        cwbvh_node_t &n = cwnodes[i];
+        if (cwbvh_internal_mask(n) != 0) {
+            // child_base is packed into 24 bits (see cwbvh_node_t)
+            assert(cwbvh_child_base(n) + nodes_index.first < (1u << 24));
+            n.child_base_imask += nodes_index.first;
         }
-        if ((n.right_child & BVH2_PRIM_COUNT_BITS) == 0) {
-            n.right_child += nodes_index.first;
-        } else {
-            n.right_child = (n.right_child & BVH2_PRIM_COUNT_BITS) | mi_indices[n.right_child & BVH2_PRIM_INDEX_BITS];
-        }
+        // meta4 leaf drain: prim_base is the base of the node's leaf payload block
+        n.prim_base += leaf_prims_index.first;
     }
-    nodes_.Set(nodes_index.first, uint32_t(bvh2_nodes.size()), bvh2_nodes.data());
+    nodes_.Set(nodes_index.first, uint32_t(cwnodes.size()), cwnodes.data());
+
+    // meta4 leaf payloads: leaf rank -> mesh instance index
+    for (uint32_t &lp : temp_leaf_prims) {
+        lp = mi_indices[lp & PRIM_INDEX_BITS];
+    }
+    leaf_prims_.Set(leaf_prims_index.first, uint32_t(temp_leaf_prims.size()), temp_leaf_prims.data());
 
     tlas_root_ = nodes_index.first;
     tlas_block_ = nodes_index.second;
+    tlas_leaf_prims_block_ = leaf_prims_index.second;
 
     // store root node
     tlas_root_node_ = bvh_nodes[0];
@@ -2389,6 +2418,7 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     li_indices_.Append(new_li_indices.data(), new_li_indices.size());
 
     light_cwnodes_.Clear();
+    light_leaf_prims_.Clear();
 
     if (primitives.empty()) {
         return;
@@ -2508,56 +2538,13 @@ inline void Ray::NS::Scene::RebuildLightTree_nolock() {
     }
 
     aligned_vector<light_cwbvh_node_t> temp_light_cwnodes;
-    [[maybe_unused]] const uint32_t root_node = FlattenLightBVH_r(temp_lnodes, 0, temp_light_cwnodes);
+    std::vector<uint32_t> temp_leaf_lights; // meta4 leaf payloads (light references)
+    [[maybe_unused]] const uint32_t root_node =
+        FlattenLightBVH_r(temp_lnodes, 0, temp_light_cwnodes, temp_leaf_lights, -1, 0, true /* pow2_quant */);
     assert(root_node == 0);
 
-    // Collapse leaf level (all leafs have only 1 light)
-    if ((temp_light_cwnodes[0].child[0] & LEAF_NODE_BIT) != 0) {
-        for (int j = 1; j < 8; ++j) {
-            temp_light_cwnodes[0].child[j] = 0x7fffffff;
-        }
-    }
-    std::vector<bool> should_remove(temp_light_cwnodes.size(), false);
-    for (uint32_t i = 0; i < temp_light_cwnodes.size(); ++i) {
-        if ((temp_light_cwnodes[i].child[0] & LEAF_NODE_BIT) == 0) {
-            for (int j = 0; j < 8; ++j) {
-                if (temp_light_cwnodes[i].child[j] == 0x7fffffff) {
-                    continue;
-                }
-                if ((temp_light_cwnodes[temp_light_cwnodes[i].child[j]].child[0] & LEAF_NODE_BIT) != 0) {
-                    assert(temp_light_cwnodes[temp_light_cwnodes[i].child[j]].child[1] == 1);
-                    should_remove[temp_light_cwnodes[i].child[j]] = true;
-                    temp_light_cwnodes[i].child[j] = temp_light_cwnodes[temp_light_cwnodes[i].child[j]].child[0];
-                }
-            }
-        }
-    }
-    std::vector<uint32_t> compacted_indices;
-    compacted_indices.reserve(should_remove.size());
-    uint32_t compacted_count = 0;
-    for (const bool b : should_remove) {
-        compacted_indices.push_back(compacted_count);
-        if (!b) {
-            ++compacted_count;
-        }
-    }
-    for (int i = 0; i < int(temp_light_cwnodes.size()); ++i) {
-        if (should_remove[i]) {
-            continue;
-        }
-        light_cwbvh_node_t &n = temp_light_cwnodes[i];
-        for (int j = 0; j < 8; ++j) {
-            if (n.child[j] == 0x7fffffff) {
-                continue;
-            }
-            if ((n.child[j] & LEAF_NODE_BIT) == 0) {
-                n.child[j] = compacted_indices[n.child[j] & PRIM_INDEX_BITS];
-            }
-        }
-        temp_light_cwnodes[compacted_indices[i]] = n;
-    }
-    temp_light_cwnodes.resize(compacted_count);
     light_cwnodes_.Append(temp_light_cwnodes.data(), temp_light_cwnodes.size());
+    light_leaf_prims_.Append(temp_leaf_lights.data(), temp_leaf_lights.size());
 }
 
 inline void Ray::NS::Scene::SetEnvironment(const environment_desc_t &env) {

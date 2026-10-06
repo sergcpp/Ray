@@ -328,6 +328,22 @@ template <> class fixed_size_simd<int, 16> {
 
     force_inline explicit operator fixed_size_simd<float, 16>() const { return _mm512_cvtepi32_ps(vec_); }
 
+    // Load 8 bytes and expand each into a separate 32-bit lane, upper lanes are zeroed
+    static force_inline fixed_size_simd<int, 16> vectorcall load_u8x8(const uint8_t *p) {
+        fixed_size_simd<int, 16> ret;
+        // NOTE: _mm512_castsi256_si512() leaves the upper lanes undefined - go through the
+        // 512-bit widening convert of a zero-extended 64-bit load instead
+        ret.vec_ = _mm512_cvtepu8_epi32(_mm_loadl_epi64((const __m128i *)p));
+        return ret;
+    }
+
+    // Load 8 16-bit values and expand each into a separate 32-bit lane, upper lanes are zeroed
+    static force_inline fixed_size_simd<int, 16> vectorcall load_u16x8(const uint16_t *p) {
+        fixed_size_simd<int, 16> ret;
+        ret.vec_ = _mm512_cvtepu16_epi32(_mm256_zextsi128_si256(_mm_loadu_si128((const __m128i *)p)));
+        return ret;
+    }
+
     force_inline explicit operator fixed_size_simd<unsigned, 16>() const;
 
     force_inline int hsum() const { return _mm512_reduce_add_epi32(vec_); }
@@ -754,7 +770,7 @@ template <> class fixed_size_simd<unsigned, 16> {
     }
 
     friend force_inline fixed_size_simd<unsigned, 16> vectorcall srli(const fixed_size_simd<unsigned, 16> v1,
-                                                                       const unsigned v2) {
+                                                                      const unsigned v2) {
         return _mm512_srli_epi32(v1.vec_, v2);
     }
 

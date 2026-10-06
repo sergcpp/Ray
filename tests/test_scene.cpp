@@ -224,7 +224,8 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         mat_desc.alpha.texture = scene.AddTexture(tex_desc);
     }
 
-    if (mat_desc.emission.color.texture != Ray::InvalidTextureHandle && textures[mat_desc.emission.color.texture._index]) {
+    if (mat_desc.emission.color.texture != Ray::InvalidTextureHandle &&
+        textures[mat_desc.emission.color.texture._index]) {
         int img_w = 0, img_h = 0, mips = 1;
         Ray::eTextureFormat format = Ray::eTextureFormat::RGB888;
         Ray::eTextureConvention convention = Ray::eTextureConvention::OGL;
@@ -808,7 +809,7 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         scene.AddMeshInstance(subsurf_bar_mesh, identity);
         scene.AddMeshInstance(text_mesh, identity);
     }
-    scene.AddMeshInstance(env_mesh, identity);
+    const MeshInstanceHandle env_instance = scene.AddMeshInstance(env_mesh, identity);
     if (test_scene == eTestScene::Standard_MeshLights || test_scene == eTestScene::Refraction_Plane) {
         //
         // Use mesh lights
@@ -1059,7 +1060,16 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         scene.RemoveMesh(mesh);
     }
 
+    // Exercise instance removal: drop the env box instance and re-add an identical one,
+    // so the rendered result must not change (covers RemoveMeshInstance_nolock and the
+    // mesh instance indirection used by the TLAS build).
+    scene.RemoveMeshInstance(env_instance);
+    scene.AddMeshInstance(env_mesh, identity);
+
     using namespace std::placeholders;
+    scene.Finalize(std::bind(&ThreadPool::ParallelFor<ParallelForFunction>, &threads, _1, _2, _3));
+    // Second Finalize exercises the TLAS rebuild path: the old BVH node and leaf_prims
+    // blocks are freed and re-allocated, prim_base/child fixups must stay consistent.
     scene.Finalize(std::bind(&ThreadPool::ParallelFor<ParallelForFunction>, &threads, _1, _2, _3));
 }
 

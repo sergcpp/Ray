@@ -224,9 +224,10 @@ bool Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3]
                                         const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
 bool Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3], const uvec<S> &ray_flags,
-                                        const ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
-                                        const mesh_instance_t *mesh_instances, const mesh_t *meshes,
-                                        const mtri_accel_t *mtris, const uint32_t *tri_indices, hit_data_t<S> &inter);
+                                        const ivec<S> &ray_mask, const cwbvh_node_t *nodes, uint32_t node_index,
+                                        const uint32_t *leaf_prims, const mesh_instance_t *mesh_instances,
+                                        const mesh_t *meshes, const mtri_accel_t *mtris, const uint32_t *tri_indices,
+                                        hit_data_t<S> &inter);
 template <int S>
 ivec<S> Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3], int ray_type, const ivec<S> &ray_mask,
                                        const bvh_node_t *nodes, uint32_t node_index,
@@ -235,7 +236,7 @@ ivec<S> Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3],
                                        const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
 ivec<S> Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3], int ray_type, const ivec<S> &ray_mask,
-                                       const wbvh_node_t *nodes, uint32_t node_index,
+                                       const cwbvh_node_t *nodes, uint32_t node_index, const uint32_t *leaf_prims,
                                        const mesh_instance_t *mesh_instances, const mesh_t *meshes,
                                        const mtri_accel_t *mtris, const tri_mat_data_t *materials,
                                        const uint32_t *tri_indices, hit_data_t<S> &inter);
@@ -245,7 +246,7 @@ bool Traverse_BLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3]
                                         const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
                                         const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 template <int S>
-bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
+bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const cwbvh_node_t *nodes,
                                         uint32_t node_index, const mtri_accel_t *mtris, const uint32_t *tri_indices,
                                         int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v);
 // returns 0 - no hit, 1 - hit, 2 - solid hit (no need to check for transparency)
@@ -255,7 +256,7 @@ ivec<S> Traverse_BLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3],
                                        const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
                                        hit_data_t<S> &inter);
 template <int S>
-int Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes, uint32_t node_index,
+int Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const cwbvh_node_t *nodes, uint32_t node_index,
                                    const mtri_accel_t *mtris, const tri_mat_data_t *materials,
                                    const uint32_t *tri_indices, int &inter_prim_index, float &inter_t, float &inter_u,
                                    float &inter_v);
@@ -393,12 +394,14 @@ void SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fvec<S> B[3
 // Account for visible lights contribution
 template <int S>
 void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
-                         hit_data_t<S> &inout_inter);
+                         Span<const uint32_t> leaf_lights, hit_data_t<S> &inout_inter);
 template <int S>
-fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes);
+fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
+                            Span<const uint32_t> leaf_lights);
 template <int S>
 fvec<S> EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &mask, const ivec<S> &tri_index,
-                           Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes);
+                           Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
+                           Span<const uint32_t> leaf_lights);
 
 template <int S>
 void TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
@@ -498,11 +501,10 @@ ivec<S> Evaluate_PrincipledNode(const light_sample_t<S> &ls, const ray_data_t<S>
 template <int S>
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<S> &ray, const ivec<S> &mask,
                            const surface_t<S> &surf, const lobe_weights_t<S> &lobe_weights,
-                           const diff_params_t<S> &diff, const spec_params_t<S> &spec,
-                           const coat_params_t<S> &coat, const transmission_params_t<S> &trans,
-                           const fvec<S> &metallic, float transmission, const fvec<S> rand[2], fvec<S> mix_rand,
-                           const fvec<S> &mix_weight, const fvec<S> &regularize_alpha, ivec<S> &secondary_mask,
-                           ray_data_t<S> &new_ray);
+                           const diff_params_t<S> &diff, const spec_params_t<S> &spec, const coat_params_t<S> &coat,
+                           const transmission_params_t<S> &trans, const fvec<S> &metallic, float transmission,
+                           const fvec<S> rand[2], fvec<S> mix_rand, const fvec<S> &mix_weight,
+                           const fvec<S> &regularize_alpha, ivec<S> &secondary_mask, ray_data_t<S> &new_ray);
 
 // Shade
 template <int S>
@@ -1319,6 +1321,220 @@ force_inline uint32_t other_child(const bvh_node_t &node, uint32_t cur_child) {
 
 force_inline bool is_leaf_node(const bvh_node_t &node) { return (node.prim_index & LEAF_NODE_BIT) != 0; }
 force_inline bool is_leaf_node(const wbvh_node_t &node) { return (node.child[0] & LEAF_NODE_BIT) != 0; }
+
+template <int S> force_inline ivec<S> load_cwbvh_bytes(const uint8_t *p) {
+    if constexpr (S >= 8) {
+        return ivec<S>::load_u8x8(p);
+    } else {
+        return ivec<S>::load_u8x4(p);
+    }
+}
+
+template <int S> force_inline ivec<S> load_cwbvh_halfs(const uint16_t *p) {
+    if constexpr (S >= 8) {
+        return ivec<S>::load_u16x8(p);
+    } else {
+        return ivec<S>::load_u16x4(p);
+    }
+}
+
+// Reconstruct 2^e by placing e into the float exponent field (CWBVH paper trick)
+force_inline float pow2FromExp(int e) {
+    const int bits = (e + 127) << 23;
+    float f;
+    memcpy(&f, &bits, sizeof(f));
+    return f;
+}
+
+// Compressed traversal stack entry (CWBVH paper): entry = (child_base, pending internal hits in
+// visit order at bits 8..15 | the node's internal-child mask at bits 0..7)
+struct cwbvh_stack_entry_t {
+    uint32_t node_index;
+    uint32_t pending_mask;
+};
+
+// Compressed light stack entry (CWBVH paper, light-tree analogue of cwbvh_stack_entry_t):
+// child_base + pending internal children (visit-order mask at bits 8..15, the node's
+// internal-child mask at bits 0..7) resolve children without reloading the node
+struct light_cwbvh_stack_entry_t {
+    uint32_t child_base;
+    uint32_t masks_L;
+    uint8_t q[8];
+};
+
+// Encode an importance ratio (0, 1] into the q grid; saturates at 2^-15.94
+force_inline uint8_t light_factor_q(const float ratio) {
+    const float q = -16.0f * log2f(ratio);
+    const int qi = int(q + 0.5f);
+    return uint8_t(qi < 0 ? 0 : (qi > 255 ? 255 : qi));
+}
+
+force_inline float pow2_int(const int e) {
+    const int32_t bits = (e + 127) << 23;
+    float f;
+    memcpy(&f, &bits, 4);
+    return f;
+}
+
+// factor = 2^(-L/16): exponent bitcast + fraction LUT; saturate past the float exponent range
+force_inline float light_factor_decode(const uint32_t L) {
+    static const float frac[16] = {1.0f,      0.957603f, 0.917004f, 0.878459f, 0.841801f, 0.806934f,
+                                   0.773763f, 0.742217f, 0.712243f, 0.683772f, 0.656720f, 0.631027f,
+                                   0.606614f, 0.583414f, 0.561384f, 0.540482f};
+    const int e = int(L >> 4);
+    if (e >= 127) {
+        return 0.0f;
+    }
+    return pow2_int(-e) * frac[L & 15u];
+}
+
+// 1.0f / factor for the decoded domain (EvalTriLightFactor's return value)
+force_inline float light_factor_recip(const uint32_t L) {
+    static const float frac_inv[16] = {1.0f,      1.044274f, 1.090508f, 1.138362f, 1.187877f, 1.239120f,
+                                       1.292397f, 1.347793f, 1.405423f, 1.465382f, 1.527752f, 1.592627f,
+                                       1.660101f, 1.730295f, 1.803312f, 1.879302f};
+    const int e = int(L >> 4);
+    if (e >= 128) {
+        return FLT_MAX;
+    }
+    return pow2_int(e) * frac_inv[L & 15u];
+}
+
+template <int S>
+force_inline long cwbvh_hit_mask(const cwbvh_node_t &n, const float inv_d[3], const float neg_inv_do[3], float t) {
+    constexpr int G = S < 8 ? S : 8;
+    constexpr int NG = 8 / G;
+
+    const fvec<G> base[3] = {fvec<G>{n.bbox_min[0]}, fvec<G>{n.bbox_min[1]}, fvec<G>{n.bbox_min[2]}};
+    // CWBVH-style box test: fold the node's power-of-two extent (ch_exp) into the inverse ray
+    // direction so that each child plane only needs one FMA from its quantized byte value.
+    const fvec<G> adj_inv[3] = {fvec<G>{pow2FromExp(n.ch_exp[0]) * inv_d[0]},
+                                fvec<G>{pow2FromExp(n.ch_exp[1]) * inv_d[1]},
+                                fvec<G>{pow2FromExp(n.ch_exp[2]) * inv_d[2]}};
+    const fvec<G> orig_term[3] = {base[0] * inv_d[0] - neg_inv_do[0], base[1] * inv_d[1] - neg_inv_do[1],
+                                  base[2] * inv_d[2] - neg_inv_do[2]};
+
+    long result = 0;
+    for (int g = 0; g < NG; ++g) {
+        const uint8_t *off_min[3] = {n.ch_bbox_min[0] + g * G, n.ch_bbox_min[1] + g * G, n.ch_bbox_min[2] + g * G};
+        const uint8_t *off_max[3] = {n.ch_bbox_max[0] + g * G, n.ch_bbox_max[1] + g * G, n.ch_bbox_max[2] + g * G};
+
+        const ivec<G> qmin[3] = {load_cwbvh_bytes<G>(off_min[0]), load_cwbvh_bytes<G>(off_min[1]),
+                                 load_cwbvh_bytes<G>(off_min[2])};
+        const ivec<G> qmax[3] = {load_cwbvh_bytes<G>(off_max[0]), load_cwbvh_bytes<G>(off_max[1]),
+                                 load_cwbvh_bytes<G>(off_max[2])};
+
+        fvec<G> low, high, tmin, tmax;
+
+        low = fvec<G>(qmin[0]) * adj_inv[0] + orig_term[0];
+        high = fvec<G>(qmax[0]) * adj_inv[0] + orig_term[0];
+        tmin = min(low, high);
+        tmax = max(low, high);
+
+        low = fvec<G>(qmin[1]) * adj_inv[1] + orig_term[1];
+        high = fvec<G>(qmax[1]) * adj_inv[1] + orig_term[1];
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
+
+        low = fvec<G>(qmin[2]) * adj_inv[2] + orig_term[2];
+        high = fvec<G>(qmax[2]) * adj_inv[2] + orig_term[2];
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
+        tmax *= 1.00000024f;
+
+        // padding slots are filtered via meta4 (a zero meta byte marks an empty slot); unlike
+        // the light tree, scene children always have finite boxes, so no degenerate-box
+        // handling is needed here
+        const ivec<G> meta = load_cwbvh_bytes<G>(reinterpret_cast<const uint8_t *>(n.meta4) + g * G);
+        const ivec<G> valid = meta != ivec<G>{0};
+
+        const fvec<G> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+        const ivec<G> mask = reinterpret_cast<const ivec<G> &>(fmask) & valid;
+
+        result |= mask.movemask() << (g * G);
+    }
+    return result;
+}
+
+template <int S>
+force_inline long light_cwbvh_hit_mask(const light_cwbvh_node_t &n, const float inv_d[3], const float neg_inv_do[3],
+                                       float t, uint32_t type_mask, float bbox_min[3][8], float bbox_max[3][8]) {
+    constexpr int G = S < 8 ? S : 8;
+    constexpr int NG = 8 / G;
+
+    const fvec<G> base[3] = {fvec<G>{n.bbox_min[0]}, fvec<G>{n.bbox_min[1]}, fvec<G>{n.bbox_min[2]}};
+    // CWBVH-style box test: fold the node's power-of-two extent (ch_exp) into the inverse ray
+    // direction (light trees are built with pow2 quantization, like the scene trees)
+    const fvec<G> step[3] = {fvec<G>{pow2FromExp(n.ch_exp[0])}, fvec<G>{pow2FromExp(n.ch_exp[1])},
+                             fvec<G>{pow2FromExp(n.ch_exp[2])}};
+    const fvec<G> adj_inv[3] = {step[0] * inv_d[0], step[1] * inv_d[1], step[2] * inv_d[2]};
+    const fvec<G> orig_term[3] = {base[0] * inv_d[0] - neg_inv_do[0], base[1] * inv_d[1] - neg_inv_do[1],
+                                  base[2] * inv_d[2] - neg_inv_do[2]};
+
+    long result = 0;
+    fvec<G> qminv[NG][3], qmaxv[NG][3];
+    ivec<G> reals[NG];
+    for (int g = 0; g < NG; ++g) {
+        const uint8_t *off_min[3] = {n.ch_bbox_min[0] + g * G, n.ch_bbox_min[1] + g * G, n.ch_bbox_min[2] + g * G};
+        const uint8_t *off_max[3] = {n.ch_bbox_max[0] + g * G, n.ch_bbox_max[1] + g * G, n.ch_bbox_max[2] + g * G};
+
+        const ivec<G> qmin[3] = {load_cwbvh_bytes<G>(off_min[0]), load_cwbvh_bytes<G>(off_min[1]),
+                                 load_cwbvh_bytes<G>(off_min[2])};
+        const ivec<G> qmax[3] = {load_cwbvh_bytes<G>(off_max[0]), load_cwbvh_bytes<G>(off_max[1]),
+                                 load_cwbvh_bytes<G>(off_max[2])};
+
+        // invalid slots (bitmask/type filter miss) are masked out; degenerate (infinite-box) slots
+        // keep infinite boxes so that directional / environment lights still hit
+        const ivec<G> bm = load_cwbvh_bytes<G>(n.ch_bitmask + g * G) & ivec<G>{int(type_mask)};
+        const ivec<G> valid = bm != ivec<G>{0};
+        const ivec<G> real = ~((qmin[0] == ivec<G>{255}) & (qmax[0] == ivec<G>{0}));
+
+        fvec<G> low, high, tmin, tmax;
+
+        low = fvec<G>(qmin[0]) * adj_inv[0] + orig_term[0];
+        high = fvec<G>(qmax[0]) * adj_inv[0] + orig_term[0];
+        tmin = min(low, high);
+        tmax = max(low, high);
+
+        low = fvec<G>(qmin[1]) * adj_inv[1] + orig_term[1];
+        high = fvec<G>(qmax[1]) * adj_inv[1] + orig_term[1];
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
+
+        low = fvec<G>(qmin[2]) * adj_inv[2] + orig_term[2];
+        high = fvec<G>(qmax[2]) * adj_inv[2] + orig_term[2];
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
+        tmax *= 1.00000024f;
+
+        tmin = select(real, tmin, fvec<G>{-MAX_DIST});
+        tmax = select(real, tmax, fvec<G>{MAX_DIST});
+
+        const fvec<G> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+        const ivec<G> mask = reinterpret_cast<const ivec<G> &>(fmask) & valid;
+
+        for (int i = 0; i < 3; ++i) {
+            qminv[g][i] = fvec<G>(qmin[i]);
+            qmaxv[g][i] = fvec<G>(qmax[i]);
+        }
+        reals[g] = real;
+        result |= mask.movemask() << (g * G);
+    }
+
+    if (result) {
+        for (int g = 0; g < NG; ++g) {
+            for (int i = 0; i < 3; ++i) {
+                const fvec<G> mn = select(reals[g], base[i] + qminv[g][i] * step[i], fvec<G>{-MAX_DIST});
+                const fvec<G> mx = select(reals[g], base[i] + qmaxv[g][i] * step[i], fvec<G>{MAX_DIST});
+
+                mn.store_to(&bbox_min[i][g * G], vector_aligned);
+                mx.store_to(&bbox_max[i][g * G], vector_aligned);
+            }
+        }
+    }
+
+    return result;
+}
 
 template <int S, int StackSize> struct TraversalStateStack_Multi {
     struct {
@@ -2347,9 +2563,9 @@ force_inline void fresnel_f82(const fvec<S> &cosi, const fvec<S> f0[3], const fv
 template <int S> fvec<S> oren_nayar_G(const fvec<S> &cos_theta) {
     const fvec<S> sin_theta = safe_sqrt(1.0f - cos_theta * cos_theta);
     const fvec<S> theta = portable_acosf(clamp(cos_theta, -1.0f, 1.0f));
-    const fvec<S> big = sin_theta * (theta - 2.0f / 3.0f - sin_theta * cos_theta) +
-                        (2.0f / 3.0f) * safe_div_pos(sin_theta, cos_theta) *
-                            (1.0f - (sin_theta * sin_theta) * sin_theta);
+    const fvec<S> big =
+        sin_theta * (theta - 2.0f / 3.0f - sin_theta * cos_theta) +
+        (2.0f / 3.0f) * safe_div_pos(sin_theta, cos_theta) * (1.0f - (sin_theta * sin_theta) * sin_theta);
     const fvec<S> small = fvec<S>{0.5f * PI - 2.0f / 3.0f} - cos_theta;
     return select(cos_theta < 1e-6f, small, big);
 }
@@ -2436,8 +2652,7 @@ force_inline fvec<S> trilerp_gather(const float *base, const ivec<S> off[8], con
     return c0 + tz * (c1 - c0);
 }
 
-template <int S>
-fvec<S> ggx_E_glass_lookup(const fvec<S> &ndotv, const fvec<S> &rough, const fvec<S> &ior_in) {
+template <int S> fvec<S> ggx_E_glass_lookup(const fvec<S> &ndotv, const fvec<S> &rough, const fvec<S> &ior_in) {
     const int res = 16;
     fvec<S> ior = ior_in;
     where(ior_in < 1.0f, ior) = safe_div_pos(fvec<S>{1.0f}, ior_in);
@@ -2616,8 +2831,7 @@ fvec<S> GGX_VNDF_Reflection_Bounded_PDF(const fvec<S> &D, const fvec<S> view_dir
 }
 
 // Smith shadowing function. Takes already-squared alpha (mirrors Ref::G1_lambda)
-template <int S>
-force_inline fvec<S> G1_lambda(const fvec<S> Ve[3], const fvec<S> &alpha2_x, const fvec<S> &alpha2_y) {
+template <int S> force_inline fvec<S> G1_lambda(const fvec<S> Ve[3], const fvec<S> &alpha2_x, const fvec<S> &alpha2_y) {
     return (-1.0f +
             safe_sqrt(1.0f + safe_div_pos(alpha2_x * Ve[0] * Ve[0] + alpha2_y * Ve[1] * Ve[1], Ve[2] * Ve[2]))) /
            2.0f;
@@ -2729,8 +2943,8 @@ template <int S> fvec<S> fresnel_dielectric_cos(const fvec<S> &cosi, const fvec<
 
 template <int S>
 void get_lobe_weights(const fvec<S> &base_color_lum, const fvec<S> &sheen_lum, const fvec<S> &spec_color_lum,
-                      const fvec<S> &specular, const fvec<S> &metallic, const float transmission,
-                      const float clearcoat, lobe_weights_t<S> &out_weights) {
+                      const fvec<S> &specular, const fvec<S> &metallic, const float transmission, const float clearcoat,
+                      lobe_weights_t<S> &out_weights) {
     // taken from Cycles
     out_weights.diffuse = base_color_lum * (1.0f - metallic) * (1.0f - transmission);
     const fvec<S> final_transmission = transmission * (1.0f - metallic);
@@ -2744,8 +2958,8 @@ void get_lobe_weights(const fvec<S> &base_color_lum, const fvec<S> &sheen_lum, c
     // sheen sits on top of the stack (like in Cycles), not attenuated by metallic/transmission
     out_weights.sheen = sheen_lum;
 
-    const fvec<S> total_weight = out_weights.diffuse + out_weights.sheen + out_weights.specular +
-                                 out_weights.clearcoat + out_weights.refraction;
+    const fvec<S> total_weight =
+        out_weights.diffuse + out_weights.sheen + out_weights.specular + out_weights.clearcoat + out_weights.refraction;
 
     where(total_weight != 0.0f, out_weights.diffuse) = safe_div_pos(out_weights.diffuse, total_weight);
     where(total_weight != 0.0f, out_weights.sheen) = safe_div_pos(out_weights.sheen, total_weight);
@@ -2915,15 +3129,63 @@ template <int S> force_inline std::array<fvec<S>, 2> decode_cosines(const uvec<S
     return ret;
 }
 
+// 8-bit packed variants (compact light tree: axis is an oct pair, cos_omega_ne a cos pair)
+force_inline fvec4 decode_oct_dir8(const uint16_t oct) {
+    fvec4 ret = 0.0f;
+    ret.set<0>(-1.0f + 2.0f * float((oct >> 8) & 0xff) / 255.0f);
+    ret.set<1>(-1.0f + 2.0f * float(oct & 0xff) / 255.0f);
+    ret.set<2>(1.0f - fabsf(ret.get<0>()) - fabsf(ret.get<1>()));
+    if (ret.get<2>() < 0.0f) {
+        const float temp = ret.get<0>();
+        ret.set<0>((1.0f - fabsf(ret.get<1>())) * copysignf(1.0f, temp));
+        ret.set<1>((1.0f - fabsf(temp)) * copysignf(1.0f, ret.get<1>()));
+    }
+    return normalize(ret);
+}
+
+template <int S> force_inline std::array<fvec<S>, 3> decode_oct_dir8(const ivec<S> &oct) {
+    const ivec<S> x = (oct >> 8) & 0xff;
+    const ivec<S> y = oct & 0xff;
+    std::array<fvec<S>, 3> out_dir;
+    out_dir[0] = -1.0f + 2.0f * fvec<S>(x) / 255.0f;
+    out_dir[1] = -1.0f + 2.0f * fvec<S>(y) / 255.0f;
+    out_dir[2] = 1.0f - abs(out_dir[0]) - abs(out_dir[1]);
+    const fvec<S> temp = out_dir[0];
+    where(out_dir[2] < 0.0f, out_dir[0]) = (1.0f - abs(out_dir[1])) * copysign(1.0f, temp);
+    where(out_dir[2] < 0.0f, out_dir[1]) = (1.0f - abs(temp)) * copysign(1.0f, out_dir[1]);
+    normalize(out_dir.data());
+    return out_dir;
+}
+
+force_inline fvec2 decode_cosines8(const uint16_t val) {
+    const uvec2 ab = uvec2((val >> 8) & 0xff, val & 0xff);
+    return 2.0f * (fvec2(ab) / 254.0f) - 1.0f;
+}
+
+template <int S> force_inline std::array<fvec<S>, 2> decode_cosines8(const ivec<S> &val) {
+    const ivec<S> a = (val >> 8) & 0xff;
+    const ivec<S> b = val & 0xff;
+    std::array<fvec<S>, 2> ret;
+    ret[0] = 2.0f * (fvec<S>(a) / 254.0f) - 1.0f;
+    ret[1] = 2.0f * (fvec<S>(b) / 254.0f) - 1.0f;
+    return ret;
+}
+
+// Child flux of the compact light tree: 8-bit fraction of the parent's flux, cube-coded
+template <int S> force_inline fvec<S> decode_flux(const uint8_t *p) {
+    const fvec<S> v = fvec<S>(load_cwbvh_bytes<S>(p)) * (1.0f / 255.0f);
+    return v * v * v;
+}
+
 template <int S>
 void calc_lnode_importance(const light_cwbvh_node_t &n, const float bbox_min[3][8], const float bbox_max[3][8],
                            const float P[3], float importance[8]) {
     for (int i = 0; i < 8; i += S) {
-        fvec<S> imp = fvec<S>{&n.flux[i]};
+        fvec<S> imp = decode_flux<S>(&n.flux[i]);
 
         const ivec<S> mask = simd_cast(fvec<S>{&bbox_min[0][i], vector_aligned} > -MAX_DIST);
         if (mask.not_all_zeros()) {
-            const std::array<fvec<S>, 3> axis = decode_oct_dir(uvec<S>{&n.axis[i]});
+            const std::array<fvec<S>, 3> axis = decode_oct_dir8<S>(load_cwbvh_halfs<S>(&n.axis[i]));
             const fvec<S> ext[3] = {fvec<S>{&bbox_max[0][i], vector_aligned} - fvec<S>{&bbox_min[0][i], vector_aligned},
                                     fvec<S>{&bbox_max[1][i], vector_aligned} - fvec<S>{&bbox_min[1][i], vector_aligned},
                                     fvec<S>{&bbox_max[2][i], vector_aligned} -
@@ -2948,7 +3210,7 @@ void calc_lnode_importance(const light_cwbvh_node_t &n, const float bbox_min[3][
             where(dist2 < extent * extent, cos_omega_b) = -1.0f;
             const fvec<S> sin_omega_b = sqrt(1.0f - cos_omega_b * cos_omega_b);
 
-            const std::array<fvec<S>, 2> cos_omega_ne = decode_cosines(uvec<S>{&n.cos_omega_ne[i]});
+            const std::array<fvec<S>, 2> cos_omega_ne = decode_cosines8<S>(load_cwbvh_halfs<S>(&n.cos_omega_ne[i]));
             const fvec<S> sin_omega_n = sqrt(1.0f - cos_omega_ne[0] * cos_omega_ne[0]);
 
             const fvec<S> cos_omega_x = cos_sub_clamped(sin_omega_w, cos_omega_w, sin_omega_n, cos_omega_ne[0]);
@@ -2963,29 +3225,29 @@ void calc_lnode_importance(const light_cwbvh_node_t &n, const float bbox_min[3][
 }
 
 template <int S> void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec<S> P[3], fvec<S> importance[8]) {
-    // Unpack bounds
-    const float decode_ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f, (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
-                                 (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
+    // Unpack bounds (pow2 step, same encoding as the box test)
+    const float decode_step[3] = {pow2FromExp(n.ch_exp[0]), pow2FromExp(n.ch_exp[1]), pow2FromExp(n.ch_exp[2])};
     alignas(32) float bbox_min[3][8], bbox_max[3][8];
     for (int i = 0; i < 8; ++i) {
         bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
         bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
         if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
-            bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * decode_ext[0];
-            bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * decode_ext[1];
-            bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * decode_ext[2];
+            bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * decode_step[0];
+            bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * decode_step[1];
+            bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * decode_step[2];
 
-            bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * decode_ext[0];
-            bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * decode_ext[1];
-            bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * decode_ext[2];
+            bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * decode_step[0];
+            bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * decode_step[1];
+            bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * decode_step[2];
         }
     }
 
     for (int i = 0; i < 8; ++i) {
-        fvec<S> imp = n.flux[i];
+        const fvec<S> fv = float(n.flux[i]) * (1.0f / 255.0f);
+        fvec<S> imp = fv * fv * fv;
 
         if (bbox_min[0][i] > -MAX_DIST) {
-            const fvec4 axis = decode_oct_dir(n.axis[i]);
+            const fvec4 axis = decode_oct_dir8(n.axis[i]);
             const float ext[3] = {bbox_max[0][i] - bbox_min[0][i], bbox_max[1][i] - bbox_min[1][i],
                                   bbox_max[2][i] - bbox_min[2][i]};
             const float extent = 0.5f * sqrtf(ext[0] * ext[0] + ext[1] * ext[1] + ext[2] * ext[2]);
@@ -3006,7 +3268,7 @@ template <int S> void calc_lnode_importance(const light_cwbvh_node_t &n, const f
             where(dist2 < extent * extent, cos_omega_b) = -1.0f;
             const fvec<S> sin_omega_b = sqrt(1.0f - cos_omega_b * cos_omega_b);
 
-            const fvec2 cos_omega_ne = decode_cosines(n.cos_omega_ne[i]);
+            const fvec2 cos_omega_ne = decode_cosines8(n.cos_omega_ne[i]);
             const float sin_omega_n = sqrtf(1.0f - cos_omega_ne.get<0>() * cos_omega_ne.get<0>());
 
             const fvec<S> cos_omega_x =
@@ -3773,7 +4035,8 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec
 
 template <int S>
 bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec<S> rd[3], const uvec<S> &ray_flags,
-                                                 const ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
+                                                 const ivec<S> &ray_mask, const cwbvh_node_t *nodes,
+                                                 uint32_t node_index, const uint32_t *leaf_prims,
                                                  const mesh_instance_t *mesh_instances, const mesh_t *meshes,
                                                  const mtri_accel_t *mtris, const uint32_t *tri_indices,
                                                  hit_data_t<S> &inter) {
@@ -3812,80 +4075,87 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec
         const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
-        TraversalStateStack_Single<MAX_STACK_SIZE> st;
-        st.push(node_index, 0.0f);
+        const uint32_t flip_bits = (r_d[0] < 0.0f ? 1u : 0u) | (r_d[1] < 0.0f ? 2u : 0u) | (r_d[2] < 0.0f ? 4u : 0u);
+        // branchless XOR-permutation gates for the visit-order mask swizzle (see TRAVERSE below)
+        const uint32_t f0 = 0u - (flip_bits & 1u), f1 = 0u - ((flip_bits >> 1) & 1u), f2 = 0u - ((flip_bits >> 2) & 1u);
+
+        TraversalStateStack_Single<MAX_STACK_SIZE, cwbvh_stack_entry_t> st;
+        st.push(node_index, 0u);
 
         while (!st.empty()) {
-            stack_entry_t cur = st.pop();
+            const cwbvh_stack_entry_t cur = st.pop();
+            uint32_t node_ref = cur.node_index;
 
-            if (cur.dist > inter_t[ri]) {
-                continue;
+            if (cur.pending_mask != 0) {
+                // resume a tested node: bsf picks the nearest pending internal child, popc
+                // addresses it from child_base - no node reload, no box re-test
+                const uint32_t imask = cur.pending_mask & 0xFFu;
+                const uint32_t vmask = cur.pending_mask >> 8;
+                const long k = GetFirstBit(vmask);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = vmask & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cur.node_index, (rest << 8) | imask);
+                }
+                node_ref = cur.node_index + popc8(imask & ((1u << slot) - 1u));
             }
 
         TRAVERSE:
-            if (!is_leaf_node(nodes[cur.index])) {
-                alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
-                                             nodes[cur.index].bbox_max, res_dist);
-                if (mask) {
-                    long i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    if (mask == 0) { // only one box was hit
-                        cur.index = nodes[cur.index].child[i];
-                        goto TRAVERSE;
-                    }
-
-                    const long i2 = GetFirstBit(mask);
-                    mask = ClearBit(mask, i2);
-                    if (mask == 0) { // two boxes were hit
-                        if (res_dist[i] < res_dist[i2]) {
-                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
-                            cur.index = nodes[cur.index].child[i];
-                        } else {
-                            st.push(nodes[cur.index].child[i], res_dist[i]);
-                            cur.index = nodes[cur.index].child[i2];
-                        }
-                        goto TRAVERSE;
-                    }
-
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    if (mask == 0) { // three boxes were hit
-                        st.sort_top3();
-                        cur.index = st.pop_index();
-                        goto TRAVERSE;
-                    }
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    if (mask == 0) { // four boxes were hit
-                        st.sort_top4();
-                        cur.index = st.pop_index();
-                        goto TRAVERSE;
-                    }
-
-                    const uint32_t size_before = st.stack_size;
-
-                    // from five to eight boxes were hit
-                    do {
-                        i = GetFirstBit(mask);
-                        mask = ClearBit(mask, i);
-                        st.push(nodes[cur.index].child[i], res_dist[i]);
-                    } while (mask != 0);
-
-                    const int count = int(st.stack_size - size_before + 4);
-                    st.sort_topN(count);
-                    cur.index = st.pop_index();
-                    goto TRAVERSE;
+            if ((node_ref & LEAF_NODE_BIT) == 0) {
+                const cwbvh_node_t &n = nodes[node_ref];
+                const long mask = cwbvh_hit_mask<S>(n, _inv_d, _inv_d_o, inter_t[ri]);
+                if (mask == 0) {
+                    continue;
                 }
+                const uint32_t imask = cwbvh_internal_mask(n);
+                // drain the hit leaf children right away: meta4 gives each leaf's rank into the
+                // parent's contiguous leaf_prims block (mesh instance references)
+                for (uint32_t lm = uint32_t(mask) & ~imask; lm != 0;) {
+                    const long i = GetFirstBit(lm);
+                    lm &= ~(1u << i);
+                    const uint32_t meta = (n.meta4[i >> 2] >> (8 * (i & 3))) & 0xFFu;
+                    const uint32_t prim_index = leaf_prims[n.prim_base + (meta & 0x3Fu)] & PRIM_INDEX_BITS;
+
+                    const mesh_instance_t &mi = mesh_instances[prim_index];
+                    if ((mi.ray_visibility & _ray_flags[ri]) == 0) {
+                        continue;
+                    }
+
+                    float tr_ro[3], tr_rd[3];
+                    TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
+
+                    const bool lres = Traverse_BLAS_WithStack_ClosestHit<S>(tr_ro, tr_rd, nodes, mi.node_index, mtris,
+                                                                            tri_indices, inter_prim_index[ri],
+                                                                            inter_t[ri], inter_u[ri], inter_v[ri]);
+                    if (lres) {
+                        inter_obj_index[ri] = int(prim_index);
+                    }
+                    res |= lres;
+                }
+                // internal children: swizzle the hit mask into visit order (index XOR with the
+                // direction sign bits = three conditional bit-pair swaps, branchless), descend
+                // into the nearest one and push the rest as one compressed entry
+                const uint32_t internal_hits = uint32_t(mask) & imask;
+                if (internal_hits == 0) {
+                    continue;
+                }
+                uint32_t m = internal_hits;
+                uint32_t d = ((m >> 1) ^ m) & 0x55u & f0;
+                m ^= d | (d << 1);
+                d = ((m >> 2) ^ m) & 0x33u & f1;
+                m ^= d | (d << 2);
+                d = ((m >> 4) ^ m) & 0x0Fu & f2;
+                m ^= d | (d << 4);
+                const long k = GetFirstBit(m);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = m & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cwbvh_child_base(n), (rest << 8) | imask);
+                }
+                node_ref = cwbvh_internal_child(n, slot);
+                goto TRAVERSE;
             } else {
-                assert(nodes[cur.index].child[1] == 1);
-                const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+                const uint32_t prim_index = (node_ref & PRIM_INDEX_BITS);
 
                 const mesh_instance_t &mi = mesh_instances[prim_index];
                 if ((mi.ray_visibility & _ray_flags[ri]) == 0) {
@@ -4001,11 +4271,11 @@ Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], co
 
 template <int S>
 Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], const fvec<S> rd[3], int ray_type,
-                                                         const ivec<S> &ray_mask, const wbvh_node_t *nodes,
-                                                         uint32_t node_index, const mesh_instance_t *mesh_instances,
-                                                         const mesh_t *meshes, const mtri_accel_t *mtris,
-                                                         const tri_mat_data_t *materials, const uint32_t *tri_indices,
-                                                         hit_data_t<S> &inter) {
+                                                         const ivec<S> &ray_mask, const cwbvh_node_t *nodes,
+                                                         uint32_t node_index, const uint32_t *leaf_prims,
+                                                         const mesh_instance_t *mesh_instances, const mesh_t *meshes,
+                                                         const mtri_accel_t *mtris, const tri_mat_data_t *materials,
+                                                         const uint32_t *tri_indices, hit_data_t<S> &inter) {
     const int ray_vismask = (1u << ray_type);
 
     ivec<S> solid_hit_mask = {0};
@@ -4031,80 +4301,93 @@ Ray::NS::ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(const fvec<S> ro[3], co
         const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
-        TraversalStateStack_Single<MAX_STACK_SIZE> st;
-        st.push(node_index, 0.0f);
+        // Direction-ordered traversal (CWBVH paper): morton slot order + ray-sign swizzle, no sorting
+        const uint32_t flip_bits = (r_d[0] < 0.0f ? 1u : 0u) | (r_d[1] < 0.0f ? 2u : 0u) | (r_d[2] < 0.0f ? 4u : 0u);
+        const uint32_t f0 = 0u - (flip_bits & 1u), f1 = 0u - ((flip_bits >> 1) & 1u), f2 = 0u - ((flip_bits >> 2) & 1u);
 
-        while (!st.empty()) {
-            stack_entry_t cur = st.pop();
+        TraversalStateStack_Single<MAX_STACK_SIZE, cwbvh_stack_entry_t> st;
+        st.push(node_index, 0u);
 
-            if (cur.dist > inter_t[ri]) {
-                continue;
+        bool solid_hit = false;
+        while (!st.empty() && !solid_hit) {
+            const cwbvh_stack_entry_t cur = st.pop();
+            uint32_t node_ref = cur.node_index;
+
+            if (cur.pending_mask != 0) {
+                // resume a tested node: bsf picks the nearest pending internal child, popc
+                // addresses it from child_base - no node reload, no box re-test
+                const uint32_t imask = cur.pending_mask & 0xFFu;
+                const uint32_t vmask = cur.pending_mask >> 8;
+                const long k = GetFirstBit(vmask);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = vmask & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cur.node_index, (rest << 8) | imask);
+                }
+                node_ref = cur.node_index + popc8(imask & ((1u << slot) - 1u));
             }
 
         TRAVERSE:
-            if (!is_leaf_node(nodes[cur.index])) {
-                alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
-                                             nodes[cur.index].bbox_max, res_dist);
-                if (mask) {
-                    long i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    if (mask == 0) { // only one box was hit
-                        cur.index = nodes[cur.index].child[i];
-                        goto TRAVERSE;
-                    }
-
-                    const long i2 = GetFirstBit(mask);
-                    mask = ClearBit(mask, i2);
-                    if (mask == 0) { // two boxes were hit
-                        if (res_dist[i] < res_dist[i2]) {
-                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
-                            cur.index = nodes[cur.index].child[i];
-                        } else {
-                            st.push(nodes[cur.index].child[i], res_dist[i]);
-                            cur.index = nodes[cur.index].child[i2];
-                        }
-                        goto TRAVERSE;
-                    }
-
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    if (mask == 0) { // three boxes were hit
-                        st.sort_top3();
-                        cur.index = st.pop_index();
-                        goto TRAVERSE;
-                    }
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    if (mask == 0) { // four boxes were hit
-                        st.sort_top4();
-                        cur.index = st.pop_index();
-                        goto TRAVERSE;
-                    }
-
-                    const uint32_t size_before = st.stack_size;
-
-                    // from five to eight boxes were hit
-                    do {
-                        i = GetFirstBit(mask);
-                        mask = ClearBit(mask, i);
-                        st.push(nodes[cur.index].child[i], res_dist[i]);
-                    } while (mask != 0);
-
-                    const int count = int(st.stack_size - size_before + 4);
-                    st.sort_topN(count);
-                    cur.index = st.pop_index();
-                    goto TRAVERSE;
+            if ((node_ref & LEAF_NODE_BIT) == 0) {
+                const cwbvh_node_t &n = nodes[node_ref];
+                const long mask = cwbvh_hit_mask<S>(n, _inv_d, _inv_d_o, inter_t[ri]);
+                if (mask == 0) {
+                    continue;
                 }
+                const uint32_t imask = cwbvh_internal_mask(n);
+                // drain the hit leaf children right away: meta4 gives each leaf's rank into the
+                // parent's contiguous leaf_prims block (mesh instance references)
+                for (uint32_t lm = uint32_t(mask) & ~imask; lm != 0;) {
+                    const long i = GetFirstBit(lm);
+                    lm &= ~(1u << i);
+                    const uint32_t meta = (n.meta4[i >> 2] >> (8 * (i & 3))) & 0xFFu;
+                    const uint32_t prim_index = leaf_prims[n.prim_base + (meta & 0x3Fu)] & PRIM_INDEX_BITS;
+
+                    const mesh_instance_t &mi = mesh_instances[prim_index];
+                    if ((mi.ray_visibility & ray_vismask) == 0) {
+                        continue;
+                    }
+
+                    float tr_ro[3], tr_rd[3];
+                    TransformRay(r_o, r_d, mi.inv_xform, tr_ro, tr_rd);
+
+                    const int hit_type = Traverse_BLAS_WithStack_AnyHit<S>(tr_ro, tr_rd, nodes, mi.node_index, mtris,
+                                                                           materials, tri_indices, inter_prim_index[ri],
+                                                                           inter_t[ri], inter_u[ri], inter_v[ri]);
+                    if (hit_type) {
+                        inter.obj_index.set(ri, int(prim_index));
+                    }
+                    if (hit_type == 2) {
+                        solid_hit_mask.set(ri, -1);
+                        solid_hit = true;
+                        break;
+                    }
+                }
+                if (solid_hit) {
+                    break;
+                }
+                // internal children: swizzle into visit order, descend nearest, push rest
+                const uint32_t internal_hits = uint32_t(mask) & imask;
+                if (internal_hits == 0) {
+                    continue;
+                }
+                uint32_t m = internal_hits;
+                uint32_t d = ((m >> 1) ^ m) & 0x55u & f0;
+                m ^= d | (d << 1);
+                d = ((m >> 2) ^ m) & 0x33u & f1;
+                m ^= d | (d << 2);
+                d = ((m >> 4) ^ m) & 0x0Fu & f2;
+                m ^= d | (d << 4);
+                const long k = GetFirstBit(m);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = m & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cwbvh_child_base(n), (rest << 8) | imask);
+                }
+                node_ref = cwbvh_internal_child(n, slot);
+                goto TRAVERSE;
             } else {
-                assert(nodes[cur.index].child[1] == 1);
-                const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+                const uint32_t prim_index = (node_ref & PRIM_INDEX_BITS);
 
                 const mesh_instance_t &mi = mesh_instances[prim_index];
                 if ((mi.ray_visibility & ray_vismask) == 0) {
@@ -4198,7 +4481,7 @@ bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const fvec<S> ro[3], const fvec
 }
 
 template <int S>
-bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
+bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const cwbvh_node_t *nodes,
                                                  uint32_t node_index, const mtri_accel_t *mtris,
                                                  const uint32_t *tri_indices, int &inter_prim_index, float &inter_t,
                                                  float &inter_u, float &inter_v) {
@@ -4207,82 +4490,73 @@ bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float 
     float _inv_d[3], _inv_d_o[3];
     comp_aux_inv_values(ro, rd, _inv_d, _inv_d_o);
 
-    TraversalStateStack_Single<MAX_STACK_SIZE> st;
-    st.push(node_index, 0.0f);
+    // Direction-ordered traversal (CWBVH paper): morton slot order + ray-sign swizzle, no sorting
+    const uint32_t flip_bits = (rd[0] < 0.0f ? 1u : 0u) | (rd[1] < 0.0f ? 2u : 0u) | (rd[2] < 0.0f ? 4u : 0u);
+    const uint32_t f0 = 0u - (flip_bits & 1u), f1 = 0u - ((flip_bits >> 1) & 1u), f2 = 0u - ((flip_bits >> 2) & 1u);
+
+    TraversalStateStack_Single<MAX_STACK_SIZE, cwbvh_stack_entry_t> st;
+    st.push(node_index, 0u);
 
     while (!st.empty()) {
-        stack_entry_t cur = st.pop();
+        const cwbvh_stack_entry_t cur = st.pop();
+        uint32_t node_ref = cur.node_index;
 
-        if (cur.dist > inter_t) {
-            continue;
+        if (cur.pending_mask != 0) {
+            // resume a tested node: bsf picks the nearest pending internal child, popc
+            // addresses it from child_base - no node reload, no box re-test
+            const uint32_t imask = cur.pending_mask & 0xFFu;
+            const uint32_t vmask = cur.pending_mask >> 8;
+            const long k = GetFirstBit(vmask);
+            const uint32_t slot = uint32_t(k) ^ flip_bits;
+            const uint32_t rest = vmask & ~(1u << k);
+            if (rest != 0) {
+                st.push(cur.node_index, (rest << 8) | imask);
+            }
+            node_ref = cur.node_index + popc8(imask & ((1u << slot) - 1u));
         }
 
     TRAVERSE:
-        if (!is_leaf_node(nodes[cur.index])) {
-            alignas(32) float res_dist[8];
-            long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t, nodes[cur.index].bbox_min,
-                                         nodes[cur.index].bbox_max, res_dist);
-            if (mask) {
-                long i = GetFirstBit(mask);
-                mask = ClearBit(mask, i);
-                if (mask == 0) { // only one box was hit
-                    cur.index = nodes[cur.index].child[i];
-                    goto TRAVERSE;
-                }
-
-                const long i2 = GetFirstBit(mask);
-                mask = ClearBit(mask, i2);
-                if (mask == 0) { // two boxes were hit
-                    if (res_dist[i] < res_dist[i2]) {
-                        st.push(nodes[cur.index].child[i2], res_dist[i2]);
-                        cur.index = nodes[cur.index].child[i];
-                    } else {
-                        st.push(nodes[cur.index].child[i], res_dist[i]);
-                        cur.index = nodes[cur.index].child[i2];
-                    }
-                    goto TRAVERSE;
-                }
-
-                st.push(nodes[cur.index].child[i], res_dist[i]);
-                st.push(nodes[cur.index].child[i2], res_dist[i2]);
-
-                i = GetFirstBit(mask);
-                mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], res_dist[i]);
-                if (mask == 0) { // three boxes were hit
-                    st.sort_top3();
-                    cur.index = st.pop_index();
-                    goto TRAVERSE;
-                }
-
-                i = GetFirstBit(mask);
-                mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], res_dist[i]);
-                if (mask == 0) { // four boxes were hit
-                    st.sort_top4();
-                    cur.index = st.pop_index();
-                    goto TRAVERSE;
-                }
-
-                const uint32_t size_before = st.stack_size;
-
-                // from five to eight boxes were hit
-                do {
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                } while (mask != 0);
-
-                const int count = int(st.stack_size - size_before + 4);
-                st.sort_topN(count);
-                cur.index = st.pop_index();
-                goto TRAVERSE;
+        if ((node_ref & LEAF_NODE_BIT) == 0) {
+            const cwbvh_node_t &n = nodes[node_ref];
+            const long mask = cwbvh_hit_mask<S>(n, _inv_d, _inv_d_o, inter_t);
+            if (mask == 0) {
+                continue;
             }
+            const uint32_t imask = cwbvh_internal_mask(n);
+            // drain the hit leaf children right away: contiguous leaf blocks, tri_start is
+            // arithmetic (prim_base + 8 * meta4 rank), no load
+            for (uint32_t lm = uint32_t(mask) & ~imask; lm != 0;) {
+                const long i = GetFirstBit(lm);
+                lm &= ~(1u << i);
+                const uint32_t meta = (n.meta4[i >> 2] >> (8 * (i & 3))) & 0xFFu;
+                [[maybe_unused]] const int tri_start = int(n.prim_base + 8u * (meta & 0x3Fu));
+                assert((tri_start % 8) == 0);
+                res |= IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u,
+                                       inter_v);
+            }
+            // internal children: swizzle into visit order, descend nearest, push rest
+            const uint32_t internal_hits = uint32_t(mask) & imask;
+            if (internal_hits == 0) {
+                continue;
+            }
+            uint32_t m = internal_hits;
+            uint32_t d = ((m >> 1) ^ m) & 0x55u & f0;
+            m ^= d | (d << 1);
+            d = ((m >> 2) ^ m) & 0x33u & f1;
+            m ^= d | (d << 2);
+            d = ((m >> 4) ^ m) & 0x0Fu & f2;
+            m ^= d | (d << 4);
+            const long k = GetFirstBit(m);
+            const uint32_t slot = uint32_t(k) ^ flip_bits;
+            const uint32_t rest = m & ~(1u << k);
+            if (rest != 0) {
+                st.push(cwbvh_child_base(n), (rest << 8) | imask);
+            }
+            node_ref = cwbvh_internal_child(n, slot);
+            goto TRAVERSE;
         } else {
-            [[maybe_unused]] const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
-                                       tri_end = int(tri_start + nodes[cur.index].child[1]);
+            [[maybe_unused]] const int tri_start = int(node_ref & PRIM_INDEX_BITS);
             assert((tri_start % 8) == 0);
-            assert((tri_end - tri_start) <= 8);
             res |=
                 IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
         }
@@ -4354,7 +4628,7 @@ Ray::NS::ivec<S> Ray::NS::Traverse_BLAS_WithStack_AnyHit(const fvec<S> ro[3], co
 }
 
 template <int S>
-int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
+int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const cwbvh_node_t *nodes,
                                             uint32_t node_index, const mtri_accel_t *mtris,
                                             const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                             int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v) {
@@ -4363,82 +4637,83 @@ int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3]
     float _inv_d[3], _inv_d_o[3];
     comp_aux_inv_values(ro, rd, _inv_d, _inv_d_o);
 
-    TraversalStateStack_Single<MAX_STACK_SIZE> st;
-    st.push(node_index, 0.0f);
+    // Direction-ordered traversal (CWBVH paper): morton slot order + ray-sign swizzle, no sorting
+    const uint32_t flip_bits = (rd[0] < 0.0f ? 1u : 0u) | (rd[1] < 0.0f ? 2u : 0u) | (rd[2] < 0.0f ? 4u : 0u);
+    const uint32_t f0 = 0u - (flip_bits & 1u), f1 = 0u - ((flip_bits >> 1) & 1u), f2 = 0u - ((flip_bits >> 2) & 1u);
+
+    TraversalStateStack_Single<MAX_STACK_SIZE, cwbvh_stack_entry_t> st;
+    st.push(node_index, 0u);
 
     while (!st.empty()) {
-        stack_entry_t cur = st.pop();
+        const cwbvh_stack_entry_t cur = st.pop();
+        uint32_t node_ref = cur.node_index;
 
-        if (cur.dist > inter_t) {
-            continue;
+        if (cur.pending_mask != 0) {
+            // resume a tested node: bsf picks the nearest pending internal child, popc
+            // addresses it from child_base - no node reload, no box re-test
+            const uint32_t imask = cur.pending_mask & 0xFFu;
+            const uint32_t vmask = cur.pending_mask >> 8;
+            const long k = GetFirstBit(vmask);
+            const uint32_t slot = uint32_t(k) ^ flip_bits;
+            const uint32_t rest = vmask & ~(1u << k);
+            if (rest != 0) {
+                st.push(cur.node_index, (rest << 8) | imask);
+            }
+            node_ref = cur.node_index + popc8(imask & ((1u << slot) - 1u));
         }
 
     TRAVERSE:
-        if (!is_leaf_node(nodes[cur.index])) {
-            alignas(32) float res_dist[8];
-            long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t, nodes[cur.index].bbox_min,
-                                         nodes[cur.index].bbox_max, res_dist);
-            if (mask) {
-                long i = GetFirstBit(mask);
-                mask = ClearBit(mask, i);
-                if (mask == 0) { // only one box was hit
-                    cur.index = nodes[cur.index].child[i];
-                    goto TRAVERSE;
-                }
-
-                const long i2 = GetFirstBit(mask);
-                mask = ClearBit(mask, i2);
-                if (mask == 0) { // two boxes were hit
-                    if (res_dist[i] < res_dist[i2]) {
-                        st.push(nodes[cur.index].child[i2], res_dist[i2]);
-                        cur.index = nodes[cur.index].child[i];
-                    } else {
-                        st.push(nodes[cur.index].child[i], res_dist[i]);
-                        cur.index = nodes[cur.index].child[i2];
-                    }
-                    goto TRAVERSE;
-                }
-
-                st.push(nodes[cur.index].child[i], res_dist[i]);
-                st.push(nodes[cur.index].child[i2], res_dist[i2]);
-
-                i = GetFirstBit(mask);
-                mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], res_dist[i]);
-                if (mask == 0) { // three boxes were hit
-                    st.sort_top3();
-                    cur.index = st.pop_index();
-                    goto TRAVERSE;
-                }
-
-                i = GetFirstBit(mask);
-                mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], res_dist[i]);
-                if (mask == 0) { // four boxes were hit
-                    st.sort_top4();
-                    cur.index = st.pop_index();
-                    goto TRAVERSE;
-                }
-
-                const uint32_t size_before = st.stack_size;
-
-                // from five to eight boxes were hit
-                do {
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                } while (mask != 0);
-
-                const int count = int(st.stack_size - size_before + 4);
-                st.sort_topN(count);
-                cur.index = st.pop_index();
-                goto TRAVERSE;
+        if ((node_ref & LEAF_NODE_BIT) == 0) {
+            const cwbvh_node_t &n = nodes[node_ref];
+            const long mask = cwbvh_hit_mask<S>(n, _inv_d, _inv_d_o, inter_t);
+            if (mask == 0) {
+                continue;
             }
+            const uint32_t imask = cwbvh_internal_mask(n);
+            // drain the hit leaf children right away: contiguous leaf blocks, tri_start is
+            // arithmetic (prim_base + 8 * meta4 rank), no load
+            for (uint32_t lm = uint32_t(mask) & ~imask; lm != 0;) {
+                const long i = GetFirstBit(lm);
+                lm &= ~(1u << i);
+                const uint32_t meta = (n.meta4[i >> 2] >> (8 * (i & 3))) & 0xFFu;
+                [[maybe_unused]] const int tri_start = int(n.prim_base + 8u * (meta & 0x3Fu));
+                assert((tri_start % 8) == 0);
+                const bool hit_found = IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index,
+                                                       inter_t, inter_u, inter_v);
+                if (hit_found) {
+                    const bool is_backfacing = inter_prim_index < 0;
+                    const uint32_t prim_index = is_backfacing ? -inter_prim_index - 1 : inter_prim_index;
+
+                    if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
+                        (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
+                        return 2;
+                    }
+                }
+                res |= hit_found;
+            }
+            // internal children: swizzle into visit order, descend nearest, push rest
+            const uint32_t internal_hits = uint32_t(mask) & imask;
+            if (internal_hits == 0) {
+                continue;
+            }
+            uint32_t m = internal_hits;
+            uint32_t d = ((m >> 1) ^ m) & 0x55u & f0;
+            m ^= d | (d << 1);
+            d = ((m >> 2) ^ m) & 0x33u & f1;
+            m ^= d | (d << 2);
+            d = ((m >> 4) ^ m) & 0x0Fu & f2;
+            m ^= d | (d << 4);
+            const long k = GetFirstBit(m);
+            const uint32_t slot = uint32_t(k) ^ flip_bits;
+            const uint32_t rest = m & ~(1u << k);
+            if (rest != 0) {
+                st.push(cwbvh_child_base(n), (rest << 8) | imask);
+            }
+            node_ref = cwbvh_internal_child(n, slot);
+            goto TRAVERSE;
         } else {
-            [[maybe_unused]] const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
-                                       tri_end = int(tri_start + nodes[cur.index].child[1]);
+            [[maybe_unused]] const int tri_start = int(node_ref & PRIM_INDEX_BITS);
             assert((tri_start % 8) == 0);
-            assert((tri_end - tri_start) <= 8);
             const bool hit_found =
                 IntersectTri<S>(ro, rd, mtris[tri_start / 8], tri_start, inter_prim_index, inter_t, inter_u, inter_v);
             if (hit_found) {
@@ -4645,8 +4920,8 @@ void Ray::NS::Evaluate_GGXSpecular_BSDF(const fvec<S> view_dir_ts[3], const fvec
     const fvec<S> D = D_GGX(sampled_normal_ts, alpha[0], alpha[1]);
 
     const fvec<S> alpha2_x = alpha[0] * alpha[0], alpha2_y = alpha[1] * alpha[1];
-    const fvec<S> G = 1.0f / (1.0f + G1_lambda(view_dir_ts, alpha2_x, alpha2_y) +
-                              G1_lambda(reflected_dir_ts, alpha2_x, alpha2_y));
+    const fvec<S> G =
+        1.0f / (1.0f + G1_lambda(view_dir_ts, alpha2_x, alpha2_y) + G1_lambda(reflected_dir_ts, alpha2_x, alpha2_y));
 
     const fvec<S> cos_theta_i = dot3(view_dir_ts, sampled_normal_ts);
     const fvec<S> FH = (fresnel_dielectric_cos(cos_theta_i, spec_ior) - spec_F0) / (1.0f - spec_F0);
@@ -4746,8 +5021,7 @@ void Ray::NS::Evaluate_GGXRefractionSpecular_BSDF(const fvec<S> view_dir_ts[3], 
 
     const fvec<S> alpha2_x = alpha[0] * alpha[0], alpha2_y = alpha[1] * alpha[1];
     const fvec<S> G1i_lambda = G1_lambda(view_dir_ts, alpha2_x, alpha2_y);
-    const fvec<S> G =
-        1.0f / (1.0f + G1i_lambda + G1_lambda(reflected_dir_ts, alpha2_x, alpha2_y));
+    const fvec<S> G = 1.0f / (1.0f + G1i_lambda + G1_lambda(reflected_dir_ts, alpha2_x, alpha2_y));
 
     const fvec<S> cos_theta_i = dot3(view_dir_ts, sampled_normal_ts);
 
@@ -4787,8 +5061,8 @@ template <int S>
 void Ray::NS::Sample_GGXRefractionSpecular_BSDF(const fvec<S> T[3], const fvec<S> B[3], const fvec<S> N[3],
                                                 const fvec<S> I[3], const fvec<S> alpha[2], const fvec<S> &spec_ior,
                                                 const fvec<S> &spec_F0, const fvec<S> spec_col[3],
-                                                const fvec<S> spec_col_90[3], const fvec<S> rand[2],
-                                                fvec<S> out_V[3], fvec<S> out_color[4]) {
+                                                const fvec<S> spec_col_90[3], const fvec<S> rand[2], fvec<S> out_V[3],
+                                                fvec<S> out_color[4]) {
     const ivec<S> is_mirror = simd_cast(alpha[0] * alpha[1] < 1e-7f);
     if (is_mirror.not_all_zeros()) {
         reflect(I, N, dot3(N, I), out_V);
@@ -4836,8 +5110,7 @@ void Ray::NS::Evaluate_GGXRefraction_BSDF(const fvec<S> view_dir_ts[3], const fv
     const fvec<S> VoH = dot3(view_dir_ts, sampled_normal_ts);
     const fvec<S> LoH = dot3(refr_dir_ts, sampled_normal_ts);
 
-    const fvec<S> is_valid =
-        (Lz < 0.0f) & (Vz > 0.0f) & (alpha[0] * alpha[1] >= 1e-7f) & (VoH > 0.0f) & (LoH < 0.0f);
+    const fvec<S> is_valid = (Lz < 0.0f) & (Vz > 0.0f) & (alpha[0] * alpha[1] >= 1e-7f) & (VoH > 0.0f) & (LoH < 0.0f);
 
     const fvec<S> D = D_GGX(sampled_normal_ts, alpha[0], alpha[1]);
 
@@ -5470,9 +5743,10 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
     while (keep_going.not_all_zeros()) {
         const fvec<S> t_val = inter.t;
 
-        if (sc.wnodes) {
-            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.wnodes, root_index,
-                                                   sc.mesh_instances, sc.meshes, sc.mtris, sc.tri_indices, inter);
+        if (sc.cwnodes) {
+            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.cwnodes, root_index,
+                                                   sc.leaf_prims, sc.mesh_instances, sc.meshes, sc.mtris,
+                                                   sc.tri_indices, inter);
         } else {
             // NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, ray_flags, keep_going, sc.nodes, root_index,
             //                                        sc.mesh_instances, sc.meshes, sc.tris,
@@ -5661,7 +5935,7 @@ void Ray::NS::TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_
         IntersectScene(r, min_transp_depth, max_transp_depth, rand_seq, rand_seed, iteration, sc, root_index, textures,
                        inter);
         if (trace_lights && sc.visible_lights_count) {
-            IntersectAreaLights(r, sc.lights, sc.light_cwnodes, inter);
+            IntersectAreaLights(r, sc.lights, sc.light_cwnodes, sc.light_leaf_prims, inter);
         }
     }
 }
@@ -5678,7 +5952,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
         fvec<S> rc[3];
         IntersectScene(sh_r, max_transp_depth, sc, root_index, rand_seq, rand_seed, iteration, textures, rc);
         if (sc.blocker_lights_count) {
-            const fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_cwnodes);
+            const fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_cwnodes, sc.light_leaf_prims);
             UNROLLED_FOR(j, 3, { rc[j] *= k; })
         }
         const fvec<S> sum = rc[0] + rc[1] + rc[2];
@@ -5717,10 +5991,10 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
         inter.t = dist;
 
         ivec<S> solid_hit;
-        if (sc.wnodes) {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.wnodes, node_index,
-                                                       sc.mesh_instances, sc.meshes, sc.mtris, sc.tri_materials,
-                                                       sc.tri_indices, inter);
+        if (sc.cwnodes) {
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.cwnodes, node_index,
+                                                       sc.leaf_prims, sc.mesh_instances, sc.meshes, sc.mtris,
+                                                       sc.tri_materials, sc.tri_indices, inter);
         } else {
             assert(false);
             solid_hit = 0;
@@ -5872,9 +6146,10 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
         int index = 0, num = 1;
         while (index != num) {
             uint32_t i = queue[index].i;
-            while ((i & LEAF_NODE_BIT) == 0) {
+            for (;;) {
+                const light_cwbvh_node_t &n = sc.light_cwnodes[i];
                 fvec<S> importance[8];
-                calc_lnode_importance(sc.light_cwnodes[i], P, importance);
+                calc_lnode_importance(n, P, importance);
 
                 fvec<S> total_importance = importance[0];
                 UNROLLED_FOR(j, 7, { total_importance += importance[j + 1]; })
@@ -5909,11 +6184,16 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 }
 
                 where(queue[index].mask, ri) = fract(safe_div_pos(ri - factors_cdf[first_next], factors[first_next]));
-                i = sc.light_cwnodes[i].child[first_next];
                 where(queue[index].mask, factor) *= factors[first_next];
-            }
 
-            where(queue[index].mask, light_index) = (i & PRIM_INDEX_BITS);
+                const uint32_t meta = (n.meta4[first_next >> 2] >> (8 * (first_next & 3))) & 0xFFu;
+                if (meta & 0x40u) {
+                    where(queue[index].mask, light_index) =
+                        int(sc.light_leaf_prims[n.prim_base + (meta & 0x3Fu)] & PRIM_INDEX_BITS);
+                    break;
+                }
+                i = cwbvh_internal_child(n, first_next);
+            }
 
             ++index;
         }
@@ -6365,7 +6645,8 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
 
 template <int S>
 void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights,
-                                  Span<const light_cwbvh_node_t> nodes, hit_data_t<S> &inout_inter) {
+                                  Span<const light_cwbvh_node_t> nodes, Span<const uint32_t> leaf_lights,
+                                  hit_data_t<S> &inout_inter) {
     const int SS = S <= 8 ? S : 8;
 
     fvec<S> inv_d[3], inv_d_o[3];
@@ -6392,294 +6673,275 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
         }
 
         // recombine in AoS layout
-        const float _ro[3] = {r.o[0][ri], r.o[1][ri], r.o[2][ri]},
+        const float _ro[3] = {r.o[0][ri], r.o[1][ri], r.o[2][ri]}, _rd[3] = {r.d[0][ri], r.d[1][ri], r.d[2][ri]},
                     _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
-        TraversalStateStack_Single<MAX_LTREE_STACK_SIZE, light_stack_entry_t> st;
-        st.push(0u /* root_index */, 0.0f, 1.0f);
+        // Direction-ordered compressed-stack traversal (CWBVH paper), same shape as the scene
+        // tree traversals: morton slot order + ray direction sign bits give the visit order
+        const uint32_t flip_bits = (_rd[0] < 0.0f ? 1u : 0u) | (_rd[1] < 0.0f ? 2u : 0u) | (_rd[2] < 0.0f ? 4u : 0u);
+        const uint32_t f0 = 0u - (flip_bits & 1u), f1 = 0u - ((flip_bits >> 1) & 1u), f2 = 0u - ((flip_bits >> 2) & 1u);
+
+        TraversalStateStack_Single<MAX_STACK_SIZE, light_cwbvh_stack_entry_t> st;
+        st.push(0u /* root_index */, 0u /* masks_L */);
 
         while (!st.empty()) {
-            light_stack_entry_t cur = st.pop();
+            const light_cwbvh_stack_entry_t cur = st.pop();
+            uint32_t node_ref = cur.child_base;
+            uint32_t L = cur.masks_L >> 16;
+
+            if ((cur.masks_L & 0xFFFFu) != 0) {
+                // resume a tested node: bsf picks the nearest pending internal child, popc
+                // addresses it from child_base - no node reload, no box re-test
+                const uint32_t imask = cur.masks_L & 0xFFu;
+                const uint32_t vmask = (cur.masks_L >> 8) & 0xFFu;
+                const long k = GetFirstBit(vmask);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = vmask & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cur.child_base, (rest << 8) | imask | (L << 16), cur.q[0], cur.q[1], cur.q[2], cur.q[3],
+                            cur.q[4], cur.q[5], cur.q[6], cur.q[7]);
+                }
+                L += cur.q[slot];
+                node_ref = cur.child_base + popc8(imask & ((1u << slot) - 1u));
+            }
 
         TRAVERSE:
-            if (cur.dist > inter_t[ri]) {
-                continue;
-            }
-            if ((cur.index & LEAF_NODE_BIT) == 0) {
-                const light_cwbvh_node_t &n = nodes[cur.index];
+            if ((node_ref & LEAF_NODE_BIT) == 0) {
+                const light_cwbvh_node_t &n = nodes[node_ref];
 
-                // Unpack bounds
-                const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f,
-                                      (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
-                                      (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
                 alignas(32) float bbox_min[3][8], bbox_max[3][8];
-                alignas(32) uint8_t bitmask[4 * S] = {};
-                for (int i = 0; i < 8; ++i) {
-                    bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
-                    bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
-                    if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
-                        bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
-                        bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
-                        bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
-
-                        bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
-                        bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
-                        bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
-                    }
-                    bitmask[i] = n.ch_bitmask[i];
+                long mask =
+                    light_cwbvh_hit_mask<SS>(n, _inv_d, _inv_d_o, inter_t[ri], LightTypesMask, bbox_min, bbox_max);
+                if (mask == 0) {
+                    continue;
                 }
 
-                ivec<S> temp = ivec<S>{(const int *)bitmask, vector_aligned};
-                temp = ~cmpeq8(temp & reinterpret_cast<const int &>(LightTypesMask4x), ivec<S>{0});
+                fvec<SS> importance[8 / SS];
+                calc_lnode_importance<SS>(n, bbox_min, bbox_max, _ro, value_ptr(importance[0]));
 
-                alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<SS>(_inv_d, _inv_d_o, inter_t[ri], bbox_min, bbox_max, res_dist);
-                mask &= temp.movemask8();
-                if (mask) {
-                    fvec<SS> importance[8 / SS];
-                    calc_lnode_importance<SS>(n, bbox_min, bbox_max, _ro, value_ptr(importance[0]));
+                fvec<SS> total_importance_v = 0.0f;
+                UNROLLED_FOR_S(i, 8 / SS, {
+                    mask &= ~(simd_cast(importance[i] == 0.0).movemask() << (i * SS));
+                    total_importance_v += importance[i];
+                })
+                if (!mask) {
+                    continue;
+                }
 
-                    fvec<SS> total_importance_v = 0.0f;
-                    UNROLLED_FOR_S(i, 8 / SS, {
-                        mask &= ~(simd_cast(importance[i] == 0.0).movemask() << (i * 4));
-                        total_importance_v += importance[i];
-                    })
-                    if (!mask) {
+                const float total_importance = hsum(total_importance_v);
+                // vectorized divide (per-lane IEEE-identical to the scalar divides)
+                alignas(32) float factors[8];
+                UNROLLED_FOR_S(i, 8 / SS,
+                               { (importance[i] / total_importance).store_to(&factors[i * SS], vector_aligned); })
+                uint8_t q[8];
+                for (uint32_t hm = uint32_t(mask); hm != 0;) {
+                    const long i = GetFirstBit(hm);
+                    hm &= ~(1u << i);
+                    q[i] = light_factor_q(factors[i]);
+                }
+
+                const uint32_t node_imask = cwbvh_internal_mask(n);
+                // drain the hit leaf lights right away: meta4 gives each leaf's rank into the
+                // parent's contiguous light block
+                for (uint32_t lm = uint32_t(mask) & ~node_imask; lm != 0;) {
+                    const long li = GetFirstBit(lm);
+                    lm &= ~(1u << li);
+                    const uint32_t meta = (n.meta4[li >> 2] >> (8 * (li & 3))) & 0xFFu;
+                    const int light_index = int(leaf_lights[n.prim_base + (meta & 0x3Fu)] & PRIM_INDEX_BITS);
+                    const float factor = light_factor_decode(L + q[li]);
+                    const light_t &l = lights[light_index];
+                    if (!l.visible || (l.ray_visibility & ray_flags[ri]) == 0) {
+                        continue;
+                    }
+                    // Portal lights affect only missed rays
+                    // TODO: actually process multiple rays
+                    ivec<S> ray_mask = 0;
+                    ray_mask.set(ri, -1);
+                    ray_mask &= ~(ivec<S>{l.sky_portal ? -1 : 0} & simd_cast(inout_inter.v >= 0.0f));
+                    if (ray_mask.all_zeros()) {
                         continue;
                     }
 
-                    const float total_importance = hsum(total_importance_v);
-                    alignas(32) float factors[8];
-                    UNROLLED_FOR_S(i, 8 / SS, {
-                        importance[i] /= total_importance;
-                        importance[i].store_to(&factors[i * SS], vector_aligned);
-                    })
+                    const fvec<S> no_shadow = simd_cast(l.cast_shadow ? ivec<S>{0} : ivec<S>{-1});
+                    if (l.type == LIGHT_TYPE_SPHERE) {
+                        const fvec<S> op[3] = {l.sph.pos[0] - r.o[0], l.sph.pos[1] - r.o[1], l.sph.pos[2] - r.o[2]};
+                        const fvec<S> b = dot3(op, r.d);
+                        fvec<S> det = b * b - dot3(op, op) + l.sph.radius * l.sph.radius;
 
-                    long i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    if (mask == 0) { // only one box was hit
-                        cur.index = n.child[i];
-                        cur.factor *= factors[i];
-                        goto TRAVERSE;
-                    }
+                        ivec<S> imask = simd_cast(det >= 0.0f) & ray_mask;
+                        if (imask.not_all_zeros()) {
+                            det = safe_sqrt(det);
+                            const fvec<S> t1 = b - det, t2 = b + det;
 
-                    const long i2 = GetFirstBit(mask);
-                    mask = ClearBit(mask, i2);
-                    if (mask == 0) { // two boxes were hit
-                        if (res_dist[i] < res_dist[i2]) {
-                            st.push(n.child[i2], res_dist[i2], cur.factor * factors[i2]);
-                            cur.index = n.child[i];
-                            cur.factor *= factors[i];
-                        } else {
-                            st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
-                            cur.index = n.child[i2];
-                            cur.factor *= factors[i2];
-                        }
-                        goto TRAVERSE;
-                    }
+                            fvec<S> mask1 = (t1 > HIT_EPS) & ((t1 < inout_inter.t) | no_shadow) & simd_cast(imask);
+                            const fvec<S> mask2 =
+                                (t2 > HIT_EPS) & ((t2 < inout_inter.t) | no_shadow) & simd_cast(imask) & ~mask1;
 
-                    st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
-                    st.push(n.child[i2], res_dist[i2], cur.factor * factors[i2]);
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
-                    if (mask == 0) { // three boxes were hit
-                        st.sort_top3();
-                        cur = st.pop();
-                        goto TRAVERSE;
-                    }
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
-                    if (mask == 0) { // four boxes were hit
-                        st.sort_top4();
-                        cur = st.pop();
-                        goto TRAVERSE;
-                    }
-
-                    const uint32_t size_before = st.stack_size;
-
-                    // from five to eight boxes were hit
-                    do {
-                        i = GetFirstBit(mask);
-                        mask = ClearBit(mask, i);
-                        st.push(n.child[i], res_dist[i], cur.factor * factors[i]);
-                    } while (mask != 0);
-
-                    const int count = int(st.stack_size - size_before + 4);
-                    st.sort_topN(count);
-                    cur = st.pop();
-                    goto TRAVERSE;
-                }
-            } else {
-                const int light_index = int(cur.index & PRIM_INDEX_BITS);
-                const light_t &l = lights[light_index];
-                if (!l.visible || (l.ray_visibility & ray_flags[ri]) == 0) {
-                    continue;
-                }
-                // Portal lights affect only missed rays
-                // TODO: actually process multiple rays
-                ivec<S> ray_mask = 0;
-                ray_mask.set(ri, -1);
-                ray_mask &= ~(ivec<S>{l.sky_portal ? -1 : 0} & simd_cast(inout_inter.v >= 0.0f));
-                if (ray_mask.all_zeros()) {
-                    continue;
-                }
-
-                const fvec<S> no_shadow = simd_cast(l.cast_shadow ? ivec<S>{0} : ivec<S>{-1});
-                if (l.type == LIGHT_TYPE_SPHERE) {
-                    const fvec<S> op[3] = {l.sph.pos[0] - r.o[0], l.sph.pos[1] - r.o[1], l.sph.pos[2] - r.o[2]};
-                    const fvec<S> b = dot3(op, r.d);
-                    fvec<S> det = b * b - dot3(op, op) + l.sph.radius * l.sph.radius;
-
-                    ivec<S> imask = simd_cast(det >= 0.0f) & ray_mask;
-                    if (imask.not_all_zeros()) {
-                        det = safe_sqrt(det);
-                        const fvec<S> t1 = b - det, t2 = b + det;
-
-                        fvec<S> mask1 = (t1 > HIT_EPS) & ((t1 < inout_inter.t) | no_shadow) & simd_cast(imask);
-                        const fvec<S> mask2 =
-                            (t2 > HIT_EPS) & ((t2 < inout_inter.t) | no_shadow) & simd_cast(imask) & ~mask1;
-
-                        if (l.sph.spot > 0.0f) {
-                            const fvec<S> _dot =
-                                min(-r.d[0] * l.sph.dir[0] - r.d[1] * l.sph.dir[1] - r.d[2] * l.sph.dir[2], 1.0f);
-                            mask1 &= (_dot > 0.0f);
-                            const ivec<S> imask1 = simd_cast(mask1);
-                            if (imask1.not_all_zeros()) {
-                                fvec<S> _angle = 0.0f;
-                                UNROLLED_FOR_S(i, S, {
-                                    if (imask1.template get<i>()) {
-                                        _angle.template set<i>(acosf(_dot.template get<i>()));
-                                    }
-                                })
-                                mask1 &= (_angle <= l.sph.spot);
+                            if (l.sph.spot > 0.0f) {
+                                const fvec<S> _dot =
+                                    min(-r.d[0] * l.sph.dir[0] - r.d[1] * l.sph.dir[1] - r.d[2] * l.sph.dir[2], 1.0f);
+                                mask1 &= (_dot > 0.0f);
+                                const ivec<S> imask1 = simd_cast(mask1);
+                                if (imask1.not_all_zeros()) {
+                                    fvec<S> _angle = 0.0f;
+                                    UNROLLED_FOR_S(i, S, {
+                                        if (imask1.template get<i>()) {
+                                            _angle.template set<i>(acosf(_dot.template get<i>()));
+                                        }
+                                    })
+                                    mask1 &= (_angle <= l.sph.spot);
+                                }
                             }
+
+                            where(mask1 | mask2, inout_inter.v) = 0.0f;
+                            where(mask1 | mask2, inout_inter.obj_index) = -light_index - 1;
+                            where(mask1, inout_inter.t) = t1;
+                            where(mask2, inout_inter.t) = t2;
+                            where(mask1 | mask2, inout_inter.u) = factor;
+                            inout_inter.t.store_to(inter_t, vector_aligned);
                         }
-
-                        where(mask1 | mask2, inout_inter.v) = 0.0f;
-                        where(mask1 | mask2, inout_inter.obj_index) = -light_index - 1;
-                        where(mask1, inout_inter.t) = t1;
-                        where(mask2, inout_inter.t) = t2;
-                        where(mask1 | mask2, inout_inter.u) = cur.factor;
+                    } else if (l.type == LIGHT_TYPE_DIR) {
+                        const fvec<S> cos_theta = dot3(r.d, l.dir.dir);
+                        const ivec<S> imask = simd_cast(cos_theta > portable_cos(fvec<S>{l.dir.angle})) & ray_mask &
+                                              (simd_cast(inout_inter.v < 0.0f) | simd_cast(no_shadow));
+                        where(imask, inout_inter.v) = 0.0f;
+                        where(imask, inout_inter.obj_index) = -light_index - 1;
+                        where(imask, inout_inter.t) = safe_div_pos(1.0f, cos_theta);
+                        where(imask, inout_inter.u) = factor;
                         inout_inter.t.store_to(inter_t, vector_aligned);
-                    }
-                } else if (l.type == LIGHT_TYPE_DIR) {
-                    const fvec<S> cos_theta = dot3(r.d, l.dir.dir);
-                    const ivec<S> imask = simd_cast(cos_theta > portable_cos(fvec<S>{l.dir.angle})) & ray_mask &
-                                          (simd_cast(inout_inter.v < 0.0f) | simd_cast(no_shadow));
-                    where(imask, inout_inter.v) = 0.0f;
-                    where(imask, inout_inter.obj_index) = -light_index - 1;
-                    where(imask, inout_inter.t) = safe_div_pos(1.0f, cos_theta);
-                    where(imask, inout_inter.u) = cur.factor;
-                    inout_inter.t.store_to(inter_t, vector_aligned);
-                } else if (l.type == LIGHT_TYPE_RECT) {
-                    float light_fwd[3];
-                    cross(l.rect.u, l.rect.v, light_fwd);
-                    normalize(light_fwd);
+                    } else if (l.type == LIGHT_TYPE_RECT) {
+                        float light_fwd[3];
+                        cross(l.rect.u, l.rect.v, light_fwd);
+                        normalize(light_fwd);
 
-                    const float plane_dist = dot3(light_fwd, l.rect.pos);
+                        const float plane_dist = dot3(light_fwd, l.rect.pos);
 
-                    const fvec<S> cos_theta = dot3(r.d, light_fwd);
-                    const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+                        const fvec<S> cos_theta = dot3(r.d, light_fwd);
+                        const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
 
-                    const ivec<S> imask =
-                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
-                    if (imask.not_all_zeros()) {
-                        const float dot_u = dot3(l.rect.u, l.rect.u);
-                        const float dot_v = dot3(l.rect.v, l.rect.v);
+                        const ivec<S> imask =
+                            simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) &
+                            ray_mask;
+                        if (imask.not_all_zeros()) {
+                            const float dot_u = dot3(l.rect.u, l.rect.u);
+                            const float dot_v = dot3(l.rect.v, l.rect.v);
 
-                        const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                              fmadd(r.d[2], t, r.o[2])};
-                        const fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
+                            const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                  fmadd(r.d[2], t, r.o[2])};
+                            const fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
 
-                        const fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
-                        const fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
+                            const fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
+                            const fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
 
-                        const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
-                        const fvec<S> tan_angl = tan_angle(temp, light_fwd);
+                            const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
+                            const fvec<S> tan_angl = tan_angle(temp, light_fwd);
 
-                        const fvec<S> final_mask = (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) &
-                                                   (tan_angl < l.rect.tan_half_spread) & simd_cast(imask);
+                            const fvec<S> final_mask = (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) &
+                                                       (tan_angl < l.rect.tan_half_spread) & simd_cast(imask);
 
-                        where(final_mask, inout_inter.v) = 0.0f;
-                        where(final_mask, inout_inter.obj_index) = -light_index - 1;
-                        where(final_mask, inout_inter.t) = t;
-                        where(final_mask, inout_inter.u) = cur.factor;
+                            where(final_mask, inout_inter.v) = 0.0f;
+                            where(final_mask, inout_inter.obj_index) = -light_index - 1;
+                            where(final_mask, inout_inter.t) = t;
+                            where(final_mask, inout_inter.u) = factor;
+                            inout_inter.t.store_to(inter_t, vector_aligned);
+                        }
+                    } else if (l.type == LIGHT_TYPE_DISK) {
+                        float light_fwd[3];
+                        cross(l.disk.u, l.disk.v, light_fwd);
+                        normalize(light_fwd);
+
+                        const float plane_dist = dot3(light_fwd, l.disk.pos);
+
+                        const fvec<S> cos_theta = dot3(r.d, light_fwd);
+                        const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+                        const ivec<S> imask =
+                            simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) &
+                            ray_mask;
+                        if (imask.not_all_zeros()) {
+                            const float dot_u = dot3(l.disk.u, l.disk.u);
+                            const float dot_v = dot3(l.disk.v, l.disk.v);
+
+                            const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                  fmadd(r.d[2], t, r.o[2])};
+                            const fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
+
+                            const fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
+                            const fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
+
+                            const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
+                            const fvec<S> tan_angl = tan_angle(temp, light_fwd);
+
+                            const fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) &
+                                                       (tan_angl < l.disk.tan_half_spread) & simd_cast(imask);
+
+                            where(final_mask, inout_inter.v) = 0.0f;
+                            where(final_mask, inout_inter.obj_index) = -light_index - 1;
+                            where(final_mask, inout_inter.t) = t;
+                            where(final_mask, inout_inter.u) = factor;
+                            inout_inter.t.store_to(inter_t, vector_aligned);
+                        }
+                    } else if (l.type == LIGHT_TYPE_LINE) {
+                        const float *light_dir = l.line.v;
+
+                        float light_v[3];
+                        cross(l.line.u, light_dir, light_v);
+
+                        fvec<S> _ro1[3] = {r.o[0] - l.line.pos[0], r.o[1] - l.line.pos[1], r.o[2] - l.line.pos[2]};
+                        const fvec<S> ro[3] = {dot3(_ro1, light_dir), dot3(_ro1, l.line.u), dot3(_ro1, light_v)};
+                        const fvec<S> rd[3] = {dot3(r.d, light_dir), dot3(r.d, l.line.u), dot3(r.d, light_v)};
+
+                        const fvec<S> A = rd[2] * rd[2] + rd[1] * rd[1];
+                        const fvec<S> B = 2.0f * (rd[2] * ro[2] + rd[1] * ro[1]);
+                        const fvec<S> C = ro[2] * ro[2] + ro[1] * ro[1] - l.line.radius * l.line.radius;
+
+                        fvec<S> t0, t1;
+                        ivec<S> imask = quadratic(A, B, C, t0, t1);
+                        imask &= simd_cast(t0 > HIT_EPS) & simd_cast(t1 > HIT_EPS);
+
+                        const fvec<S> t = min(t0, t1);
+                        const fvec<S> p[3] = {fmadd(rd[0], t, ro[0]), fmadd(rd[1], t, ro[1]), fmadd(rd[2], t, ro[2])};
+
+                        imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) &
+                                 simd_cast((t < inout_inter.t) | no_shadow) & ray_mask;
+
+                        where(imask, inout_inter.v) = 0.0f;
+                        where(imask, inout_inter.obj_index) = -light_index - 1;
+                        where(imask, inout_inter.t) = t;
+                        where(imask, inout_inter.u) = factor;
                         inout_inter.t.store_to(inter_t, vector_aligned);
+                    } else if (l.type == LIGHT_TYPE_ENV) {
+                        // NOTE: mask remains empty
+                        where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.obj_index) = -light_index - 1;
+                        where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.u) = factor;
                     }
-                } else if (l.type == LIGHT_TYPE_DISK) {
-                    float light_fwd[3];
-                    cross(l.disk.u, l.disk.v, light_fwd);
-                    normalize(light_fwd);
-
-                    const float plane_dist = dot3(light_fwd, l.disk.pos);
-
-                    const fvec<S> cos_theta = dot3(r.d, light_fwd);
-                    const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
-
-                    const ivec<S> imask =
-                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
-                    if (imask.not_all_zeros()) {
-                        const float dot_u = dot3(l.disk.u, l.disk.u);
-                        const float dot_v = dot3(l.disk.v, l.disk.v);
-
-                        const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                              fmadd(r.d[2], t, r.o[2])};
-                        const fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
-
-                        const fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
-                        const fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
-
-                        const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
-                        const fvec<S> tan_angl = tan_angle(temp, light_fwd);
-
-                        const fvec<S> final_mask =
-                            (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & (tan_angl < l.disk.tan_half_spread) & simd_cast(imask);
-
-                        where(final_mask, inout_inter.v) = 0.0f;
-                        where(final_mask, inout_inter.obj_index) = -light_index - 1;
-                        where(final_mask, inout_inter.t) = t;
-                        where(final_mask, inout_inter.u) = cur.factor;
-                        inout_inter.t.store_to(inter_t, vector_aligned);
-                    }
-                } else if (l.type == LIGHT_TYPE_LINE) {
-                    const float *light_dir = l.line.v;
-
-                    float light_v[3];
-                    cross(l.line.u, light_dir, light_v);
-
-                    fvec<S> _ro1[3] = {r.o[0] - l.line.pos[0], r.o[1] - l.line.pos[1], r.o[2] - l.line.pos[2]};
-                    const fvec<S> ro[3] = {dot3(_ro1, light_dir), dot3(_ro1, l.line.u), dot3(_ro1, light_v)};
-                    const fvec<S> rd[3] = {dot3(r.d, light_dir), dot3(r.d, l.line.u), dot3(r.d, light_v)};
-
-                    const fvec<S> A = rd[2] * rd[2] + rd[1] * rd[1];
-                    const fvec<S> B = 2.0f * (rd[2] * ro[2] + rd[1] * ro[1]);
-                    const fvec<S> C = ro[2] * ro[2] + ro[1] * ro[1] - l.line.radius * l.line.radius;
-
-                    fvec<S> t0, t1;
-                    ivec<S> imask = quadratic(A, B, C, t0, t1);
-                    imask &= simd_cast(t0 > HIT_EPS) & simd_cast(t1 > HIT_EPS);
-
-                    const fvec<S> t = min(t0, t1);
-                    const fvec<S> p[3] = {fmadd(rd[0], t, ro[0]), fmadd(rd[1], t, ro[1]), fmadd(rd[2], t, ro[2])};
-
-                    imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast((t < inout_inter.t) | no_shadow) &
-                             ray_mask;
-
-                    where(imask, inout_inter.v) = 0.0f;
-                    where(imask, inout_inter.obj_index) = -light_index - 1;
-                    where(imask, inout_inter.t) = t;
-                    where(imask, inout_inter.u) = cur.factor;
-                    inout_inter.t.store_to(inter_t, vector_aligned);
-                } else if (l.type == LIGHT_TYPE_ENV) {
-                    // NOTE: mask remains empty
-                    where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.obj_index) = -light_index - 1;
-                    where(simd_cast(inout_inter.v < 0.0f) & ray_mask, inout_inter.u) = cur.factor;
                 }
+
+                // internal children: swizzle the hit mask into visit order (index XOR with the
+                // direction sign bits = three conditional bit-pair swaps, branchless), descend
+                // into the nearest one and push the rest as one compressed entry
+                const uint32_t internal_hits = uint32_t(mask) & node_imask;
+                if (internal_hits == 0) {
+                    continue;
+                }
+                uint32_t m = internal_hits;
+                uint32_t d = ((m >> 1) ^ m) & 0x55u & f0;
+                m ^= d | (d << 1);
+                d = ((m >> 2) ^ m) & 0x33u & f1;
+                m ^= d | (d << 2);
+                d = ((m >> 4) ^ m) & 0x0Fu & f2;
+                m ^= d | (d << 4);
+                const long k = GetFirstBit(m);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = m & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cwbvh_child_base(n), (rest << 8) | node_imask | (L << 16), q[0], q[1], q[2], q[3], q[4],
+                            q[5], q[6], q[7]);
+                }
+                L += q[slot];
+                node_ref = cwbvh_internal_child(n, slot);
+                goto TRAVERSE;
             }
         }
     }
@@ -6687,7 +6949,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
 template <int S>
 Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights,
-                                              Span<const light_cwbvh_node_t> nodes) {
+                                              Span<const light_cwbvh_node_t> nodes, Span<const uint32_t> leaf_lights) {
     fvec<S> inv_d[3], inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
 
@@ -6712,179 +6974,146 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
         }
 
         // recombine in AoS layout
+        const float _rd[3] = {r.d[0][ri], r.d[1][ri], r.d[2][ri]};
         const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
-        TraversalStateStack_Single<MAX_LTREE_STACK_SIZE> st;
-        st.push(0u /* root_index */, 0.0f);
+        const uint32_t flip_bits = (_rd[0] < 0.0f ? 1u : 0u) | (_rd[1] < 0.0f ? 2u : 0u) | (_rd[2] < 0.0f ? 4u : 0u);
+        const uint32_t f0 = 0u - (flip_bits & 1u), f1 = 0u - ((flip_bits >> 1) & 1u), f2 = 0u - ((flip_bits >> 2) & 1u);
+
+        TraversalStateStack_Single<MAX_STACK_SIZE, cwbvh_stack_entry_t> st;
+        st.push(0u /* root_index */, 0u);
 
         while (!st.empty() && ray_masks[ri]) {
-            stack_entry_t cur = st.pop();
+            const cwbvh_stack_entry_t cur = st.pop();
+            uint32_t node_ref = cur.node_index;
 
-            if (cur.dist > inter_t[ri]) {
-                continue;
+            if (cur.pending_mask != 0) {
+                // resume a tested node: bsf picks the nearest pending internal child, popc
+                // addresses it from child_base - no node reload, no box re-test
+                const uint32_t imask = cur.pending_mask & 0xFFu;
+                const uint32_t vmask = cur.pending_mask >> 8;
+                const long k = GetFirstBit(vmask);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = vmask & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cur.node_index, (rest << 8) | imask);
+                }
+                node_ref = cur.node_index + popc8(imask & ((1u << slot) - 1u));
             }
+
         TRAVERSE:
-            if ((cur.index & LEAF_NODE_BIT) == 0) {
-                const light_cwbvh_node_t &n = nodes[cur.index];
+            if ((node_ref & LEAF_NODE_BIT) == 0) {
+                const light_cwbvh_node_t &n = nodes[node_ref];
 
-                // Unpack bounds
-                const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f,
-                                      (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
-                                      (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
                 alignas(32) float bbox_min[3][8], bbox_max[3][8];
-                alignas(32) uint8_t bitmask[4 * S] = {};
-                for (int i = 0; i < 8; ++i) {
-                    bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
-                    bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
-                    if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
-                        bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
-                        bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
-                        bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
-
-                        bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
-                        bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
-                        bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
-                    }
-                    bitmask[i] = n.ch_bitmask[i];
-                }
-
-                ivec<S> temp = ivec<S>{(const int *)bitmask, vector_aligned};
-                temp = ~cmpeq8(temp & reinterpret_cast<const int &>(LightTypesMask4x), ivec<S>{0});
-
-                alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], bbox_min, bbox_max, res_dist);
-                mask &= temp.movemask8();
-                if (mask) {
-                    long i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    if (mask == 0) { // only one box was hit
-                        cur.index = n.child[i];
-                        goto TRAVERSE;
-                    }
-
-                    const long i2 = GetFirstBit(mask);
-                    mask = ClearBit(mask, i2);
-                    if (mask == 0) { // two boxes were hit
-                        if (res_dist[i] < res_dist[i2]) {
-                            st.push(n.child[i2], res_dist[i2]);
-                            cur.index = n.child[i];
-                        } else {
-                            st.push(n.child[i], res_dist[i]);
-                            cur.index = n.child[i2];
-                        }
-                        goto TRAVERSE;
-                    }
-
-                    st.push(n.child[i], res_dist[i]);
-                    st.push(n.child[i2], res_dist[i2]);
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(n.child[i], res_dist[i]);
-                    if (mask == 0) { // three boxes were hit
-                        st.sort_top3();
-                        cur.index = st.pop_index();
-                        goto TRAVERSE;
-                    }
-
-                    i = GetFirstBit(mask);
-                    mask = ClearBit(mask, i);
-                    st.push(n.child[i], res_dist[i]);
-                    if (mask == 0) { // four boxes were hit
-                        st.sort_top4();
-                        cur.index = st.pop_index();
-                        goto TRAVERSE;
-                    }
-
-                    const uint32_t size_before = st.stack_size;
-
-                    // from five to eight boxes were hit
-                    do {
-                        i = GetFirstBit(mask);
-                        mask = ClearBit(mask, i);
-                        st.push(n.child[i], res_dist[i]);
-                    } while (mask != 0);
-
-                    const int count = int(st.stack_size - size_before + 4);
-                    st.sort_topN(count);
-                    cur.index = st.pop_index();
-                    goto TRAVERSE;
-                }
-            } else {
-                const int light_index = int(cur.index & PRIM_INDEX_BITS);
-                const light_t &l = lights[light_index];
-                if ((l.ray_visibility & RAY_TYPE_SHADOW_BIT) == 0) {
+                const long mask =
+                    light_cwbvh_hit_mask<S>(n, _inv_d, _inv_d_o, inter_t[ri], LightTypesMask, bbox_min, bbox_max);
+                if (mask == 0) {
                     continue;
                 }
-                const ivec<S> portal_mask = l.sky_portal ? env_ray : -1;
-                if (l.type == LIGHT_TYPE_RECT) {
-                    float light_fwd[3];
-                    cross(l.rect.u, l.rect.v, light_fwd);
-                    normalize(light_fwd);
-
-                    const float plane_dist = dot3(light_fwd, l.rect.pos);
-
-                    const fvec<S> cos_theta = dot3(r.d, light_fwd);
-                    const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
-
-                    const ivec<S> imask =
-                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
-                    if (imask.not_all_zeros()) {
-                        const float dot_u = dot3(l.rect.u, l.rect.u);
-                        const float dot_v = dot3(l.rect.v, l.rect.v);
-
-                        const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                              fmadd(r.d[2], t, r.o[2])};
-                        const fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
-
-                        const fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
-                        const fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
-
-                        const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
-                        const fvec<S> tan_angl = tan_angle(temp, light_fwd);
-
-                        const fvec<S> final_mask = (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) &
-                                                   (tan_angl < l.rect.tan_half_spread) & simd_cast(imask);
-
-                        ray_mask &= ~simd_cast(final_mask);
-                        where(final_mask, ret) = 0.0f;
-                        ray_mask.store_to(ray_masks, vector_aligned);
+                const uint32_t node_imask = cwbvh_internal_mask(n);
+                // drain the hit leaf lights right away
+                for (uint32_t lm = uint32_t(mask) & ~node_imask; lm != 0;) {
+                    const long li = GetFirstBit(lm);
+                    lm &= ~(1u << li);
+                    const uint32_t meta = (n.meta4[li >> 2] >> (8 * (li & 3))) & 0xFFu;
+                    const int light_index = int(leaf_lights[n.prim_base + (meta & 0x3Fu)] & PRIM_INDEX_BITS);
+                    const light_t &l = lights[light_index];
+                    if ((l.ray_visibility & RAY_TYPE_SHADOW_BIT) == 0) {
+                        continue;
                     }
-                } else if (l.type == LIGHT_TYPE_DISK) {
-                    float light_fwd[3];
-                    cross(l.disk.u, l.disk.v, light_fwd);
-                    normalize(light_fwd);
+                    const ivec<S> portal_mask = l.sky_portal ? env_ray : -1;
+                    if (l.type == LIGHT_TYPE_RECT) {
+                        float light_fwd[3];
+                        cross(l.rect.u, l.rect.v, light_fwd);
+                        normalize(light_fwd);
 
-                    const float plane_dist = dot3(light_fwd, l.disk.pos);
+                        const float plane_dist = dot3(light_fwd, l.rect.pos);
 
-                    const fvec<S> cos_theta = dot3(r.d, light_fwd);
-                    const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+                        const fvec<S> cos_theta = dot3(r.d, light_fwd);
+                        const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
 
-                    const ivec<S> imask =
-                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
-                    if (imask.not_all_zeros()) {
-                        const float dot_u = dot3(l.disk.u, l.disk.u);
-                        const float dot_v = dot3(l.disk.v, l.disk.v);
+                        const ivec<S> imask =
+                            simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
+                        if (imask.not_all_zeros()) {
+                            const float dot_u = dot3(l.rect.u, l.rect.u);
+                            const float dot_v = dot3(l.rect.v, l.rect.v);
 
-                        const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                              fmadd(r.d[2], t, r.o[2])};
-                        const fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
+                            const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                  fmadd(r.d[2], t, r.o[2])};
+                            const fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
 
-                        const fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
-                        const fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
+                            const fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
+                            const fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
 
-                        const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
-                        const fvec<S> tan_angl = tan_angle(temp, light_fwd);
+                            const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
+                            const fvec<S> tan_angl = tan_angle(temp, light_fwd);
 
-                        const fvec<S> final_mask =
-                            (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & (tan_angl < l.disk.tan_half_spread) & simd_cast(imask);
+                            const fvec<S> final_mask = (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) &
+                                                       (tan_angl < l.rect.tan_half_spread) & simd_cast(imask);
 
-                        ray_mask &= ~simd_cast(final_mask);
-                        where(final_mask, ret) = 0.0f;
-                        ray_mask.store_to(ray_masks, vector_aligned);
+                            ray_mask &= ~simd_cast(final_mask);
+                            where(final_mask, ret) = 0.0f;
+                            ray_mask.store_to(ray_masks, vector_aligned);
+                        }
+                    } else if (l.type == LIGHT_TYPE_DISK) {
+                        float light_fwd[3];
+                        cross(l.disk.u, l.disk.v, light_fwd);
+                        normalize(light_fwd);
+
+                        const float plane_dist = dot3(light_fwd, l.disk.pos);
+
+                        const fvec<S> cos_theta = dot3(r.d, light_fwd);
+                        const fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+                        const ivec<S> imask =
+                            simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
+                        if (imask.not_all_zeros()) {
+                            const float dot_u = dot3(l.disk.u, l.disk.u);
+                            const float dot_v = dot3(l.disk.v, l.disk.v);
+
+                            const fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                  fmadd(r.d[2], t, r.o[2])};
+                            const fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
+
+                            const fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
+                            const fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
+
+                            const fvec<S> temp[3] = {-r.d[0], -r.d[1], -r.d[2]};
+                            const fvec<S> tan_angl = tan_angle(temp, light_fwd);
+
+                            const fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) &
+                                                       (tan_angl < l.disk.tan_half_spread) & simd_cast(imask);
+
+                            ray_mask &= ~simd_cast(final_mask);
+                            where(final_mask, ret) = 0.0f;
+                            ray_mask.store_to(ray_masks, vector_aligned);
+                        }
                     }
                 }
+
+                // internal children: swizzle the hit mask into visit order, descend into the
+                // nearest one and push the rest as one compressed entry
+                const uint32_t internal_hits = uint32_t(mask) & node_imask;
+                if (internal_hits == 0) {
+                    continue;
+                }
+                uint32_t m = internal_hits;
+                uint32_t d = ((m >> 1) ^ m) & 0x55u & f0;
+                m ^= d | (d << 1);
+                d = ((m >> 2) ^ m) & 0x33u & f1;
+                m ^= d | (d << 2);
+                d = ((m >> 4) ^ m) & 0x0Fu & f2;
+                m ^= d | (d << 4);
+                const long k = GetFirstBit(m);
+                const uint32_t slot = uint32_t(k) ^ flip_bits;
+                const uint32_t rest = m & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cwbvh_child_base(n), (rest << 8) | node_imask);
+                }
+                node_ref = cwbvh_internal_child(n, slot);
+                goto TRAVERSE;
             }
         }
     }
@@ -6895,7 +7124,7 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
 template <int S>
 Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &_mask,
                                              const ivec<S> &tri_index, Span<const light_t> lights,
-                                             Span<const light_cwbvh_node_t> nodes) {
+                                             Span<const light_cwbvh_node_t> nodes, Span<const uint32_t> leaf_lights) {
     const int SS = S <= 8 ? S : 8;
 
     fvec<S> ret = 1.0f;
@@ -6908,66 +7137,108 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
         // recombine in AoS layout
         const float _p[3] = {P[0][ri], P[1][ri], P[2][ri]}, _ro[3] = {ro[0][ri], ro[1][ri], ro[2][ri]};
 
-        uint32_t stack[MAX_LTREE_STACK_SIZE];
-        float stack_factors[MAX_LTREE_STACK_SIZE];
-        uint32_t stack_size = 0;
+        TraversalStateStack_Single<MAX_STACK_SIZE, light_cwbvh_stack_entry_t> st;
+        st.push(0u /* root_index */, 0u /* masks_L */);
 
-        stack_factors[stack_size] = 1.0f;
-        stack[stack_size++] = 0;
+        bool found = false;
+        while (!st.empty() && !found) {
+            const light_cwbvh_stack_entry_t cur = st.pop();
+            uint32_t node_ref = cur.child_base;
+            uint32_t L = cur.masks_L >> 16;
 
-        while (stack_size) {
-            const uint32_t cur = stack[--stack_size];
-            const float cur_factor = stack_factors[stack_size];
+            if ((cur.masks_L & 0xFFFFu) != 0) {
+                // resume a tested node: bsf picks the next pending internal child, popc addresses
+                // it from child_base - no node reload, no containment re-test
+                const uint32_t imask = cur.masks_L & 0xFFu;
+                const uint32_t vmask = (cur.masks_L >> 8) & 0xFFu;
+                const long k = GetFirstBit(vmask);
+                const uint32_t rest = vmask & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cur.child_base, (rest << 8) | imask | (L << 16), cur.q[0], cur.q[1], cur.q[2], cur.q[3],
+                            cur.q[4], cur.q[5], cur.q[6], cur.q[7]);
+                }
+                L += cur.q[k];
+                node_ref = cur.child_base + popc8(imask & ((1u << k) - 1u));
+            }
 
-            if ((cur & LEAF_NODE_BIT) == 0) {
-                const light_cwbvh_node_t &n = nodes[cur];
+        TRAVERSE:
+            if ((node_ref & LEAF_NODE_BIT) == 0) {
+                const light_cwbvh_node_t &n = nodes[node_ref];
 
-                // Unpack bounds
-                const float ext[3] = {(n.bbox_max[0] - n.bbox_min[0]) / 255.0f,
-                                      (n.bbox_max[1] - n.bbox_min[1]) / 255.0f,
-                                      (n.bbox_max[2] - n.bbox_min[2]) / 255.0f};
+                // Unpack bounds (pow2 quantization: the step comes from ch_exp)
+                const float step[3] = {pow2FromExp(n.ch_exp[0]), pow2FromExp(n.ch_exp[1]), pow2FromExp(n.ch_exp[2])};
                 alignas(32) float bbox_min[3][8], bbox_max[3][8];
                 for (int i = 0; i < 8; ++i) {
                     bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
                     bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
                     if (n.ch_bbox_min[0][i] != 0xff || n.ch_bbox_max[0][i] != 0) {
-                        bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * ext[0];
-                        bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * ext[1];
-                        bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * ext[2];
+                        bbox_min[0][i] = n.bbox_min[0] + n.ch_bbox_min[0][i] * step[0];
+                        bbox_min[1][i] = n.bbox_min[1] + n.ch_bbox_min[1][i] * step[1];
+                        bbox_min[2][i] = n.bbox_min[2] + n.ch_bbox_min[2][i] * step[2];
 
-                        bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * ext[0];
-                        bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * ext[1];
-                        bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * ext[2];
+                        bbox_max[0][i] = n.bbox_min[0] + n.ch_bbox_max[0][i] * step[0];
+                        bbox_max[1][i] = n.bbox_min[1] + n.ch_bbox_max[1][i] * step[1];
+                        bbox_max[2][i] = n.bbox_min[2] + n.ch_bbox_max[2][i] * step[2];
                     }
                 }
 
                 long mask = bbox_test_oct<S>(_p, bbox_min, bbox_max);
-                if (mask) {
-                    alignas(32) float importance[8];
-                    calc_lnode_importance<SS>(n, bbox_min, bbox_max, _ro, importance);
+                if (mask == 0) {
+                    continue;
+                }
+                alignas(32) float importance[8];
+                calc_lnode_importance<SS>(n, bbox_min, bbox_max, _ro, importance);
 
-                    float total_importance = 0.0f;
-                    UNROLLED_FOR(j, 8, { total_importance += importance[j]; })
-                    if (total_importance == 0.0f) {
-                        continue;
+                float total_importance = 0.0f;
+                UNROLLED_FOR(j, 8, { total_importance += importance[j]; })
+                if (total_importance == 0.0f) {
+                    continue;
+                }
+                uint8_t q[8];
+                for (uint32_t hm = uint32_t(mask); hm != 0;) {
+                    const long i = GetFirstBit(hm);
+                    hm &= ~(1u << i);
+                    if (importance[i] == 0.0f) {
+                        mask &= ~(1u << i);
+                    } else {
+                        q[i] = light_factor_q(importance[i] / total_importance);
                     }
+                }
+                if (mask == 0) {
+                    continue;
+                }
 
-                    do {
-                        const long i = GetFirstBit(mask);
-                        mask = ClearBit(mask, i);
-                        if (importance[i] > 0.0f) {
-                            stack_factors[stack_size] = cur_factor * importance[i] / total_importance;
-                            stack[stack_size++] = n.child[i];
-                        }
-                    } while (mask != 0);
+                const uint32_t imask = cwbvh_internal_mask(n);
+                // drain the contained leaf lights right away
+                for (uint32_t lm = uint32_t(mask) & ~imask; lm != 0;) {
+                    const long i = GetFirstBit(lm);
+                    lm &= ~(1u << i);
+                    const uint32_t meta = (n.meta4[i >> 2] >> (8 * (i & 3))) & 0xFFu;
+                    const int light_index = int(leaf_lights[n.prim_base + (meta & 0x3Fu)] & PRIM_INDEX_BITS);
+                    const light_t &l = lights[light_index];
+                    if (l.type == LIGHT_TYPE_TRI && l.tri.tri_index == tri_index[ri]) {
+                        // needed triangle found
+                        ret.set(ri, light_factor_recip(L + q[i]));
+                        found = true;
+                        break;
+                    }
                 }
-            } else {
-                const int light_index = int(cur & PRIM_INDEX_BITS);
-                const light_t &l = lights[light_index];
-                if (l.type == LIGHT_TYPE_TRI && l.tri.tri_index == tri_index[ri]) {
-                    // needed triangle found
-                    ret.set(ri, 1.0f / cur_factor);
+                if (found) {
+                    break;
                 }
+                const uint32_t internal_hits = uint32_t(mask) & imask;
+                if (internal_hits == 0) {
+                    continue;
+                }
+                const long k = GetFirstBit(internal_hits);
+                const uint32_t rest = internal_hits & ~(1u << k);
+                if (rest != 0) {
+                    st.push(cwbvh_child_base(n), (rest << 8) | imask | (L << 16), q[0], q[1], q[2], q[3], q[4], q[5],
+                            q[6], q[7]);
+                }
+                L += q[k];
+                node_ref = cwbvh_internal_child(n, k);
+                goto TRAVERSE;
             }
         }
     }
@@ -7350,8 +7621,8 @@ void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const ivec<S> &mas
 
     fvec<S> V[4], F[4];
     const std::array<fvec<S>, 2> alpha = calc_alpha(roughness, fvec<S>{0.0f}, regularize_alpha);
-    Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, ray.d, alpha.data(), eta, base_color, rand,
-                              false /* fresnel */, false /* preserve_energy */, V, F);
+    Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, ray.d, alpha.data(), eta, base_color, rand, false /* fresnel */,
+                              false /* preserve_energy */, V, F);
 
     where(mask, new_ray.depth) = pack_ray_type(RAY_TYPE_REFR);
     where(mask, new_ray.depth) |=
@@ -7464,13 +7735,11 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
     const ivec<S> refraction_active = simd_cast(lobe_weights.refraction > 0.0f) & mask;
     if (refraction_active.not_all_zeros()) {
         const std::array<fvec<S>, 2> refr_spec_alpha = calc_alpha(spec.roughness, fvec<S>{0.0f}, regularize_alpha);
-        const fvec<S> trans_fresnel =
-            fresnel_dielectric_cos(dot3(view_dir_ts, sampled_normal_ts), 1.0f / trans.eta);
+        const fvec<S> trans_fresnel = fresnel_dielectric_cos(dot3(view_dir_ts, sampled_normal_ts), 1.0f / trans.eta);
 
-        const ivec<S> eval_refr_spec_lobe = simd_cast(lobe_weights.refraction > 0.0f) &
-                                            ((ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) &
-                                            simd_cast(refr_spec_alpha[0] * refr_spec_alpha[1] >= 1e-7f) &
-                                            _is_frontfacing & mask;
+        const ivec<S> eval_refr_spec_lobe =
+            simd_cast(lobe_weights.refraction > 0.0f) & ((ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0) &
+            simd_cast(refr_spec_alpha[0] * refr_spec_alpha[1] >= 1e-7f) & _is_frontfacing & mask;
         if (eval_refr_spec_lobe.not_all_zeros()) {
             const fvec<S> refr_eta = 1.0f / trans.eta;
             fvec<S> spec_col[4];
@@ -7482,10 +7751,9 @@ Ray::NS::ivec<S> Ray::NS::Evaluate_PrincipledNode(
                          { where(eval_refr_spec_lobe, lcol[i]) += safe_div_pos(ls.col[i] * spec_col[i], ls.pdf); })
         }
 
-        const ivec<S> eval_refr_trans_lobe = simd_cast(lobe_weights.refraction > 0.0f) &
-                                             ((ls.ray_flags & RAY_TYPE_REFR_BIT) != 0) &
-                                             simd_cast(refr_spec_alpha[0] * refr_spec_alpha[1] >= 1e-7f) &
-                                             _is_backfacing & mask;
+        const ivec<S> eval_refr_trans_lobe =
+            simd_cast(lobe_weights.refraction > 0.0f) & ((ls.ray_flags & RAY_TYPE_REFR_BIT) != 0) &
+            simd_cast(refr_spec_alpha[0] * refr_spec_alpha[1] >= 1e-7f) & _is_backfacing & mask;
         if (eval_refr_trans_lobe.not_all_zeros()) {
             const fvec<S> refr_base_col[3] = {sqrt(diff.base_color[0]), sqrt(diff.base_color[1]),
                                               sqrt(diff.base_color[2])};
@@ -7677,10 +7945,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         secondary_mask |= sample_coat_lobe;
     }
 
-    ivec<S> sample_trans_lobe =
-        simd_cast(mix_rand >=
-                  lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat) &
-        (total_depth < ps.max_total_depth) & mask;
+    ivec<S> sample_trans_lobe = simd_cast(mix_rand >= lobe_weights.diffuse + lobe_weights.sheen +
+                                                          lobe_weights.specular + lobe_weights.clearcoat) &
+                                (total_depth < ps.max_total_depth) & mask;
     if (sample_trans_lobe.not_all_zeros()) {
         const std::array<fvec<S>, 2> alpha = calc_alpha(spec.roughness, fvec<S>{0.0f}, regularize_alpha);
 
@@ -7695,15 +7962,14 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
             SampleGGX_VNDF(view_dir_ts, alpha.data(), rand, vndf_n);
             UNROLLED_FOR(i, 3, { where(use_vndf, sampled_normal_ts[i]) = vndf_n[i]; })
         }
-        const fvec<S> trans_fresnel =
-            fresnel_dielectric_cos(dot3(view_dir_ts, sampled_normal_ts), 1.0f / trans.eta);
+        const fvec<S> trans_fresnel = fresnel_dielectric_cos(dot3(view_dir_ts, sampled_normal_ts), 1.0f / trans.eta);
 
         mix_rand -= lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat;
         mix_rand = safe_div_pos(mix_rand, lobe_weights.refraction);
 
         const ivec<S> spec_branch = simd_cast(mix_rand < trans_fresnel);
-        sample_trans_lobe &= ((~spec_branch & (refr_depth < ps.max_refr_depth)) |
-                              (spec_branch & (spec_depth < ps.max_spec_depth)));
+        sample_trans_lobe &=
+            ((~spec_branch & (refr_depth < ps.max_refr_depth)) | (spec_branch & (spec_depth < ps.max_spec_depth)));
 
         fvec<S> F[4] = {}, V[3] = {};
 
@@ -8376,9 +8642,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
                                            simd_cast(N_dot_L > 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
                     assert((shadow_mask & eval_light).all_zeros());
-                    shadow_mask |= Evaluate_GlossyNode(ls, ray, eval_light, surf, base_color, roughness,
-                                                       regularize_alpha, mix_weight,
-                                                       (total_depth < ps.max_total_depth), col, sh_r);
+                    shadow_mask |=
+                        Evaluate_GlossyNode(ls, ray, eval_light, surf, base_color, roughness, regularize_alpha,
+                                            mix_weight, (total_depth < ps.max_total_depth), col, sh_r);
                 };
 #endif
 
@@ -8415,8 +8681,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
 #if USE_NEE
                 if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_IMP_SAMPLE)) {
 #if USE_HIERARCHICAL_NEE
-                    const fvec<S> pdf_factor =
-                        EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights, sc.light_cwnodes);
+                    const fvec<S> pdf_factor = EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights,
+                                                                  sc.light_cwnodes, sc.light_leaf_prims);
 #else  // USE_HIERARCHICAL_NEE
                     const float pdf_factor = float(sc.li_indices.size());
 #endif // USE_HIERARCHICAL_NEE
