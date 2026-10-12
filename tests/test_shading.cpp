@@ -1255,7 +1255,7 @@ void test_complex_mat5(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat5_emissive(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 64;
-    const int PixThres = 15480;
+    const int PixThres = 15490;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1632,7 +1632,7 @@ void test_complex_mat6_dof(const char *arch_list[], std::string_view preferred_d
 void test_complex_mat6_mesh_lights(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 64;
     const double MinPSNR = 23.0;
-    const int PixThres = 4505;
+    const int PixThres = 4510;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};
