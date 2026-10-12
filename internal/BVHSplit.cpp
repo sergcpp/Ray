@@ -4,6 +4,7 @@
 #include <climits>
 
 #include <algorithm>
+#include <numeric>
 
 #include "SmallVector.h"
 
@@ -13,6 +14,7 @@
 namespace Ray {
 const int BinningThreshold = 1024;
 const int BinsCount = 256;
+const int MaxBuildDepth = 32;
 
 const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 256;
@@ -135,12 +137,64 @@ bbox_t GetClippedAABB(const Ref::fvec3 &_v0, const Ref::fvec3 &_v1, const Ref::f
 }
 } // namespace Ray
 
+// Balanced split by position along the widest axis - used whenever SAH would produce a leaf
+// bigger than min_primitives_in_leaf (the compacted BVH form has no prim count per leaf, only
+// the 8-prim block at prim_index, so oversized leaves make the extra prims unreachable) or when
+// SAH keeps producing degenerate splits.
+static Ray::split_data_t median_split(const Ray::prim_t *primitives, Ray::Span<const uint32_t> prim_indices,
+                                      const Ray::bbox_t &whole_box) {
+    const int num_prims = int(prim_indices.size());
+
+    const Ray::Ref::fvec4 ext = whole_box.max - whole_box.min;
+    int axis = 0;
+    if (ext[1] > ext[axis])
+        axis = 1;
+    if (ext[2] > ext[axis])
+        axis = 2;
+
+    std::vector<uint32_t> order(num_prims);
+    std::iota(order.begin(), order.end(), 0u);
+    const int mid = num_prims / 2;
+    std::nth_element(
+        order.begin(), order.begin() + mid, order.end(), [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) {
+            return primitives[prim_indices[p1]].bbox_min[axis] < primitives[prim_indices[p2]].bbox_min[axis];
+        });
+
+    std::vector<uint32_t> left_indices, right_indices;
+    left_indices.reserve(mid);
+    right_indices.reserve(num_prims - mid);
+
+    Ray::bbox_t left_bounds, right_bounds;
+    for (int i = 0; i < mid; ++i) {
+        const Ray::prim_t &p = primitives[prim_indices[order[i]]];
+        left_indices.push_back(prim_indices[order[i]]);
+        left_bounds.min = min(left_bounds.min, p.bbox_min);
+        left_bounds.max = max(left_bounds.max, p.bbox_max);
+    }
+    for (int i = mid; i < num_prims; ++i) {
+        const Ray::prim_t &p = primitives[prim_indices[order[i]]];
+        right_indices.push_back(prim_indices[order[i]]);
+        right_bounds.min = min(right_bounds.min, p.bbox_min);
+        right_bounds.max = max(right_bounds.max, p.bbox_max);
+    }
+
+    return {std::move(left_indices),
+            std::move(right_indices),
+            {left_bounds.min, left_bounds.max},
+            {right_bounds.min, right_bounds.max}};
+}
+
 Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
                                            const vtx_attribute_t &positions, const Ref::fvec4 &bbox_min,
                                            const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min,
-                                           const Ref::fvec4 &root_max, const bvh_settings_t &s) {
+                                           const Ref::fvec4 &root_max, const bvh_settings_t &s, int depth) {
     const int num_prims = int(prim_indices.size());
     const bbox_t whole_box = {bbox_min, bbox_max};
+
+    if (depth >= MaxBuildDepth && num_prims > s.min_primitives_in_leaf) {
+        // SAH keeps producing degenerate splits - force a balanced median split
+        return median_split(primitives, prim_indices, whole_box);
+    }
 
     std::vector<bbox_t> modified_prim_bounds;
 
@@ -245,6 +299,11 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                     res_right_bounds.max = max(res_right_bounds.max, p.bbox_max);
                 }
             }
+
+            if (left_indices.empty() || right_indices.empty())
+                return median_split(primitives, prim_indices, whole_box);
+        } else if (num_prims > s.min_primitives_in_leaf) {
+            return median_split(primitives, prim_indices, whole_box);
         } else {
             left_indices.assign(prim_indices.begin(), prim_indices.end());
             res_left_bounds = whole_box;
@@ -498,6 +557,8 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
             for (size_t i = div_index; i < axis_lists[div_axis].size(); ++i) {
                 right_indices.push_back(prim_indices[axis_lists[div_axis][i]]);
             }
+        } else if (num_prims > s.min_primitives_in_leaf) {
+            return median_split(primitives, prim_indices, whole_box);
         } else {
             left_indices.assign(prim_indices.begin(), prim_indices.end());
             res_left_bounds = whole_box;

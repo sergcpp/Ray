@@ -19,7 +19,7 @@ struct split_data_t {
 
 split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
                                  const vtx_attribute_t &positions, const Ref::fvec4 &bbox_min,
-                                 const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min,
-                                 const Ref::fvec4 &root_max, const bvh_settings_t &s);
+                                 const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min, const Ref::fvec4 &root_max,
+                                 const bvh_settings_t &s, int depth);
 
 } // namespace Ray

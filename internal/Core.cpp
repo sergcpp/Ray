@@ -547,9 +547,10 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
     struct prims_coll_t {
         std::vector<uint32_t> indices;
         Ref::fvec4 min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
+        int depth = 0;
         prims_coll_t() = default;
-        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::fvec4 &_min, const Ref::fvec4 &_max)
-            : indices(std::move(_indices)), min(_min), max(_max) {}
+        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::fvec4 &_min, const Ref::fvec4 &_max, int _depth)
+            : indices(std::move(_indices)), min(_min), max(_max), depth(_depth) {}
     };
 
     std::deque<prims_coll_t, aligned_allocator<prims_coll_t, alignof(prims_coll_t)>> prim_lists;
@@ -569,7 +570,8 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
     while (!prim_lists.empty()) {
         split_data_t split_data =
             SplitPrimitives_SAH(prims.data(), prim_lists.back().indices, positions, prim_lists.back().min,
-                                prim_lists.back().max, root_min, root_max, s);
+                                prim_lists.back().max, root_min, root_max, s, prim_lists.back().depth);
+        const int depth = prim_lists.back().depth;
         prim_lists.pop_back();
 
         if (split_data.right_indices.empty()) {
@@ -613,9 +615,9 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
             memcpy(&n.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
             memcpy(&n.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
             prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0],
-                                     split_data.left_bounds[1]);
+                                     split_data.left_bounds[1], depth + 1);
             prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0],
-                                     split_data.right_bounds[1]);
+                                     split_data.right_bounds[1], depth + 1);
 
             num_nodes += 2;
         }
