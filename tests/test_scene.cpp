@@ -635,6 +635,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
         }
         env_mesh_desc.groups = groups;
 
+        // Spatial-split coverage: the room shell has large straddling triangles
+        env_mesh_desc.bvh_quality = eBVHBuildQuality::HighQuality;
+
         env_mesh = scene.AddMesh(env_mesh_desc);
 
         // Add mesh one more time to test compaction later
