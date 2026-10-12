@@ -291,7 +291,8 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
 }
 
 std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint32_t vert_index,
-                                                                     const uint32_t vert_count) {
+                                                                     const uint32_t vert_count,
+                                                                     const eBVHBuildQuality quality) {
     VkAccelerationStructureGeometryTrianglesDataKHR tri_data = {
         VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR};
     tri_data.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
@@ -334,8 +335,10 @@ std::pair<uint32_t, uint32_t> Ray::Vk::Scene::Build_HWRT_BLAS_nolock(const uint3
         VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     build_info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    build_info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
-                       VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+    build_info.flags =
+        VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR |
+        (quality == eBVHBuildQuality::FastBuild ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR
+                                                : VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR);
     build_info.geometryCount = uint32_t(geometries.size());
     build_info.pGeometries = geometries.cdata();
 

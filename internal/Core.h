@@ -271,6 +271,16 @@ struct bvh_settings_t {
     int primitive_alignment = 1;
 };
 
+inline bvh_settings_t mesh_bvh_settings(const eBVHBuildQuality quality) {
+    bvh_settings_t s;
+    s.oversplit_threshold = -1.0f;
+    s.allow_spatial_splits = quality == eBVHBuildQuality::HighQuality;
+    s.use_fast_bvh_build = quality == eBVHBuildQuality::FastBuild;
+    s.min_primitives_in_leaf = 8;
+    s.primitive_alignment = 8;
+    return s;
+}
+
 template <typename T, size_t Alignment = alignof(T)>
 using aligned_vector = std::vector<T, aligned_allocator<T, Alignment>>;
 

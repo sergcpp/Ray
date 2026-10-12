@@ -108,8 +108,7 @@ force_inline float castflt_up(const double val) {
     return a;
 }
 
-bbox_t GetClippedAABB(const Ref::fvec3 &_v0, const Ref::fvec3 &_v1, const Ref::fvec3 &_v2,
-                      const bbox_t &limits) {
+bbox_t GetClippedAABB(const Ref::fvec3 &_v0, const Ref::fvec3 &_v1, const Ref::fvec3 &_v2, const bbox_t &limits) {
     Ref::dvec3 vertices1[9], vertices2[9];
     int vertex_count = 3;
 
@@ -168,7 +167,17 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
     uint32_t div_index = 0;
     bbox_t res_left_bounds, res_right_bounds;
 
-    if (num_prims > BinningThreshold) {
+    if (num_prims > BinningThreshold || s.use_fast_bvh_build) {
+        std::vector<uint32_t> left_indices, right_indices;
+
+        if (num_prims <= s.min_primitives_in_leaf) {
+            left_indices.assign(prim_indices.begin(), prim_indices.end());
+            return {std::move(left_indices),
+                    std::move(right_indices),
+                    {whole_box.min, whole_box.max},
+                    {res_right_bounds.min, res_right_bounds.max}};
+        }
+
         for (int axis = 0; axis < 3; ++axis) {
             const float bounds_min = whole_box.min[axis];
             const float bounds_max = whole_box.max[axis];
@@ -223,7 +232,6 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
             }
         }
 
-        std::vector<uint32_t> left_indices, right_indices;
         if (div_axis != -1) {
             for (int i = 0; i < num_prims; ++i) {
                 const prim_t &p = primitives[prim_indices[i]];

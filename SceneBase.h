@@ -135,6 +135,13 @@ struct vtx_attribute_t {
     int stride = 0;         ///< Stride between vertices expressed in sizeof(float)
 };
 
+/// BVH build quality/speed trade-off, similar to VkBuildAccelerationStructureFlagBitsKHR hints
+enum class eBVHBuildQuality : uint8_t {
+    FastBuild,   ///< Fastest build, lowest tree quality
+    Default,     ///< Balanced build
+    HighQuality, ///< Better BVH, worse load times and memory consumption (spatial splits)
+};
+
 /// Mesh description
 struct mesh_desc_t {
     std::string_view name;               ///< Mesh name (for debugging)
@@ -146,8 +153,7 @@ struct mesh_desc_t {
     Span<const uint32_t> vtx_indices;    ///< Vertex indices, defining primitives
     int base_vertex = 0;                 ///< Shift applied to indices
     Span<const mat_group_desc_t> groups; ///< Shapes of a mesh
-    bool allow_spatial_splits = false;   ///< Better BVH, worse load times and memory consumption
-    bool use_fast_bvh_build = false;     ///< Use faster BVH construction with less tree quality
+    eBVHBuildQuality bvh_quality = eBVHBuildQuality::Default;
 };
 
 /// Mesh instance description

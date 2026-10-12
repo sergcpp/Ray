@@ -155,7 +155,8 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 }
 
 std::pair<uint32_t, uint32_t> Ray::Dx::Scene::Build_HWRT_BLAS_nolock(const uint32_t vert_index,
-                                                                     const uint32_t vert_count) {
+                                                                     const uint32_t vert_count,
+                                                                     const eBVHBuildQuality quality) {
     //
     // Gather geometries
     //
@@ -191,8 +192,10 @@ std::pair<uint32_t, uint32_t> Ray::Dx::Scene::Build_HWRT_BLAS_nolock(const uint3
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc = {};
     as_desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
     as_desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    as_desc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-                           D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+    as_desc.Inputs.Flags =
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION |
+        (quality == eBVHBuildQuality::FastBuild ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD
+                                                : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE);
     as_desc.Inputs.NumDescs = UINT(geometries.size());
     as_desc.Inputs.pGeometryDescs = geometries.data();
 

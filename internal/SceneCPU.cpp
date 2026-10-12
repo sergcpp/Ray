@@ -349,12 +349,7 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
 }
 
 Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
-    bvh_settings_t s;
-    s.oversplit_threshold = -1.0f;
-    s.allow_spatial_splits = _m.allow_spatial_splits;
-    s.use_fast_bvh_build = _m.use_fast_bvh_build;
-    s.min_primitives_in_leaf = 8;
-    s.primitive_alignment = 8;
+    const bvh_settings_t s = mesh_bvh_settings(_m.bvh_quality);
 
     const uint64_t t1 = Ray::GetTimeMs();
 
