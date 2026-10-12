@@ -1207,17 +1207,17 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
                                   s.materials_.empty() ? nullptr : &s.materials_[0],
                                   {s.lights_.data(), s.lights_.capacity()},
                                   {s.li_indices_},
-                                  {},
+                                  {s.dir_lights_},
                                   s.visible_lights_count_,
                                   s.blocker_lights_count_,
                                   {s.light_nodes_},
                                   {s.light_cwnodes_},
-                                  {},
-                                  {},
-                                  {},
+                                  {s.light_leaf_prims_},
+                                  {s.sky_transmittance_lut_},
+                                  {s.sky_multiscatter_lut_},
                                   cache_grid_params,
-                                  {},
-                                  {}};
+                                  {s.spatial_cache_entries_},
+                                  {s.spatial_cache_voxels_prev_}};
 
     const uint32_t tlas_root = s.tlas_root_;
 
