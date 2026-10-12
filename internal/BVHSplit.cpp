@@ -4,7 +4,6 @@
 #include <climits>
 
 #include <algorithm>
-#include <numeric>
 
 #include "SmallVector.h"
 
@@ -111,77 +110,68 @@ static Ref::dvec3 prim_vertex(const vtx_attribute_t &positions, uint32_t vtx) {
     return {double(v[0]), double(v[1]), double(v[2])};
 }
 
-// Balanced split by position along the widest axis - used whenever SAH would produce a leaf
-// bigger than min_primitives_in_leaf (the compacted BVH form has no prim count per leaf, only
-// the 8-prim block at prim_index, so oversized leaves make the extra prims unreachable) or when
-// SAH keeps producing degenerate splits.
-static split_data_t median_split(const prim_t *primitives, Span<const uint32_t> prim_indices, const bbox_t &whole_box,
-                                 Span<const bbox_t> prim_bounds) {
-    const int num_prims = int(prim_indices.size());
+static bbox_t range_bounds(const ref_t *rp, const int count) {
+    bbox_t b;
+    for (int i = 0; i < count; ++i) {
+        b.min = min(b.min, rp[i].bbox_min);
+        b.max = max(b.max, rp[i].bbox_max);
+    }
+    return b;
+}
 
-    const Ref::fvec4 ext = whole_box.max - whole_box.min;
+static int widest_axis(const bbox_t &box) {
+    const Ref::fvec4 ext = box.max - box.min;
     int axis = 0;
     if (ext[1] > ext[axis])
         axis = 1;
     if (ext[2] > ext[axis])
         axis = 2;
-
-    std::vector<uint32_t> order(num_prims);
-    std::iota(order.begin(), order.end(), 0u);
-    const int mid = num_prims / 2;
-    std::nth_element(
-        order.begin(), order.begin() + mid, order.end(), [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) {
-            return primitives[prim_indices[p1]].bbox_min[axis] < primitives[prim_indices[p2]].bbox_min[axis];
-        });
-
-    std::vector<uint32_t> left_indices, right_indices;
-    std::vector<bbox_t> left_pb, right_pb;
-    left_indices.reserve(mid);
-    right_indices.reserve(num_prims - mid);
-    if (!prim_bounds.empty()) {
-        left_pb.reserve(mid);
-        right_pb.reserve(num_prims - mid);
-    }
-
-    bbox_t left_bounds, right_bounds;
-    for (int i = 0; i < mid; ++i) {
-        const prim_t &p = primitives[prim_indices[order[i]]];
-        left_indices.push_back(prim_indices[order[i]]);
-        if (!prim_bounds.empty())
-            left_pb.push_back(prim_bounds[order[i]]);
-        left_bounds.min = min(left_bounds.min, p.bbox_min);
-        left_bounds.max = max(left_bounds.max, p.bbox_max);
-    }
-    for (int i = mid; i < num_prims; ++i) {
-        const prim_t &p = primitives[prim_indices[order[i]]];
-        right_indices.push_back(prim_indices[order[i]]);
-        if (!prim_bounds.empty())
-            right_pb.push_back(prim_bounds[order[i]]);
-        right_bounds.min = min(right_bounds.min, p.bbox_min);
-        right_bounds.max = max(right_bounds.max, p.bbox_max);
-    }
-
-    return {std::move(left_indices),
-            std::move(right_indices),
-            std::move(left_pb),
-            std::move(right_pb),
-            {left_bounds.min, left_bounds.max},
-            {right_bounds.min, right_bounds.max},
-            false};
+    return axis;
 }
 
-split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
-                                 const vtx_attribute_t &positions, const Ref::fvec4 &bbox_min,
-                                 const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min, const Ref::fvec4 &root_max,
-                                 const bvh_settings_t &s, int depth, int spatial_depth, bool allow_spatial,
-                                 Span<const bbox_t> prim_bounds) {
-    const int num_prims = int(prim_indices.size());
+// Balanced split by position along the widest axis
+static split_result_t median_split(std::vector<ref_t> &refs, const uint32_t start, const uint32_t end,
+                                   const bbox_t &whole_box) {
+    const int num_prims = int(end - start);
+    const int axis = widest_axis(whole_box);
+
+    const uint32_t mid = start + num_prims / 2;
+    std::nth_element(refs.begin() + start, refs.begin() + mid, refs.begin() + end,
+                     [axis](const ref_t &r1, const ref_t &r2) { return r1.bbox_min[axis] < r2.bbox_min[axis]; });
+
+    const bbox_t lb = range_bounds(&refs[start], int(mid - start));
+    const bbox_t rb = range_bounds(&refs[mid], int(end - mid));
+
+    split_result_t res;
+    res.left_start = start;
+    res.left_end = mid;
+    res.right_start = mid;
+    res.right_end = end;
+    res.left_bounds[0] = lb.min;
+    res.left_bounds[1] = lb.max;
+    res.right_bounds[0] = rb.min;
+    res.right_bounds[1] = rb.max;
+    return res;
+}
+
+static split_result_t leaf_result() {
+    split_result_t res;
+    res.is_leaf = true;
+    return res;
+}
+
+split_result_t SplitPrimitives_SAH(const prim_t *primitives, std::vector<ref_t> &refs, const uint32_t start,
+                                   const uint32_t end, const vtx_attribute_t &positions, const Ref::fvec4 &bbox_min,
+                                   const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min, const Ref::fvec4 &root_max,
+                                   const bvh_settings_t &s, const int depth, const int spatial_depth,
+                                   const bool allow_spatial, scratch_t &scratch) {
+    const int num_prims = int(end - start);
     const bbox_t whole_box = {bbox_min, bbox_max};
-    const bool use_pb = !prim_bounds.empty();
+    assert(end == refs.size()); // tail invariant: the node's refs are the last entries of refs
 
     if (depth >= MaxBuildDepth && num_prims > s.min_primitives_in_leaf) {
         // SAH keeps producing degenerate splits - force a balanced median split
-        return median_split(primitives, prim_indices, whole_box, prim_bounds);
+        return median_split(refs, start, end, whole_box);
     }
 
     float res_sah = FLT_MAX;
@@ -194,25 +184,8 @@ split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> 
     bbox_t res_left_bounds, res_right_bounds;
 
     if (num_prims > BinningThreshold || s.use_fast_bvh_build) {
-        std::vector<uint32_t> left_indices, right_indices;
-        std::vector<bbox_t> left_pb, right_pb;
-        if (use_pb) {
-            left_pb.reserve(size_t(num_prims));
-            right_pb.reserve(size_t(num_prims));
-        }
-
-        if (num_prims <= s.min_primitives_in_leaf) {
-            left_indices.assign(prim_indices.begin(), prim_indices.end());
-            if (use_pb)
-                left_pb.assign(prim_bounds.begin(), prim_bounds.end());
-            return {std::move(left_indices),
-                    std::move(right_indices),
-                    std::move(left_pb),
-                    std::move(right_pb),
-                    {whole_box.min, whole_box.max},
-                    {res_right_bounds.min, res_right_bounds.max},
-                    false};
-        }
+        if (num_prims <= s.min_primitives_in_leaf)
+            return leaf_result();
 
         for (int axis = 0; axis < 3; ++axis) {
             const float bounds_min = whole_box.min[axis];
@@ -230,12 +203,12 @@ split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> 
             } bins[BinsCount];
 
             for (int i = 0; i < num_prims; ++i) {
-                const prim_t &p = primitives[prim_indices[i]];
-                const int bin_ndx = std::min(BinsCount - 1, int((p.bbox_min[axis] - bounds_min) * Scale));
+                const ref_t &r = refs[start + i];
+                const int bin_ndx = std::min(BinsCount - 1, int((r.bbox_min[axis] - bounds_min) * Scale));
 
                 bins[bin_ndx].prim_count++;
-                bins[bin_ndx].bounds.min = min(bins[bin_ndx].bounds.min, p.bbox_min);
-                bins[bin_ndx].bounds.max = max(bins[bin_ndx].bounds.max, p.bbox_max);
+                bins[bin_ndx].bounds.min = min(bins[bin_ndx].bounds.min, r.bbox_min);
+                bins[bin_ndx].bounds.max = max(bins[bin_ndx].bounds.max, r.bbox_max);
             }
 
             float area_left[BinsCount - 1], area_right[BinsCount - 1];
@@ -268,119 +241,76 @@ split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> 
             }
         }
 
+        split_result_t result;
         if (div_axis != -1) {
-            for (int i = 0; i < num_prims; ++i) {
-                const prim_t &p = primitives[prim_indices[i]];
-                if (p.bbox_min[div_axis] < div_pos) {
-                    left_indices.push_back(prim_indices[i]);
-                    if (use_pb)
-                        left_pb.push_back(prim_bounds[i]);
-                    res_left_bounds.min = min(res_left_bounds.min, p.bbox_min);
-                    res_left_bounds.max = max(res_left_bounds.max, p.bbox_max);
-                } else {
-                    right_indices.push_back(prim_indices[i]);
-                    if (use_pb)
-                        right_pb.push_back(prim_bounds[i]);
-                    res_right_bounds.min = min(res_right_bounds.min, p.bbox_min);
-                    res_right_bounds.max = max(res_right_bounds.max, p.bbox_max);
-                }
+            uint32_t lo = start, hi = end;
+            while (lo < hi) {
+                if (refs[lo].bbox_min[div_axis] < div_pos)
+                    ++lo;
+                else
+                    std::swap(refs[lo], refs[--hi]);
             }
 
-            if (left_indices.empty() || right_indices.empty())
-                return median_split(primitives, prim_indices, whole_box, prim_bounds);
-        } else if (num_prims > s.min_primitives_in_leaf) {
-            return median_split(primitives, prim_indices, whole_box, prim_bounds);
-        } else {
-            left_indices.assign(prim_indices.begin(), prim_indices.end());
-            if (use_pb)
-                left_pb.assign(prim_bounds.begin(), prim_bounds.end());
-            res_left_bounds = whole_box;
+            if (lo == start || lo == end)
+                return median_split(refs, start, end, whole_box);
+
+            const bbox_t lb = range_bounds(&refs[start], int(lo - start));
+            const bbox_t rb = range_bounds(&refs[lo], int(end - lo));
+            result.left_start = start;
+            result.left_end = lo;
+            result.right_start = lo;
+            result.right_end = end;
+            result.left_bounds[0] = lb.min;
+            result.left_bounds[1] = lb.max;
+            result.right_bounds[0] = rb.min;
+            result.right_bounds[1] = rb.max;
+            return result;
         }
 
-        return {std::move(left_indices),
-                std::move(right_indices),
-                std::move(left_pb),
-                std::move(right_pb),
-                {res_left_bounds.min, res_left_bounds.max},
-                {res_right_bounds.min, res_right_bounds.max},
-                false};
+        if (num_prims > s.min_primitives_in_leaf)
+            return median_split(refs, start, end, whole_box);
+        return leaf_result();
     } else {
-        SmallVector<uint32_t, 1024> axis_lists[3];
-
         if (num_prims > s.min_primitives_in_leaf) {
-            for (auto &list : axis_lists) {
-                list.reserve(num_prims);
-            }
-
-            for (uint32_t i = 0; i < uint32_t(num_prims); ++i) {
-                axis_lists[0].push_back(i);
-                axis_lists[1].push_back(i);
-                axis_lists[2].push_back(i);
-            }
-
-            SmallVector<bbox_t, 1024> right_bounds(num_prims);
+            // Sort the node's references in place along each axis and sweep them; after the
+            // loop the range is in axis-2 order, so re-sort if another axis won.
+            scratch.right_bounds.resize(num_prims);
 
             for (int axis = 0; axis < 3; ++axis) {
-                auto &list = axis_lists[axis];
-
-                if (use_pb) {
-                    std::stable_sort(list.begin(), list.end(), [axis, &prim_bounds](uint32_t p1, uint32_t p2) -> bool {
-                        return prim_bounds[p1].max[axis] < prim_bounds[p2].max[axis];
-                    });
-                } else {
-                    std::stable_sort(list.begin(), list.end(),
-                                     [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) -> bool {
-                                         return primitives[prim_indices[p1]].bbox_max[axis] <
-                                                primitives[prim_indices[p2]].bbox_max[axis];
-                                     });
-                }
+                std::sort(refs.begin() + start, refs.begin() + end, [axis](const ref_t &r1, const ref_t &r2) -> bool {
+                    return r1.bbox_max[axis] < r2.bbox_max[axis];
+                });
 
                 bbox_t cur_right_bounds;
-                if (use_pb) {
-                    for (size_t i = list.size() - 1; i > 0; --i) {
-                        const bbox_t &pb = prim_bounds[list[i]];
-                        cur_right_bounds.min = min(cur_right_bounds.min, pb.min);
-                        cur_right_bounds.max = max(cur_right_bounds.max, pb.max);
-                        right_bounds[i - 1] = cur_right_bounds;
-                    }
-                } else {
-                    for (size_t i = list.size() - 1; i > 0; --i) {
-                        cur_right_bounds.min = min(cur_right_bounds.min, primitives[prim_indices[list[i]]].bbox_min);
-                        cur_right_bounds.max = max(cur_right_bounds.max, primitives[prim_indices[list[i]]].bbox_max);
-                        right_bounds[i - 1] = cur_right_bounds;
-                    }
+                for (int i = num_prims - 1; i > 0; --i) {
+                    const ref_t &r = refs[start + i];
+                    cur_right_bounds.min = min(cur_right_bounds.min, r.bbox_min);
+                    cur_right_bounds.max = max(cur_right_bounds.max, r.bbox_max);
+                    scratch.right_bounds[i - 1] = cur_right_bounds;
                 }
 
                 bbox_t left_bounds;
-                for (size_t i = 1; i < list.size(); i++) {
-                    if (use_pb) {
-                        left_bounds.min = min(left_bounds.min, prim_bounds[list[i - 1]].min);
-                        left_bounds.max = max(left_bounds.max, prim_bounds[list[i - 1]].max);
-                    } else {
-                        left_bounds.min = min(left_bounds.min, primitives[prim_indices[list[i - 1]]].bbox_min);
-                        left_bounds.max = max(left_bounds.max, primitives[prim_indices[list[i - 1]]].bbox_max);
-                    }
+                for (int i = 1; i < num_prims; i++) {
+                    const ref_t &r = refs[start + i - 1];
+                    left_bounds.min = min(left_bounds.min, r.bbox_min);
+                    left_bounds.max = max(left_bounds.max, r.bbox_max);
 
                     const float sah = left_bounds.surface_area() * float(i) +
-                                      right_bounds[i - 1].surface_area() * float(list.size() - i);
+                                      scratch.right_bounds[i - 1].surface_area() * float(num_prims - i);
                     if (sah < res_sah) {
                         res_sah = sah;
                         div_axis = axis;
                         div_index = uint32_t(i);
                         res_left_bounds = left_bounds;
-                        res_right_bounds = right_bounds[i - 1];
+                        res_right_bounds = scratch.right_bounds[i - 1];
                     }
                 }
             }
 
-            // Spatial split candidate search (SBVH): bin the (clipped) reference bounds, chop
-            // polygons incrementally across the bin planes they span, then sweep the bins once
-            // per axis for the best plane.
             int spatial_axis = -1;
             float spatial_pos = 0.0f;
 
-            if (allow_spatial && use_pb && !positions.data.empty() && spatial_depth < MaxSpatialDepth &&
-                div_axis != -1) {
+            if (allow_spatial && !positions.data.empty() && spatial_depth < MaxSpatialDepth && div_axis != -1) {
                 const bbox_t overlap = {max(res_left_bounds.min, res_right_bounds.min),
                                         min(res_left_bounds.max, res_right_bounds.max)};
                 Ref::ivec4 test = simd_cast(overlap.max <= overlap.min);
@@ -405,17 +335,17 @@ split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> 
                         const float inv_bin_size = 1.0f / bin_size;
 
                         for (int i = 0; i < num_prims; ++i) {
-                            const bbox_t &pb = prim_bounds[i];
+                            const ref_t &r = refs[start + i];
                             const int first = std::min(NumSpatialSplitBins - 1,
-                                                       std::max(0, int((pb.min[axis] - bmin) * inv_bin_size)));
+                                                       std::max(0, int((r.bbox_min[axis] - bmin) * inv_bin_size)));
                             const int last = std::min(NumSpatialSplitBins - 1,
-                                                      std::max(first, int((pb.max[axis] - bmin) * inv_bin_size)));
+                                                      std::max(first, int((r.bbox_max[axis] - bmin) * inv_bin_size)));
 
                             bins[axis][first].enter++;
                             bins[axis][last].exit++;
 
                             Ref::dvec3 upper[64], lower[64], rest[64];
-                            const prim_t &p = primitives[prim_indices[i]];
+                            const prim_t &p = primitives[r.prim_index];
                             upper[0] = prim_vertex(positions, p.i0);
                             upper[1] = prim_vertex(positions, p.i1);
                             upper[2] = prim_vertex(positions, p.i2);
@@ -472,39 +402,36 @@ split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> 
             }
 
             if (spatial_axis != -1) {
-                std::vector<uint32_t> left_indices, right_indices;
-                std::vector<bbox_t> left_pb, right_pb;
-                left_indices.reserve(num_prims);
-                right_indices.reserve(num_prims);
-                left_pb.reserve(num_prims);
-                right_pb.reserve(num_prims);
-
+                // Partition in place: [start, leftEnd) left, [leftEnd, rightStart) straddlers,
+                // [rightStart, refs.size()) right (duplicates get appended at the end).
+                uint32_t leftEnd = start, rightStart = end;
                 bbox_t lb, rb;
-                for (int i = 0; i < num_prims; ++i) {
-                    const bbox_t &pb = prim_bounds[i];
-                    if (pb.max[spatial_axis] <= spatial_pos) {
-                        left_indices.push_back(prim_indices[i]);
-                        left_pb.push_back(pb);
-                        lb.min = min(lb.min, pb.min);
-                        lb.max = max(lb.max, pb.max);
-                    } else if (pb.min[spatial_axis] >= spatial_pos) {
-                        right_indices.push_back(prim_indices[i]);
-                        right_pb.push_back(pb);
-                        rb.min = min(rb.min, pb.min);
-                        rb.max = max(rb.max, pb.max);
+
+                for (uint32_t i = start; i < rightStart;) {
+                    const ref_t &r = refs[i];
+                    if (r.bbox_max[spatial_axis] <= spatial_pos) {
+                        lb.min = min(lb.min, r.bbox_min);
+                        lb.max = max(lb.max, r.bbox_max);
+                        if (i != leftEnd)
+                            std::swap(refs[i], refs[leftEnd]);
+                        ++leftEnd;
+                        ++i;
+                    } else if (r.bbox_min[spatial_axis] >= spatial_pos) {
+                        rb.min = min(rb.min, r.bbox_min);
+                        rb.max = max(rb.max, r.bbox_max);
+                        std::swap(refs[i], refs[--rightStart]);
+                    } else {
+                        ++i;
                     }
                 }
 
                 // References intersecting both sides: unsplit to one side or duplicate, whichever
                 // is cheapest by SAH (this also keeps the duplicate count low by itself).
-                for (int i = 0; i < num_prims; ++i) {
-                    const bbox_t &pb = prim_bounds[i];
-                    if (pb.max[spatial_axis] <= spatial_pos || pb.min[spatial_axis] >= spatial_pos) {
-                        continue;
-                    }
+                while (leftEnd < rightStart) {
+                    const ref_t r = refs[leftEnd];
 
                     Ref::dvec3 tri[3];
-                    const prim_t &p = primitives[prim_indices[i]];
+                    const prim_t &p = primitives[r.prim_index];
                     tri[0] = prim_vertex(positions, p.i0);
                     tri[1] = prim_vertex(positions, p.i1);
                     tri[2] = prim_vertex(positions, p.i2);
@@ -517,103 +444,100 @@ split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> 
                     if (lo_count)
                         grow_from_poly(lref, lo, lo_count);
                     else
-                        lref = pb;
+                        lref = {r.bbox_min, r.bbox_max};
                     if (up_count)
                         grow_from_poly(rref, up, up_count);
                     else
-                        rref = pb;
+                        rref = {r.bbox_min, r.bbox_max};
                     // keep the clipped pieces inside the reference's current bounds
-                    lref.min = max(lref.min, pb.min);
-                    lref.max = min(lref.max, pb.max);
-                    rref.min = max(rref.min, pb.min);
-                    rref.max = min(rref.max, pb.max);
+                    lref.min = max(lref.min, r.bbox_min);
+                    lref.max = min(lref.max, r.bbox_max);
+                    rref.min = max(rref.min, r.bbox_min);
+                    rref.max = min(rref.max, r.bbox_max);
 
                     const bool dup_valid = lref.min[0] <= lref.max[0] && lref.min[1] <= lref.max[1] &&
                                            lref.min[2] <= lref.max[2] && rref.min[0] <= rref.max[0] &&
                                            rref.min[1] <= rref.max[1] && rref.min[2] <= rref.max[2];
+                    // never let the children hold more than twice the node's references -
+                    // enforced here so we never have to abandon a partition that already
+                    // clipped references
+                    const bool dup_budget_ok =
+                        int((leftEnd - start) + 1 + (refs.size() - rightStart) + 1) <= 2 * num_prims;
 
-                    const bbox_t lub = {min(lb.min, pb.min), max(lb.max, pb.max)};
-                    const bbox_t rub = {min(rb.min, pb.min), max(rb.max, pb.max)};
+                    const bbox_t lub = {min(lb.min, r.bbox_min), max(lb.max, r.bbox_max)};
+                    const bbox_t rub = {min(rb.min, r.bbox_min), max(rb.max, r.bbox_max)};
                     const bbox_t ldb = {min(lb.min, lref.min), max(lb.max, lref.max)};
                     const bbox_t rdb = {min(rb.min, rref.min), max(rb.max, rref.max)};
 
-                    const float lac = float(left_indices.size()), rac = float(right_indices.size());
+                    const float lac = float(leftEnd - start), rac = float(refs.size() - rightStart);
                     const float lbc = lac + 1.0f, rbc = rac + 1.0f;
 
                     const float unsplit_left_sah = lub.surface_area() * lbc + rb.surface_area() * rac;
                     const float unsplit_right_sah = lb.surface_area() * lac + rub.surface_area() * rbc;
                     const float duplicate_sah =
-                        dup_valid ? ldb.surface_area() * lbc + rdb.surface_area() * rbc : FLT_MAX;
+                        dup_valid && dup_budget_ok ? ldb.surface_area() * lbc + rdb.surface_area() * rbc : FLT_MAX;
 
                     if (unsplit_left_sah <= unsplit_right_sah && unsplit_left_sah <= duplicate_sah) {
-                        left_indices.push_back(prim_indices[i]);
-                        left_pb.push_back(pb);
                         lb = lub;
+                        ++leftEnd;
                     } else if (unsplit_right_sah <= duplicate_sah) {
-                        right_indices.push_back(prim_indices[i]);
-                        right_pb.push_back(pb);
                         rb = rub;
+                        std::swap(refs[leftEnd], refs[--rightStart]);
                     } else {
-                        left_indices.push_back(prim_indices[i]);
-                        left_pb.push_back(lref);
-                        right_indices.push_back(prim_indices[i]);
-                        right_pb.push_back(rref);
                         lb = ldb;
                         rb = rdb;
+                        refs[leftEnd] = {lref.min, lref.max, r.prim_index};
+                        ++leftEnd;
+                        refs.push_back({rref.min, rref.max, r.prim_index});
                     }
                 }
 
-                if (!left_indices.empty() && !right_indices.empty() &&
-                    int(left_indices.size() + right_indices.size()) <= 2 * num_prims) {
-                    return {std::move(left_indices),
-                            std::move(right_indices),
-                            std::move(left_pb),
-                            std::move(right_pb),
-                            {lb.min, lb.max},
-                            {rb.min, rb.max},
-                            true};
+                if (leftEnd > start && rightStart < refs.size()) {
+                    split_result_t result;
+                    result.spatial = true;
+                    result.left_start = start;
+                    result.left_end = leftEnd;
+                    result.right_start = rightStart;
+                    result.right_end = uint32_t(refs.size());
+                    result.left_bounds[0] = lb.min;
+                    result.left_bounds[1] = lb.max;
+                    result.right_bounds[0] = rb.min;
+                    result.right_bounds[1] = rb.max;
+                    return result;
                 }
-                // degenerate or over-duplicating spatial split - fall back to the object split
+                // empty child - no reference was clipped in that case, so falling back to the
+                // object split below is safe
             }
         }
 
-        std::vector<uint32_t> left_indices, right_indices;
-        std::vector<bbox_t> left_pb, right_pb;
+        split_result_t result;
         if (div_axis != -1) {
-            left_indices.reserve(size_t(div_index));
-            right_indices.reserve(prim_indices.size() - div_index);
-            if (use_pb) {
-                left_pb.reserve(size_t(div_index));
-                right_pb.reserve(prim_indices.size() - div_index);
+            if (div_axis != 2) {
+                std::sort(refs.begin() + start, refs.begin() + end,
+                          [div_axis](const ref_t &r1, const ref_t &r2) -> bool {
+                              return r1.bbox_max[div_axis] < r2.bbox_max[div_axis];
+                          });
             }
-            for (size_t i = 0; i < div_index; ++i) {
-                const uint32_t pi = axis_lists[div_axis][i];
-                left_indices.push_back(prim_indices[pi]);
-                if (use_pb)
-                    left_pb.push_back(prim_bounds[pi]);
-            }
-            for (size_t i = div_index; i < axis_lists[div_axis].size(); ++i) {
-                const uint32_t pi = axis_lists[div_axis][i];
-                right_indices.push_back(prim_indices[pi]);
-                if (use_pb)
-                    right_pb.push_back(prim_bounds[pi]);
-            }
-        } else if (num_prims > s.min_primitives_in_leaf) {
-            return median_split(primitives, prim_indices, whole_box, prim_bounds);
-        } else {
-            left_indices.assign(prim_indices.begin(), prim_indices.end());
-            if (use_pb)
-                left_pb.assign(prim_bounds.begin(), prim_bounds.end());
-            res_left_bounds = whole_box;
+
+            const uint32_t mid = start + div_index;
+            result.left_start = start;
+            result.left_end = mid;
+            result.right_start = mid;
+            result.right_end = end;
+            // recompute from the actual partition - re-sorting can order ties differently than
+            // the sweep did, and node boxes must contain everything below them
+            const bbox_t lb = range_bounds(&refs[start], int(div_index));
+            const bbox_t rb = range_bounds(&refs[mid], int(end - mid));
+            result.left_bounds[0] = lb.min;
+            result.left_bounds[1] = lb.max;
+            result.right_bounds[0] = rb.min;
+            result.right_bounds[1] = rb.max;
+            return result;
         }
 
-        return {std::move(left_indices),
-                std::move(right_indices),
-                std::move(left_pb),
-                std::move(right_pb),
-                {res_left_bounds.min, res_left_bounds.max},
-                {res_right_bounds.min, res_right_bounds.max},
-                false};
+        if (num_prims > s.min_primitives_in_leaf)
+            return median_split(refs, start, end, whole_box);
+        return leaf_result();
     }
 }
 } // namespace Ray

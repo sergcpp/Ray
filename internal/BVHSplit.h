@@ -6,6 +6,7 @@
 #include "../SceneBase.h"
 #include "../Span.h"
 #include "CoreRef.h"
+#include "SmallVector.h"
 
 namespace Ray {
 struct prim_t {
@@ -26,22 +27,27 @@ struct bbox_t {
     }
 };
 
-struct split_data_t {
-    std::vector<uint32_t> left_indices, right_indices;
-    // Clipped reference bounds parallel to the index arrays - only populated when the parent
-    // collection had prim_bounds (spatial-split mode); empty otherwise
-    std::vector<bbox_t> left_prim_bounds, right_prim_bounds;
-    Ref::fvec4 left_bounds[2], right_bounds[2];
-    bool spatial = false;
+struct ref_t {
+    Ref::fvec4 bbox_min, bbox_max;
+    uint32_t prim_index;
 };
 
-// prim_bounds: per-primitive (possibly spatially clipped) reference bounds parallel to
-// prim_indices, empty to use the full primitive bboxes. allow_spatial additionally gates on
-// the caller's duplicate budget; spatial_depth counts spatial splits on the path to this node.
-split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
-                                 const vtx_attribute_t &positions, const Ref::fvec4 &bbox_min,
-                                 const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min, const Ref::fvec4 &root_max,
-                                 const bvh_settings_t &s, int depth, int spatial_depth, bool allow_spatial,
-                                 Span<const bbox_t> prim_bounds);
+// Per-build scratch buffers reused across nodes
+struct scratch_t {
+    SmallVector<bbox_t, 1024> right_bounds;
+};
+
+struct split_result_t {
+    bool is_leaf = false;
+    bool spatial = false;
+    uint32_t left_start = 0, left_end = 0, right_start = 0, right_end = 0;
+    Ref::fvec4 left_bounds[2], right_bounds[2];
+};
+
+split_result_t SplitPrimitives_SAH(const prim_t *primitives, std::vector<ref_t> &refs, uint32_t start, uint32_t end,
+                                   const vtx_attribute_t &positions, const Ref::fvec4 &bbox_min,
+                                   const Ref::fvec4 &bbox_max, const Ref::fvec4 &root_min, const Ref::fvec4 &root_max,
+                                   const bvh_settings_t &s, int depth, int spatial_depth, bool allow_spatial,
+                                   scratch_t &scratch);
 
 } // namespace Ray

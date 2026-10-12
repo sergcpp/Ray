@@ -544,74 +544,69 @@ uint32_t Ray::EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint3
 
 uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_t &positions, const bvh_settings_t &s,
                                   std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
-    struct prims_coll_t {
-        std::vector<uint32_t> indices;
-        // per-primitive (possibly spatially clipped) reference bounds, parallel to indices;
-        // only populated when spatial splits are enabled
-        std::vector<bbox_t> prim_bounds;
+    struct node_range_t {
+        uint32_t start = 0, end = 0;
+        uint32_t node_index = 0;
         Ref::fvec4 min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
         int depth = 0;
         int spatial_depth = 0;
         int duplicates = 0;
-        prims_coll_t() = default;
-        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::fvec4 &_min, const Ref::fvec4 &_max, int _depth)
-            : indices(std::move(_indices)), min(_min), max(_max), depth(_depth) {}
+        node_range_t() = default;
+        node_range_t(uint32_t _start, uint32_t _end, uint32_t _node_index, const Ref::fvec4 &_min,
+                     const Ref::fvec4 &_max, int _depth)
+            : start(_start), end(_end), node_index(_node_index), min(_min), max(_max), depth(_depth) {}
     };
 
-    std::deque<prims_coll_t, aligned_allocator<prims_coll_t, alignof(prims_coll_t)>> prim_lists;
-    prim_lists.emplace_back();
-
-    size_t num_nodes = out_nodes.size();
-    const auto root_node_index = uint32_t(num_nodes);
-
-    if (s.allow_spatial_splits) {
-        prim_lists.back().prim_bounds.resize(prims.size());
-    }
-
+    std::vector<ref_t> refs(prims.size());
+    Ref::fvec4 root_min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, root_max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
     for (uint32_t j = 0; j < uint32_t(prims.size()); j++) {
-        prim_lists.back().indices.push_back(j);
-        prim_lists.back().min = min(prim_lists.back().min, prims[j].bbox_min);
-        prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
-        if (s.allow_spatial_splits) {
-            prim_lists.back().prim_bounds[j] = {prims[j].bbox_min, prims[j].bbox_max};
-        }
+        refs[j] = {prims[j].bbox_min, prims[j].bbox_max, j};
+        root_min = min(root_min, prims[j].bbox_min);
+        root_max = max(root_max, prims[j].bbox_max);
     }
 
-    Ref::fvec4 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
     const int dup_budget = int(prims.size()) / 8;
+    if (s.allow_spatial_splits) {
+        refs.reserve(refs.size() + size_t(dup_budget) + 16);
+    }
 
-    while (!prim_lists.empty()) {
-        const bool allow_spatial = s.allow_spatial_splits && prim_lists.back().duplicates < dup_budget;
-        split_data_t split_data =
-            SplitPrimitives_SAH(prims.data(), prim_lists.back().indices, positions, prim_lists.back().min,
-                                prim_lists.back().max, root_min, root_max, s, prim_lists.back().depth,
-                                prim_lists.back().spatial_depth, allow_spatial, prim_lists.back().prim_bounds);
-        const int depth = prim_lists.back().depth;
-        const int spatial_depth = prim_lists.back().spatial_depth;
-        const int duplicates = prim_lists.back().duplicates;
-        const int coll_prims = int(prim_lists.back().indices.size());
-        prim_lists.pop_back();
+    // The node's references always sit at the end of refs: children are processed right-first
+    // (LIFO) and leaves pop their range, so spatial splits can append duplicates at the tail.
+    // Node slots are reserved when the children are pushed, so the emission order is free.
+    std::deque<node_range_t, aligned_allocator<node_range_t, alignof(node_range_t)>> node_stack;
+    const auto root_node_index = uint32_t(out_nodes.size());
+    out_nodes.emplace_back();
+    uint32_t next_node_index = root_node_index + 1;
+    node_stack.emplace_back(0, uint32_t(refs.size()), root_node_index, root_min, root_max, 0);
+    scratch_t scratch;
 
-        if (split_data.right_indices.empty()) {
-            Ref::fvec4 bbox_min = split_data.left_bounds[0], bbox_max = split_data.left_bounds[1];
+    while (!node_stack.empty()) {
+        const node_range_t range = node_stack.back();
+        node_stack.pop_back();
+        assert(range.end == refs.size());
 
-            out_nodes.emplace_back();
-            bvh_node_t &n = out_nodes.back();
+        const bool allow_spatial = s.allow_spatial_splits && range.duplicates < dup_budget;
+        const split_result_t split =
+            SplitPrimitives_SAH(prims.data(), refs, range.start, range.end, positions, range.min, range.max, root_min,
+                                root_max, s, range.depth, range.spatial_depth, allow_spatial, scratch);
+
+        if (split.is_leaf) {
+            bvh_node_t &n = out_nodes[range.node_index];
 
             n.prim_index = LEAF_NODE_BIT + uint32_t(out_indices.size());
-            n.prim_count = uint32_t(split_data.left_indices.size());
-            memcpy(&n.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
-            memcpy(&n.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
-            out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
+            n.prim_count = range.end - range.start;
+            memcpy(&n.bbox_min[0], value_ptr(range.min), 3 * sizeof(float));
+            memcpy(&n.bbox_max[0], value_ptr(range.max), 3 * sizeof(float));
+            for (uint32_t i = range.start; i < range.end; i++)
+                out_indices.push_back(refs[i].prim_index);
             while (out_indices.size() % s.primitive_alignment) {
                 out_indices.push_back(out_indices.back());
             }
+            refs.resize(range.start);
         } else {
-            const auto index = uint32_t(num_nodes);
-
             uint32_t space_axis = 0;
-            const Ref::fvec4 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2.0f,
-                             c_right = (split_data.right_bounds[0] + split_data.right_bounds[1]) / 2.0f;
+            const Ref::fvec4 c_left = (split.left_bounds[0] + split.left_bounds[1]) / 2.0f,
+                             c_right = (split.right_bounds[0] + split.right_bounds[1]) / 2.0f;
 
             const Ref::fvec4 dist = abs(c_left - c_right);
 
@@ -623,27 +618,30 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
                 space_axis = 2;
             }
 
-            const Ref::fvec4 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
-                             bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
+            const Ref::fvec4 bbox_min = min(split.left_bounds[0], split.right_bounds[0]),
+                             bbox_max = max(split.left_bounds[1], split.right_bounds[1]);
 
-            out_nodes.emplace_back();
-            bvh_node_t &n = out_nodes.back();
-            n.left_child = index + 1;
-            n.right_child = (space_axis << 30) + index + 2;
+            bvh_node_t &n = out_nodes[range.node_index];
+            const uint32_t left_index = next_node_index, right_index = next_node_index + 1;
+            next_node_index += 2;
+            n.left_child = left_index;
+            n.right_child = (space_axis << 30) + right_index;
             memcpy(&n.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
             memcpy(&n.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
-            auto &left_coll = prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0],
-                                                       split_data.left_bounds[1], depth + 1);
-            auto &right_coll = prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0],
-                                                        split_data.right_bounds[1], depth + 1);
-            left_coll.prim_bounds = std::move(split_data.left_prim_bounds);
-            right_coll.prim_bounds = std::move(split_data.right_prim_bounds);
-            const int child_spatial_depth = spatial_depth + (split_data.spatial ? 1 : 0);
-            const int child_dups = duplicates + int(left_coll.indices.size() + right_coll.indices.size()) - coll_prims;
-            left_coll.spatial_depth = right_coll.spatial_depth = child_spatial_depth;
-            left_coll.duplicates = right_coll.duplicates = child_dups;
 
-            num_nodes += 2;
+            out_nodes.emplace_back();
+            out_nodes.emplace_back();
+
+            auto &left_child = node_stack.emplace_back(split.left_start, split.left_end, left_index,
+                                                       split.left_bounds[0], split.left_bounds[1], range.depth + 1);
+            auto &right_child = node_stack.emplace_back(split.right_start, split.right_end, right_index,
+                                                        split.right_bounds[0], split.right_bounds[1], range.depth + 1);
+            const int child_spatial_depth = range.spatial_depth + (split.spatial ? 1 : 0);
+            const int child_dups = range.duplicates +
+                                   int((split.left_end - split.left_start) + (split.right_end - split.right_start)) -
+                                   int(range.end - range.start);
+            left_child.spatial_depth = right_child.spatial_depth = child_spatial_depth;
+            left_child.duplicates = right_child.duplicates = child_dups;
         }
     }
 
