@@ -546,8 +546,13 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
                                   std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
+        // per-primitive (possibly spatially clipped) reference bounds, parallel to indices;
+        // only populated when spatial splits are enabled
+        std::vector<bbox_t> prim_bounds;
         Ref::fvec4 min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
         int depth = 0;
+        int spatial_depth = 0;
+        int duplicates = 0;
         prims_coll_t() = default;
         prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::fvec4 &_min, const Ref::fvec4 &_max, int _depth)
             : indices(std::move(_indices)), min(_min), max(_max), depth(_depth) {}
@@ -559,19 +564,32 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
     size_t num_nodes = out_nodes.size();
     const auto root_node_index = uint32_t(num_nodes);
 
+    if (s.allow_spatial_splits) {
+        prim_lists.back().prim_bounds.resize(prims.size());
+    }
+
     for (uint32_t j = 0; j < uint32_t(prims.size()); j++) {
         prim_lists.back().indices.push_back(j);
         prim_lists.back().min = min(prim_lists.back().min, prims[j].bbox_min);
         prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
+        if (s.allow_spatial_splits) {
+            prim_lists.back().prim_bounds[j] = {prims[j].bbox_min, prims[j].bbox_max};
+        }
     }
 
     Ref::fvec4 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
+    const int dup_budget = int(prims.size()) / 8;
 
     while (!prim_lists.empty()) {
+        const bool allow_spatial = s.allow_spatial_splits && prim_lists.back().duplicates < dup_budget;
         split_data_t split_data =
             SplitPrimitives_SAH(prims.data(), prim_lists.back().indices, positions, prim_lists.back().min,
-                                prim_lists.back().max, root_min, root_max, s, prim_lists.back().depth);
+                                prim_lists.back().max, root_min, root_max, s, prim_lists.back().depth,
+                                prim_lists.back().spatial_depth, allow_spatial, prim_lists.back().prim_bounds);
         const int depth = prim_lists.back().depth;
+        const int spatial_depth = prim_lists.back().spatial_depth;
+        const int duplicates = prim_lists.back().duplicates;
+        const int coll_prims = int(prim_lists.back().indices.size());
         prim_lists.pop_back();
 
         if (split_data.right_indices.empty()) {
@@ -614,10 +632,16 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
             n.right_child = (space_axis << 30) + index + 2;
             memcpy(&n.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
             memcpy(&n.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
-            prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0],
-                                     split_data.left_bounds[1], depth + 1);
-            prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0],
-                                     split_data.right_bounds[1], depth + 1);
+            auto &left_coll = prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0],
+                                                       split_data.left_bounds[1], depth + 1);
+            auto &right_coll = prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0],
+                                                        split_data.right_bounds[1], depth + 1);
+            left_coll.prim_bounds = std::move(split_data.left_prim_bounds);
+            right_coll.prim_bounds = std::move(split_data.right_prim_bounds);
+            const int child_spatial_depth = spatial_depth + (split_data.spatial ? 1 : 0);
+            const int child_dups = duplicates + int(left_coll.indices.size() + right_coll.indices.size()) - coll_prims;
+            left_coll.spatial_depth = right_coll.spatial_depth = child_spatial_depth;
+            left_coll.duplicates = right_coll.duplicates = child_dups;
 
             num_nodes += 2;
         }
