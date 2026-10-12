@@ -703,6 +703,9 @@ void setup_test_scene(ThreadPool &threads, Ray::SceneBase &scene, const int min_
                                            {glassball_mat1, glassball_groups[2], glassball_groups[3]}};
         glassball_mesh_desc.groups = groups;
 
+        // HLBVH coverage: curved mesh, no coplanar ties, big enough for a real LBVH hierarchy
+        glassball_mesh_desc.bvh_quality = eBVHBuildQuality::FastBuild;
+
         glassball_mesh = scene.AddMesh(glassball_mesh_desc);
     }
 

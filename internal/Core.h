@@ -381,19 +381,17 @@ uint32_t PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32_t> v
                         aligned_vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices,
                         aligned_vector<mtri_accel_t> &out_tris2);
 
-// Recursively builds linear bvh for a set of primitives
-uint32_t EmitLBVH_r(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index,
-                    uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes);
-// Iteratively builds linear bvh for a set of primitives
+// Iteratively builds linear bvh for a set of primitives, emitting alignment-padded leaf index runs
 uint32_t EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index,
-                  uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes);
+                  uint32_t prim_count, std::vector<uint32_t> &out_indices, int alignment, int bit_index,
+                  std::vector<bvh_node_t> &out_nodes);
 
 // Builds SAH-based BVH for a set of primitives, slow
 uint32_t PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_t &positions, const bvh_settings_t &s,
                              std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices);
 
 // Builds linear BVH for a set of primitives, fast
-uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t> &out_nodes,
+uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
                                std::vector<uint32_t> &out_indices);
 
 uint32_t FlattenBVH_r(Span<const bvh_node_t> nodes, uint32_t node_index, aligned_vector<wbvh_node_t> &out_nodes);

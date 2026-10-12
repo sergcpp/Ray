@@ -349,10 +349,10 @@ uint32_t Ray::PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32
 
     const size_t indices_start = out_tri_indices.size();
     uint32_t num_out_nodes;
-    if (!s.use_fast_bvh_build || s.primitive_alignment != 1) {
-        num_out_nodes = PreprocessPrims_SAH(primitives, positions, s, out_nodes, out_tri_indices);
+    if (s.use_fast_bvh_build) {
+        num_out_nodes = PreprocessPrims_HLBVH(primitives, s, out_nodes, out_tri_indices);
     } else {
-        num_out_nodes = PreprocessPrims_HLBVH(primitives, out_nodes, out_tri_indices);
+        num_out_nodes = PreprocessPrims_SAH(primitives, positions, s, out_nodes, out_tri_indices);
     }
 
     // make sure mesh occupies the whole 8-triangle slot
@@ -380,77 +380,9 @@ uint32_t Ray::PreprocessMesh(const vtx_attribute_t &positions, Span<const uint32
     return num_out_nodes;
 }
 
-uint32_t Ray::EmitLBVH_r(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
-                         uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
-                         std::vector<bvh_node_t> &out_nodes) {
-    if (bit_index == -1 || prim_count < 8) {
-        Ref::fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
-
-        for (uint32_t i = prim_index; i < prim_index + prim_count; i++) {
-            bbox_min = min(bbox_min, prims[indices[i]].bbox_min);
-            bbox_max = max(bbox_max, prims[indices[i]].bbox_max);
-        }
-
-        const auto node_index = uint32_t(out_nodes.size());
-
-        out_nodes.emplace_back();
-        bvh_node_t &node = out_nodes.back();
-
-        node.prim_index = LEAF_NODE_BIT + prim_index + index_offset;
-        node.prim_count = prim_count;
-
-        memcpy(&node.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
-        memcpy(&node.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
-
-        return node_index;
-    } else {
-        const uint32_t mask = (1u << bit_index);
-
-        if ((morton_codes[prim_index] & mask) == (morton_codes[prim_index + prim_count - 1] & mask)) {
-            return EmitLBVH_r(prims, indices, morton_codes, prim_index, prim_count, index_offset, bit_index - 1,
-                              out_nodes);
-        }
-
-        uint32_t search_start = prim_index, search_end = search_start + prim_count - 1;
-        while (search_start + 1 != search_end) {
-            const uint32_t mid = (search_start + search_end) / 2;
-            if ((morton_codes[search_start] & mask) == (morton_codes[mid] & mask)) {
-                search_start = mid;
-            } else {
-                search_end = mid;
-            }
-        }
-
-        const uint32_t split_offset = search_end - prim_index;
-
-        const auto node_index = uint32_t(out_nodes.size());
-        out_nodes.emplace_back();
-
-        uint32_t child0 =
-            EmitLBVH_r(prims, indices, morton_codes, prim_index, split_offset, index_offset, bit_index - 1, out_nodes);
-        uint32_t child1 = EmitLBVH_r(prims, indices, morton_codes, prim_index + split_offset, prim_count - split_offset,
-                                     index_offset, bit_index - 1, out_nodes);
-
-        uint32_t space_axis = bit_index % 3;
-        if (out_nodes[child0].bbox_min[space_axis] > out_nodes[child1].bbox_min[space_axis]) {
-            std::swap(child0, child1);
-        }
-
-        bvh_node_t &par_node = out_nodes[node_index];
-        par_node.left_child = child0;
-        par_node.right_child = (space_axis << 30) + child1;
-
-        for (int i = 0; i < 3; i++) {
-            par_node.bbox_min[i] = fminf(out_nodes[child0].bbox_min[i], out_nodes[child1].bbox_min[i]);
-            par_node.bbox_max[i] = fmaxf(out_nodes[child0].bbox_max[i], out_nodes[child1].bbox_max[i]);
-        }
-
-        return node_index;
-    }
-}
-
 uint32_t Ray::EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index,
-                       uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes) {
+                       uint32_t prim_count, std::vector<uint32_t> &out_indices, int alignment, int bit_index,
+                       std::vector<bvh_node_t> &out_nodes) {
     struct proc_item_t {
         int bit_index;
         uint32_t prim_index, prim_count;
@@ -477,8 +409,13 @@ uint32_t Ray::EmitLBVH(const prim_t *prims, const uint32_t *indices, const uint3
 
             bvh_node_t &node = out_nodes[cur.node_index];
 
-            node.prim_index = LEAF_NODE_BIT + cur.prim_index + index_offset;
+            node.prim_index = LEAF_NODE_BIT + uint32_t(out_indices.size());
             node.prim_count = cur.prim_count;
+
+            for (uint32_t i = cur.prim_index; i < cur.prim_index + cur.prim_count; i++)
+                out_indices.push_back(indices[i]);
+            while (out_indices.size() % alignment)
+                out_indices.push_back(out_indices.back());
 
             memcpy(&node.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
             memcpy(&node.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
@@ -648,37 +585,42 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const vtx_attribute_
     return uint32_t(out_nodes.size() - root_node_index);
 }
 
-uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t> &out_nodes,
-                                    std::vector<uint32_t> &out_indices) {
+uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, const bvh_settings_t &s,
+                                    std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
+    if (prims.empty()) {
+        return 0;
+    }
+
     std::vector<uint32_t> morton_codes(prims.size());
 
     Ref::fvec4 whole_min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, whole_max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
 
-    const auto indices_start = uint32_t(out_indices.size());
-    out_indices.reserve(out_indices.size() + prims.size());
-
     for (uint32_t j = 0; j < uint32_t(prims.size()); j++) {
         whole_min = min(whole_min, prims[j].bbox_min);
         whole_max = max(whole_max, prims[j].bbox_max);
-
-        out_indices.push_back(j);
     }
 
-    uint32_t *indices = &out_indices[indices_start];
+    // Leaves copy their (alignment-padded) index runs to the tail of out_indices, so the
+    // Morton-sorted primitive array must live separately
+    std::vector<uint32_t> sorted_indices(prims.size());
+    out_indices.reserve(out_indices.size() + prims.size() * 2);
 
     const Ref::fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min + FLT_EPSILON);
+    const uint32_t max_code = (1u << BitsPerDim) - 1;
 
     // compute morton codes
     for (int i = 0; i < int(prims.size()); i++) {
         const Ref::fvec4 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
         const Ref::fvec4 code = (center - whole_min) * scale;
 
-        const auto x = uint32_t(code.get<0>()), y = uint32_t(code.get<1>()), z = uint32_t(code.get<2>());
+        const auto x = std::min(uint32_t(code.get<0>()), max_code);
+        const auto y = std::min(uint32_t(code.get<1>()), max_code);
+        const auto z = std::min(uint32_t(code.get<2>()), max_code);
 
         morton_codes[i] = EncodeMorton3(x, y, z);
     }
 
-    sort_mort_codes(&morton_codes[0], morton_codes.size(), indices);
+    sort_mort_codes(&morton_codes[0], morton_codes.size(), &sorted_indices[0]);
 
     struct treelet_t {
         uint32_t index, count;
@@ -704,8 +646,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     // Build bottom-level hierarchy from each treelet using LBVH
     const int start_bit = 29 - 12;
     for (treelet_t &tr : treelets) {
-        tr.node_index = EmitLBVH(prims.data(), indices, &morton_codes[0], tr.index, tr.count, indices_start, start_bit,
-                                 bottom_nodes);
+        tr.node_index = EmitLBVH(prims.data(), &sorted_indices[0], &morton_codes[0], tr.index, tr.count, out_indices,
+                                 s.primitive_alignment, start_bit, bottom_nodes);
     }
 
     aligned_vector<prim_t> top_prims;
@@ -722,15 +664,15 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     std::vector<uint32_t> top_indices;
 
-    // Force spliting until each primitive will be in separate leaf node
-    bvh_settings_t s;
-    s.oversplit_threshold = -1.0f;
-    s.allow_spatial_splits = false;
-    s.min_primitives_in_leaf = 1;
+    // Force splitting until each primitive will be in separate leaf node
+    bvh_settings_t top_s;
+    top_s.oversplit_threshold = -1.0f;
+    top_s.allow_spatial_splits = false;
+    top_s.min_primitives_in_leaf = 1;
 
     // Build top level hierarchy using SAH
     [[maybe_unused]] const uint32_t new_nodes_count =
-        PreprocessPrims_SAH({&top_prims[0], top_prims.size()}, {}, s, out_nodes, top_indices);
+        PreprocessPrims_SAH({&top_prims[0], top_prims.size()}, {}, top_s, out_nodes, top_indices);
 
     auto bottom_nodes_start = uint32_t(out_nodes.size());
 
