@@ -983,9 +983,12 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
             bbox_max = max(bbox_max, max(p[0], max(p[1], p[2])));
         }
     } else {
+        const uint64_t t1 = GetTimeMs();
         aligned_vector<mtri_accel_t> _unused;
         PreprocessMesh(_m.vtx_positions, _m.vtx_indices, _m.base_vertex, s, new_nodes, new_tris, new_tri_indices,
                        _unused);
+        log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", !_m.name.empty() ? _m.name.data() : "(unknown)",
+                   (long long)(GetTimeMs() - t1));
 
         memcpy(value_ptr(bbox_min), new_nodes[0].bbox_min, 3 * sizeof(float));
         memcpy(value_ptr(bbox_max), new_nodes[0].bbox_max, 3 * sizeof(float));
