@@ -166,16 +166,17 @@ void Convolution3x3(const float *restrict data, const rect_t &rect, const int w,
                         _C0[k][di] = hsum(C0[k][di]);
                         _C1[k][di] = hsum(C1[k][di]);
                         if (Activation == eActivation::ReLU) {
-                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
-                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                            _C0[k][di] = std::max(0.0f, _C0[k][di]);
+                            _C1[k][di] = std::max(0.0f, _C1[k][di]);
                         }
                     }
                 }
                 if (PostOp == ePostOp::Downsample) {
                     for (int k = 0; k < C_ROWS; k += 2) {
                         for (int di = 0; di < C_COLS; ++di) {
-                            _C0[k][di] = fmaxf(fmaxf(_C0[k][di], _C0[k + 1][di]), fmaxf(_C1[k][di], _C1[k + 1][di]));
-                            _C0[k][di] = fmaxf(_C0[k][di], 0.0f);
+                            _C0[k][di] =
+                                std::max(std::max(_C0[k][di], _C0[k + 1][di]), std::max(_C1[k][di], _C1[k + 1][di]));
+                            _C0[k][di] = std::max(0.0f, _C0[k][di]);
                         }
                     }
                     for (int xx = x; xx < std::min(x + C_ROWS, rect.x + rect.w); xx += 2) {
@@ -288,8 +289,8 @@ void Convolution3x3(const float *restrict data1, const float *restrict data2, co
                         _C0[k][di] = hsum(C0[k][di]);
                         _C1[k][di] = hsum(C1[k][di]);
                         if (Activation == eActivation::ReLU) {
-                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
-                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                            _C0[k][di] = std::max(0.0f, _C0[k][di]);
+                            _C1[k][di] = std::max(0.0f, _C1[k][di]);
                         }
                     }
                 }
@@ -408,8 +409,8 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
                         _C0[k][di] = hsum(C0[k][di]);
                         _C1[k][di] = hsum(C1[k][di]);
                         if (Activation == eActivation::ReLU) {
-                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
-                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                            _C0[k][di] = std::max(0.0f, _C0[k][di]);
+                            _C1[k][di] = std::max(0.0f, _C1[k][di]);
                         }
                     }
                 }
@@ -561,8 +562,8 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
                         _C0[k][di] = hsum(C0[k][di]);
                         _C1[k][di] = hsum(C1[k][di]);
                         if (Activation == eActivation::ReLU) {
-                            _C0[k][di] = fmaxf(0.0f, _C0[k][di]);
-                            _C1[k][di] = fmaxf(0.0f, _C1[k][di]);
+                            _C0[k][di] = std::max(0.0f, _C0[k][di]);
+                            _C1[k][di] = std::max(0.0f, _C1[k][di]);
                         }
                     }
                 }
