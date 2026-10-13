@@ -101,7 +101,7 @@ int ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels1, 
 } // namespace Ray
 
 int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, const bool round_w,
-                         unet_filter_tensors_t &out_tensors, SmallVector<int, 2> alias_dependencies[]) {
+                         unet_filter_tensors_t &out_tensors, SmallVector<int, 16> alias_dependencies[]) {
     struct resource_t {
         std::string_view name;
         int resolution_div;
@@ -229,8 +229,7 @@ int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, cons
                     continue;
                 }
 
-                bool exit = false;
-                for (int j = i - 1; j >= 0 && !exit; --j) {
+                for (int j = i - 1; j >= 0; --j) {
                     const pass_t &pass2 = passes[j];
                     for (const int res2_index : pass2.used_resource_indices) {
                         if (res2_index == -1 || res2_index == res_index) {
@@ -249,7 +248,6 @@ int Ray::SetupUNetFilter(const int w, const int h, const bool alias_memory, cons
                             if (it == std::end(alias_dependencies[i])) {
                                 alias_dependencies[i].push_back(j);
                             }
-                            exit = true;
                         }
                     }
                 }

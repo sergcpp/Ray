@@ -234,7 +234,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
         float *dec_conv1a = nullptr;
         float *dec_conv1b = nullptr;
     } unet_tensors_;
-    SmallVector<int, 2> unet_alias_dependencies_[UNetFilterPasses];
+    SmallVector<int, 16> unet_alias_dependencies_[UNetFilterPasses];
     void UpdateUNetFilterMemory();
 
   public:
@@ -1439,7 +1439,7 @@ Ray::unet_filter_properties_t Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(
     for (int i = 0; i < UNetFilterPasses; ++i) {
         assert(unet_alias_dependencies_[i].size() <= dep_slots);
         std::fill(&out_props.alias_dependencies[i][0], &out_props.alias_dependencies[i][0] + dep_slots, -1);
-        for (int j = 0; j < int(unet_alias_dependencies_[i].size()); ++j) {
+        for (int j = 0; j < int(unet_alias_dependencies_[i].size()) && j < int(dep_slots); ++j) {
             out_props.alias_dependencies[i][j] = unet_alias_dependencies_[i][j];
         }
     }

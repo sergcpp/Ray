@@ -121,6 +121,8 @@ struct gpu_device_t {
 
 struct unet_filter_properties_t {
     int pass_count = 0;
-    int alias_dependencies[16][4] = {};
+    // One row per pass: every earlier pass whose tensor memory overlaps this pass's tensors. A row can
+    // hold up to pass_count - 1 entries plus the -1 terminator, hence the square size.
+    int alias_dependencies[16][16] = {};
 };
 } // namespace Ray
