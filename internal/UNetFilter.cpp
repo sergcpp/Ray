@@ -21,10 +21,10 @@ template <typename T> T convert_weight(const uint16_t val);
 template <> uint16_t convert_weight<uint16_t>(const uint16_t val) { return val; }
 template <> float convert_weight<float>(const uint16_t val) { return f16_to_f32(val); }
 
-// Reorder weights for direct 3x3 convolution
+// Reorder weights for direct 3x3 convolution, returns number of weight elements written
 template <typename T>
-void ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels, const int out_channels,
-                                   const int alignment, T out_weights[]) {
+int ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels, const int out_channels,
+                                  const int alignment, T out_weights[]) {
     const int rounded_triple = round_up(3 * in_channels, alignment);
 
     int out_index = 0;
@@ -46,11 +46,12 @@ void ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels, 
         }
         out_index += 3 * rounded_triple - (2 * rounded_triple + 3 * in_channels);
     }
+    return out_index;
 }
 
 template <typename T>
-void ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels1, const int in_channels2,
-                                   const int out_channels, const int alignment, T out_weights[]) {
+int ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels1, const int in_channels2,
+                                  const int out_channels, const int alignment, T out_weights[]) {
     const int rounded_triple1 = round_up(3 * in_channels1, alignment),
               rounded_triple2 = round_up(3 * in_channels2, alignment);
 
@@ -95,6 +96,7 @@ void ReorderWeights_Conv3x3_Direct(const T in_weights[], const int in_channels1,
         }
         out_index += 3 * rounded_triple2 - (2 * rounded_triple2 + 3 * in_channels2);
     }
+    return out_index;
 }
 } // namespace Ray
 
@@ -336,7 +338,9 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
     };
 
     auto count2 = [&](const int in_channels1, const int in_channels2, const int out_channels) {
-        const int per_output = 3 * round_up(3 * in_channels1, alignment) * 3 * round_up(3 * in_channels2, alignment);
+        // Must match the layout produced by ReorderWeights_Conv3x3_Direct (2-input form):
+        // per output channel there are 3 kernel rows, each holding padded in_channels1 followed by padded in_channels2.
+        const int per_output = 3 * (round_up(3 * in_channels1, alignment) + round_up(3 * in_channels2, alignment));
         return per_output * out_channels;
     };
 
@@ -427,8 +431,9 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
         for (int i = 0; i < enc_conv0_weight.size(); ++i) {
             temp[i] = convert_weight<T>(enc_conv0_weight[i]);
         }
-        ReorderWeights_Conv3x3_Direct(temp.data(), input_channels, 32, alignment,
-                                      &out_weights[out_offsets->enc_conv0_weight]);
+        [[maybe_unused]] const int enc_conv0_written = ReorderWeights_Conv3x3_Direct(
+            temp.data(), input_channels, 32, alignment, &out_weights[out_offsets->enc_conv0_weight]);
+        assert(enc_conv0_written == extend(int(enc_conv0_weight.size()), input_channels));
         for (int i = 0; i < enc_conv0_bias.size(); ++i) {
             out_weights[out_offsets->enc_conv0_bias + i] = convert_weight<T>(enc_conv0_bias[i]);
         }
@@ -547,8 +552,9 @@ int Ray::SetupUNetWeights(const int alignment, unet_weight_offsets_t *out_offset
         for (int i = 0; i < dec_conv1a_weight.size(); ++i) {
             temp[i] = convert_weight<T>(dec_conv1a_weight[i]);
         }
-        ReorderWeights_Conv3x3_Direct(temp.data(), 64, input_channels, 64, alignment,
-                                      &out_weights[out_offsets->dec_conv1a_weight]);
+        [[maybe_unused]] const int dec_conv1a_written = ReorderWeights_Conv3x3_Direct(
+            temp.data(), 64, input_channels, 64, alignment, &out_weights[out_offsets->dec_conv1a_weight]);
+        assert(dec_conv1a_written == count2(64, input_channels, 64));
         for (int i = 0; i < dec_conv1a_bias.size(); ++i) {
             out_weights[out_offsets->dec_conv1a_bias + i] = convert_weight<T>(dec_conv1a_bias[i]);
         }
