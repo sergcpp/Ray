@@ -123,7 +123,7 @@ void Convolution3x3(const float *restrict data, const rect_t &rect, const int w,
     const int RoundedTriple = 8 * ((3 * InChannels + 7) / 8); // stride and offset must be aligned
 
 #define C_ROWS 4
-#define C_COLS 8
+#define C_COLS 16
 
     for (int y = rect.y; y < rect.y + rect.h; y += 2) {
         for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
@@ -243,7 +243,7 @@ void Convolution3x3(const float *restrict data1, const float *restrict data2, co
     }
 
 #define C_ROWS 4
-#define C_COLS 8
+#define C_COLS 16
 
     for (int y = rect.y; y < rect.y + rect.h; y += 2) {
         for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
@@ -325,7 +325,7 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
 #define index2(y, x) InChannels2 *((y) * stride2 + (x))
 
 #define C_ROWS 4
-#define C_COLS 8
+#define C_COLS 16
 
     for (int y = rect.y; y < rect.y + rect.h; y += 2) {
         for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
@@ -477,7 +477,7 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
     }
 
 #define C_ROWS 4
-#define C_COLS 8
+#define C_COLS 16
 
     for (int y = rect.y; y < rect.y + rect.h; y += 2) {
         for (int x = rect.x; x < rect.x + rect.w; x += C_ROWS) {
