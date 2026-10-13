@@ -1435,8 +1435,10 @@ Ray::unet_filter_properties_t Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(
 
     unet_filter_properties_t out_props;
     out_props.pass_count = UNetFilterPasses;
+    constexpr size_t dep_slots = std::size(out_props.alias_dependencies[0]);
     for (int i = 0; i < UNetFilterPasses; ++i) {
-        std::fill(&out_props.alias_dependencies[i][0], &out_props.alias_dependencies[i][0] + 4, -1);
+        assert(unet_alias_dependencies_[i].size() <= dep_slots);
+        std::fill(&out_props.alias_dependencies[i][0], &out_props.alias_dependencies[i][0] + dep_slots, -1);
         for (int j = 0; j < int(unet_alias_dependencies_[i].size()); ++j) {
             out_props.alias_dependencies[i][j] = unet_alias_dependencies_[i][j];
         }
