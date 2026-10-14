@@ -958,6 +958,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
     const int h_rounded = round_up(h_, 16);
 
     rect_t r = region.rect();
+    assert((r.x & 1) == 0 && (r.y & 1) == 0);
+    assert((r.x + r.w == w_ || (r.w & 1) == 0) && (r.y + r.h == h_ || (r.h & 1) == 0));
     if (pass < 15) {
         r.w = round_up(r.w, 16);
         r.h = round_up(r.h, 16);
