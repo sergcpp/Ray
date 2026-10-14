@@ -223,7 +223,7 @@ void Convolution3x3(const float *restrict data1, const float *restrict data2, co
 
     // Preload data
     const int stride123 = rect.w + 2, req_size = InChannels123 * stride123 * (rect.h + 2);
-    temp_data.resize(req_size + 16);
+    temp_data.resize(req_size + RoundedTriple);
     float *data123 = temp_data.data();
     int index = 0;
     for (int y = rect.y - 1; y < rect.y + rect.h + 1; ++y) {
@@ -457,7 +457,7 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
 
     // Preload data
     const int _stride234 = rect.w + 2, req_size = InChannels234 * _stride234 * (rect.h + 2);
-    temp_data.resize(req_size + 16);
+    temp_data.resize(req_size + RoundedTriple2);
     float *data234 = temp_data.data();
     int index = 0;
     for (int y = rect.y - 1; y < rect.y + rect.h + 1; ++y) {
