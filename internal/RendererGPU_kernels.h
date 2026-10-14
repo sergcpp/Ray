@@ -341,7 +341,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
     const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
     const uint32_t weights_size = out_channels * 3 * round_up(3 * in_channels, 8) * el_sz;
     const uint32_t biases_size = out_channels * el_sz;
-    const uint32_t output_size = output_stride * (h + 2) * out_channels * el_sz;
+    const uint32_t output_size = output_stride * ((downsample ? h / 2 : h) + 2) * out_channels * el_sz;
 
     SmallVector<Binding, 16> bindings = {
         {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset, input_buf},
