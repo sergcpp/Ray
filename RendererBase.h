@@ -236,7 +236,11 @@ class RendererBase {
         unsigned long long time_secondary_trace_us;
         unsigned long long time_secondary_shade_us;
         unsigned long long time_secondary_shadow_us;
+        // CPU backends: sum over worker threads (not wall); GPU backends: timestamp bracket
         unsigned long long time_denoise_us;
+        // wall window of denoise tasks (min start .. max end); the CPU window includes
+        // interleaved render tasks, but exposes stalls the sum hides
+        unsigned long long time_denoise_span_us;
         unsigned long long time_cache_update_us;
         unsigned long long time_cache_resolve_us;
     };

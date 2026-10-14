@@ -201,6 +201,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     std::mutex mtx_;
 
     stats_t stats_ = {0};
+    unsigned long long denoise_span_start_us_ = ~0ull, denoise_span_end_us_ = 0;
     int w_ = 0, h_ = 0;
 
     ePixelFilter filter_table_filter_ = ePixelFilter(-1);
@@ -312,7 +313,11 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
                            const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
-    void ResetStats() override { stats_ = {0}; }
+    void ResetStats() override {
+        stats_ = {0};
+        denoise_span_start_us_ = ~0ull;
+        denoise_span_end_us_ = 0;
+    }
 
     unet_filter_properties_t
     InitUNetFilter(bool alias_memory,
@@ -946,6 +951,14 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
     {
         std::lock_guard<std::mutex> _(mtx_);
         stats_.time_denoise_us += (unsigned long long)duration<double, std::micro>{denoise_end - denoise_start}.count();
+        const auto start_us =
+            (unsigned long long)duration<double, std::micro>{denoise_start.time_since_epoch()}.count();
+        const auto end_us = (unsigned long long)duration<double, std::micro>{denoise_end.time_since_epoch()}.count();
+        denoise_span_start_us_ = std::min(denoise_span_start_us_, start_us);
+        denoise_span_end_us_ = std::max(denoise_span_end_us_, end_us);
+        if (denoise_span_end_us_ > denoise_span_start_us_) {
+            stats_.time_denoise_span_us = denoise_span_end_us_ - denoise_span_start_us_;
+        }
     }
 }
 
@@ -1168,6 +1181,14 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
     {
         std::lock_guard<std::mutex> _(mtx_);
         stats_.time_denoise_us += (unsigned long long)duration<double, std::micro>{denoise_end - denoise_start}.count();
+        const auto start_us =
+            (unsigned long long)duration<double, std::micro>{denoise_start.time_since_epoch()}.count();
+        const auto end_us = (unsigned long long)duration<double, std::micro>{denoise_end.time_since_epoch()}.count();
+        denoise_span_start_us_ = std::min(denoise_span_start_us_, start_us);
+        denoise_span_end_us_ = std::max(denoise_span_end_us_, end_us);
+        if (denoise_span_end_us_ > denoise_span_start_us_) {
+            stats_.time_denoise_span_us = denoise_span_end_us_ - denoise_span_start_us_;
+        }
     }
 }
 

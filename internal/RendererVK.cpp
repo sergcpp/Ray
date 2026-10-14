@@ -825,6 +825,7 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     stats_.time_denoise_us = ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].denoise[0],
                                                                   timestamps_[ctx_->backend_frame].denoise[1]);
+    stats_.time_denoise_span_us = stats_.time_denoise_us;
 
 #if RUN_IN_LOCKSTEP
     cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -936,6 +937,7 @@ void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region
 
         stats_.time_denoise_us = ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].denoise[0],
                                                                       timestamps_[ctx_->backend_frame].denoise[1]);
+        stats_.time_denoise_span_us = stats_.time_denoise_us;
 
 #if RUN_IN_LOCKSTEP
         cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
