@@ -2,10 +2,16 @@
 
 #include "../Types.h"
 
+#include <cmath>
+
 #pragma warning(push)
 #pragma warning(disable : 6294) // Ill-defined for-loop
 
 namespace Ray::NS {
+using std::pow;
+using std::exp;
+using std::log;
+
 void ClearBorders(const rect_t &rect, const int w, const int h, const bool downscaled, const int out_channels,
                   float output[]) {
     if (!downscaled) {
@@ -83,9 +89,9 @@ template <ePreOp PreOp> force_inline float input(const float val) {
         if (val <= y0) {
             return a * val * norm_scale;
         } else if (val <= y1) {
-            return (b * powf(val, c) + d) * norm_scale;
+            return (b * pow(val, c) + d) * norm_scale;
         } else {
-            return (e * logf(val + f) + g) * norm_scale;
+            return (e * log(val + f) + g) * norm_scale;
         }
     } else if (PreOp == ePreOp::PositiveNormalize) {
         return 0.5f * val + 0.5f;
@@ -102,9 +108,9 @@ template <ePostOp PostOp> force_inline float output(float val) {
         if (val <= x0) {
             return val / a;
         } else if (val <= x1) {
-            return powf((val - d) / b, 1.0f / c);
+            return pow((val - d) / b, 1.0f / c);
         } else {
-            return expf((val - g) / e) - f;
+            return exp((val - g) / e) - f;
         }
     } else if (PostOp == ePostOp::PositiveNormalize) {
         return 2.0f * val - 1.0f;

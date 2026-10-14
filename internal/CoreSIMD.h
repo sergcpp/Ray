@@ -1781,7 +1781,7 @@ template <int S> force_inline fvec<S> distance2(const fvec<S> p1[3], const float
 
 template <int S> force_inline fvec<S> pow(const float base, const fvec<S> exponent) {
     fvec<S> ret;
-    UNROLLED_FOR_S(i, S, { ret.template set<i>(powf(base, exponent[i])); })
+    UNROLLED_FOR_S(i, S, { ret.template set<i>(pow(base, exponent[i])); })
     return ret;
 }
 
