@@ -6664,8 +6664,6 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
     // NOTE: triangle lights are processed separately
     static uint32_t LightTypesMask = (1u << LIGHT_TYPE_SPHERE) | (1u << LIGHT_TYPE_DIR) | (1u << LIGHT_TYPE_LINE) |
                                      (1u << LIGHT_TYPE_RECT) | (1u << LIGHT_TYPE_DISK) | (1u << LIGHT_TYPE_ENV);
-    static uint32_t LightTypesMask4x =
-        LightTypesMask | (LightTypesMask << 8) | (LightTypesMask << 16) | (LightTypesMask << 24);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_masks[ri]) {
@@ -6699,8 +6697,10 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                 const uint32_t slot = uint32_t(k) ^ flip_bits;
                 const uint32_t rest = vmask & ~(1u << k);
                 if (rest != 0) {
-                    st.push(cur.child_base, (rest << 8) | imask | (L << 16), cur.q[0], cur.q[1], cur.q[2], cur.q[3],
-                            cur.q[4], cur.q[5], cur.q[6], cur.q[7]);
+                    st.push(light_cwbvh_stack_entry_t{
+                        cur.child_base,
+                        (rest << 8) | imask | (L << 16),
+                        {cur.q[0], cur.q[1], cur.q[2], cur.q[3], cur.q[4], cur.q[5], cur.q[6], cur.q[7]}});
                 }
                 L += cur.q[slot];
                 node_ref = cur.child_base + popc8(imask & ((1u << slot) - 1u));
@@ -6734,7 +6734,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                 alignas(32) float factors[8];
                 UNROLLED_FOR_S(i, 8 / SS,
                                { (importance[i] / total_importance).store_to(&factors[i * SS], vector_aligned); })
-                uint8_t q[8];
+                uint8_t q[8] = {};
                 for (uint32_t hm = uint32_t(mask); hm != 0;) {
                     const long i = GetFirstBit(hm);
                     hm &= ~(1u << i);
@@ -6936,8 +6936,9 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                 const uint32_t slot = uint32_t(k) ^ flip_bits;
                 const uint32_t rest = m & ~(1u << k);
                 if (rest != 0) {
-                    st.push(cwbvh_child_base(n), (rest << 8) | node_imask | (L << 16), q[0], q[1], q[2], q[3], q[4],
-                            q[5], q[6], q[7]);
+                    st.push(light_cwbvh_stack_entry_t{cwbvh_child_base(n),
+                                                      (rest << 8) | node_imask | (L << 16),
+                                                      {q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]}});
                 }
                 L += q[slot];
                 node_ref = cwbvh_internal_child(n, slot);
@@ -6965,8 +6966,6 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
     rdist.store_to(inter_t, vector_aligned);
 
     static uint32_t LightTypesMask = (1u << LIGHT_TYPE_RECT) | (1u << LIGHT_TYPE_DISK);
-    static uint32_t LightTypesMask4x =
-        LightTypesMask | (LightTypesMask << 8) | (LightTypesMask << 16) | (LightTypesMask << 24);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_masks[ri]) {
@@ -7154,8 +7153,10 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
                 const long k = GetFirstBit(vmask);
                 const uint32_t rest = vmask & ~(1u << k);
                 if (rest != 0) {
-                    st.push(cur.child_base, (rest << 8) | imask | (L << 16), cur.q[0], cur.q[1], cur.q[2], cur.q[3],
-                            cur.q[4], cur.q[5], cur.q[6], cur.q[7]);
+                    st.push(light_cwbvh_stack_entry_t{
+                        cur.child_base,
+                        (rest << 8) | imask | (L << 16),
+                        {cur.q[0], cur.q[1], cur.q[2], cur.q[3], cur.q[4], cur.q[5], cur.q[6], cur.q[7]}});
                 }
                 L += cur.q[k];
                 node_ref = cur.child_base + popc8(imask & ((1u << k) - 1u));
@@ -7194,7 +7195,7 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
                 if (total_importance == 0.0f) {
                     continue;
                 }
-                uint8_t q[8];
+                uint8_t q[8] = {};
                 for (uint32_t hm = uint32_t(mask); hm != 0;) {
                     const long i = GetFirstBit(hm);
                     hm &= ~(1u << i);
@@ -7233,8 +7234,9 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
                 const long k = GetFirstBit(internal_hits);
                 const uint32_t rest = internal_hits & ~(1u << k);
                 if (rest != 0) {
-                    st.push(cwbvh_child_base(n), (rest << 8) | imask | (L << 16), q[0], q[1], q[2], q[3], q[4], q[5],
-                            q[6], q[7]);
+                    st.push(light_cwbvh_stack_entry_t{cwbvh_child_base(n),
+                                                      (rest << 8) | imask | (L << 16),
+                                                      {q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]}});
                 }
                 L += q[k];
                 node_ref = cwbvh_internal_child(n, k);

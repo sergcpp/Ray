@@ -34,7 +34,7 @@ struct ref_t {
 
 // Per-build scratch buffers reused across nodes
 struct scratch_t {
-    SmallVector<bbox_t, 1024> right_bounds;
+    std::vector<bbox_t> right_bounds;
 };
 
 struct split_result_t {

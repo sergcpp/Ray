@@ -4288,8 +4288,10 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 const uint32_t slot = uint32_t(k) ^ flip_bits;
                 const uint32_t rest = vmask & ~(1u << k);
                 if (rest != 0) {
-                    st.push(cur.child_base, (rest << 8) | imask | (L << 16), cur.q[0], cur.q[1], cur.q[2], cur.q[3],
-                            cur.q[4], cur.q[5], cur.q[6], cur.q[7]);
+                    st.push(light_cwbvh_stack_entry_t{
+                        cur.child_base,
+                        (rest << 8) | imask | (L << 16),
+                        {cur.q[0], cur.q[1], cur.q[2], cur.q[3], cur.q[4], cur.q[5], cur.q[6], cur.q[7]}});
                 }
                 L += cur.q[slot];
                 node_ref = cur.child_base + popc8(imask & ((1u << slot) - 1u));
@@ -4318,7 +4320,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 alignas(16) float imp[8];
                 (importance[0] / fvec4{total_importance}).store_to(&imp[0], vector_aligned);
                 (importance[1] / fvec4{total_importance}).store_to(&imp[4], vector_aligned);
-                uint8_t q[8];
+                uint8_t q[8] = {};
                 for (uint32_t hm = uint32_t(mask); hm != 0;) {
                     const long i = GetFirstBit(hm);
                     hm &= ~(1u << i);
@@ -4493,8 +4495,9 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 const uint32_t slot = uint32_t(k) ^ flip_bits;
                 const uint32_t rest = m & ~(1u << k);
                 if (rest != 0) {
-                    st.push(cwbvh_child_base(n), (rest << 8) | imask | (L << 16), q[0], q[1], q[2], q[3], q[4], q[5],
-                            q[6], q[7]);
+                    st.push(light_cwbvh_stack_entry_t{cwbvh_child_base(n),
+                                                      (rest << 8) | imask | (L << 16),
+                                                      {q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]}});
                 }
                 L += q[slot];
                 node_ref = cwbvh_internal_child(n, slot);
@@ -5343,8 +5346,10 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, const uint32
             const long k = GetFirstBit(vmask);
             const uint32_t rest = vmask & ~(1u << k);
             if (rest != 0) {
-                st.push(cur.child_base, (rest << 8) | imask | (L << 16), cur.q[0], cur.q[1], cur.q[2], cur.q[3],
-                        cur.q[4], cur.q[5], cur.q[6], cur.q[7]);
+                st.push(light_cwbvh_stack_entry_t{
+                    cur.child_base,
+                    (rest << 8) | imask | (L << 16),
+                    {cur.q[0], cur.q[1], cur.q[2], cur.q[3], cur.q[4], cur.q[5], cur.q[6], cur.q[7]}});
             }
             L += cur.q[k];
             node_ref = cur.child_base + popc8(imask & ((1u << k) - 1u));
@@ -5371,7 +5376,7 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, const uint32
             alignas(16) float imp[8];
             importance[0].store_to(&imp[0], vector_aligned);
             importance[1].store_to(&imp[4], vector_aligned);
-            uint8_t q[8];
+            uint8_t q[8] = {};
             for (uint32_t hm = uint32_t(mask); hm != 0;) {
                 const long i = GetFirstBit(hm);
                 hm &= ~(1u << i);
@@ -5398,8 +5403,9 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, const uint32
             const long k = GetFirstBit(internal_hits);
             const uint32_t rest = internal_hits & ~(1u << k);
             if (rest != 0) {
-                st.push(cwbvh_child_base(n), (rest << 8) | imask | (L << 16), q[0], q[1], q[2], q[3], q[4], q[5], q[6],
-                        q[7]);
+                st.push(light_cwbvh_stack_entry_t{cwbvh_child_base(n),
+                                                  (rest << 8) | imask | (L << 16),
+                                                  {q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]}});
             }
             L += q[k];
             node_ref = cwbvh_internal_child(n, k);
