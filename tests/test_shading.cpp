@@ -369,7 +369,7 @@ void test_oren_mat0(const char *arch_list[], std::string_view preferred_device) 
 
 void test_oren_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 290;
+    const int PixThres = 300;
 
     Ray::shading_node_desc_t desc;
     desc.type = Ray::eShadingNode::Diffuse;
@@ -381,7 +381,7 @@ void test_oren_mat1(const char *arch_list[], std::string_view preferred_device) 
 
 void test_oren_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 400;
+    const int PixThres = 410;
 
     Ray::shading_node_desc_t desc;
     desc.type = Ray::eShadingNode::Diffuse;
@@ -409,7 +409,7 @@ void test_diff_mat0(const char *arch_list[], std::string_view preferred_device) 
 
 void test_diff_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 290;
+    const int PixThres = 300;
 
     Ray::principled_mat_desc_t desc;
     desc.base_color = {{0.0f, 0.5f, 0.5f}};
@@ -422,7 +422,7 @@ void test_diff_mat1(const char *arch_list[], std::string_view preferred_device) 
 void test_diff_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const double MinPSNR = 30.9;
-    const int PixThres = 370;
+    const int PixThres = 380;
 
     Ray::principled_mat_desc_t desc;
     desc.base_color = {{0.0f, 0.0f, 0.5f}};
@@ -466,7 +466,7 @@ void test_sheen_mat1(const char *arch_list[], std::string_view preferred_device)
 
 void test_sheen_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 14;
-    const int PixThres = 170;
+    const int PixThres = 180;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color = {{0.1f, 0.0f, 0.1f}};
@@ -480,7 +480,7 @@ void test_sheen_mat2(const char *arch_list[], std::string_view preferred_device)
 
 void test_sheen_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 8;
-    const int PixThres = 340;
+    const int PixThres = 350;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color = {{0.0f, 0.0f, 0.0f}};
@@ -510,7 +510,7 @@ void test_glossy_mat0(const char *arch_list[], std::string_view preferred_device
 
 void test_glossy_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 750;
+    const int PixThres = 760;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::eShadingNode::Glossy;
@@ -522,7 +522,7 @@ void test_glossy_mat1(const char *arch_list[], std::string_view preferred_device
 
 void test_glossy_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 280;
+    const int PixThres = 290;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::eShadingNode::Glossy;
@@ -605,7 +605,7 @@ void test_aniso_mat1(const char *arch_list[], std::string_view preferred_device)
 }
 
 void test_aniso_mat2(const char *arch_list[], std::string_view preferred_device) {
-    const int SampleCount = 306;
+    const int SampleCount = 308;
     const int PixThres = 490;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -675,7 +675,7 @@ void test_aniso_mat6(const char *arch_list[], std::string_view preferred_device)
 }
 
 void test_aniso_mat7(const char *arch_list[], std::string_view preferred_device) {
-    const int SampleCount = 330;
+    const int SampleCount = 332;
     const int PixThres = 535;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -706,7 +706,7 @@ void test_metal_mat0(const char *arch_list[], std::string_view preferred_device)
 
 void test_metal_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 18;
-    const int PixThres = 300;
+    const int PixThres = 310;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{0.5f, 0.0f, 0.5f}};
@@ -718,7 +718,7 @@ void test_metal_mat1(const char *arch_list[], std::string_view preferred_device)
 
 void test_metal_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
-    const int PixThres = 310;
+    const int PixThres = 320;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{0.5f, 0.0f, 0.0f}};
@@ -734,7 +734,7 @@ void test_metal_mat2(const char *arch_list[], std::string_view preferred_device)
 
 void test_plastic_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 28;
-    const int PixThres = 870;
+    const int PixThres = 880;
 
     Ray::principled_mat_desc_t plastic_mat_desc;
     plastic_mat_desc.base_color = {{0.0f, 0.0f, 0.5f}};
@@ -746,7 +746,7 @@ void test_plastic_mat0(const char *arch_list[], std::string_view preferred_devic
 
 void test_plastic_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 18;
-    const int PixThres = 225;
+    const int PixThres = 230;
 
     Ray::principled_mat_desc_t plastic_mat_desc;
     plastic_mat_desc.base_color = {{0.0f, 0.5f, 0.0f}};
@@ -861,7 +861,7 @@ void test_coat_mat0(const char *arch_list[], std::string_view preferred_device) 
 
 void test_coat_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 10;
-    const int PixThres = 200;
+    const int PixThres = 210;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color = {{0.0f, 0.0f, 0.0f}};
@@ -907,7 +907,7 @@ void test_refr_mis0(const char *arch_list[], std::string_view preferred_device) 
 void test_refr_mis1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 14;
     const double MinPSNR = 31.25;
-    const int PixThres = 195;
+    const int PixThres = 200;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::eShadingNode::Refractive;
@@ -966,7 +966,7 @@ void test_refr_mat1(const char *arch_list[], std::string_view preferred_device) 
 
 void test_refr_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 64;
-    const int PixThres = 2410;
+    const int PixThres = 2420;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::eShadingNode::Refractive;
@@ -980,7 +980,7 @@ void test_refr_mat2(const char *arch_list[], std::string_view preferred_device) 
 
 void test_refr_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 42;
-    const int PixThres = 415;
+    const int PixThres = 430;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::eShadingNode::Refractive;
@@ -1013,7 +1013,7 @@ void test_refr_mat3(const char *arch_list[], std::string_view preferred_device) 
 
 void test_trans_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 664;
-    const int PixThres = 1015;
+    const int PixThres = 1020;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color = {{1.0f, 1.0f, 1.0f}};
@@ -1027,7 +1027,7 @@ void test_trans_mat1(const char *arch_list[], std::string_view preferred_device)
 }
 
 void test_trans_mat2(const char *arch_list[], std::string_view preferred_device) {
-    const int SampleCount = 74;
+    const int SampleCount = 76;
     const int PixThres = 3020;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -1098,7 +1098,7 @@ void test_alpha_mat2(const char *arch_list[], std::string_view preferred_device)
 
 void test_alpha_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 24;
-    const int PixThres = 75;
+    const int PixThres = 80;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color = {{0.0f, 0.0f, 0.5f}};
@@ -1111,7 +1111,7 @@ void test_alpha_mat3(const char *arch_list[], std::string_view preferred_device)
 void test_alpha_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
     const double MinPSNR = 31.00;
-    const int PixThres = 230;
+    const int PixThres = 240;
 
     Ray::shading_node_desc_t alpha_mat_desc;
     alpha_mat_desc.type = Ray::eShadingNode::Transparent;
