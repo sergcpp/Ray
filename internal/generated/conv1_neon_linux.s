@@ -1,0 +1,288 @@
+.text
+.globl ray_conv1_neon
+.type ray_conv1_neon, @function
+ray_conv1_neon:
+.cfi_startproc
+    sub sp, sp, 208
+    .cfi_def_cfa_offset 208
+    stp q8, q9, [sp, #0]
+    .cfi_offset d8, -208
+    .cfi_offset d9, -200
+    stp q10, q11, [sp, #32]
+    .cfi_offset d10, -176
+    .cfi_offset d11, -168
+    stp q12, q13, [sp, #64]
+    .cfi_offset d12, -144
+    .cfi_offset d13, -136
+    stp q14, q15, [sp, #96]
+    .cfi_offset d14, -112
+    .cfi_offset d15, -104
+    stp x19, x20, [sp, #128]
+    .cfi_offset x19, -80
+    .cfi_offset x20, -72
+    stp x21, x22, [sp, #144]
+    .cfi_offset x21, -64
+    .cfi_offset x22, -56
+    stp x23, x24, [sp, #160]
+    .cfi_offset x23, -48
+    .cfi_offset x24, -40
+    stp x25, x26, [sp, #176]
+    .cfi_offset x25, -32
+    .cfi_offset x26, -24
+    stp x27, x28, [sp, #192]
+    .cfi_offset x27, -16
+    .cfi_offset x28, -8
+    mov x19, x0
+    mov w27, w1
+    add w25, w1, w3
+    add w26, w2, w4
+    mov x16, 128
+    mul x21, x5, x16
+    mov x22, x6
+    mov x23, x7
+    ldr x24, [sp, #208]
+    ldr w17, [sp, #216]
+    mov x16, 128
+    mul x20, x17, x16
+    mov w0, w2
+    fmov s26, wzr
+conv1_neon_y_loop:
+    cmp x0, x26
+    b.ge conv1_neon_Ly_done
+    mov x1, x27
+conv1_neon_x_loop:
+    cmp x1, x25
+    b.ge conv1_neon_Lx_done
+    mov x8, x0
+    lsr x8, x8, #1
+    mul x8, x8, x20
+    add x28, x8, x24
+    mov x9, x1
+    lsr x9, x9, #1
+    mov x10, 128
+    mul x9, x9, x10
+    add x28, x28, x9
+    mov x12, xzr
+    mov x16, x22
+    add x17, x16, #384
+    add x13, x17, #384
+    mov x15, x23
+conv1_neon_ii_loop:
+    cmp x12, 128
+    b.ge conv1_neon_Lii_done
+    mul x8, x0, x21
+    sub x9, x1, #1
+    mov x10, 128
+    mul x9, x9, x10
+    add x8, x8, x9
+    add x5, x19, x8
+    sub x4, x5, x21
+    add x6, x5, x21
+    add x7, x6, x21
+    add x9, x16, #1152
+    add x10, x17, #1152
+    add x11, x13, #1152
+    ldr s0, [x15]
+    mov v1.16b, v0.16b
+    mov v2.16b, v0.16b
+    mov v3.16b, v0.16b
+    mov v4.16b, v0.16b
+    mov v5.16b, v0.16b
+    mov v6.16b, v0.16b
+    mov v7.16b, v0.16b
+    ldr s8, [x15, #4]
+    mov v9.16b, v8.16b
+    mov v10.16b, v8.16b
+    mov v11.16b, v8.16b
+    mov v12.16b, v8.16b
+    mov v13.16b, v8.16b
+    mov v14.16b, v8.16b
+    mov v15.16b, v8.16b
+    mov x2, xzr
+conv1_neon_j_loop:
+    ldr q20, [x16, x2]
+    ldr q21, [x17, x2]
+    ldr q22, [x13, x2]
+    ldr q23, [x9, x2]
+    ldr q24, [x10, x2]
+    ldr q25, [x11, x2]
+    ldr q16, [x4]
+    ldr q17, [x5]
+    ldr q18, [x6]
+    ldr q19, [x7]
+    fmla v0.4s, v16.4s, v20.4s
+    fmla v0.4s, v17.4s, v21.4s
+    fmla v0.4s, v18.4s, v22.4s
+    fmla v4.4s, v17.4s, v20.4s
+    fmla v4.4s, v18.4s, v21.4s
+    fmla v4.4s, v19.4s, v22.4s
+    fmla v8.4s, v16.4s, v23.4s
+    fmla v8.4s, v17.4s, v24.4s
+    fmla v8.4s, v18.4s, v25.4s
+    fmla v12.4s, v17.4s, v23.4s
+    fmla v12.4s, v18.4s, v24.4s
+    fmla v12.4s, v19.4s, v25.4s
+    ldr q16, [x4, #128]
+    ldr q17, [x5, #128]
+    ldr q18, [x6, #128]
+    ldr q19, [x7, #128]
+    fmla v1.4s, v16.4s, v20.4s
+    fmla v1.4s, v17.4s, v21.4s
+    fmla v1.4s, v18.4s, v22.4s
+    fmla v5.4s, v17.4s, v20.4s
+    fmla v5.4s, v18.4s, v21.4s
+    fmla v5.4s, v19.4s, v22.4s
+    fmla v9.4s, v16.4s, v23.4s
+    fmla v9.4s, v17.4s, v24.4s
+    fmla v9.4s, v18.4s, v25.4s
+    fmla v13.4s, v17.4s, v23.4s
+    fmla v13.4s, v18.4s, v24.4s
+    fmla v13.4s, v19.4s, v25.4s
+    ldr q16, [x4, #256]
+    ldr q17, [x5, #256]
+    ldr q18, [x6, #256]
+    ldr q19, [x7, #256]
+    fmla v2.4s, v16.4s, v20.4s
+    fmla v2.4s, v17.4s, v21.4s
+    fmla v2.4s, v18.4s, v22.4s
+    fmla v6.4s, v17.4s, v20.4s
+    fmla v6.4s, v18.4s, v21.4s
+    fmla v6.4s, v19.4s, v22.4s
+    fmla v10.4s, v16.4s, v23.4s
+    fmla v10.4s, v17.4s, v24.4s
+    fmla v10.4s, v18.4s, v25.4s
+    fmla v14.4s, v17.4s, v23.4s
+    fmla v14.4s, v18.4s, v24.4s
+    fmla v14.4s, v19.4s, v25.4s
+    ldr q16, [x4, #384]
+    ldr q17, [x5, #384]
+    ldr q18, [x6, #384]
+    ldr q19, [x7, #384]
+    fmla v3.4s, v16.4s, v20.4s
+    fmla v3.4s, v17.4s, v21.4s
+    fmla v3.4s, v18.4s, v22.4s
+    fmla v7.4s, v17.4s, v20.4s
+    fmla v7.4s, v18.4s, v21.4s
+    fmla v7.4s, v19.4s, v22.4s
+    fmla v11.4s, v16.4s, v23.4s
+    fmla v11.4s, v17.4s, v24.4s
+    fmla v11.4s, v18.4s, v25.4s
+    fmla v15.4s, v17.4s, v23.4s
+    fmla v15.4s, v18.4s, v24.4s
+    fmla v15.4s, v19.4s, v25.4s
+    add x2, x2, 16
+    add x4, x4, 16
+    add x5, x5, 16
+    add x6, x6, 16
+    add x7, x7, 16
+    cmp x2, 384
+    b.lt conv1_neon_j_loop
+    faddp v12.4s, v12.4s, v12.4s
+    faddp s12, v12.2s
+    fmax s12, s12, s26
+    faddp v13.4s, v13.4s, v13.4s
+    faddp s13, v13.2s
+    fmax s13, s13, s26
+    faddp v14.4s, v14.4s, v14.4s
+    faddp s14, v14.2s
+    fmax s14, s14, s26
+    faddp v15.4s, v15.4s, v15.4s
+    faddp s15, v15.2s
+    fmax s15, s15, s26
+    faddp v8.4s, v8.4s, v8.4s
+    faddp s8, v8.2s
+    fmax s8, s8, s26
+    faddp v9.4s, v9.4s, v9.4s
+    faddp s9, v9.2s
+    fmax s9, s9, s26
+    faddp v10.4s, v10.4s, v10.4s
+    faddp s10, v10.2s
+    fmax s10, s10, s26
+    faddp v11.4s, v11.4s, v11.4s
+    faddp s11, v11.2s
+    fmax s11, s11, s26
+    faddp v4.4s, v4.4s, v4.4s
+    faddp s4, v4.2s
+    fmax s4, s4, s26
+    faddp v5.4s, v5.4s, v5.4s
+    faddp s5, v5.2s
+    fmax s5, s5, s26
+    faddp v6.4s, v6.4s, v6.4s
+    faddp s6, v6.2s
+    fmax s6, s6, s26
+    faddp v7.4s, v7.4s, v7.4s
+    faddp s7, v7.2s
+    fmax s7, s7, s26
+    faddp v0.4s, v0.4s, v0.4s
+    faddp s0, v0.2s
+    fmax s0, s0, s26
+    faddp v1.4s, v1.4s, v1.4s
+    faddp s1, v1.2s
+    fmax s1, s1, s26
+    faddp v2.4s, v2.4s, v2.4s
+    faddp s2, v2.2s
+    fmax s2, s2, s26
+    faddp v3.4s, v3.4s, v3.4s
+    faddp s3, v3.2s
+    fmax s3, s3, s26
+    add x8, x1, #0
+    cmp x8, x25
+    b.ge conv1_neon_Lp0
+    fmax s1, s1, s0
+    fmax s5, s5, s4
+    fmax s5, s5, s1
+    fmax s5, s5, s26
+    fmax s9, s9, s8
+    fmax s13, s13, s12
+    fmax s13, s13, s9
+    fmax s13, s13, s26
+    add x8, x28, #0
+    str s5, [x8, x12]
+    add x8, x8, #4
+    str s13, [x8, x12]
+conv1_neon_Lp0:
+    add x8, x1, #2
+    cmp x8, x25
+    b.ge conv1_neon_Lp2
+    fmax s3, s3, s2
+    fmax s7, s7, s6
+    fmax s7, s7, s3
+    fmax s7, s7, s26
+    fmax s11, s11, s10
+    fmax s15, s15, s14
+    fmax s15, s15, s11
+    fmax s15, s15, s26
+    add x8, x28, #128
+    str s7, [x8, x12]
+    add x8, x8, #4
+    str s15, [x8, x12]
+conv1_neon_Lp2:
+    mov x8, 2304
+    add x16, x16, x8
+    add x17, x17, x8
+    add x13, x13, x8
+    add x15, x15, #8
+    add x12, x12, #8
+    b conv1_neon_ii_loop
+conv1_neon_Lii_done:
+    add x1, x1, 4
+    b conv1_neon_x_loop
+conv1_neon_Lx_done:
+    add x0, x0, #2
+    b conv1_neon_y_loop
+conv1_neon_Ly_done:
+    ldp q8, q9, [sp, #0]
+    ldp q10, q11, [sp, #32]
+    ldp q12, q13, [sp, #64]
+    ldp q14, q15, [sp, #96]
+    ldp x19, x20, [sp, #128]
+    ldp x21, x22, [sp, #144]
+    ldp x23, x24, [sp, #160]
+    ldp x25, x26, [sp, #176]
+    ldp x27, x28, [sp, #192]
+    add sp, sp, 208
+    .cfi_def_cfa_offset 0
+    ret 
+.cfi_endproc
+.size ray_conv1_neon, .-ray_conv1_neon
+.section .note.GNU-stack,"",@progbits

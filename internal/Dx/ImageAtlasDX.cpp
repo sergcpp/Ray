@@ -273,7 +273,7 @@ bool Ray::Dx::ImageAtlas::Resize(const int pages_count) {
             throw std::runtime_error("Failed to create resource");
         }
 
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
         std::wstring temp_str(name_.begin(), name_.end());
         new_img->SetName(temp_str.c_str());
 #endif

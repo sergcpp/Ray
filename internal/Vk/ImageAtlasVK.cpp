@@ -295,7 +295,7 @@ bool Ray::Vk::ImageAtlas::Resize(const int pages_count) {
         }
     }
 
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
     VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType = VK_OBJECT_TYPE_IMAGE;
     name_info.objectHandle = uint64_t(new_img);

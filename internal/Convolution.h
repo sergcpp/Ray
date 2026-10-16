@@ -211,17 +211,17 @@ void Convolution3x3(const float *restrict data, const rect_t &rect, const int w,
 #undef C_COLS
 }
 
-template <int S, int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, ePreOp PreOp1,
-          ePreOp PreOp2, ePreOp PreOp3, ePostOp PostOp, eActivation Activation>
-void Convolution3x3(const float *restrict data1, const float *restrict data2, const float *restrict data3,
-                    const rect_t &rect, const int in_w, const int in_h, const int w, const int h, const int stride,
-                    const float *restrict weights, const float *restrict biases, float *restrict output,
-                    const int output_stride, aligned_vector<float, 64> &temp_data) {
+// Staging for the 3-input Convolution3x3 below: gathers the rect + 1px halo window of the three
+// inputs into temp_data as one InChannels123-channel tensor (pre-ops applied, out-of-bounds
+// pixels zero, tail padded to RoundedTriple for the final S-wide window). Split out so the
+// generated asm walk (CoreSIMD.h pass-0 hook) can reuse the exact same staged buffer.
+template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, ePreOp PreOp1, ePreOp PreOp2,
+          ePreOp PreOp3>
+void StageConv3x3(const float *restrict data1, const float *restrict data2, const float *restrict data3,
+                  const rect_t &rect, const int in_w, const int in_h, const int stride,
+                  aligned_vector<float, 64> &temp_data) {
     const int InChannels123 = (InChannels1 + InChannels2 + InChannels3);
-
     const int RoundedTriple = 8 * ((3 * InChannels123 + 7) / 8); // stride and offset must be aligned
-
-    // Preload data
     const int stride123 = rect.w + 2, req_size = InChannels123 * stride123 * (rect.h + 2);
     temp_data.resize(req_size + RoundedTriple);
     float *data123 = temp_data.data();
@@ -248,6 +248,22 @@ void Convolution3x3(const float *restrict data1, const float *restrict data2, co
     while (index < temp_data.size()) {
         data123[index++] = 0.0f;
     }
+}
+
+template <int S, int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, ePreOp PreOp1,
+          ePreOp PreOp2, ePreOp PreOp3, ePostOp PostOp, eActivation Activation>
+void Convolution3x3(const float *restrict data1, const float *restrict data2, const float *restrict data3,
+                    const rect_t &rect, const int in_w, const int in_h, const int w, const int h, const int stride,
+                    const float *restrict weights, const float *restrict biases, float *restrict output,
+                    const int output_stride, aligned_vector<float, 64> &temp_data) {
+    const int InChannels123 = (InChannels1 + InChannels2 + InChannels3);
+
+    const int RoundedTriple = 8 * ((3 * InChannels123 + 7) / 8); // stride and offset must be aligned
+    const int stride123 = rect.w + 2;
+
+    StageConv3x3<InChannels1, InChannels2, InChannels3, PxPitch, PreOp1, PreOp2, PreOp3>(
+        data1, data2, data3, rect, in_w, in_h, stride, temp_data);
+    float *data123 = temp_data.data();
 
 #define C_ROWS 4
 #define C_COLS 16
@@ -441,21 +457,17 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
 #undef index2
 }
 
-template <int S, int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch234, int OutChannels,
-          ePreOp PreOp1, ePreOp PreOp2, ePreOp PreOp3, ePreOp PreOp4, ePostOp PostOp, eActivation Activation>
-void ConvolutionConcat3x3(const float *restrict data1, const float *restrict data2, const float *restrict data3,
-                          const float *restrict data4, const rect_t &rect, const int w, const int h, const int w234,
-                          const int h234, const int stride1, const int stride234, const float *restrict weights,
-                          const float *restrict biases, float *restrict output, int output_stride,
-                          aligned_vector<float, 64> &temp_data) {
+// Staging for the 4-input ConvolutionConcat3x3 below: gathers the rect + 1px halo window of the
+// three aux inputs into temp_data as one InChannels234-channel tensor (pre-ops applied,
+// out-of-bounds pixels zero, tail padded to RoundedTriple2 for the final S-wide window). Split
+// out so the generated asm walk (CoreSIMD.h pass-13 hook) can reuse the exact same staged buffer.
+template <int InChannels2, int InChannels3, int InChannels4, int PxPitch234, ePreOp PreOp2, ePreOp PreOp3,
+          ePreOp PreOp4>
+void StageConvConcat3x3(const float *restrict data2, const float *restrict data3, const float *restrict data4,
+                        const rect_t &rect, const int w234, const int h234, const int stride234,
+                        aligned_vector<float, 64> &temp_data) {
     const int InChannels234 = (InChannels2 + InChannels3 + InChannels4);
-
-    const int RoundedTriple1 = 8 * ((3 * InChannels1 + 7) / 8),
-              RoundedTriple2 = 8 * ((3 * InChannels234 + 7) / 8); // stride and offset must be aligned
-
-#define index1(y, x) InChannels1 *((y) * stride1 + (x))
-
-    // Preload data
+    const int RoundedTriple2 = 8 * ((3 * InChannels234 + 7) / 8); // stride and offset must be aligned
     const int _stride234 = rect.w + 2, req_size = InChannels234 * _stride234 * (rect.h + 2);
     temp_data.resize(req_size + RoundedTriple2);
     float *data234 = temp_data.data();
@@ -482,6 +494,26 @@ void ConvolutionConcat3x3(const float *restrict data1, const float *restrict dat
     while (index < temp_data.size()) {
         data234[index++] = 0.0f;
     }
+}
+
+template <int S, int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch234, int OutChannels,
+          ePreOp PreOp1, ePreOp PreOp2, ePreOp PreOp3, ePreOp PreOp4, ePostOp PostOp, eActivation Activation>
+void ConvolutionConcat3x3(const float *restrict data1, const float *restrict data2, const float *restrict data3,
+                          const float *restrict data4, const rect_t &rect, const int w, const int h, const int w234,
+                          const int h234, const int stride1, const int stride234, const float *restrict weights,
+                          const float *restrict biases, float *restrict output, int output_stride,
+                          aligned_vector<float, 64> &temp_data) {
+    const int InChannels234 = (InChannels2 + InChannels3 + InChannels4);
+
+    const int RoundedTriple1 = 8 * ((3 * InChannels1 + 7) / 8),
+              RoundedTriple2 = 8 * ((3 * InChannels234 + 7) / 8); // stride and offset must be aligned
+
+#define index1(y, x) InChannels1 *((y) * stride1 + (x))
+
+    const int _stride234 = rect.w + 2;
+    StageConvConcat3x3<InChannels2, InChannels3, InChannels4, PxPitch234, PreOp2, PreOp3, PreOp4>(
+        data2, data3, data4, rect, w234, h234, stride234, temp_data);
+    float *data234 = temp_data.data();
 
 #define C_ROWS 4
 #define C_COLS 16

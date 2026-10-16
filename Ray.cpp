@@ -4,13 +4,13 @@
 
 #include "internal/Core.h"
 
-#ifdef ENABLE_REF_IMPL
+#ifdef RAY_ENABLE_REF_IMPL
 #include "internal/RendererRef.h"
-#else // ENABLE_REF_IMPL
+#else // RAY_ENABLE_REF_IMPL
 #pragma message("Ray: Compiling without reference backend")
-#endif // ENABLE_REF_IMPL
+#endif // RAY_ENABLE_REF_IMPL
 
-#ifdef ENABLE_SIMD_IMPL
+#ifdef RAY_ENABLE_SIMD_IMPL
 #if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #include "internal/RendererAVX.h"
 #include "internal/RendererAVX2.h"
@@ -21,19 +21,23 @@
 #elif defined(__i386__) || defined(__x86_64__)
 #include "internal/RendererSSE41.h"
 #endif
-#else // ENABLE_SIMD_IMPL
+#else // RAY_ENABLE_SIMD_IMPL
 #pragma message("Ray: Compiling without SIMD support")
-#endif // #ifdef ENABLE_SIMD_IMPL
+#endif // #ifdef RAY_ENABLE_SIMD_IMPL
 
-#if defined(ENABLE_DX_IMPL) && defined(_WIN32)
+#if defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)
 #include "internal/RendererDX.h"
-#endif // defined(ENABLE_DX_IMPL) && defined(_WIN32)
-#ifdef ENABLE_VK_IMPL
+#endif // defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)
+#ifdef RAY_ENABLE_VK_IMPL
 #include "internal/RendererVK.h"
-#endif // ENABLE_VK_IMPL
+#endif // RAY_ENABLE_VK_IMPL
 
-#if !(defined(ENABLE_DX_IMPL) && defined(_WIN32)) && !defined(ENABLE_VK_IMPL)
+#if !(defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)) && !defined(RAY_ENABLE_VK_IMPL)
 #pragma message("Ray: Compiling without GPU support")
+#endif
+
+#ifndef RAY_ENABLE_ASM_CONV
+#pragma message("Ray: Compiling without asm UNet conv kernels")
 #endif
 
 #include "internal/simd/detect.h"
@@ -53,7 +57,7 @@ extern const int KnownGPUVendorsCount = std::size(KnownGPUVendors);
 Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
                                        const std::function<void(int, int, ParallelForFunction &&)> &parallel_for,
                                        const Bitmask<eRendererType> enabled_types) {
-#if defined(ENABLE_VK_IMPL)
+#if defined(RAY_ENABLE_VK_IMPL)
     if (enabled_types & eRendererType::Vulkan) {
         log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
         try {
@@ -62,8 +66,8 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
             log->Info("Ray: Failed to create Vulkan renderer, %s", e.what());
         }
     }
-#endif // ENABLE_VK_IMPL
-#if defined(ENABLE_DX_IMPL) && defined(_WIN32)
+#endif // RAY_ENABLE_VK_IMPL
+#if defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)
     if (enabled_types & eRendererType::DirectX12) {
         log->Info("Ray: Creating DirectX12 renderer %ix%i", s.w, s.h);
         try {
@@ -72,9 +76,9 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
             log->Info("Ray: Failed to create DirectX12 renderer, %s", e.what());
         }
     }
-#endif // defined(ENABLE_DX_IMPL) && defined(_WIN32)
+#endif // defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)
 #if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
-#ifdef ENABLE_SIMD_IMPL
+#ifdef RAY_ENABLE_SIMD_IMPL
     const CpuFeatures features = GetCpuFeatures();
     if ((enabled_types & eRendererType::SIMD_AVX512) && features.avx512_supported) {
         log->Info("Ray: Creating AVX512 renderer %ix%i", s.w, s.h);
@@ -93,27 +97,27 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
         return Sse41::CreateRenderer(s, log);
     }
 #endif
-#ifdef ENABLE_REF_IMPL
+#ifdef RAY_ENABLE_REF_IMPL
     if (enabled_types & eRendererType::Reference) {
         log->Info("Ray: Creating Reference renderer %ix%i", s.w, s.h);
         return Ref::CreateRenderer(s, log);
     }
 #endif
 #elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-#ifdef ENABLE_SIMD_IMPL
+#ifdef RAY_ENABLE_SIMD_IMPL
     if (enabled_types & eRendererType::SIMD_NEON) {
         log->Info("Ray: Creating NEON renderer %ix%i", s.w, s.h);
         return Neon::CreateRenderer(s, log);
     }
 #endif
-#ifdef ENABLE_REF_IMPL
+#ifdef RAY_ENABLE_REF_IMPL
     if (enabled_types & eRendererType::Reference) {
         log->Info("Ray: Creating Reference renderer %ix%i", s.w, s.h);
         return Ref::CreateRenderer(s, log);
     }
 #endif
 #endif
-#ifdef ENABLE_REF_IMPL
+#ifdef RAY_ENABLE_REF_IMPL
     log->Info("Ray: Creating Reference renderer %ix%i", s.w, s.h);
     return Ref::CreateRenderer(s, log);
 #else
@@ -124,10 +128,10 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
 
 int Ray::QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], const int capacity) {
     int count = 0;
-#ifdef ENABLE_VK_IMPL
+#ifdef RAY_ENABLE_VK_IMPL
     count = Vk::Context::QueryAvailableDevices(log, out_devices, capacity);
 #endif
-#if defined(ENABLE_DX_IMPL) && defined(_WIN32)
+#if defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)
     count = Dx::Context::QueryAvailableDevices(log, out_devices, capacity);
 #endif
     return count;

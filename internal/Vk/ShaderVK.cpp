@@ -78,7 +78,7 @@ bool Ray::Vk::Shader::Init(std::string_view name, Context *ctx, Span<const uint8
         return false;
     }
 
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
     VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
     name_info.objectHandle = uint64_t(module_);

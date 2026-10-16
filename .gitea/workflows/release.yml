@@ -128,7 +128,7 @@ jobs:
       - name: Compile the code
         uses: ./.gitea/actions/build-windows
         with:
-          cmake-args: "-A ARM64 -DCMAKE_UNITY_BUILD=ON -DENABLE_VK_IMPL=OFF -DENABLE_DX_IMPL=ON"
+          cmake-args: "-A ARM64 -DCMAKE_UNITY_BUILD=ON -DRAY_ENABLE_VK_IMPL=OFF -DRAY_ENABLE_DX_IMPL=ON"
           config: "Release"
           bin-dir: "windows-arm64"
       - name: Upload artifacts
@@ -148,7 +148,7 @@ jobs:
       - name: Compile the code
         uses: ./.gitea/actions/build-windows
         with:
-          cmake-args: "-A ARM64 -DENABLE_VK_IMPL=OFF -DENABLE_DX_IMPL=ON"
+          cmake-args: "-A ARM64 -DRAY_ENABLE_VK_IMPL=OFF -DRAY_ENABLE_DX_IMPL=ON"
           config: "Debug"
   build-windows-arm64-dev:
     runs-on: [ windows, builder ]
@@ -162,7 +162,7 @@ jobs:
       - name: Compile the code
         uses: ./.gitea/actions/build-windows
         with:
-          cmake-args: "-A ARM64 -DENABLE_VK_IMPL=OFF -DENABLE_DX_IMPL=ON"
+          cmake-args: "-A ARM64 -DRAY_ENABLE_VK_IMPL=OFF -DRAY_ENABLE_DX_IMPL=ON"
           config: "RelWithDebInfo"
   build-linux-x86_64-rel:
     runs-on: [ linux, builder ]

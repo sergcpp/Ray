@@ -17,7 +17,7 @@ struct DebugMarker {
 
 inline Ray::Vk::DebugMarker::DebugMarker(Context *ctx, VkCommandBuffer cmd_buf, std::string_view name)
     : api_(ctx->api()), cmd_buf_(cmd_buf) {
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
     VkDebugUtilsLabelEXT label = {VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT};
     label.pLabelName = name.data();
     label.color[0] = label.color[1] = label.color[2] = label.color[3] = 1.0f;
@@ -27,7 +27,7 @@ inline Ray::Vk::DebugMarker::DebugMarker(Context *ctx, VkCommandBuffer cmd_buf, 
 }
 
 inline void Ray::Vk::DebugMarker::End() {
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
     if (cmd_buf_) {
         api_.vkCmdEndDebugUtilsLabelEXT(cmd_buf_);
         cmd_buf_ = {};

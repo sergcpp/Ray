@@ -1,8 +1,8 @@
 #pragma once
 
-#cmakedefine ENABLE_REF_IMPL
-#cmakedefine ENABLE_SIMD_IMPL
-#cmakedefine ENABLE_VK_IMPL
-#cmakedefine ENABLE_DX_IMPL
-#cmakedefine ENABLE_GPU_DEBUG
-#cmakedefine ENABLE_PIX
+#cmakedefine RAY_ENABLE_REF_IMPL
+#cmakedefine RAY_ENABLE_SIMD_IMPL
+#cmakedefine RAY_ENABLE_VK_IMPL
+#cmakedefine RAY_ENABLE_DX_IMPL
+#cmakedefine RAY_ENABLE_GPU_DEBUG
+#cmakedefine RAY_ENABLE_PIX

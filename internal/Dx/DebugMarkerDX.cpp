@@ -13,14 +13,14 @@
 
 #include "../../Config.h"
 
-#ifdef ENABLE_PIX
+#ifdef RAY_ENABLE_PIX
 #include <WinPixEventRuntime/pix3.h>
 #endif
 
 Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf, std::string_view name)
     : cmd_buf_(_cmd_buf) {
-#ifdef ENABLE_GPU_DEBUG
-#ifdef ENABLE_PIX
+#ifdef RAY_ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_PIX
     PIXBeginEvent(cmd_buf_, 0, name.data());
 #else
     const int req_size = MultiByteToWideChar(CP_UTF8, 0, name.data(), -1, nullptr, 0);
@@ -36,8 +36,8 @@ Ray::Dx::DebugMarker::DebugMarker(Context *, ID3D12GraphicsCommandList *_cmd_buf
 }
 
 Ray::Dx::DebugMarker::~DebugMarker() {
-#ifdef ENABLE_GPU_DEBUG
-#ifdef ENABLE_PIX
+#ifdef RAY_ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_PIX
     PIXEndEvent(cmd_buf_);
 #else
     cmd_buf_->EndEvent();

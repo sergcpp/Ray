@@ -30,6 +30,96 @@ extern const float ggx_E_glass_inv[][16][16];
 extern const float ggx_Eavg_glass[][16];
 extern const float ggx_Eavg_glass_inv[][16];
 
+#if defined(RAY_ENABLE_ASM_CONV)
+// generated kernels (scripts/gen_conv_asm.py): all 16 denoise passes, bit-identical to the C++ path
+// (pass 10 reuses conv6; 7/9/11/13 are the concat kernels; 0/13 walk C++-staged buffers)
+#define RAY_ASM_CONV_DECL(sym)                                                                                         \
+    extern "C" void sym(const float *data, int rect_x, int rect_y, int rect_w, int rect_h, int stride,                 \
+                        const float *weights, const float *biases, float *output, int output_stride);
+// 2-input concat kernels (passes 7/9/11, PreOp1=Upsample), bit-identical to ConvolutionConcat3x3
+#define RAY_ASM_CC2_DECL(sym)                                                                                          \
+    extern "C" void sym(const float *data1, const float *data2, int rect_x, int rect_y, int rect_w, int rect_h,        \
+                        int stride1, int stride2, const float *weights, const float *biases, float *output,            \
+                        int output_stride);
+RAY_ASM_CONV_DECL(ray_conv0_avx2)
+RAY_ASM_CONV_DECL(ray_conv1_avx2)
+RAY_ASM_CONV_DECL(ray_conv2_avx2)
+RAY_ASM_CONV_DECL(ray_conv3_avx2)
+RAY_ASM_CONV_DECL(ray_conv4_avx2)
+RAY_ASM_CONV_DECL(ray_conv5_avx2)
+RAY_ASM_CONV_DECL(ray_conv6_avx2)
+RAY_ASM_CONV_DECL(ray_conv8_avx2)
+RAY_ASM_CONV_DECL(ray_conv12_avx2)
+RAY_ASM_CONV_DECL(ray_conv14_avx2)
+RAY_ASM_CONV_DECL(ray_conv15_avx2)
+RAY_ASM_CONV_DECL(ray_conv0_avx1)
+RAY_ASM_CONV_DECL(ray_conv1_avx1)
+RAY_ASM_CONV_DECL(ray_conv2_avx1)
+RAY_ASM_CONV_DECL(ray_conv3_avx1)
+RAY_ASM_CONV_DECL(ray_conv4_avx1)
+RAY_ASM_CONV_DECL(ray_conv5_avx1)
+RAY_ASM_CONV_DECL(ray_conv6_avx1)
+RAY_ASM_CONV_DECL(ray_conv8_avx1)
+RAY_ASM_CONV_DECL(ray_conv12_avx1)
+RAY_ASM_CONV_DECL(ray_conv14_avx1)
+RAY_ASM_CONV_DECL(ray_conv15_avx1)
+RAY_ASM_CONV_DECL(ray_conv0_sse41)
+RAY_ASM_CONV_DECL(ray_conv1_sse41)
+RAY_ASM_CONV_DECL(ray_conv2_sse41)
+RAY_ASM_CONV_DECL(ray_conv3_sse41)
+RAY_ASM_CONV_DECL(ray_conv4_sse41)
+RAY_ASM_CONV_DECL(ray_conv5_sse41)
+RAY_ASM_CONV_DECL(ray_conv6_sse41)
+RAY_ASM_CONV_DECL(ray_conv8_sse41)
+RAY_ASM_CONV_DECL(ray_conv12_sse41)
+RAY_ASM_CONV_DECL(ray_conv14_sse41)
+RAY_ASM_CONV_DECL(ray_conv15_sse41)
+RAY_ASM_CONV_DECL(ray_conv0_avx512)
+RAY_ASM_CONV_DECL(ray_conv1_avx512)
+RAY_ASM_CONV_DECL(ray_conv2_avx512)
+RAY_ASM_CONV_DECL(ray_conv3_avx512)
+RAY_ASM_CONV_DECL(ray_conv4_avx512)
+RAY_ASM_CONV_DECL(ray_conv5_avx512)
+RAY_ASM_CONV_DECL(ray_conv6_avx512)
+RAY_ASM_CONV_DECL(ray_conv8_avx512)
+RAY_ASM_CONV_DECL(ray_conv12_avx512)
+RAY_ASM_CONV_DECL(ray_conv14_avx512)
+RAY_ASM_CONV_DECL(ray_conv15_avx512)
+RAY_ASM_CC2_DECL(ray_conv7_avx2)
+RAY_ASM_CC2_DECL(ray_conv9_avx2)
+RAY_ASM_CC2_DECL(ray_conv11_avx2)
+RAY_ASM_CC2_DECL(ray_conv13_avx2)
+RAY_ASM_CC2_DECL(ray_conv7_avx1)
+RAY_ASM_CC2_DECL(ray_conv9_avx1)
+RAY_ASM_CC2_DECL(ray_conv11_avx1)
+RAY_ASM_CC2_DECL(ray_conv13_avx1)
+RAY_ASM_CC2_DECL(ray_conv7_sse41)
+RAY_ASM_CC2_DECL(ray_conv9_sse41)
+RAY_ASM_CC2_DECL(ray_conv11_sse41)
+RAY_ASM_CC2_DECL(ray_conv13_sse41)
+RAY_ASM_CC2_DECL(ray_conv7_avx512)
+RAY_ASM_CC2_DECL(ray_conv9_avx512)
+RAY_ASM_CC2_DECL(ray_conv11_avx512)
+RAY_ASM_CC2_DECL(ray_conv13_avx512)
+RAY_ASM_CONV_DECL(ray_conv0_neon)
+RAY_ASM_CONV_DECL(ray_conv1_neon)
+RAY_ASM_CONV_DECL(ray_conv2_neon)
+RAY_ASM_CONV_DECL(ray_conv3_neon)
+RAY_ASM_CONV_DECL(ray_conv4_neon)
+RAY_ASM_CONV_DECL(ray_conv5_neon)
+RAY_ASM_CONV_DECL(ray_conv6_neon)
+RAY_ASM_CONV_DECL(ray_conv8_neon)
+RAY_ASM_CONV_DECL(ray_conv12_neon)
+RAY_ASM_CONV_DECL(ray_conv14_neon)
+RAY_ASM_CONV_DECL(ray_conv15_neon)
+RAY_ASM_CC2_DECL(ray_conv7_neon)
+RAY_ASM_CC2_DECL(ray_conv9_neon)
+RAY_ASM_CC2_DECL(ray_conv11_neon)
+RAY_ASM_CC2_DECL(ray_conv13_neon)
+#undef RAY_ASM_CONV_DECL
+#undef RAY_ASM_CC2_DECL
+#endif
+
 //
 // Useful macros for debugging
 //
@@ -652,6 +742,56 @@ class SIMDPolicyBase {
     static force_inline void Convolution3x3(const float data[], const rect_t &rect, const int w, const int h,
                                             const int stride, const float weights[], const float biases[],
                                             float output[], const int output_stride) {
+// asm kernels are AVX2/AVX1/SSE41/AVX512/NEON prototypes - every SIMD arch whose TU includes this
+// header; REF stays on the C++ kernel. The chain below has an explicit branch per arch, so a future
+// arch without kernels fails to compile instead of silently binding a kernel family.
+#if defined(RAY_ENABLE_ASM_CONV)
+#define RAY_ASM_CAT2(a, b) a##b
+#define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
+#if defined(USE_AVX512)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
+#elif defined(USE_AVX2)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx2)
+#elif defined(USE_AVX)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
+#elif defined(USE_NEON)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#elif defined(USE_SSE41)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
+#endif
+        // (pass, in, out, pitch) table; pitch == OutChannels except pass 15 (RGB + pad)
+#define RAY_ASM_CONV_CASE(n, ic, oc, pitch)                                                                            \
+    if constexpr (InChannels == (ic) && OutChannels == (oc) && OutPxPitch == (pitch)) {                                \
+        RAY_ASM_CONV(n)(data, rect.x, rect.y, rect.w, rect.h, stride, weights, biases, output, output_stride);         \
+        return;                                                                                                        \
+    }
+        if constexpr (RPSize == RAY_ASM_CONV_RP && PostOp == ePostOp::None && Activation == eActivation::ReLU) {
+            RAY_ASM_CONV_CASE(5, 80, 96, 96)    // pass 5
+            RAY_ASM_CONV_CASE(6, 96, 96, 96)    // passes 6 and 10 (same channel config)
+            RAY_ASM_CONV_CASE(8, 112, 112, 112) // pass 8
+            RAY_ASM_CONV_CASE(12, 64, 64, 64)   // pass 12
+            RAY_ASM_CONV_CASE(14, 64, 32, 32)   // pass 14
+        }
+        if constexpr (RPSize == RAY_ASM_CONV_RP && PostOp == ePostOp::Downsample && Activation == eActivation::ReLU) {
+            RAY_ASM_CONV_CASE(1, 32, 32, 32) // pass 1
+            RAY_ASM_CONV_CASE(2, 32, 48, 48) // pass 2
+            RAY_ASM_CONV_CASE(3, 48, 64, 64) // pass 3
+            RAY_ASM_CONV_CASE(4, 64, 80, 80) // pass 4
+        }
+        if constexpr (RPSize == RAY_ASM_CONV_RP && PostOp == ePostOp::HDRTransfer && Activation == eActivation::ReLU) {
+            RAY_ASM_CONV_CASE(15, 32, 3, 4) // pass 15 (final output, HDR transfer post-op)
+        }
+#undef RAY_ASM_CAT2
+#undef RAY_ASM_CAT
+#undef RAY_ASM_CONV_RP
+#undef RAY_ASM_CONV
+#undef RAY_ASM_CONV_CASE
+#endif
         NS::Convolution3x3<RPSize, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
             data, rect, w, h, stride, weights, biases, output, output_stride);
     }
@@ -664,6 +804,44 @@ class SIMDPolicyBase {
                                             const int h, const int stride, const float weights[], const float biases[],
                                             float output[], const int output_stride,
                                             aligned_vector<float, 64> &temp_data) {
+// pass 0: C++ staging + generated walk over the staged 9-channel buffer (see StageConv3x3). The
+// staged buffer is rect-relative (1px halo); the asm kernel addresses data absolutely, so hand it
+// the base that maps absolute (x,y) onto the halo: staged + In123 * ((1-ry)*s + (1-rx)).
+#if defined(RAY_ENABLE_ASM_CONV)
+#define RAY_ASM_CAT2(a, b) a##b
+#define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
+#if defined(USE_AVX512)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
+#elif defined(USE_AVX2)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx2)
+#elif defined(USE_AVX)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
+#elif defined(USE_NEON)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#elif defined(USE_SSE41)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
+#endif
+        if constexpr (RPSize == RAY_ASM_CONV_RP && InChannels1 == 3 && InChannels2 == 3 && InChannels3 == 3 &&
+                      PxPitch == 4 && OutChannels == 32 && PreOp1 == ePreOp::HDRTransfer && PreOp2 == ePreOp::None &&
+                      PreOp3 == ePreOp::PositiveNormalize && PostOp == ePostOp::None &&
+                      Activation == eActivation::ReLU) {
+            NS::StageConv3x3<InChannels1, InChannels2, InChannels3, PxPitch, PreOp1, PreOp2, PreOp3>(
+                data1, data2, data3, rect, in_w, in_h, stride, temp_data);
+            const int In123 = InChannels1 + InChannels2 + InChannels3, s123 = rect.w + 2;
+            const float *staged = temp_data.data() + In123 * ((1 - rect.y) * s123 + (1 - rect.x));
+            RAY_ASM_CONV(0)(staged, rect.x, rect.y, rect.w, rect.h, s123, weights, biases, output, output_stride);
+            return;
+        }
+#undef RAY_ASM_CAT2
+#undef RAY_ASM_CAT
+#undef RAY_ASM_CONV_RP
+#undef RAY_ASM_CONV
+#endif
         NS::Convolution3x3<RPSize, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3,
                            PostOp, Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights, biases,
                                                output, output_stride, temp_data);
@@ -675,6 +853,47 @@ class SIMDPolicyBase {
                                                   const int w, const int h, const int stride1, const int stride2,
                                                   const float weights[], const float biases[], float output[],
                                                   const int output_stride) {
+// asm kernels are AVX2/AVX1/SSE41/AVX512/NEON prototypes - every SIMD arch whose TU includes this
+// header; REF stays on the C++ kernel. The chain below has an explicit branch per arch, so a future
+// arch without kernels fails to compile instead of silently binding a kernel family.
+#if defined(RAY_ENABLE_ASM_CONV)
+#define RAY_ASM_CAT2(a, b) a##b
+#define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
+#if defined(USE_AVX512)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
+#elif defined(USE_AVX2)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx2)
+#elif defined(USE_AVX)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
+#elif defined(USE_NEON)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#elif defined(USE_SSE41)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
+#endif
+        // (pass, in1, in2, out) table; only the Upsample-concat denoise passes have asm kernels
+#define RAY_ASM_CC2_CASE(n, ic1, ic2, oc)                                                                              \
+    if constexpr (InChannels1 == (ic1) && InChannels2 == (ic2) && OutChannels == (oc)) {                               \
+        RAY_ASM_CONV(n)(data1, data2, rect.x, rect.y, rect.w, rect.h, stride1, stride2, weights, biases, output,       \
+                        output_stride);                                                                                \
+        return;                                                                                                        \
+    }
+        if constexpr (RPSize == RAY_ASM_CONV_RP && PreOp1 == ePreOp::Upsample && PostOp == ePostOp::None &&
+                      Activation == eActivation::ReLU) {
+            RAY_ASM_CC2_CASE(7, 96, 64, 112) // pass 7
+            RAY_ASM_CC2_CASE(9, 112, 48, 96) // pass 9
+            RAY_ASM_CC2_CASE(11, 96, 32, 64) // pass 11
+        }
+#undef RAY_ASM_CAT2
+#undef RAY_ASM_CAT
+#undef RAY_ASM_CONV_RP
+#undef RAY_ASM_CONV
+#undef RAY_ASM_CC2_CASE
+#endif
         NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
             data1, data2, rect, w, h, stride1, stride2, weights, biases, output, output_stride);
     }
@@ -687,6 +906,43 @@ class SIMDPolicyBase {
                                                   const int w2, const int h2, const int stride1, const int stride2,
                                                   const float weights[], const float biases[], float output[],
                                                   const int output_stride, aligned_vector<float, 64> &temp_data) {
+// pass 13: C++ staging of the three aux inputs + generated concat walk (data1 with Upsample
+// addressing + the staged 9-channel buffer via the absolute base pointer, see the pass-0 hook).
+#if defined(RAY_ENABLE_ASM_CONV)
+#define RAY_ASM_CAT2(a, b) a##b
+#define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
+#if defined(USE_AVX512)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
+#elif defined(USE_AVX2)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx2)
+#elif defined(USE_AVX)
+#define RAY_ASM_CONV_RP 8
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
+#elif defined(USE_NEON)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#elif defined(USE_SSE41)
+#define RAY_ASM_CONV_RP 4
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
+#endif
+        if constexpr (RPSize == RAY_ASM_CONV_RP && InChannels1 == 64 && InChannels2 == 3 && InChannels3 == 3 &&
+                      InChannels4 == 3 && PxPitch2 == 4 && OutChannels == 64 && PreOp1 == ePreOp::Upsample &&
+                      PostOp == ePostOp::None && Activation == eActivation::ReLU) {
+            NS::StageConvConcat3x3<InChannels2, InChannels3, InChannels4, PxPitch2, PreOp2, PreOp3, PreOp4>(
+                data2, data3, data4, rect, w2, h2, stride2, temp_data);
+            const int In234 = InChannels2 + InChannels3 + InChannels4, s234 = rect.w + 2;
+            const float *staged = temp_data.data() + In234 * ((1 - rect.y) * s234 + (1 - rect.x));
+            RAY_ASM_CONV(13)(data1, staged, rect.x, rect.y, rect.w, rect.h, stride1, s234, weights, biases, output,
+                             output_stride);
+            return;
+        }
+#undef RAY_ASM_CAT2
+#undef RAY_ASM_CAT
+#undef RAY_ASM_CONV_RP
+#undef RAY_ASM_CONV
+#endif
         NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2, OutChannels,
                                  PreOp1, PreOp2, PreOp3, PreOp4, PostOp, Activation>(
             data1, data2, data3, data4, rect, w, h, w2, h2, stride1, stride2, weights, biases, output, output_stride,

@@ -177,7 +177,7 @@ bool Ray::Dx::Image::Realloc(const int w, const int h, int mip_count, const int 
             return false;
         }
 
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(new_image);
@@ -242,7 +242,7 @@ bool Ray::Dx::Image::Realloc(const int w, const int h, int mip_count, const int 
             return false;
         }
 
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
         VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(new_image_view);
@@ -419,7 +419,7 @@ void Ray::Dx::Image::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsC
             return;
         }
 
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
         std::wstring temp_str(name_.begin(), name_.end());
         handle_.img->SetName(temp_str.c_str());
 #endif
@@ -486,7 +486,7 @@ void Ray::Dx::Image::InitFromRAWData(Buffer *sbuf, int data_off, ID3D12GraphicsC
             handle_.views.push_back(depth_only_view);
         }
 
-#ifdef ENABLE_GPU_DEBUG
+#ifdef RAY_ENABLE_GPU_DEBUG
         for (VkImageView view : handle_.views) {
             VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
             name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
