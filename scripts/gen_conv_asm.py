@@ -39,8 +39,10 @@
 #              plus master TUs (conv_all_win_x64.asm, conv_all_{linux,macos}_{x86_64,aarch64}.s)
 #              that pull the per-kernel sources into ONE object per target/arch - internal labels
 #              are namespaced per kernel (ns_labels) so the kernels can be assembled in one pass;
-#              Windows kernels carry no END directive (the x64 master supplies it; CMake
-#              concatenates the 15 arm64 kernels via scripts/asm_concat.cmake and appends one).
+#              Windows x86 kernels carry no END directive (the x64 master supplies it); arm64 win
+#              kernels each end with their own indented END - armasm64 GET includes are per-unit
+#              and require it (a mid-stream END does not stop assembly, unlike ml64); the master
+#              conv_all_win_arm64.asm lists the kernels via GET (+ /I<generated dir>).
 
 import os
 import re
@@ -1691,7 +1693,9 @@ def wrap_armasm64(t, p, isa):
     if p.post_op == 'hdr':
         # literal pool right after the function body: hdr_site reaches it with one adr
         lines += [f'{p.tag}_hdr_c'] + [f'\tDCD {v}' for v in HDR_CONSTS]
-    # no END directive: CMake's asm_concat.cmake appends one after concatenating the 15 kernels
+    # armasm64 GET includes are per-unit: each kernel file must end with its own (indented!)
+    # END; a mid-stream END does not stop the assembly of the remaining kernels
+    lines += ['\tEND']
     return lines
 
 
@@ -1785,8 +1789,8 @@ def main():
 
     # Master TUs: one object per target/arch instead of 60/15. The per-kernel sources stay
     # separate files - the master only pulls them in (ml64 INCLUDE needs /I<generated dir>,
-    # GAS .include needs -I<generated dir>; armasm64 has no include directive, so CMake
-    # concatenates its 15 .asm at build time via scripts/asm_concat.cmake).
+    # GAS .include needs -I<generated dir>, armasm64 GET needs /I<generated dir> but each
+    # kernel file carries its own indented END - GET units do not truncate the assembly).
     def emit_master(fname, header, includes, footer):
         write_asm(os.path.join(out_dir, fname), [header] + includes + footer)
 
@@ -1794,6 +1798,10 @@ def main():
                 '; master TU: assembles all 60 x86 kernels into one object (ml64 + /I<generated dir>;'
                 ' per-kernel sources carry no END, it is supplied here)',
                 [f'INCLUDE {p.tag}_{isa.name}.asm' for p in PASSES for isa in ISAS], ['END'])
+    emit_master('conv_all_win_arm64.asm',
+                '; master TU: assembles all 15 NEON kernels into one object (armasm64 + /I<generated'
+                ' dir>; GET includes are per-unit: each kernel file ends with its own indented END)',
+                [f'\tGET {p.tag}_{isa.name}.asm' for p in PASSES for isa in ISAS_ARM], ['\tEND'])
     for fname, sfx, isas, isa0 in [('conv_all_linux_x86_64.s', '_linux.s', ISAS, None),
                                    ('conv_all_macos_x86_64.s', '_macos.s', ISAS, None),
                                    ('conv_all_linux_aarch64.s', '_linux.s', ISAS_ARM, None),

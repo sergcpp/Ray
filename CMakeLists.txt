@@ -531,36 +531,35 @@ if(_ray_conv_mode STREQUAL "masm")
         source_group("src\\internal\\generated" FILES ${_ray_conv_asm_srcs} ${_ray_conv_asm_aux} ${_ray_conv_asm_kernels})
     endif()
 elseif(_ray_conv_mode STREQUAL "armasm")
-    # armasm64 has no INCLUDE directive: concatenate the 15 kernels at build time
-    # (scripts/asm_concat.cmake appends the single END directive), then assemble the merged
-    # master into one object.
+    # armasm64 GET includes are per-unit (each kernel file ends with its own indented END, a
+    # mid-stream END does not stop the rest, unlike ml64): the master TU assembles all kernels
+    # into one object, GET names resolve via /I.
+    set(_ray_conv_arm_master internal/generated/conv_all_win_arm64.asm)
     set(_ray_conv_arm_srcs "")
     set(_ray_conv_asm_aux "")
     foreach(_ray_conv_pass IN LISTS _ray_conv_passes)
-        list(APPEND _ray_conv_arm_srcs ${CMAKE_CURRENT_SOURCE_DIR}/internal/generated/conv${_ray_conv_pass}_neon.asm)
+        list(APPEND _ray_conv_arm_srcs internal/generated/conv${_ray_conv_pass}_neon.asm)
         list(APPEND _ray_conv_asm_aux internal/generated/conv${_ray_conv_pass}_neon_linux.s
             internal/generated/conv${_ray_conv_pass}_neon_macos.s)
     endforeach()
     list(APPEND _ray_conv_asm_aux internal/generated/conv_all_linux_aarch64.s internal/generated/conv_all_macos_aarch64.s)
-    _ray_conv_probe_missing(_ray_conv_arm_srcs)
+    _ray_conv_probe_missing(_ray_conv_arm_master _ray_conv_arm_srcs)
     if(NOT _ray_conv_missing)
-        set(_ray_conv_merged ${CMAKE_CURRENT_BINARY_DIR}/generated_asm/conv_all_win_arm64.asm)
-        set(_ray_conv_merged_obj ${CMAKE_CURRENT_BINARY_DIR}/generated_asm/conv_all_win_arm64.obj)
-        file(GENERATE OUTPUT ${_ray_conv_merged}.inlist CONTENT "${_ray_conv_arm_srcs}\n")
-        add_custom_command(OUTPUT ${_ray_conv_merged}
-                COMMAND ${CMAKE_COMMAND} -DOUT=${_ray_conv_merged} -DINLIST=${_ray_conv_merged}.inlist
-                        -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/asm_concat.cmake
-                DEPENDS ${_ray_conv_arm_srcs} ${_ray_conv_merged}.inlist ${CMAKE_CURRENT_SOURCE_DIR}/scripts/asm_concat.cmake
-                COMMENT "Concatenating 15 NEON conv kernels (asm_concat.cmake)")
-        add_custom_command(OUTPUT ${_ray_conv_merged_obj}
-                COMMAND ${RAY_ARMASM64} /nologo /o ${_ray_conv_merged_obj} ${_ray_conv_merged}
-                DEPENDS ${_ray_conv_merged}
-                COMMENT "Assembling conv_all_win_arm64.asm (armasm64)")
-        target_sources(Ray PRIVATE ${_ray_conv_merged_obj})
-        target_sources(Ray PRIVATE ${_ray_conv_arm_srcs} ${_ray_conv_asm_aux})
-        # per-kernel sources are browse-only (assembled through the merged master)
-        set_source_files_properties(${_ray_conv_arm_srcs} ${_ray_conv_asm_aux} PROPERTIES HEADER_FILE_ONLY TRUE)
-        source_group("src\\internal\\generated" FILES ${_ray_conv_arm_srcs} ${_ray_conv_asm_aux})
+        set(_ray_conv_arm_obj ${CMAKE_CURRENT_BINARY_DIR}/generated_asm/conv_all_win_arm64.obj)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated_asm)
+        add_custom_command(OUTPUT ${_ray_conv_arm_obj}
+                COMMAND ${RAY_ARMASM64} /nologo /I${CMAKE_CURRENT_SOURCE_DIR}/internal/generated
+                        /o ${_ray_conv_arm_obj}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/internal/generated/conv_all_win_arm64.asm
+                DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/internal/generated/conv_all_win_arm64.asm
+                        ${_ray_conv_arm_srcs}
+                COMMENT "Assembling conv_all_win_arm64.asm (armasm64, GET master)")
+        target_sources(Ray PRIVATE ${_ray_conv_arm_obj})
+        target_sources(Ray PRIVATE ${_ray_conv_arm_master} ${_ray_conv_arm_srcs} ${_ray_conv_asm_aux})
+        # per-kernel sources are browse-only (assembled through the GET master)
+        set_source_files_properties(${_ray_conv_arm_master} ${_ray_conv_arm_srcs} ${_ray_conv_asm_aux}
+            PROPERTIES HEADER_FILE_ONLY TRUE)
+        source_group("src\\internal\\generated" FILES ${_ray_conv_arm_master} ${_ray_conv_arm_srcs} ${_ray_conv_asm_aux})
     endif()
 elseif(_ray_conv_mode STREQUAL "gas")
     # one master TU (.include) compiles to a single object; the per-kernel .s files stay
