@@ -30,6 +30,9 @@ class SIMDPolicy;
 namespace Avx512 {
 class SIMDPolicy;
 }
+namespace Avx512_fp16 {
+class SIMDPolicy;
+}
 namespace Neon {
 class SIMDPolicy;
 }
@@ -45,6 +48,7 @@ class Scene : public SceneCommon {
     friend class Cpu::Renderer<Avx::SIMDPolicy>;
     friend class Cpu::Renderer<Avx2::SIMDPolicy>;
     friend class Cpu::Renderer<Avx512::SIMDPolicy>;
+    friend class Cpu::Renderer<Avx512_fp16::SIMDPolicy>;
     friend class Cpu::Renderer<Neon::SIMDPolicy>;
 
     bool use_wide_bvh_, use_compact_bvh_, use_tex_compression_;

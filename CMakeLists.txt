@@ -144,7 +144,9 @@ if (RAY_ENABLE_SIMD_IMPL)
                               internal/RendererAVX2.h
                               internal/RendererAVX2.cpp
                               internal/RendererAVX512.h
-                              internal/RendererAVX512.cpp)
+                              internal/RendererAVX512.cpp
+                              internal/RendererAVX512FP16.h
+                              internal/RendererAVX512FP16.cpp)
 
     set_source_files_properties(
         internal/RendererSSE41.cpp
@@ -152,6 +154,7 @@ if (RAY_ENABLE_SIMD_IMPL)
         internal/RendererAVX.cpp
         internal/RendererAVX2.cpp
         internal/RendererAVX512.cpp
+        internal/RendererAVX512FP16.cpp
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
     )
 endif(RAY_ENABLE_SIMD_IMPL)
@@ -192,13 +195,20 @@ if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND NOT "${CMAKE_APPLE_SIL
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
         set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
         set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
+        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            set_source_files_properties(internal/RendererAVX512FP16.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX512 /mavx512fp16")
+        else()
+            set_source_files_properties(internal/RendererAVX512FP16.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
+        endif()
     else()
         set_source_files_properties(internal/simd/detect.cpp PROPERTIES COMPILE_FLAGS -mxsave)
         set_source_files_properties(internal/TextureUtilsSSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
         set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
-        set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
-        set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mavx512f -mavx512bw -mavx512dq -mavx512vl")
+        set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mf16c")
+        set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mf16c -mavx512f -mavx512bw -mavx512dq -mavx512vl")
+        set_source_files_properties(internal/RendererAVX512FP16.cpp PROPERTIES COMPILE_FLAGS
+            "-mavx2 -mfma -mf16c -mavx512f -mavx512bw -mavx512dq -mavx512vl -mavx512fp16")
     endif()
 endif(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND NOT "${CMAKE_APPLE_SILICON_PROCESSOR}" STREQUAL "arm64")
 
@@ -219,6 +229,7 @@ set(SOURCE_FILES Bitmask.h
 set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h
                internal/simd/detect.cpp
+               internal/simd/fp16.h
                internal/simd/simd.h
                internal/simd/simd_sse.h
                internal/simd/simd_avx.h
@@ -391,11 +402,12 @@ endif (RAY_ENABLE_PIX AND WIN32)
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
 
 # Generated asm UNet conv kernels (scripts/gen_conv_asm.py) for denoise passes 0-9, 11-15:
-# bit-identical to the C++ kernels and ~1.2-1.5x faster. Assembler per platform: MASM .asm
-# on MSVC/ClangCL x64, armasm64 .asm on MSVC ARM64 (CMake's ASM_MASM language rejects ARM64,
-# so armasm64.exe next to the target cl.exe is run via custom commands and the objects are
-# linked into Ray), GAS .s through the C compiler driver on Linux/macOS - x86_64 gets
-# avx1/avx2/sse41/avx512, aarch64/arm64 gets neon. .intel_syntax noprefix is accepted by
+# fp32 x86 kernels bit-identical to the C++ ones; the f16 kernels (NEON, AVX512-FP16 ph) use GPU
+# conv numerics (f16 tensors, weights AND f16 accumulation) and are ~2-2.5x faster. Assembler per
+# platform: MASM .asm on MSVC/ClangCL x64, armasm64 .asm on MSVC ARM64 (CMake's ASM_MASM language
+# rejects ARM64, so armasm64.exe next to the target cl.exe is run via custom commands and the
+# objects are linked into Ray), GAS .s through the C compiler driver on Linux/macOS - x86_64 gets
+# avx1/avx2/sse41/avx512/avx512f16, aarch64/arm64 gets neon. .intel_syntax noprefix is accepted by
 # GNU as and clang; the macOS files carry no CFI (Mach-O's CFI object writer rejects their
 # label-difference advance_loc expressions; these hot kernels are never unwound through -
 # same posture as the ml64/armasm64 objects), the Linux files keep CFI and .note.GNU-stack.
@@ -403,7 +415,8 @@ add_library(Ray STATIC ${ALL_SOURCE_FILES})
 # arch with explicit -arch flags and lipo-merges the objects into one fat object.
 # RAY_ENABLE_ASM_CONV defaults to ON; if the platform has no kernel form or the assembler or
 # the generated sources are missing, the kernels are disabled and the C++ Convolution3x3
-# path is used instead of failing the build.
+# path is used instead of failing the build; UNet tensors then stay fp32 (the fp16 tensor_t
+# storage is gated on the same define - the C++ kernels only read/write fp32 tensors).
 set(_ray_conv_mode "")
 set(_ray_conv_reason "")
 set(_ray_conv_missing FALSE)
@@ -465,7 +478,7 @@ elseif(NOT MSVC AND (APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
         set(_ray_conv_gas_arch "aarch64")
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
         set(_ray_conv_mode "gas")
-        set(_ray_conv_gas_isas "avx1;avx2;sse41;avx512")
+        set(_ray_conv_gas_isas "avx1;avx2;sse41;avx512;avx512f16")
         set(_ray_conv_gas_arch "x86_64")
     else()
         set(_ray_conv_reason "no kernels generated for CPU '${CMAKE_SYSTEM_PROCESSOR}'")
@@ -505,7 +518,7 @@ if(_ray_conv_mode STREQUAL "masm")
     foreach(_ray_conv_pass IN LISTS _ray_conv_passes)
         list(APPEND _ray_conv_asm_kernels internal/generated/conv${_ray_conv_pass}_avx2.asm
             internal/generated/conv${_ray_conv_pass}_avx1.asm internal/generated/conv${_ray_conv_pass}_sse41.asm
-            internal/generated/conv${_ray_conv_pass}_avx512.asm)
+            internal/generated/conv${_ray_conv_pass}_avx512.asm internal/generated/conv${_ray_conv_pass}_avx512f16.asm)
         list(APPEND _ray_conv_asm_aux internal/generated/conv${_ray_conv_pass}_avx2_linux.s
             internal/generated/conv${_ray_conv_pass}_avx2_macos.s
             internal/generated/conv${_ray_conv_pass}_avx1_linux.s
@@ -513,7 +526,9 @@ if(_ray_conv_mode STREQUAL "masm")
             internal/generated/conv${_ray_conv_pass}_sse41_linux.s
             internal/generated/conv${_ray_conv_pass}_sse41_macos.s
             internal/generated/conv${_ray_conv_pass}_avx512_linux.s
-            internal/generated/conv${_ray_conv_pass}_avx512_macos.s)
+            internal/generated/conv${_ray_conv_pass}_avx512_macos.s
+            internal/generated/conv${_ray_conv_pass}_avx512f16_linux.s
+            internal/generated/conv${_ray_conv_pass}_avx512f16_macos.s)
     endforeach()
     list(APPEND _ray_conv_asm_aux internal/generated/conv_all_linux_x86_64.s internal/generated/conv_all_macos_x86_64.s
         internal/generated/conv_all_linux_aarch64.s internal/generated/conv_all_macos_aarch64.s)
@@ -591,7 +606,7 @@ elseif(_ray_conv_mode STREQUAL "gas_universal")
         if(_ray_conv_gas_arch STREQUAL "aarch64")
             set(_ray_conv_arch_isas "neon")
         else()
-            set(_ray_conv_arch_isas "avx1;avx2;sse41;avx512")
+            set(_ray_conv_arch_isas "avx1;avx2;sse41;avx512;avx512f16")
         endif()
         set(_ray_conv_arch_srcs "")
         foreach(_ray_conv_gas_isa IN LISTS _ray_conv_arch_isas)

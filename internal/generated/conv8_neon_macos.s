@@ -1,6 +1,7 @@
+.arch armv8.2-a+fp16
 .section __TEXT,__text,regular,pure_instructions
-.globl _ray_conv8_neon
-_ray_conv8_neon:
+.globl _ray_conv8_neon_f16
+_ray_conv8_neon_f16:
     sub sp, sp, 208
     stp q8, q9, [sp, #0]
     stp q10, q11, [sp, #32]
@@ -15,13 +16,13 @@ _ray_conv8_neon:
     mov w27, w1
     add w25, w1, w3
     add w26, w2, w4
-    mov x16, 448
+    mov x16, 224
     mul x21, x5, x16
     mov x22, x6
     mov x23, x7
     ldr x24, [sp, #208]
     ldr w17, [sp, #216]
-    mov x16, 448
+    mov x16, 224
     mul x20, x17, x16
     mov w0, w2
     fmov s30, wzr
@@ -36,30 +37,30 @@ conv8_neon_x_loop:
     mul x8, x8, x20
     add x28, x8, x24
     mov x9, x1
-    mov x10, 448
+    mov x10, 224
     mul x9, x9, x10
     add x28, x28, x9
     mov x12, xzr
     mov x16, x22
-    add x17, x16, #1344
-    add x13, x17, #1344
+    add x17, x16, #672
+    add x13, x17, #672
     mov x15, x23
 conv8_neon_ii_loop:
-    cmp x12, 448
+    cmp x12, 224
     b.ge conv8_neon_Lii_done
     mul x8, x0, x21
     sub x9, x1, #1
-    mov x10, 448
+    mov x10, 224
     mul x9, x9, x10
     add x8, x8, x9
     add x5, x19, x8
     sub x4, x5, x21
     add x6, x5, x21
     add x7, x6, x21
-    add x9, x16, #4032
-    add x10, x17, #4032
-    add x11, x13, #4032
-    ldr s0, [x15]
+    add x9, x16, #2016
+    add x10, x17, #2016
+    add x11, x13, #2016
+    ldr h0, [x15]
     mov v1.16b, v0.16b
     mov v2.16b, v0.16b
     mov v3.16b, v0.16b
@@ -69,7 +70,7 @@ conv8_neon_ii_loop:
     mov v7.16b, v0.16b
     mov v8.16b, v0.16b
     mov v9.16b, v0.16b
-    ldr s10, [x15, #4]
+    ldr h10, [x15, #2]
     mov v11.16b, v10.16b
     mov v12.16b, v10.16b
     mov v13.16b, v10.16b
@@ -91,88 +92,88 @@ conv8_neon_j_loop:
     ldr q21, [x5]
     ldr q22, [x6]
     ldr q23, [x7]
-    fmla v0.4s, v20.4s, v24.4s
-    fmla v0.4s, v21.4s, v25.4s
-    fmla v0.4s, v22.4s, v26.4s
-    fmla v5.4s, v21.4s, v24.4s
-    fmla v5.4s, v22.4s, v25.4s
-    fmla v5.4s, v23.4s, v26.4s
-    fmla v10.4s, v20.4s, v27.4s
-    fmla v10.4s, v21.4s, v28.4s
-    fmla v10.4s, v22.4s, v29.4s
-    fmla v15.4s, v21.4s, v27.4s
-    fmla v15.4s, v22.4s, v28.4s
-    fmla v15.4s, v23.4s, v29.4s
+    fmla v0.8h, v20.8h, v24.8h
+    fmla v0.8h, v21.8h, v25.8h
+    fmla v0.8h, v22.8h, v26.8h
+    fmla v5.8h, v21.8h, v24.8h
+    fmla v5.8h, v22.8h, v25.8h
+    fmla v5.8h, v23.8h, v26.8h
+    fmla v10.8h, v20.8h, v27.8h
+    fmla v10.8h, v21.8h, v28.8h
+    fmla v10.8h, v22.8h, v29.8h
+    fmla v15.8h, v21.8h, v27.8h
+    fmla v15.8h, v22.8h, v28.8h
+    fmla v15.8h, v23.8h, v29.8h
+    ldr q20, [x4, #224]
+    ldr q21, [x5, #224]
+    ldr q22, [x6, #224]
+    ldr q23, [x7, #224]
+    fmla v1.8h, v20.8h, v24.8h
+    fmla v1.8h, v21.8h, v25.8h
+    fmla v1.8h, v22.8h, v26.8h
+    fmla v6.8h, v21.8h, v24.8h
+    fmla v6.8h, v22.8h, v25.8h
+    fmla v6.8h, v23.8h, v26.8h
+    fmla v11.8h, v20.8h, v27.8h
+    fmla v11.8h, v21.8h, v28.8h
+    fmla v11.8h, v22.8h, v29.8h
+    fmla v16.8h, v21.8h, v27.8h
+    fmla v16.8h, v22.8h, v28.8h
+    fmla v16.8h, v23.8h, v29.8h
     ldr q20, [x4, #448]
     ldr q21, [x5, #448]
     ldr q22, [x6, #448]
     ldr q23, [x7, #448]
-    fmla v1.4s, v20.4s, v24.4s
-    fmla v1.4s, v21.4s, v25.4s
-    fmla v1.4s, v22.4s, v26.4s
-    fmla v6.4s, v21.4s, v24.4s
-    fmla v6.4s, v22.4s, v25.4s
-    fmla v6.4s, v23.4s, v26.4s
-    fmla v11.4s, v20.4s, v27.4s
-    fmla v11.4s, v21.4s, v28.4s
-    fmla v11.4s, v22.4s, v29.4s
-    fmla v16.4s, v21.4s, v27.4s
-    fmla v16.4s, v22.4s, v28.4s
-    fmla v16.4s, v23.4s, v29.4s
+    fmla v2.8h, v20.8h, v24.8h
+    fmla v2.8h, v21.8h, v25.8h
+    fmla v2.8h, v22.8h, v26.8h
+    fmla v7.8h, v21.8h, v24.8h
+    fmla v7.8h, v22.8h, v25.8h
+    fmla v7.8h, v23.8h, v26.8h
+    fmla v12.8h, v20.8h, v27.8h
+    fmla v12.8h, v21.8h, v28.8h
+    fmla v12.8h, v22.8h, v29.8h
+    fmla v17.8h, v21.8h, v27.8h
+    fmla v17.8h, v22.8h, v28.8h
+    fmla v17.8h, v23.8h, v29.8h
+    ldr q20, [x4, #672]
+    ldr q21, [x5, #672]
+    ldr q22, [x6, #672]
+    ldr q23, [x7, #672]
+    fmla v3.8h, v20.8h, v24.8h
+    fmla v3.8h, v21.8h, v25.8h
+    fmla v3.8h, v22.8h, v26.8h
+    fmla v8.8h, v21.8h, v24.8h
+    fmla v8.8h, v22.8h, v25.8h
+    fmla v8.8h, v23.8h, v26.8h
+    fmla v13.8h, v20.8h, v27.8h
+    fmla v13.8h, v21.8h, v28.8h
+    fmla v13.8h, v22.8h, v29.8h
+    fmla v18.8h, v21.8h, v27.8h
+    fmla v18.8h, v22.8h, v28.8h
+    fmla v18.8h, v23.8h, v29.8h
     ldr q20, [x4, #896]
     ldr q21, [x5, #896]
     ldr q22, [x6, #896]
     ldr q23, [x7, #896]
-    fmla v2.4s, v20.4s, v24.4s
-    fmla v2.4s, v21.4s, v25.4s
-    fmla v2.4s, v22.4s, v26.4s
-    fmla v7.4s, v21.4s, v24.4s
-    fmla v7.4s, v22.4s, v25.4s
-    fmla v7.4s, v23.4s, v26.4s
-    fmla v12.4s, v20.4s, v27.4s
-    fmla v12.4s, v21.4s, v28.4s
-    fmla v12.4s, v22.4s, v29.4s
-    fmla v17.4s, v21.4s, v27.4s
-    fmla v17.4s, v22.4s, v28.4s
-    fmla v17.4s, v23.4s, v29.4s
-    ldr q20, [x4, #1344]
-    ldr q21, [x5, #1344]
-    ldr q22, [x6, #1344]
-    ldr q23, [x7, #1344]
-    fmla v3.4s, v20.4s, v24.4s
-    fmla v3.4s, v21.4s, v25.4s
-    fmla v3.4s, v22.4s, v26.4s
-    fmla v8.4s, v21.4s, v24.4s
-    fmla v8.4s, v22.4s, v25.4s
-    fmla v8.4s, v23.4s, v26.4s
-    fmla v13.4s, v20.4s, v27.4s
-    fmla v13.4s, v21.4s, v28.4s
-    fmla v13.4s, v22.4s, v29.4s
-    fmla v18.4s, v21.4s, v27.4s
-    fmla v18.4s, v22.4s, v28.4s
-    fmla v18.4s, v23.4s, v29.4s
-    ldr q20, [x4, #1792]
-    ldr q21, [x5, #1792]
-    ldr q22, [x6, #1792]
-    ldr q23, [x7, #1792]
-    fmla v4.4s, v20.4s, v24.4s
-    fmla v4.4s, v21.4s, v25.4s
-    fmla v4.4s, v22.4s, v26.4s
-    fmla v9.4s, v21.4s, v24.4s
-    fmla v9.4s, v22.4s, v25.4s
-    fmla v9.4s, v23.4s, v26.4s
-    fmla v14.4s, v20.4s, v27.4s
-    fmla v14.4s, v21.4s, v28.4s
-    fmla v14.4s, v22.4s, v29.4s
-    fmla v19.4s, v21.4s, v27.4s
-    fmla v19.4s, v22.4s, v28.4s
-    fmla v19.4s, v23.4s, v29.4s
+    fmla v4.8h, v20.8h, v24.8h
+    fmla v4.8h, v21.8h, v25.8h
+    fmla v4.8h, v22.8h, v26.8h
+    fmla v9.8h, v21.8h, v24.8h
+    fmla v9.8h, v22.8h, v25.8h
+    fmla v9.8h, v23.8h, v26.8h
+    fmla v14.8h, v20.8h, v27.8h
+    fmla v14.8h, v21.8h, v28.8h
+    fmla v14.8h, v22.8h, v29.8h
+    fmla v19.8h, v21.8h, v27.8h
+    fmla v19.8h, v22.8h, v28.8h
+    fmla v19.8h, v23.8h, v29.8h
     add x2, x2, 16
     add x4, x4, 16
     add x5, x5, 16
     add x6, x6, 16
     add x7, x7, 16
-    cmp x2, 1344
+    cmp x2, 672
     b.lt conv8_neon_j_loop
     add x8, x0, #1
     cmp x8, x26
@@ -181,151 +182,171 @@ conv8_neon_j_loop:
     add x8, x1, #0
     cmp x8, x25
     b.ge conv8_neon_Lc1_0
-    faddp v5.4s, v5.4s, v5.4s
-    faddp s5, v5.2s
-    faddp v15.4s, v15.4s, v15.4s
-    faddp s15, v15.2s
-    fmax s5, s5, s30
-    fmax s15, s15, s30
+    faddp v5.8h, v5.8h, v5.8h
+    faddp v5.4h, v5.4h, v5.4h
+    faddp h5, v5.2h
+    faddp v15.8h, v15.8h, v15.8h
+    faddp v15.4h, v15.4h, v15.4h
+    faddp h15, v15.2h
+    fmax h5, h5, h30
+    fmax h15, h15, h30
     add x8, x28, #0
-    str s5, [x8, x12]
-    add x8, x8, #4
-    str s15, [x8, x12]
+    str h5, [x8, x12]
+    add x8, x8, #2
+    str h15, [x8, x12]
 conv8_neon_Lc1_0:
     add x8, x1, #1
     cmp x8, x25
     b.ge conv8_neon_Lc1_1
-    faddp v6.4s, v6.4s, v6.4s
-    faddp s6, v6.2s
-    faddp v16.4s, v16.4s, v16.4s
-    faddp s16, v16.2s
-    fmax s6, s6, s30
-    fmax s16, s16, s30
-    add x8, x28, #448
-    str s6, [x8, x12]
-    add x8, x8, #4
-    str s16, [x8, x12]
+    faddp v6.8h, v6.8h, v6.8h
+    faddp v6.4h, v6.4h, v6.4h
+    faddp h6, v6.2h
+    faddp v16.8h, v16.8h, v16.8h
+    faddp v16.4h, v16.4h, v16.4h
+    faddp h16, v16.2h
+    fmax h6, h6, h30
+    fmax h16, h16, h30
+    add x8, x28, #224
+    str h6, [x8, x12]
+    add x8, x8, #2
+    str h16, [x8, x12]
 conv8_neon_Lc1_1:
     add x8, x1, #2
     cmp x8, x25
     b.ge conv8_neon_Lc1_2
-    faddp v7.4s, v7.4s, v7.4s
-    faddp s7, v7.2s
-    faddp v17.4s, v17.4s, v17.4s
-    faddp s17, v17.2s
-    fmax s7, s7, s30
-    fmax s17, s17, s30
-    add x8, x28, #896
-    str s7, [x8, x12]
-    add x8, x8, #4
-    str s17, [x8, x12]
+    faddp v7.8h, v7.8h, v7.8h
+    faddp v7.4h, v7.4h, v7.4h
+    faddp h7, v7.2h
+    faddp v17.8h, v17.8h, v17.8h
+    faddp v17.4h, v17.4h, v17.4h
+    faddp h17, v17.2h
+    fmax h7, h7, h30
+    fmax h17, h17, h30
+    add x8, x28, #448
+    str h7, [x8, x12]
+    add x8, x8, #2
+    str h17, [x8, x12]
 conv8_neon_Lc1_2:
     add x8, x1, #3
     cmp x8, x25
     b.ge conv8_neon_Lc1_3
-    faddp v8.4s, v8.4s, v8.4s
-    faddp s8, v8.2s
-    faddp v18.4s, v18.4s, v18.4s
-    faddp s18, v18.2s
-    fmax s8, s8, s30
-    fmax s18, s18, s30
-    add x8, x28, #1344
-    str s8, [x8, x12]
-    add x8, x8, #4
-    str s18, [x8, x12]
+    faddp v8.8h, v8.8h, v8.8h
+    faddp v8.4h, v8.4h, v8.4h
+    faddp h8, v8.2h
+    faddp v18.8h, v18.8h, v18.8h
+    faddp v18.4h, v18.4h, v18.4h
+    faddp h18, v18.2h
+    fmax h8, h8, h30
+    fmax h18, h18, h30
+    add x8, x28, #672
+    str h8, [x8, x12]
+    add x8, x8, #2
+    str h18, [x8, x12]
 conv8_neon_Lc1_3:
     add x8, x1, #4
     cmp x8, x25
     b.ge conv8_neon_Lc1_4
-    faddp v9.4s, v9.4s, v9.4s
-    faddp s9, v9.2s
-    faddp v19.4s, v19.4s, v19.4s
-    faddp s19, v19.2s
-    fmax s9, s9, s30
-    fmax s19, s19, s30
-    add x8, x28, #1792
-    str s9, [x8, x12]
-    add x8, x8, #4
-    str s19, [x8, x12]
+    faddp v9.8h, v9.8h, v9.8h
+    faddp v9.4h, v9.4h, v9.4h
+    faddp h9, v9.2h
+    faddp v19.8h, v19.8h, v19.8h
+    faddp v19.4h, v19.4h, v19.4h
+    faddp h19, v19.2h
+    fmax h9, h9, h30
+    fmax h19, h19, h30
+    add x8, x28, #896
+    str h9, [x8, x12]
+    add x8, x8, #2
+    str h19, [x8, x12]
 conv8_neon_Lc1_4:
     sub x28, x28, x20
 conv8_neon_Lrow0:
     add x8, x1, #0
     cmp x8, x25
     b.ge conv8_neon_Lc0_0
-    faddp v0.4s, v0.4s, v0.4s
-    faddp s0, v0.2s
-    faddp v10.4s, v10.4s, v10.4s
-    faddp s10, v10.2s
-    fmax s0, s0, s30
-    fmax s10, s10, s30
+    faddp v0.8h, v0.8h, v0.8h
+    faddp v0.4h, v0.4h, v0.4h
+    faddp h0, v0.2h
+    faddp v10.8h, v10.8h, v10.8h
+    faddp v10.4h, v10.4h, v10.4h
+    faddp h10, v10.2h
+    fmax h0, h0, h30
+    fmax h10, h10, h30
     add x8, x28, #0
-    str s0, [x8, x12]
-    add x8, x8, #4
-    str s10, [x8, x12]
+    str h0, [x8, x12]
+    add x8, x8, #2
+    str h10, [x8, x12]
 conv8_neon_Lc0_0:
     add x8, x1, #1
     cmp x8, x25
     b.ge conv8_neon_Lc0_1
-    faddp v1.4s, v1.4s, v1.4s
-    faddp s1, v1.2s
-    faddp v11.4s, v11.4s, v11.4s
-    faddp s11, v11.2s
-    fmax s1, s1, s30
-    fmax s11, s11, s30
-    add x8, x28, #448
-    str s1, [x8, x12]
-    add x8, x8, #4
-    str s11, [x8, x12]
+    faddp v1.8h, v1.8h, v1.8h
+    faddp v1.4h, v1.4h, v1.4h
+    faddp h1, v1.2h
+    faddp v11.8h, v11.8h, v11.8h
+    faddp v11.4h, v11.4h, v11.4h
+    faddp h11, v11.2h
+    fmax h1, h1, h30
+    fmax h11, h11, h30
+    add x8, x28, #224
+    str h1, [x8, x12]
+    add x8, x8, #2
+    str h11, [x8, x12]
 conv8_neon_Lc0_1:
     add x8, x1, #2
     cmp x8, x25
     b.ge conv8_neon_Lc0_2
-    faddp v2.4s, v2.4s, v2.4s
-    faddp s2, v2.2s
-    faddp v12.4s, v12.4s, v12.4s
-    faddp s12, v12.2s
-    fmax s2, s2, s30
-    fmax s12, s12, s30
-    add x8, x28, #896
-    str s2, [x8, x12]
-    add x8, x8, #4
-    str s12, [x8, x12]
+    faddp v2.8h, v2.8h, v2.8h
+    faddp v2.4h, v2.4h, v2.4h
+    faddp h2, v2.2h
+    faddp v12.8h, v12.8h, v12.8h
+    faddp v12.4h, v12.4h, v12.4h
+    faddp h12, v12.2h
+    fmax h2, h2, h30
+    fmax h12, h12, h30
+    add x8, x28, #448
+    str h2, [x8, x12]
+    add x8, x8, #2
+    str h12, [x8, x12]
 conv8_neon_Lc0_2:
     add x8, x1, #3
     cmp x8, x25
     b.ge conv8_neon_Lc0_3
-    faddp v3.4s, v3.4s, v3.4s
-    faddp s3, v3.2s
-    faddp v13.4s, v13.4s, v13.4s
-    faddp s13, v13.2s
-    fmax s3, s3, s30
-    fmax s13, s13, s30
-    add x8, x28, #1344
-    str s3, [x8, x12]
-    add x8, x8, #4
-    str s13, [x8, x12]
+    faddp v3.8h, v3.8h, v3.8h
+    faddp v3.4h, v3.4h, v3.4h
+    faddp h3, v3.2h
+    faddp v13.8h, v13.8h, v13.8h
+    faddp v13.4h, v13.4h, v13.4h
+    faddp h13, v13.2h
+    fmax h3, h3, h30
+    fmax h13, h13, h30
+    add x8, x28, #672
+    str h3, [x8, x12]
+    add x8, x8, #2
+    str h13, [x8, x12]
 conv8_neon_Lc0_3:
     add x8, x1, #4
     cmp x8, x25
     b.ge conv8_neon_Lc0_4
-    faddp v4.4s, v4.4s, v4.4s
-    faddp s4, v4.2s
-    faddp v14.4s, v14.4s, v14.4s
-    faddp s14, v14.2s
-    fmax s4, s4, s30
-    fmax s14, s14, s30
-    add x8, x28, #1792
-    str s4, [x8, x12]
-    add x8, x8, #4
-    str s14, [x8, x12]
+    faddp v4.8h, v4.8h, v4.8h
+    faddp v4.4h, v4.4h, v4.4h
+    faddp h4, v4.2h
+    faddp v14.8h, v14.8h, v14.8h
+    faddp v14.4h, v14.4h, v14.4h
+    faddp h14, v14.2h
+    fmax h4, h4, h30
+    fmax h14, h14, h30
+    add x8, x28, #896
+    str h4, [x8, x12]
+    add x8, x8, #2
+    str h14, [x8, x12]
 conv8_neon_Lc0_4:
-    mov x8, 8064
+    mov x8, 4032
     add x16, x16, x8
     add x17, x17, x8
     add x13, x13, x8
-    add x15, x15, #8
-    add x12, x12, #8
+    add x15, x15, #4
+    add x12, x12, #4
     b conv8_neon_ii_loop
 conv8_neon_Lii_done:
     add x1, x1, 5

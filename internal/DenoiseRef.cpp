@@ -249,3 +249,9 @@ Ray::Ref::ConvolutionConcat3x3<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upsample, Ray::e
     const float data1[], const float data2[], const float data3[], const float data4[], const rect_t &rect, int w,
     int h, int w2, int h2, int stride1, int stride2, const float weights[], const float biases[], float output[],
     int output_stride, aligned_vector<float, 64> &temp_data);
+// Ref policy ClearBorders entry point (declared non-template in DenoiseRef.h): the reference
+// renderer keeps fp32 tensors, so forward to the fp32 instantiation of the Convolution.h template.
+void Ray::Ref::ClearBorders(const rect_t &rect, const int w, const int h, const bool downscaled, const int out_channels,
+                            float output[]) {
+    Ray::Ref::ClearBorders<float>(rect, w, h, downscaled, out_channels, output);
+}

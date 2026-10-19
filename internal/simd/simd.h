@@ -1,4 +1,6 @@
 
+#include "fp16.h"
+
 #include <cmath>
 #include <cstring>
 
@@ -52,6 +54,14 @@
                              { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
                              { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C } { constexpr int I = 11; C } \
                              { constexpr int I = 12; C } { constexpr int I = 13; C } { constexpr int I = 14; C } { constexpr int I = 15; C }
+#define UNROLLED_FOR_32(I, C){ constexpr int I =  0; C } { constexpr int I =  1; C } { constexpr int I =  2; C } { constexpr int I =  3; C } \
+                             { constexpr int I =  4; C } { constexpr int I =  5; C } { constexpr int I =  6; C } { constexpr int I =  7; C } \
+                             { constexpr int I =  8; C } { constexpr int I =  9; C } { constexpr int I = 10; C } { constexpr int I = 11; C } \
+                             { constexpr int I = 12; C } { constexpr int I = 13; C } { constexpr int I = 14; C } { constexpr int I = 15; C } \
+                             { constexpr int I = 16; C } { constexpr int I = 17; C } { constexpr int I = 18; C } { constexpr int I = 19; C } \
+                             { constexpr int I = 20; C } { constexpr int I = 21; C } { constexpr int I = 22; C } { constexpr int I = 23; C } \
+                             { constexpr int I = 24; C } { constexpr int I = 25; C } { constexpr int I = 26; C } { constexpr int I = 27; C } \
+                             { constexpr int I = 28; C } { constexpr int I = 29; C } { constexpr int I = 30; C } { constexpr int I = 31; C }
 
 #define UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE) UNROLLED_FOR_##COUNT(INDEX, CODE)
 #define UNROLLED_FOR(INDEX, COUNT, CODE) UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE)
@@ -60,7 +70,7 @@
 #define UNROLLED_FOR_S(INDEX, COUNT, CODE)                                          \
     static_assert(COUNT == 1 || COUNT == 2 || COUNT == 3 ||                         \
                   COUNT == 4 || COUNT == 7 || COUNT == 8 ||                         \
-                  COUNT == 15 || COUNT == 16, "!");                                 \
+                  COUNT == 15 || COUNT == 16 || COUNT == 32, "!");                  \
     if constexpr (COUNT ==  1) { UNROLLED_FOR_1(INDEX, CODE)  } else         \
     if constexpr (COUNT ==  2) { UNROLLED_FOR_2(INDEX, CODE)  } else         \
     if constexpr (COUNT ==  3) { UNROLLED_FOR_3(INDEX, CODE)  } else         \
@@ -68,10 +78,27 @@
     if constexpr (COUNT ==  7) { UNROLLED_FOR_7(INDEX, CODE)  } else         \
     if constexpr (COUNT ==  8) { UNROLLED_FOR_8(INDEX, CODE)  } else         \
     if constexpr (COUNT == 15) { UNROLLED_FOR_15(INDEX, CODE) } else         \
-    if constexpr (COUNT == 16) { UNROLLED_FOR_16(INDEX, CODE) }
+    if constexpr (COUNT == 16) { UNROLLED_FOR_16(INDEX, CODE) } else         \
+    if constexpr (COUNT == 32) { UNROLLED_FOR_32(INDEX, CODE) }
 
 #define UNROLLED_FOR_R(INDEX, COUNT, CODE)              \
     switch(COUNT) {                                     \
+        case 32: { constexpr int INDEX = 31 % COUNT; CODE } \
+        case 31: { constexpr int INDEX = 30 % COUNT; CODE } \
+        case 30: { constexpr int INDEX = 29 % COUNT; CODE } \
+        case 29: { constexpr int INDEX = 28 % COUNT; CODE } \
+        case 28: { constexpr int INDEX = 27 % COUNT; CODE } \
+        case 27: { constexpr int INDEX = 26 % COUNT; CODE } \
+        case 26: { constexpr int INDEX = 25 % COUNT; CODE } \
+        case 25: { constexpr int INDEX = 24 % COUNT; CODE } \
+        case 24: { constexpr int INDEX = 23 % COUNT; CODE } \
+        case 23: { constexpr int INDEX = 22 % COUNT; CODE } \
+        case 22: { constexpr int INDEX = 21 % COUNT; CODE } \
+        case 21: { constexpr int INDEX = 20 % COUNT; CODE } \
+        case 20: { constexpr int INDEX = 19 % COUNT; CODE } \
+        case 19: { constexpr int INDEX = 18 % COUNT; CODE } \
+        case 18: { constexpr int INDEX = 17 % COUNT; CODE } \
+        case 17: { constexpr int INDEX = 16 % COUNT; CODE } \
         case 16: { constexpr int INDEX = 15 % COUNT; CODE } \
         case 15: { constexpr int INDEX = 14 % COUNT; CODE } \
         case 14: { constexpr int INDEX = 13 % COUNT; CODE } \
@@ -182,74 +209,62 @@ template <typename T, int S> class fixed_size_simd {
     }
 
     fixed_size_simd<T, S> operator==(const fixed_size_simd<T, S> &rhs) const {
-        fixed_size_simd<int, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] == rhs.comp_[i] ? -1 : 0; })
-
-        static_assert(sizeof(fixed_size_simd<T, S>) == sizeof(fixed_size_simd<int, S>), "!");
-
+        using U = typename same_size_uint<T>::type;
         fixed_size_simd<T, S> ret;
-        memcpy(&ret, &temp, sizeof(fixed_size_simd<T, S>));
-
+        UNROLLED_FOR_S(i, S, {
+            const U v = (comp_[i] == rhs.comp_[i]) ? U(-1) : U(0);
+            memcpy(&ret.comp_[i], &v, sizeof(T));
+        })
         return ret;
     }
 
     fixed_size_simd<T, S> operator!=(const fixed_size_simd<T, S> &rhs) const {
-        fixed_size_simd<int, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] != rhs.comp_[i] ? -1 : 0; })
-
-        static_assert(sizeof(fixed_size_simd<T, S>) == sizeof(fixed_size_simd<int, S>), "!");
-
+        using U = typename same_size_uint<T>::type;
         fixed_size_simd<T, S> ret;
-        memcpy(&ret, &temp, sizeof(fixed_size_simd<T, S>));
-
+        UNROLLED_FOR_S(i, S, {
+            const U v = (comp_[i] != rhs.comp_[i]) ? U(-1) : U(0);
+            memcpy(&ret.comp_[i], &v, sizeof(T));
+        })
         return ret;
     }
 
     fixed_size_simd<T, S> operator<(const fixed_size_simd<T, S> &rhs) const {
-        fixed_size_simd<int, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] < rhs.comp_[i] ? -1 : 0; })
-
-        static_assert(sizeof(fixed_size_simd<T, S>) == sizeof(fixed_size_simd<int, S>), "!");
-
+        using U = typename same_size_uint<T>::type;
         fixed_size_simd<T, S> ret;
-        memcpy(&ret, &temp, sizeof(fixed_size_simd<T, S>));
-
+        UNROLLED_FOR_S(i, S, {
+            const U v = (comp_[i] < rhs.comp_[i]) ? U(-1) : U(0);
+            memcpy(&ret.comp_[i], &v, sizeof(T));
+        })
         return ret;
     }
 
     fixed_size_simd<T, S> operator<=(const fixed_size_simd<T, S> &rhs) const {
-        fixed_size_simd<int, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] <= rhs.comp_[i] ? -1 : 0; })
-
-        static_assert(sizeof(fixed_size_simd<T, S>) == sizeof(fixed_size_simd<int, S>), "!");
-
+        using U = typename same_size_uint<T>::type;
         fixed_size_simd<T, S> ret;
-        memcpy(&ret, &temp, sizeof(fixed_size_simd<T, S>));
-
+        UNROLLED_FOR_S(i, S, {
+            const U v = (comp_[i] <= rhs.comp_[i]) ? U(-1) : U(0);
+            memcpy(&ret.comp_[i], &v, sizeof(T));
+        })
         return ret;
     }
 
     fixed_size_simd<T, S> operator>(const fixed_size_simd<T, S> &rhs) const {
-        fixed_size_simd<int, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] > rhs.comp_[i] ? -1 : 0; })
-
-        static_assert(sizeof(fixed_size_simd<T, S>) == sizeof(fixed_size_simd<int, S>), "!");
-
+        using U = typename same_size_uint<T>::type;
         fixed_size_simd<T, S> ret;
-        memcpy(&ret, &temp, sizeof(fixed_size_simd<T, S>));
-
+        UNROLLED_FOR_S(i, S, {
+            const U v = (comp_[i] > rhs.comp_[i]) ? U(-1) : U(0);
+            memcpy(&ret.comp_[i], &v, sizeof(T));
+        })
         return ret;
     }
 
     fixed_size_simd<T, S> operator>=(const fixed_size_simd<T, S> &rhs) const {
-        fixed_size_simd<int, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] >= rhs.comp_[i] ? -1 : 0; })
-
-        static_assert(sizeof(fixed_size_simd<T, S>) == sizeof(fixed_size_simd<int, S>), "!");
-
+        using U = typename same_size_uint<T>::type;
         fixed_size_simd<T, S> ret;
-        memcpy(&ret, &temp, sizeof(fixed_size_simd<T, S>));
-
+        UNROLLED_FOR_S(i, S, {
+            const U v = (comp_[i] >= rhs.comp_[i]) ? U(-1) : U(0);
+            memcpy(&ret.comp_[i], &v, sizeof(T));
+        })
         return ret;
     }
 
@@ -289,8 +304,9 @@ template <typename T, int S> class fixed_size_simd {
     }
 
     fixed_size_simd<T, S> sqrt() const {
+        using std::sqrt;
         fixed_size_simd<T, S> temp;
-        UNROLLED_FOR_S(i, S, { temp.set<i>(std::sqrt(comp_[i])); })
+        UNROLLED_FOR_S(i, S, { temp.set<i>(sqrt(comp_[i])); })
         return temp;
     }
 
@@ -407,6 +423,16 @@ template <typename T, int S> class fixed_size_simd {
         fixed_size_simd<float, S> temp;
         UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::ceil(v1.comp_[i]); })
         return temp;
+    }
+
+    static force_inline fixed_size_simd<T, S> load_f16(const unsigned short *p) {
+        fixed_size_simd<T, S> temp;
+        UNROLLED_FOR_S(i, S, { temp.template set<i>(T(float16::f16_to_f32(p[i]))); })
+        return temp;
+    }
+
+    force_inline void store_f16(unsigned short *p) const {
+        UNROLLED_FOR_S(i, S, { p[i] = float16::f32_to_f16(float(comp_[i])); })
     }
 
 #define DEFINE_BITS_OPERATOR(OP)                                                                                       \
@@ -662,8 +688,9 @@ template <typename T, int S> fixed_size_simd<T, S> inclusive_scan(const fixed_si
 
 template <typename T, int S>
 fixed_size_simd<T, S> copysign(const fixed_size_simd<T, S> &val, const fixed_size_simd<T, S> &sign) {
+    using std::copysign;
     fixed_size_simd<T, S> res;
-    UNROLLED_FOR_S(i, S, { res.template set<i>(std::copysign(val.template get<i>(), sign.template get<i>())); });
+    UNROLLED_FOR_S(i, S, { res.template set<i>(copysign(val.template get<i>(), sign.template get<i>())); });
     return res;
 }
 
@@ -748,7 +775,7 @@ template <int S> force_inline fixed_size_simd<float, S> simd_cast(const fixed_si
 #include "simd_sse.h"
 #elif defined(USE_AVX) || defined(USE_AVX2)
 #include "simd_avx.h"
-#elif defined(USE_AVX512)
+#elif defined(USE_AVX512) || defined(USE_AVX512_FP16)
 #include "simd_avx512.h"
 #elif defined(USE_NEON)
 #include "simd_neon.h"
@@ -783,6 +810,14 @@ using dvec3 = dvec<3>;
 using dvec4 = dvec<4>;
 using dvec8 = dvec<8>;
 using dvec16 = dvec<16>;
+
+template <int S> using f16vec = fixed_size_simd<float16, S>;
+using f16vec2 = f16vec<2>;
+using f16vec3 = f16vec<3>;
+using f16vec4 = f16vec<4>;
+using f16vec8 = f16vec<8>;
+using f16vec16 = f16vec<16>;
+using f16vec32 = f16vec<32>;
 } // namespace NS
 } // namespace Ray
 

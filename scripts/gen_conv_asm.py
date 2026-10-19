@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-# Generates AVX2/AVX1/SSE41/AVX512 (x86) and NEON (AArch64) kernels for UNet conv passes
+# Generates AVX2/AVX1/SSE41/AVX512/AVX512-FP16 (x86) and NEON (AArch64) kernels for UNet conv passes
 # as plain asm: MASM for MSVC, GAS Intel syntax for GCC/Clang (Linux) and Clang (macOS).
+#
+# fp16 tensor storage (C++ tensor_t = uint16_t) kernels carry the _f16 symbol suffix and take f16
+# weights+biases (GPU parity): NEON (.8h FMLA) and AVX512-FP16 (.16h VFMADD231PH, EVEX+AVX512VL).
+# The other x86 kernels stay fp32 (F16C is convert-only; the f16 storage walks measured 3-21%
+# slower than fp32 on SKX).
 #
 # Each kernel mirrors Ray::NS::Convolution3x3 (Convolution.h) instruction-for-
 # instruction so golden tests stay bit-identical:
@@ -33,8 +38,10 @@
 # MSVC arm64 cl /FA listing of Convolution.h (faddp pair hsum, fmla, fcmp+fmax, fcmp+b.le hdr chain).
 #
 # Regenerate:  python src/Ray/scripts/gen_conv_asm.py
-# Outputs:     src/Ray/internal/generated/conv<N>_{avx2,avx1,sse41,avx512}{.asm,_linux.s,_macos.s}
+# Outputs:     src/Ray/internal/generated/conv<N>_{avx2,avx1,sse41,avx512,avx512f16}{.asm,_linux.s,_macos.s}
 #              src/Ray/internal/generated/conv<N>_neon{.asm,_linux.s,_macos.s}   (AArch64,
+#              entry symbols ray_conv<N>_<sym>[_f16] - _f16 on the avx512f16/neon kernels
+#              (avx512f16 symbols are ray_conv<N>_avx512_f16),
 #              armasm64 syntax on Windows; GAS AArch64 for Linux/macOS - see ARM64 emitters)
 #              plus master TUs (conv_all_win_x64.asm, conv_all_{linux,macos}_{x86_64,aarch64}.s)
 #              that pull the per-kernel sources into ONE object per target/arch - internal labels
@@ -52,17 +59,24 @@ TROWS_REQ = 6   # tile width for plain/downsample passes. AVX512: 6 wins on i9-1
 TROWS = 4       # active per-file tile width, recomputed by _set_plan() below
 OB2 = False     # arm64 OUT_BLK=2 mode: two output channels share one channel walk (see _set_plan)
 B3 = B4 = B5 = 0  # OB2 only: the second output channel's tap regs
+OUT_BLK = 16    # blocked x86 f16 walk: output channels per channel walk (the C++ kernel's C_COLS)
+BLOCK = False   # active per-file flag: blocked walk emitted (set by _set_plan)
+S_ACC = 0       # blocked only: base offset of the accumulator slot area in the frame
 
 
 class Isa:
-    def __init__(self, name, V, fma, arch='x64', vex=None):
-        self.name = name                       # 'avx2' | 'avx1' | 'sse41' | 'avx512' | 'neon'
+    def __init__(self, name, V, fma, arch='x64', vex=None, f16=False, acc16=False, sym=None):
+        self.name = name                       # 'avx2' | 'avx1' | 'sse41' | 'avx512' | 'avx512f16' | 'neon'
         self.V = V                             # lanes/vector
         self.fma = fma                         # True: vfmadd231ps/fmla; False: mulps+addps
         self.vex = fma if vex is None else vex # True: VEX encodings (vmovups/vmulps ymm...);
                                                # False: legacy SSE (xmm only - SSE41)
         self.arch = arch                       # 'x64' | 'arm64'
         self.vec = 'zmm' if V == 16 else ('ymm' if V == 8 else 'xmm')  # wide vector prefix
+        self.sym = sym or name                 # symbol infix (avx512f16 -> ray_convN_avx512_f16)
+        self.f16 = f16                         # fp16 tensor storage, kernel gets the _f16 suffix
+        self.acc16 = acc16                     # accumulate in f16: NEON .8h FMLA / AVX512-FP16 .16h
+                                               # VFMADD231PH + f16 weights, GPU conv numerics
 
     def v(self, n):
         return f'{self.vec}{n}'
@@ -74,16 +88,19 @@ class Isa:
         return f'xmm{n}'
 
 
-AVX2 = Isa('avx2', 8, True)
+AVX2 = Isa('avx2', 8, True)           # fp32 tensors: x86 F16C is convert-only, no FP16 FMA pre-Zen4
 AVX1 = Isa('avx1', 8, False, vex=True)  # VEX ymm encodings, no FMA (MSVC lowers fmadd() to mul-then-add)
-SSE41 = Isa('sse41', 4, False)
-AVX512 = Isa('avx512', 16, True)
-NEON = Isa('neon', 4, True, 'arm64')
+SSE41 = Isa('sse41', 4, False)        # f16 storage measured 3-21% slower on SKX, kept fp32
+AVX512 = Isa('avx512', 16, True)      # fp32 tensors too: SKX has F16C but no AVX512-FP16 FMA
+AVX512F16 = Isa('avx512f16', 8, True, vex=True, f16=True, acc16=True, sym='avx512')
+                                    # native ph ops (EVEX+AVX512VL): GPU parity, f16 weights, .16h ymm
+                                    # windows (isa.V=8 vectors x 2 half-lanes -> WV=16 channels)
+NEON = Isa('neon', 4, True, 'arm64', f16=True, acc16=True)  # GPU parity: f16 tensors + weights + .8h acc
 
 
 class Pass:
     def __init__(self, num, in_ch, out_ch, res_desc, downsample=False, pitch=None, post_op='none',
-                 kind='plain', in2=None):
+                 kind='plain', in2=None, i16=False, i2_16=None, o16=False):
         self.num = num                       # denoise pass number (RendererCPU.h switch)
         self.in_ch, self.out_ch = in_ch, out_ch
         self.res_desc = res_desc
@@ -92,22 +109,53 @@ class Pass:
         self.kind = kind                     # 'plain' | 'concat2' (2-input ConvolutionConcat3x3, PreOp1=Upsample)
         self.in2 = in2                       # concat2: second input's channel count
         rt = 8 * ((3 * in_ch + 7) // 8)      # RoundedTriple (same rounding as the C++ kernel)
-        self.J_END = 3 * in_ch * 4           # one tap block: 3 pixels * in_ch channels * 4 B
+        self.i16 = i16                       # input1 (data) is fp16 on f16 ISAs
+        self.i2_16 = i2_16                   # concat2 input2 (None = same as i16; pass 13's
+                                             # staged aux buffer stays fp32 => False)
+        self.o16 = o16                       # output is fp16 on f16 ISAs
+        self.pitch = pitch
         self.RT = rt
         self.W_ROW = 3 * rt * 4              # bytes per output-channel weight row (3 tap blocks)
         self.TAP = rt * 4                    # bytes between tap blocks within a weight row
-        self.PIX = (pitch or out_ch) * 4     # bytes per output pixel column (OutPxPitch * 4)
-        self.COL = in_ch * 4                 # bytes per input pixel column within a row
-        self.II_END = out_ch * 4             # r8 counts 4*ii (ii = output channel)
         if kind == 'concat2':
             # two j loops: input1 (Upsample addressing, weight block RT1) + input2 (plain, RT2)
             self.RT1 = rt
             self.RT2 = 8 * ((3 * in2 + 7) // 8)
-            self.COL1, self.COL2 = in_ch * 4, in2 * 4
-            self.J1_END, self.J2_END = 3 * in_ch * 4, 3 * in2 * 4
             self.TAP1, self.TAP2 = rt * 4, self.RT2 * 4
             self.W_OFF = 3 * rt * 4          # input2 weight block offset within a row
             self.W_ROW = (rt + self.RT2) * 3 * 4
+
+    def setup(self, isa):
+        # (Re)compute the byte-layout constants for ONE (pass, isa) emission. IE/IE2/OE/WE are the
+        # per-operand element sizes; walk bounds use them, see the x86/arm walk comments for cursors.
+        f = isa.f16
+        # acc16 (AArch64 f16-accumulation walk): 8-channel windows, weight row bounds scale with 2 B.
+        self.WE = 2 if getattr(isa, 'acc16', False) else 4
+        self.WV = 2 * isa.V if getattr(isa, 'acc16', False) else isa.V
+        self.IE = 2 if (self.i16 and f) else 4
+        self.IE2 = 2 if ((self.i16 if self.i2_16 is None else self.i2_16) and f) else 4
+        self.OE = 2 if (self.o16 and f) else 4
+        self.J_END = 3 * self.in_ch * self.IE    # input-byte walk bound (x86 plain rdx)
+        self.JW_END = 3 * self.in_ch * self.WE   # weight-byte walk bound (AArch64 x2)
+        self.COL = self.in_ch * self.IE          # bytes per input pixel column within a row
+        self.II_END = self.out_ch * self.OE      # r8 counts OE*ii (ii = output channel)
+        self.PIX = (self.pitch or self.out_ch) * self.OE  # bytes per output pixel column
+        if self.kind == 'plain':
+            self.TAP, self.W_ROW = self.RT * self.WE, 3 * self.RT * self.WE
+        if self.kind == 'concat2':
+            self.COL1, self.COL2 = self.in_ch * self.IE, self.in2 * self.IE2
+            self.J1_END = 3 * self.in_ch * self.IE
+            self.J2_END = 3 * self.in2 * self.IE2    # x86 j2 rdx walks input bytes
+            self.J2W_END = 3 * self.in2 * self.WE    # AArch64 j2 x2 walks weight bytes
+            self.TAP1, self.TAP2 = self.RT * self.WE, self.RT2 * self.WE
+            self.W_OFF = 3 * self.RT * self.WE       # input2 weight block offset within a row
+            self.W_ROW = (self.RT + self.RT2) * 3 * self.WE
+
+    def blocked(self, isa):
+        # x86-only C_COLS=16 blocking of f16 plain walks. DORMANT: kept for Zen4/ICL-class FP16
+        # FMA (the AVX512-FP16 ISA uses the native ph walk, acc16).
+        return (isa.arch == 'x64' and isa.f16 and not getattr(isa, 'acc16', False) and
+                self.i16 and self.kind == 'plain' and self.post_op != 'hdr')
 
     def frame(self, abi, isa):
         # hdr passes spill loop state + scalars and call powf/expf:
@@ -116,6 +164,13 @@ class Pass:
         # concat2 needs slots for data2/row strides/row offsets/saved out stride.
         # AVX512: the zmm6-15 save area is 4x the xmm6-15 one (base 160 -> 640).
         base = 640 if isa.V == 16 else 160
+        if self.blocked(isa):
+            # + accumulator slot area (2*TROWS vectors x OUT_BLK channels; TROWS=2 on AVX2, see
+            # _set_plan), placed after a 128/64 B pad so the vector slots land on their natural
+            # size boundary when the frame keeps rsp 16B aligned (the +8 keeps the win/sysv
+            # rsp == 0 invariant).
+            trows = 2 if isa.V == 8 else TROWS_REQ
+            return base + (64 if isa.V == 16 else 128) + 2 * trows * OUT_BLK * isa.V * 4 + 8
         if self.kind == 'concat2':
             return base + 112
         if self.post_op != 'hdr':
@@ -125,45 +180,52 @@ class Pass:
         # (rsp == 0 -> bare calls aligned). Padding keeps those invariants (mod 16).
         return base + (144 if abi == 'win' else 152)
 
+    def js_in(self, isa, which=1):
+        # input-side channel-window advance (bytes): WV channels of IE/IE2-wide elements
+        return self.WV * (self.IE if which == 1 else self.IE2)
+
+    def js_w(self, isa):
+        # weight-side channel-window advance: 4 B fp32 weights, 2 B in the f16-accum walk
+        return self.WV * self.WE
+
     def j_step(self, isa):
         # j/j2 loops are cmp-based: a partial final window (in_ch not a multiple of V, e.g. the
         # 9-channel staged inputs of passes 0/13) mirrors the C++ staged walk - the garbage
         # lanes multiply against the zero-padded weight tail. j1 is unrolled per tap block, so
         # input1 must be V-aligned (per-tap channel run an exact multiple of the window).
         if self.kind == 'concat2':
-            assert self.J1_END % (isa.V * 4) == 0 and (self.in_ch * 4) % (isa.V * 4) == 0, "!"
-        return isa.V * 4
+            assert self.in_ch % isa.V == 0, "!"
+        return self.WV * self.WE
 
     @property
     def tag(self):
         return f'conv{self.num}'
 
     def symbol(self, isa):
-        return f'ray_conv{self.num}_{isa.name}'
+        return f'ray_conv{self.num}_{isa.sym}' + ('_f16' if isa.f16 else '')
 
 
 PASSES = [
-    # pass 0 walks the staged 3-input buffer (3+3+3ch, pre-ops applied by the C++ staging);
-    # pass 13 walks data1 (Upsample) + the staged 4-input aux buffer (3+3+3ch). in=9 gives a
-    # partial final j window - see j_step.
-    Pass(0, 9, 32, '9 staged (3+3+3)->32 @ full res, enc conv 0'),
-    Pass(1, 32, 32, '32->32 @ full res -> 1/2, downsample', downsample=True),
-    Pass(2, 32, 48, '32->48 @ 1/2 -> 1/4, downsample', downsample=True),
-    Pass(3, 48, 64, '48->64 @ 1/4 -> 1/8, downsample', downsample=True),
-    Pass(4, 64, 80, '64->80 @ 1/8 -> 1/16, downsample', downsample=True),
-    Pass(5, 80, 96, '80->96 @ 1/16 res'),
-    Pass(6, 96, 96, '96->96 @ 1/16 res, also serves pass 10 @ 1/4 res'),
-    Pass(7, 96, 112, '96(+64)->112 @ 1/8 res, concat Upsample', kind='concat2', in2=64),
-    Pass(8, 112, 112, '112->112 @ 1/8 res'),
-    Pass(9, 112, 96, '112(+48)->96 @ 1/4 res, concat Upsample', kind='concat2', in2=48),
-    Pass(11, 96, 64, '96(+32)->64 @ 1/2 res, concat Upsample', kind='concat2', in2=32),
-    Pass(12, 64, 64, '64->64 @ 1/2 res'),
-    Pass(13, 64, 64, '64(+9 staged aux)->64 @ full res, concat Upsample', kind='concat2', in2=9),
-    Pass(14, 64, 32, '64->32 @ full res'),
-    Pass(15, 32, 3, '32->3 @ full res, HDR post-op (final pass)', pitch=4, post_op='hdr'),
+    # pass 0 walks the staged 3-input buffer (3+3+3ch fp32) and pass 13's input2 is the staged aux
+    # buffer, so those inputs stay fp32 (i2_16=False); pass 15 keeps its fp32 output (final image).
+    Pass(0, 9, 32, '9 staged (3+3+3)->32 @ full res, enc conv 0', o16=True),
+    Pass(1, 32, 32, '32->32 @ full res -> 1/2, downsample', downsample=True, i16=True, o16=True),
+    Pass(2, 32, 48, '32->48 @ 1/2 -> 1/4, downsample', downsample=True, i16=True, o16=True),
+    Pass(3, 48, 64, '48->64 @ 1/4 -> 1/8, downsample', downsample=True, i16=True, o16=True),
+    Pass(4, 64, 80, '64->80 @ 1/8 -> 1/16, downsample', downsample=True, i16=True, o16=True),
+    Pass(5, 80, 96, '80->96 @ 1/16 res', i16=True, o16=True),
+    Pass(6, 96, 96, '96->96 @ 1/16 res, also serves pass 10 @ 1/4 res', i16=True, o16=True),
+    Pass(7, 96, 112, '96(+64)->112 @ 1/8 res, concat Upsample', kind='concat2', in2=64, i16=True, o16=True),
+    Pass(8, 112, 112, '112->112 @ 1/8 res', i16=True, o16=True),
+    Pass(9, 112, 96, '112(+48)->96 @ 1/4 res, concat Upsample', kind='concat2', in2=48, i16=True, o16=True),
+    Pass(11, 96, 64, '96(+32)->64 @ 1/2 res, concat Upsample', kind='concat2', in2=32, i16=True, o16=True),
+    Pass(12, 64, 64, '64->64 @ 1/2 res', i16=True, o16=True),
+    Pass(13, 64, 64, '64(+9 staged aux)->64 @ full res, concat Upsample', kind='concat2', in2=9, i16=True, i2_16=False, o16=True),
+    Pass(14, 64, 32, '64->32 @ full res', i16=True, o16=True),
+    Pass(15, 32, 3, '32->3 @ full res, HDR post-op (final pass)', pitch=4, post_op='hdr', i16=True),
 ]
 
-ISAS = [AVX2, AVX1, SSE41, AVX512]
+ISAS = [AVX2, AVX1, SSE41, AVX512, AVX512F16]
 ISAS_ARM = [NEON]
 
 
@@ -179,12 +241,12 @@ class Target:
     def r(self, reg):
         return reg  # GAS .intel_syntax uses bare register names (AT&T's % is not used here)
 
-    def m(self, base=None, index=None, disp=0):
+    def m(self, base=None, index=None, disp=0, iscale=1):
         s = ''
         if base:
             s += self.r(base)
         if index:
-            s += ' + ' + self.r(index)
+            s += ' + ' + self.r(index) + (f'*{iscale}' if iscale != 1 else '')
         if disp:
             s += (' - ' + str(-disp)) if disp < 0 else (' + ' + str(disp))
         return '[' + (s if s else '0') + ']'
@@ -192,6 +254,17 @@ class Target:
     def dword(self, mem):
         # ml64 needs the size keyword for movss memory operands; GAS Intel accepts it too
         return ('dword ptr ' if self.syntax == 'masm' else 'DWORD PTR ') + mem
+
+    def word(self, mem):
+        # 16-bit store for fp16 tensor outputs (the MOV r16 half of the f16 store sequence)
+        return ('word ptr ' if self.syntax == 'masm' else 'WORD PTR ') + mem
+
+    def szmem(self, mem, isa):
+        # ml64 cannot size-match VCVTPH2PS (EVEX.256 reads 16 B into ymm, EVEX.512 reads 32 B
+        # into zmm) without an explicit keyword; the GAS Intel files infer it from the mnemonic.
+        if self.syntax != 'masm':
+            return mem
+        return ('ymmword ptr ' if isa.V == 16 else 'xmmword ptr ') + mem
 
     def csym(self, name):
         # libm callee (powf/expf); macOS prefixes C symbols with '_'
@@ -233,34 +306,30 @@ ACC = range(8)
 A0, A1, A2, A3 = 8, 9, 10, 11
 B0, B1, B2 = 12, 13, 14
 ZR = 15
+PK0, PK1, PK2 = 24, 25, 26
 
 
 def _set_plan(p, isa):
     """Recompute the per-file register plan + stack layout globals. cc2 hardcodes 4 GPR column
     pointer regs and hdr sizes its scalar spill slots for 4 columns: those kinds stay at 4."""
-    global TROWS, ACC, A0, A1, A2, A3, B0, B1, B2, B3, B4, B5, ZR, OB2
+    global TROWS, ACC, A0, A1, A2, A3, B0, B1, B2, B3, B4, B5, ZR, PK0, PK1, PK2, OB2, ACC16
     global S_BASE, S_W, S_B, S_O, S_XE, S_YE, S_RX, S_Y, S_SC, S_X, S_ST, S_II
     global S_D2, S_ST1, S_ST2, S_R0, S_R1, S_R2, S_R3, S_OR12, S_DT, S_WT, S_R11
+    global BLOCK, S_ACC
+    p.setup(isa)
+    ACC16 = getattr(isa, 'acc16', False)
     TROWS = 4 if (p.kind == 'concat2' or p.post_op == 'hdr') else TROWS_REQ
     OB2 = False
     if isa.arch == 'arm64':
         import os
         _wide = p.kind != 'concat2' and p.post_op != 'hdr'
-        # OB2: walk two output channels per ii. The A window is loaded ONCE per step and
-        # serves both channels' accumulator chains: loads/vec-FMA 35/48 -> 26/60, walk body
-        # 94 instrs/60 FMA (was 90/48). Measured on Apple M4 (TBUD=0.8, interleaved): every
-        # plain pass beats the C++ kernel now - conv14 1.47->0.78, conv12 1.28->0.68,
-        # conv4 1.28->0.70, conv1 1.12->0.92, conv2 1.18->0.96 (this is also the structure
-        # Apple clang's own codegen relies on: its A regs feed 8 accumulator slots).
-        # acc layout: ch0 v(k)/v(T+k), ch1 v(2T+k)/v(3T+k) (row0/row1); per-output tap
-        # order unchanged -> bit-identical. DS pooling wants an even tile width -> T=4
-        # there, 5 for plain walks (accs 4T + A4 + B6 + ZR <= 32 v regs).
-        # cc2 joins OB2 at T=4 (j1 hardcodes 4 column-pointer GPRs): its tap displacements
-        # x17/x13 are walking byte OFFSETS, so each input needs just ONE extra weight base
-        # reg (j1: x15, j2: x3) instead of three.
+        # OB2: two output channels per ii, the A window feeds both accumulator sets (M4: every
+        # plain pass beats the C++ kernel). accs ch0 v(k)/v(T+k), ch1 v(2T+k)/v(3T+k); tap order
+        # per output unchanged. T=5 plain / T=4 DS+cc2+pack (accs 4T + A4 + B6 + ZR + PK3 <= 32).
+        # PK = f32->f16 window-pack temps (only needed when an input is the fp32 staged buffer).
         OB2 = p.post_op != 'hdr' and p.out_ch % 2 == 0
         if OB2:
-            TROWS = 5 if (_wide and not p.downsample) else 4
+            TROWS = 5 if (_wide and not p.downsample and p.IE == 2) else 4
         else:
             TROWS = 8 if _wide else 4  # 32 v regs: all 16 accs register-resident
     elif isa.V != 16:
@@ -276,6 +345,9 @@ def _set_plan(p, isa):
         A0, A1, A2, A3 = 2 * TROWS, 2 * TROWS + 1, 2 * TROWS + 2, 2 * TROWS + 3
         B0, B1, B2 = 2 * TROWS + 4, 2 * TROWS + 5, 2 * TROWS + 6
         ZR = 2 * TROWS + 7
+    PK0, PK1, PK2 = ZR + 1, ZR + 2, ZR + 3
+    if ACC16 and isa.arch == 'arm64' and (p.IE == 4 or (p.kind == 'concat2' and p.IE2 == 4)):
+        assert TROWS == 4 and PK2 <= 31, '!'  # the f32->f16 pack needs the PK temps, only T=4 leaves room
     S_BASE = len(XMM_SAVE) * (64 if isa.V == 16 else 16)
     S_W, S_B, S_O, S_XE, S_YE, S_RX = (S_BASE + 8 * k for k in range(6))
     S_Y, S_SC, S_X, S_ST, S_II = (S_BASE + 48 + d for d in (0, 8, 40, 48, 56))
@@ -284,6 +356,25 @@ def _set_plan(p, isa):
     # r11=row base). Volatile in BOTH x86-64 ABIs - the prologue pushes only protect
     # them across the kernel boundary, NOT across the internal libm calls.
     S_DT, S_WT, S_R11 = (S_BASE + 112 + 8 * k for k in range(3))
+    BLOCK = p.blocked(isa)
+    if BLOCK:
+        # Mirror the C++ kernel's C_ROWS budget that fits the register file WITH B taps held in
+        # registers: AVX2 tiles 2 columns (A regs 4x2=8 + B3 + chain temps + ReLU zero = 14/16);
+        # AVX512 keeps TROWS_REQ=6 (4x6=24 A + B3 + 2t + ZR = 30/32). The walk nests ii (output
+        # channel) OUTSIDE k: 3 B reg loads per ii feed 6*2T FMAs across the tile columns.
+        TROWS = 2 if isa.V == 8 else TROWS_REQ
+        assert p.out_ch % OUT_BLK == 0, "!"
+        ACC = range(2 * TROWS)     # store phase: slots load into v(k)/v(TROWS+k) (A regs, dead)
+        # store-phase scratch (hsum temp + store1 f16 scratch: PEXTRW needs a legacy-reachable
+        # xmm) and the ReLU zero. The WALK's chain temps are locals in body_blocked
+        # (v11/v12 on AVX2, v27/v28 on AVX512) - they must stay clear of the 4*TROWS A regs.
+        A0, A1 = (14, 15) if isa.V == 8 else (12, 13)
+        A2, A3 = A0, A1
+        B0, B1, B2 = 4 * TROWS, 4 * TROWS + 1, 4 * TROWS + 2
+        ZR = 13 if isa.V == 8 else 4 * TROWS + 5
+        # slot area base past every fixed slot; keeps each vector slot on its natural
+        # boundary (matches the identical pad in Pass.frame)
+        S_ACC = S_BASE + (64 if isa.V == 16 else 128)
 
 
 import struct
@@ -310,7 +401,17 @@ def prologue(t, p, isa):
     r, m, i = t.r, t.m, t.i
     frame = p.frame(t.abi, isa)
     L = [i('push', r(x)) for x in CALLEE_SAVED]
-    L.append(i('sub', r('rsp'), str(frame)))
+    if frame > 4096:
+        # blocked-walk frames span multiple pages: probe one touch per page so the stack
+        # commit grows through every guard page instead of faulting on a skipped one
+        # (MSVC's /GS does the same for the C++ kernel's 4 KB+ accumulator arrays)
+        for _ in range(frame // 4096):
+            L.append(i('sub', r('rsp'), '4096'))
+            L.append(i('mov', 'qword ptr [rsp]', r('rax')))
+        if frame % 4096:
+            L.append(i('sub', r('rsp'), str(frame % 4096)))
+    else:
+        L.append(i('sub', r('rsp'), str(frame)))
     for n, xr in enumerate(XMM_SAVE):  # spill callee-saved xmm6-15 (Win64 ABI); full zmm on AVX512
         if isa.V == 16:
             L.append(i('vmovups', m('rsp', disp=64 * n), f'zmm{xr}'))
@@ -463,21 +564,55 @@ def prologue_cc2(t, p, isa):
     return L
 
 
-def kblock(t, p, isa, k, col=None):
-    """One tile column k: 4 A loads + the 6 accumulation chains, bit-identical to the
-    C++ fmadd order. SSE4.1 lowers fmadd(a,b,c) to mulps+addps, reusing A regs as
-    scratch once their last use has passed."""
+def kblock(t, p, isa, k, col=None, ie=None, isd=1):
+    """One tile column k: 4 A loads + the 6 accumulation chains, bit-identical to the C++ fmadd
+    order (SSE4.1 lowers fmadd to mulps+addps, reusing dead A regs as scratch)."""
     i, m = t.i, t.m
     v = isa.v
     if col is None:
         col = p.COL
-    L = [
-        i('movups' if not isa.vex else 'vmovups', v(A0), m('r13', 'rdx', disp=col * k)),  # A0 (row y-1)
-        i('movups' if not isa.vex else 'vmovups', v(A1), m('r11', 'rdx', disp=col * k)),  # A1 (row y)
-        i('movups' if not isa.vex else 'vmovups', v(A2), m('r14', 'rdx', disp=col * k)),  # A2 (row y+1)
-        i('movups' if not isa.vex else 'vmovups', v(A3), m('r10', 'rdx', disp=col * k)),  # A3 (row y+2)
-    ]
-    if isa.fma:
+    if ie is None:
+        ie = p.IE
+    ld = 'movups' if not isa.vex else 'vmovups'
+    if ACC16 and ie == 4:
+        # fp32 staged window -> WV halfs: one 16-float zmm load + AVX512F VCVTPS2PH ymm<-zmm
+        # (garbage lanes die on the zero-padded weight tail, like the ARM walks)
+        L = []
+        for a, rowreg in ((A0, 'r13'), (A1, 'r11'), (A2, 'r14'), (A3, 'r10')):
+            L += [i('vmovups', f'zmm{PK0}', m(rowreg, 'rdx', disp=col * k, iscale=isd)),
+                  i('vcvtps2ph', v(a), f'zmm{PK0}', '8')]
+    elif ACC16:
+        L = [
+            i(ld, v(A0), m('r13', 'rdx', disp=col * k, iscale=isd)),  # A0 (row y-1)
+            i(ld, v(A1), m('r11', 'rdx', disp=col * k, iscale=isd)),  # A1 (row y)
+            i(ld, v(A2), m('r14', 'rdx', disp=col * k, iscale=isd)),  # A2 (row y+1)
+            i(ld, v(A3), m('r10', 'rdx', disp=col * k, iscale=isd)),  # A3 (row y+2)
+        ]
+    elif ie == 2:
+        L = [
+            i('vcvtph2ps', v(A0), t.szmem(m('r13', 'rdx', disp=col * k), isa)),  # A0 (row y-1)
+            i('vcvtph2ps', v(A1), t.szmem(m('r11', 'rdx', disp=col * k), isa)),  # A1 (row y)
+            i('vcvtph2ps', v(A2), t.szmem(m('r14', 'rdx', disp=col * k), isa)),  # A2 (row y+1)
+            i('vcvtph2ps', v(A3), t.szmem(m('r10', 'rdx', disp=col * k), isa)),  # A3 (row y+2)
+        ]
+    else:
+        L = [
+            i('movups' if not isa.vex else 'vmovups', v(A0), m('r13', 'rdx', disp=col * k)),  # A0 (row y-1)
+            i('movups' if not isa.vex else 'vmovups', v(A1), m('r11', 'rdx', disp=col * k)),  # A1 (row y)
+            i('movups' if not isa.vex else 'vmovups', v(A2), m('r14', 'rdx', disp=col * k)),  # A2 (row y+1)
+            i('movups' if not isa.vex else 'vmovups', v(A3), m('r10', 'rdx', disp=col * k)),  # A3 (row y+2)
+        ]
+    if ACC16:
+        # native half-precision chains (AVX512-FP16), same tap order as the C++ f16 kernel
+        L += [
+            i('vfmadd231ph', v(k), v(A0), v(B0)),
+            i('vfmadd231ph', v(k), v(A1), v(B1)),
+            i('vfmadd231ph', v(k), v(A2), v(B2)),
+            i('vfmadd231ph', v(TROWS + k), v(A1), v(B0)),
+            i('vfmadd231ph', v(TROWS + k), v(A2), v(B1)),
+            i('vfmadd231ph', v(TROWS + k), v(A3), v(B2)),
+        ]
+    elif isa.fma:
         L += [
             i('vfmadd231ps', v(k), v(A0), v(B0)),
             i('vfmadd231ps', v(k), v(A1), v(B1)),
@@ -519,6 +654,19 @@ def smax(t, isa, a, b):
 def hsum(t, isa, n):
     """Mirror fvec<V>::hsum exactly (result consumed from lane 0)."""
     i = t.i
+    if ACC16:
+        # .16h accumulator (AVX512-FP16): widen both 128-bit halves to f32 and pair-fold in
+        # f32, then the fvec<8> tree - the C++ f16vec8::hsum also widens before reducing.
+        return [
+            i('vextracti128', t.r(isa.x(A0)), isa.v(n), '1'),
+            i('vcvtph2ps', isa.v(A0), t.r(isa.x(A0))),
+            i('vcvtph2ps', isa.v(n), t.r(isa.x(n))),
+            i('vaddps', isa.v(n), isa.v(n), isa.v(A0)),
+            i('vhaddps', isa.v(n), isa.v(n), isa.v(n)),
+            i('vhaddps', isa.v(n), isa.v(n), isa.v(n)),
+            i('vperm2f128', isa.v(A0), isa.v(n), isa.v(n), '1'),
+            i('vaddps', isa.v(n), isa.v(A0), isa.v(n)),
+        ]
     if isa.V == 16:
         # MSVC _mm512_reduce_add_ps lowering (simd_avx512.h hsum): pairwise fold
         # 16->8->4 lanes, then psrldq shifts + addss; result lands in x(n) lane 0.
@@ -545,13 +693,30 @@ def hsum(t, isa, n):
     return [i('haddps', isa.v(n), isa.v(n)), i('haddps', isa.v(n), isa.v(n))]
 
 
+def store1(t, p, isa, n, mem):
+    # fp16 output: VCVTPS2PH reg form + PEXTRW store (ml64 AND the LLVM IAS reject the mem form);
+    # RNE matches the C++ f16_encode. Scratch: the A0 vector reg (dead at the store).
+    if p.OE == 2:
+        return [t.i('vcvtps2ph', t.r(isa.x(A0)), t.r(isa.x(n)), '0'),
+                t.i('pextrw', t.word(mem), t.r(isa.x(A0)), '0')]
+    return [t.i('movss' if not isa.vex else 'vmovss', t.dword(mem), t.r(isa.x(n)))]
+
+
 def body(t, p, isa):
     if p.kind == 'concat2':
         return body_cc2(t, p, isa)
+    if BLOCK:
+        return body_blocked(t, p, isa)
     r, m, i = t.r, t.m, t.i
     L = []
     add = L.append
-    js = p.j_step(isa)
+    # x86 plain walk cursor: rdx counts input bytes, except with f16 weights + fp32 staged input
+    # (pass 0) where it counts WEIGHT bytes and input loads index them via *isd.
+    if ACC16 and p.IE != p.WE:
+        js, jend, isd, wsc = p.js_w(isa), p.JW_END, p.IE // p.WE, 1
+    else:
+        js, jend, isd = p.js_in(isa), p.J_END, 1
+        wsc = 1 if ACC16 else (2 if p.IE == 2 else 1)
 
     add('y_loop:')
     add(i('cmp', r('rax'), m('rsp', disp=S_YE)))
@@ -595,7 +760,12 @@ def body(t, p, isa):
     add(i('cmp', r('r8'), str(p.II_END)))
     add(i('jge', 'ii_done'))
     # acc = set<0>(biases[ii]): lane 0 = bias, other lanes = 0
-    add(i('movss' if not isa.vex else 'vmovss', t.r(isa.x(0)), t.dword(m('rbp'))))
+    if ACC16:
+        # f16 bias bits (rdx scratch here: the j loop re-zeroes it; rax holds y, live)
+        add(i('movzx', r('edx'), t.word(m('rbp'))))
+        add(i('vmovd', t.r(isa.x(0)), r('edx')))
+    else:
+        add(i('movss' if not isa.vex else 'vmovss', t.r(isa.x(0)), t.dword(m('rbp'))))
     for k in list(ACC)[1:]:
         add(i('movaps' if not isa.vex else 'vmovaps', isa.v(k), isa.v(0)))
     # C1[k] = C0[k] for k < TROWS; the extra k (up to A regs, targets v(T..T+3+TROWS-1)) mirror
@@ -603,15 +773,15 @@ def body(t, p, isa):
     for k in range(min(2 * TROWS, TROWS + 4)):
         add(i('movaps' if not isa.vex else 'vmovaps', isa.v(TROWS + k), isa.v(k)))
 
-    add(i('xor', r('edx'), r('edx')))                        # rdx = 4*j byte offset
+    add(i('xor', r('edx'), r('edx')))                        # rdx = WE*j byte offset
     add('j_loop:')
-    add(i('movaps' if not isa.vex else 'vmovaps', isa.v(B0), m('rsi', 'rdx')))            # B0
-    add(i('movaps' if not isa.vex else 'vmovaps', isa.v(B1), m('rsi', 'rdx', disp=p.TAP)))      # B1
-    add(i('movaps' if not isa.vex else 'vmovaps', isa.v(B2), m('rsi', 'rdx', disp=2 * p.TAP)))  # B2
+    add(i('movaps' if not isa.vex else 'vmovaps', isa.v(B0), m('rsi', 'rdx', iscale=wsc)))            # B0
+    add(i('movaps' if not isa.vex else 'vmovaps', isa.v(B1), m('rsi', 'rdx', disp=p.TAP, iscale=wsc)))      # B1
+    add(i('movaps' if not isa.vex else 'vmovaps', isa.v(B2), m('rsi', 'rdx', disp=2 * p.TAP, iscale=wsc)))  # B2
     for k in range(TROWS):
-        L += kblock(t, p, isa, k)
+        L += kblock(t, p, isa, k, isd=isd)
     add(i('add', r('rdx'), str(js)))
-    add(i('cmp', r('rdx'), str(p.J_END)))
+    add(i('cmp', r('rdx'), str(jend)))
     add(i('jl', 'j_loop'))
 
     if p.downsample:
@@ -629,12 +799,11 @@ def body(t, p, isa):
             add(smax(t, isa, TROWS + k + 1, TROWS + k))  # max(C1[k], C1[k+1])
             add(smax(t, isa, TROWS + k + 1, k + 1))      # max of the two pairs
             add(smax(t, isa, TROWS + k + 1, ZR))         # std::max(0.0f, m)
-            add(i('movss' if not isa.vex else 'vmovss',
-                  t.dword(m('rbx', 'r8', disp=p.PIX * (k // 2))), t.r(isa.x(TROWS + k + 1))))
+            L += store1(t, p, isa, TROWS + k + 1, m('rbx', 'r8', disp=p.PIX * (k // 2)))
             add(f'{t.lbl(f"p{k}")}:')
         add(i('add', r('rsi'), str(p.W_ROW)))
-        add(i('add', r('rbp'), '4'))
-        add(i('add', r('r8'), '4'))
+        add(i('add', r('rbp'), str(p.WE)))
+        add(i('add', r('r8'), str(p.OE)))
         add(i('jmp', 'ii_loop'))
         add('ii_done:')
         add(i('add', r('rcx'), str(TROWS)))
@@ -717,8 +886,8 @@ def body(t, p, isa):
         add(i('mov', r('r10'), r('r14')))
         add(i('add', r('r10'), r('r15')))
         add(i('add', r('rsi'), str(p.W_ROW)))
-        add(i('add', r('rbp'), '4'))
-        add(i('add', r('r8'), '4'))
+        add(i('add', r('rbp'), str(p.WE)))
+        add(i('add', r('r8'), str(p.OE)))
         add(i('jmp', 'ii_loop'))
         add('ii_done:')
         add(i('add', r('rcx'), str(TROWS)))
@@ -740,8 +909,7 @@ def body(t, p, isa):
         add(i('jge', t.lbl(f'c1_{k}')))
         L += hsum(t, isa, TROWS + k)
         add(smax(t, isa, TROWS + k, ZR))
-        add(i('movss' if not isa.vex else 'vmovss',
-              t.dword(m('rbx', 'r8', disp=p.PIX * k)), t.r(isa.x(TROWS + k))))
+        L += store1(t, p, isa, TROWS + k, m('rbx', 'r8', disp=p.PIX * k))
         add(f'{t.lbl(f"c1_{k}")}:')
     add(i('sub', r('rbx'), r('r12')))                        # back to row y
     add('row0_only:')
@@ -751,16 +919,192 @@ def body(t, p, isa):
         add(i('jge', t.lbl(f'c0_{k}')))
         L += hsum(t, isa, k)
         add(smax(t, isa, k, ZR))
-        add(i('movss' if not isa.vex else 'vmovss',
-              t.dword(m('rbx', 'r8', disp=p.PIX * k)), t.r(isa.x(k))))
+        L += store1(t, p, isa, k, m('rbx', 'r8', disp=p.PIX * k))
         add(f'{t.lbl(f"c0_{k}")}:')
 
     add(i('add', r('rsi'), str(p.W_ROW)))
-    add(i('add', r('rbp'), '4'))
-    add(i('add', r('r8'), '4'))
+    add(i('add', r('rbp'), str(p.WE)))
+    add(i('add', r('r8'), str(p.OE)))
     add(i('jmp', 'ii_loop'))
     add('ii_done:')
     add(i('add', r('rcx'), str(TROWS)))
+    add(i('jmp', 'x_loop'))
+    add('x_done:')
+    add(i('add', r('rax'), '2'))
+    add(i('jmp', 'y_loop'))
+    add('y_done:')
+    return L
+
+
+def body_blocked(t, p, isa):
+    """Blocked walk for the fp16-input x86 kernels - the C++ kernel's loop nesting exactly: ONE
+    channel walk serves OUT_BLK=16 output channels whose accumulators (2*TROWS vectors each)
+    live in DI-MAJOR stack slots. Per j window ALL 4*TROWS A vectors (tile columns x tap rows)
+    are converted once (folded VCVTPH2PS) and held in registers; then an unrolled di run loads
+    the 3 B taps ONCE per output channel and the k-inner chains read/write the accumulator pair
+    with reg-reg FMAs (C++: A0[C_ROWS] outside, ii loop, k inner). Both reuse dimensions are
+    saturated: 16 A conversions serve 6*2T*OB FMAs, 3 B loads serve 6*2T; the spill traffic is
+    exactly one accumulator load+store per (window, accumulator) - the minimum for the 128+
+    accumulators that don't fit any register file. (AVX2 therefore tiles 2 columns wide, see
+    _set_plan.) Per-accumulator tap order, bias init (set<0>), hsum, ReLU and store order are
+    exactly the per-ii walk's, so the output is bit-identical. The store phase loops di with
+    cursor regs; the tap-row GPRs r10/r11/r13/r14 are dead after the walk and serve as its
+    cursors."""
+    r, m, i = t.r, t.m, t.i
+    L = []
+    add = L.append
+    js = p.js_in(isa)
+    wsc = 2 if p.IE == 2 else 1
+    OB, T, V4 = OUT_BLK, TROWS, isa.V * 4
+    assert p.IE == 2 and p.out_ch % OB == 0, "!"
+    # accumulator chain temps during the walk (clear of the 4*TROWS A regs and the ZR/B regs;
+    # the store phase uses the A0/A1 scratch globals instead - see _set_plan)
+    ch0, ch1 = (11, 12) if isa.V == 8 else (27, 28)
+
+    def slot(k, row, di):  # di-major: each di owns 2T contiguous slot vectors
+        return m('rsp', disp=S_ACC + (di * 2 * T + row * T + k) * V4)
+
+    add('y_loop:')
+    add(i('cmp', r('rax'), m('rsp', disp=S_YE)))
+    add(i('jge', 'y_done'))
+    add(i('mov', r('rcx'), m('rsp', disp=S_RX)))             # x = rect_x
+
+    add('x_loop:')
+    add(i('cmp', r('rcx'), m('rsp', disp=S_XE)))
+    add(i('jge', 'x_done'))
+    # rbx = output_g + out_row_stride*(y>>ds) + PIX*(x>>ds)  (ds = 1 for downsample passes)
+    add(i('mov', r('rbx'), r('rax')))
+    if p.downsample:
+        add(i('shr', r('rbx'), '1'))
+    add(i('imul', r('rbx'), r('r12')))
+    add(i('add', r('rbx'), m('rsp', disp=S_O)))
+    if p.downsample:
+        add(i('mov', r('rdx'), r('rcx')))
+        add(i('shr', r('rdx'), '1'))
+        add(i('imul', r('rdx'), r('rdx'), str(p.PIX)))
+    else:
+        add(i('imul', r('rdx'), r('rcx'), str(p.PIX)))
+    add(i('add', r('rbx'), r('rdx')))
+
+    add(i('xor', r('r8d'), r('r8d')))                        # r8 = OE*ii (block start)
+    add(i('mov', r('rsi'), m('rsp', disp=S_W)))              # weights (advances W_ROW per di)
+    add(i('mov', r('rbp'), m('rsp', disp=S_B)))              # biases (advances 4 per di)
+
+    add('ii_loop:')
+    add(i('cmp', r('r8'), str(p.II_END)))
+    add(i('jge', 'ii_done'))
+    # tap row bases: r13=(y-1) r11=y r14=(y+1) r10=(y+2), all + COL*(x-1). Set UP PER BLOCK:
+    # the store phase's cursors (r10/r11/r14) clobber them between output-channel blocks.
+    add(i('mov', r('rdx'), r('rax')))
+    add(i('imul', r('rdx'), r('r9')))                        # y * stride
+    add(i('lea', r('rdx'), m('rdx', 'rcx', disp=-1)))        # + x - 1
+    add(i('imul', r('rdx'), r('rdx'), str(p.COL)))
+    add(i('lea', r('r11'), m('rdi', 'rdx')))                 # A1 base (row y)
+    add(i('mov', r('r13'), r('r11')))
+    add(i('sub', r('r13'), r('r15')))                        # A0 base (row y-1)
+    add(i('mov', r('r14'), r('r11')))
+    add(i('add', r('r14'), r('r15')))                        # A2 base (row y+1)
+    add(i('mov', r('r10'), r('r14')))
+    add(i('add', r('r10'), r('r15')))                        # A3 base (row y+2)
+    # acc slots = set<0>(biases[ii]) for every di: vmovss zeroes the vector, 2T stores each
+    for di in range(OB):
+        add(i('movss' if not isa.vex else 'vmovss', t.r(isa.x(0)), t.dword(m('rbp', disp=4 * di))))
+        for k in range(T):
+            for row in (0, 1):
+                add(i('vmovups', slot(k, row, di), isa.v(0)))
+
+    add(i('xor', r('edx'), r('edx')))                        # rdx = j input-byte offset
+    add('j_loop:')
+    # A windows: all tile columns x tap rows, once per channel window (A regs k*4+row)
+    for k in range(T):
+        col = p.COL * k
+        for rr, rowreg in enumerate(('r13', 'r11', 'r14', 'r10')):
+            L.append(i('vcvtph2ps', isa.v(k * 4 + rr), t.szmem(m(rowreg, 'rdx', disp=col), isa)))
+    for di in range(OB):
+        for c, breg in enumerate((B0, B1, B2)):              # B taps: once per output channel
+            L.append(i('vmovups', isa.v(breg),
+                       m('rsi', 'rdx', disp=di * p.W_ROW + c * p.TAP, iscale=wsc)))
+        for k in range(T):                                   # k-inner chains, A x B in regs
+            L += [i('vmovups', isa.v(ch0), slot(k, 0, di)),
+                  i('vmovups', isa.v(ch1), slot(k, 1, di)),
+                  i('vfmadd231ps', isa.v(ch0), isa.v(k * 4 + 0), isa.v(B0)),
+                  i('vfmadd231ps', isa.v(ch0), isa.v(k * 4 + 1), isa.v(B1)),
+                  i('vfmadd231ps', isa.v(ch0), isa.v(k * 4 + 2), isa.v(B2)),
+                  i('vfmadd231ps', isa.v(ch1), isa.v(k * 4 + 1), isa.v(B0)),
+                  i('vfmadd231ps', isa.v(ch1), isa.v(k * 4 + 2), isa.v(B1)),
+                  i('vfmadd231ps', isa.v(ch1), isa.v(k * 4 + 3), isa.v(B2)),
+                  i('vmovups', slot(k, 0, di), isa.v(ch0)),
+                  i('vmovups', slot(k, 1, di), isa.v(ch1))]
+    add(i('add', r('rdx'), str(js)))
+    add(i('cmp', r('rdx'), str(p.J_END)))
+    add(i('jl', 'j_loop'))
+
+    # store phase: one di per iteration - r10 = slot cursor, r11 = out channel byte cursor
+    # (folds r8), r14 = di counter; rdx stays the x-guard scratch
+    add(i('mov', r('r10'), '0'))
+    add(i('mov', r('r11'), r('r8')))
+    add(i('mov', r('r14'), str(OB)))
+    add('st_loop:')
+
+    def slotc(k, row):  # cursor-relative slot
+        return m('rsp', 'r10', disp=S_ACC + (row * T + k) * V4)
+
+    def och(kpix):      # output byte address for pixel column kpix of this tile
+        return m('rbx', 'r11', disp=p.PIX * kpix)
+
+    if p.downsample:
+        # hsum + ReLU all accumulators (C1 rows first, exactly the per-ii walk's order), then
+        # the 2x2 pool + half-coordinate stores
+        for n in list(range(T, 2 * T)) + list(range(T)):
+            add(i('vmovups', isa.v(n), slotc(n % T, 1 if n >= T else 0)))
+            L += hsum(t, isa, n)
+            add(smax(t, isa, n, ZR))
+        for k in range(0, T, 2):
+            add(i('lea', r('rdx'), m('rcx', disp=k)))
+            add(i('cmp', r('rdx'), m('rsp', disp=S_XE)))
+            add(i('jge', t.lbl(f'p{k}')))
+            add(smax(t, isa, k + 1, k))                   # max(C0[k], C0[k+1])
+            add(smax(t, isa, T + k + 1, T + k))           # max(C1[k], C1[k+1])
+            add(smax(t, isa, T + k + 1, k + 1))           # max of the two pairs
+            add(smax(t, isa, T + k + 1, ZR))              # std::max(0.0f, m)
+            L += store1(t, p, isa, T + k + 1, och(k // 2))
+            add(f'{t.lbl(f"p{k}")}:')
+    else:
+        add(i('lea', r('rdx'), m('rax', disp=1)))
+        add(i('cmp', r('rdx'), m('rsp', disp=S_YE)))
+        add(i('jge', 'row0_only'))
+        add(i('add', r('rbx'), r('r12')))                 # shift to row y+1
+        for k in range(T):
+            add(i('lea', r('rdx'), m('rcx', disp=k)))
+            add(i('cmp', r('rdx'), m('rsp', disp=S_XE)))
+            add(i('jge', t.lbl(f'c1_{k}')))
+            add(i('vmovups', isa.v(T + k), slotc(k, 1)))
+            L += hsum(t, isa, T + k)
+            add(smax(t, isa, T + k, ZR))
+            L += store1(t, p, isa, T + k, och(k))
+            add(f'{t.lbl(f"c1_{k}")}:')
+        add(i('sub', r('rbx'), r('r12')))                 # back to row y
+        add('row0_only:')
+        for k in range(T):
+            add(i('lea', r('rdx'), m('rcx', disp=k)))
+            add(i('cmp', r('rdx'), m('rsp', disp=S_XE)))
+            add(i('jge', t.lbl(f'c0_{k}')))
+            add(i('vmovups', isa.v(k), slotc(k, 0)))
+            L += hsum(t, isa, k)
+            add(smax(t, isa, k, ZR))
+            L += store1(t, p, isa, k, och(k))
+            add(f'{t.lbl(f"c0_{k}")}:')
+
+    add(i('add', r('r10'), str(2 * T * V4)))
+    add(i('add', r('r11'), str(p.OE)))
+    add(i('sub', r('r14'), '1'))
+    add(i('jne', 'st_loop'))
+    add(i('add', r('rsi'), str(OB * p.W_ROW)))
+    add(i('add', r('rbp'), str(OB * 4)))
+    add(i('add', r('r8'), str(OB * p.OE)))
+    add(i('jmp', 'ii_loop'))
+    add('ii_done:')
+    add(i('add', r('rcx'), str(T)))
     add(i('jmp', 'x_loop'))
     add('x_done:')
     add(i('add', r('rax'), '2'))
@@ -782,6 +1126,14 @@ def body_cc2(t, p, isa):
     cp = 'movaps' if not isa.vex else 'vmovaps'
     st = 'movss' if not isa.vex else 'vmovss'
     vp = 'v' if isa.vex else ''  # VEX prefix for the non-FMA mul/add chains (avx1 ymm)
+    jsw, js1, js2 = p.js_w(isa), p.js_in(isa, 1), p.js_in(isa, 2)
+    # j2 cursor: input bytes when input/weight elements match size; with fp32 staged aux + f16
+    # weights (pass 13 in acc16) it counts weight bytes and kblock indexes them with *isd2.
+    if ACC16 and p.IE2 != p.WE:
+        jsj2, j2end, wsc2, isd2 = p.js_w(isa), p.J2W_END, 1, p.IE2 // p.WE
+    else:
+        jsj2, j2end, isd2 = js2, p.J2_END, 1
+        wsc2 = 1 if ACC16 else (2 if p.IE2 == 2 else 1)
 
     def ma(op, dst, src):  # mul/add accumulate: 2-op legacy, 3-op VEX (masm needs 3-op VEX)
         return i('v' + op, dst, dst, src) if isa.vex else i(op, dst, src)
@@ -837,7 +1189,11 @@ def body_cc2(t, p, isa):
     add('ii_loop:')
     add(i('cmp', r('r8'), str(p.II_END)))
     add(i('jge', 'ii_done'))
-    add(i(st, t.r(isa.x(0)), t.dword(m('rbp'))))
+    if ACC16:
+        add(i('movzx', r('edx'), t.word(m('rbp'))))   # f16 bias bits (rdx scratch: j1 zeroes it below)
+        add(i('vmovd', t.r(isa.x(0)), r('edx')))
+    else:
+        add(i(st, t.r(isa.x(0)), t.dword(m('rbp'))))
     for k in list(ACC)[1:]:
         add(i(cp, v(k), v(0)))
     for k in ACC:
@@ -866,10 +1222,16 @@ def body_cc2(t, p, isa):
         for slot, c0b, c1b in (('S_R0', B0, None), ('S_R1', B1, B0), ('S_R2', B2, B1), ('S_R3', None, B2)):
             add(i('mov', r('r9'), m('rsp', disp=globals()[slot])))
             for k, reg in enumerate(CREG):
-                add(i(ld, v(A0 + k), m(f'r{reg}', 'r9')))
+                if p.IE == 2 and not ACC16:
+                    add(i('vcvtph2ps', v(A0 + k), t.szmem(m(f'r{reg}', 'r9'), isa)))
+                else:
+                    add(i(ld, v(A0 + k), m(f'r{reg}', 'r9')))
             for k in range(TROWS):
                 if c0b is not None and c1b is not None:
-                    if isa.fma:
+                    if ACC16:
+                        add(i('vfmadd231ph', v(k), v(A0 + k), v(c0b)))
+                        add(i('vfmadd231ph', v(TROWS + k), v(A0 + k), v(c1b)))
+                    elif isa.fma:
                         add(i('vfmadd231ps', v(k), v(A0 + k), v(c0b)))
                         add(i('vfmadd231ps', v(TROWS + k), v(A0 + k), v(c1b)))
                     else:
@@ -882,15 +1244,17 @@ def body_cc2(t, p, isa):
                 else:
                     b = c0b if c0b is not None else c1b
                     acc = k if c0b is not None else TROWS + k
-                    if isa.fma:
+                    if ACC16:
+                        add(i('vfmadd231ph', v(acc), v(A0 + k), v(b)))
+                    elif isa.fma:
                         add(i('vfmadd231ps', v(acc), v(A0 + k), v(b)))
                     else:
                         add(ma('mulps', v(A0 + k), v(b)))
                         add(ma('addps', v(acc), v(A0 + k)))
-        add(i('add', r('rdx'), str(js)))
+        add(i('add', r('rdx'), str(jsw)))          # rdx walks weight bytes (B loads, plain idx)
         for reg in CREG:
-            add(i('add', r(f'r{reg}'), str(js)))
-        add(i('cmp', r('rdx'), str((tap + 1) * p.in_ch * 4)))
+            add(i('add', r(f'r{reg}'), str(js1)))   # column pointers walk input bytes
+        add(i('cmp', r('rdx'), str((tap + 1) * p.in_ch * p.WE)))
         add(i('jl', f'j1w{tap}'))
 
     # ---- j2: input2, plain tap window (kblock over COL2) ----
@@ -910,13 +1274,13 @@ def body_cc2(t, p, isa):
     add(i('add', r('r10'), m('rsp', disp=S_ST2)))            # A3 base (row y+2)
     add(i('xor', r('edx'), r('edx')))
     add('j2_loop:')
-    add(i(cp, v(B0), m('rsi', 'rdx', disp=p.W_OFF)))
-    add(i(cp, v(B1), m('rsi', 'rdx', disp=p.W_OFF + p.TAP2)))
-    add(i(cp, v(B2), m('rsi', 'rdx', disp=p.W_OFF + 2 * p.TAP2)))
+    add(i(cp, v(B0), m('rsi', 'rdx', disp=p.W_OFF, iscale=wsc2)))
+    add(i(cp, v(B1), m('rsi', 'rdx', disp=p.W_OFF + p.TAP2, iscale=wsc2)))
+    add(i(cp, v(B2), m('rsi', 'rdx', disp=p.W_OFF + 2 * p.TAP2, iscale=wsc2)))
     for k in range(TROWS):
-        L += kblock(t, p, isa, k, col=p.COL2)
-    add(i('add', r('rdx'), str(js)))
-    add(i('cmp', r('rdx'), str(p.J2_END)))
+        L += kblock(t, p, isa, k, col=p.COL2, ie=p.IE2, isd=isd2)
+    add(i('add', r('rdx'), str(jsj2)))
+    add(i('cmp', r('rdx'), str(j2end)))
     add(i('jl', 'j2_loop'))
 
     # ---- epilogue: same as the plain kernel (hsum + ReLU + clipped scalar stores) ----
@@ -933,7 +1297,7 @@ def body_cc2(t, p, isa):
         add(i('jge', t.lbl(f'c1_{k}')))
         L += hsum(t, isa, TROWS + k)
         add(smax(t, isa, TROWS + k, ZR))
-        add(i(st, t.dword(m('rbx', 'r8', disp=p.PIX * k)), t.r(isa.x(TROWS + k))))
+        L += store1(t, p, isa, TROWS + k, m('rbx', 'r8', disp=p.PIX * k))
         add(f'{t.lbl(f"c1_{k}")}:')
     add(i('sub', r('rbx'), r('r12')))                        # back to row y
     add('row0_only:')
@@ -943,12 +1307,12 @@ def body_cc2(t, p, isa):
         add(i('jge', t.lbl(f'c0_{k}')))
         L += hsum(t, isa, k)
         add(smax(t, isa, k, ZR))
-        add(i(st, t.dword(m('rbx', 'r8', disp=p.PIX * k)), t.r(isa.x(k))))
+        L += store1(t, p, isa, k, m('rbx', 'r8', disp=p.PIX * k))
         add(f'{t.lbl(f"c0_{k}")}:')
 
     add(i('add', r('rsi'), str(p.W_ROW)))
-    add(i('add', r('rbp'), '4'))
-    add(i('add', r('r8'), '4'))
+    add(i('add', r('rbp'), str(p.WE)))
+    add(i('add', r('r8'), str(p.OE)))
     add(i('jmp', 'ii_loop'))
     add('ii_done:')
     add(i('add', r('rcx'), str(TROWS)))
@@ -1062,6 +1426,12 @@ def imul_imm(i, dst, src, imm, treg):
 
 def hsum_arm(t, isa, n):
     # fvec<4> hsum on AArch64: MSVC lowers vaddvq_f32 to exactly this two-step tree
+    if isa.acc16:
+        # same-width pairwise fold (8h->8h halves the live lanes, 4h->4h again) then scalar H:
+        # there is no narrowing 8h->4h faddp form.
+        return [t.i('faddp', f'v{n}.8h', f'v{n}.8h', f'v{n}.8h'),
+                t.i('faddp', f'v{n}.4h', f'v{n}.4h', f'v{n}.4h'),
+                t.i('faddp', f'h{n}', f'v{n}.2h')]
     return [t.i('faddp', f'v{n}.4s', f'v{n}.4s', f'v{n}.4s'),
             t.i('faddp', f's{n}', f'v{n}.2s')]
 
@@ -1069,11 +1439,15 @@ def hsum_arm(t, isa, n):
 def smax_arm(t, a, b):
     # std::max(a, b): finite inputs (ReLU outputs) make fmax bit-identical to the
     # fcmp+fcselgt MSVC emits and to the x86 maxss(a, b) mirror (NaN/+-0 picks agree).
-    return t.i('fmax', f's{a}', f's{a}', f's{b}')
+    # acc16: half-precision scalar form; ZR holds a full zero vector, lane0 reads as h=0.
+    s = 'h' if ACC16 else 's'
+    return t.i('fmax', f'{s}{a}', f'{s}{a}', f'{s}{b}')
 
 
-def kblock_arm(t, p, isa, k, col):
-    # one tile column k + the 6 accumulator chains. The row base regs x4-x7 advance by
+def kblock_arm(t, p, isa, k, col, ie=4):
+    # one tile column k + the 6 accumulator chains. ie==2: fp16 taps - LDR D + FCVTL v.4s/4h
+    # (the vld1_f16 + vcvt_f32_f16 the C++ kernel emits). Tap offsets are multiples of 8 B.
+    # The row base regs x4-x7 advance by
     # j_step with the channel window, so column k is addressed by the LOAD IMMEDIATE
     # [xrow, #k*col]: multiples of 16 -> scaled LDR, other strides (conv0/conv13's 36 B
     # staged pitch, offsets <= 108 B) -> the assemblers lower to LDUR unscaled loads.
@@ -1082,36 +1456,62 @@ def kblock_arm(t, p, isa, k, col):
     i, L = t.i, []
     for a, rowreg in ((A0, 'x4'), (A1, 'x5'), (A2, 'x6'), (A3, 'x7')):
         off = col * k
-        L.append(i('ldr', f'q{a}', f'[{rowreg}, #{off}]') if off else i('ldr', f'q{a}', f'[{rowreg}]'))
-    L += [i('fmla', f'v{k}.4s', f'v{A0}.4s', f'v{B0}.4s'),
-          i('fmla', f'v{k}.4s', f'v{A1}.4s', f'v{B1}.4s'),
-          i('fmla', f'v{k}.4s', f'v{A2}.4s', f'v{B2}.4s'),
-          i('fmla', f'v{TROWS + k}.4s', f'v{A1}.4s', f'v{B0}.4s'),
-          i('fmla', f'v{TROWS + k}.4s', f'v{A2}.4s', f'v{B1}.4s'),
-          i('fmla', f'v{TROWS + k}.4s', f'v{A3}.4s', f'v{B2}.4s')]
+        mem = f'[{rowreg}, #{off}]' if off else f'[{rowreg}]'
+        if isa.acc16 and ie == 4:
+            # fp32 staged input: pack 8 halfs; garbage lanes die on the zero-padded weight tail
+            mem2 = f'[{rowreg}, #{off + 16}]'
+            L += [i('ldr', f'q{PK0}', mem), i('ldr', f'q{PK1}', mem2),
+                  i('fcvtn', f'v{a}.4h', f'v{PK0}.4s'), i('fcvtn', f'v{PK2}.4h', f'v{PK1}.4s'),
+                  i('mov', f'v{a}.d[1]', f'v{PK2}.d[0]')]
+        elif isa.acc16:
+            L.append(i('ldr', f'q{a}', mem))       # 8-channel f16 window: raw 16 B load, no converts
+        elif ie == 2:
+            L.append(i('ldr', f'd{a}', mem))
+            L.append(i('fcvtl', f'v{a}.4s', f'v{a}.4h'))
+        else:
+            L.append(i('ldr', f'q{a}', mem))
+    h = '8h' if isa.acc16 else '4s'
+    L += [i('fmla', f'v{k}.{h}', f'v{A0}.{h}', f'v{B0}.{h}'),
+          i('fmla', f'v{k}.{h}', f'v{A1}.{h}', f'v{B1}.{h}'),
+          i('fmla', f'v{k}.{h}', f'v{A2}.{h}', f'v{B2}.{h}'),
+          i('fmla', f'v{TROWS + k}.{h}', f'v{A1}.{h}', f'v{B0}.{h}'),
+          i('fmla', f'v{TROWS + k}.{h}', f'v{A2}.{h}', f'v{B1}.{h}'),
+          i('fmla', f'v{TROWS + k}.{h}', f'v{A3}.{h}', f'v{B2}.{h}')]
     return L
 
 
-def kblock_arm2(t, p, isa, k, col):
+def kblock_arm2(t, p, isa, k, col, ie=4):
     # OB2 column block: the SAME 4 row loads feed both output channels' 4 accumulator
     # chains (12 FMA per 4 loads vs 6 per 4). Per-accumulator tap order is unchanged.
     i, L = t.i, []
     for a, rowreg in ((A0, 'x4'), (A1, 'x5'), (A2, 'x6'), (A3, 'x7')):
         off = col * k
-        L.append(i('ldr', f'q{a}', f'[{rowreg}, #{off}]') if off else i('ldr', f'q{a}', f'[{rowreg}]'))
-    T = TROWS
-    L += [i('fmla', f'v{k}.4s', f'v{A0}.4s', f'v{B0}.4s'),
-          i('fmla', f'v{k}.4s', f'v{A1}.4s', f'v{B1}.4s'),
-          i('fmla', f'v{k}.4s', f'v{A2}.4s', f'v{B2}.4s'),
-          i('fmla', f'v{T + k}.4s', f'v{A1}.4s', f'v{B0}.4s'),
-          i('fmla', f'v{T + k}.4s', f'v{A2}.4s', f'v{B1}.4s'),
-          i('fmla', f'v{T + k}.4s', f'v{A3}.4s', f'v{B2}.4s'),
-          i('fmla', f'v{2 * T + k}.4s', f'v{A0}.4s', f'v{B3}.4s'),
-          i('fmla', f'v{2 * T + k}.4s', f'v{A1}.4s', f'v{B4}.4s'),
-          i('fmla', f'v{2 * T + k}.4s', f'v{A2}.4s', f'v{B5}.4s'),
-          i('fmla', f'v{3 * T + k}.4s', f'v{A1}.4s', f'v{B3}.4s'),
-          i('fmla', f'v{3 * T + k}.4s', f'v{A2}.4s', f'v{B4}.4s'),
-          i('fmla', f'v{3 * T + k}.4s', f'v{A3}.4s', f'v{B5}.4s')]
+        mem = f'[{rowreg}, #{off}]' if off else f'[{rowreg}]'
+        if isa.acc16 and ie == 4:
+            mem2 = f'[{rowreg}, #{off + 16}]'      # pack 8 halfs (see kblock_arm)
+            L += [i('ldr', f'q{PK0}', mem), i('ldr', f'q{PK1}', mem2),
+                  i('fcvtn', f'v{a}.4h', f'v{PK0}.4s'), i('fcvtn', f'v{PK2}.4h', f'v{PK1}.4s'),
+                  i('mov', f'v{a}.d[1]', f'v{PK2}.d[0]')]
+        elif isa.acc16:
+            L.append(i('ldr', f'q{a}', mem))       # acc16: 8-channel f16 window, no converts
+        elif ie == 2:
+            L.append(i('ldr', f'd{a}', mem))
+            L.append(i('fcvtl', f'v{a}.4s', f'v{a}.4h'))
+        else:
+            L.append(i('ldr', f'q{a}', mem))
+    T, h = TROWS, ('8h' if isa.acc16 else '4s')
+    L += [i('fmla', f'v{k}.{h}', f'v{A0}.{h}', f'v{B0}.{h}'),
+          i('fmla', f'v{k}.{h}', f'v{A1}.{h}', f'v{B1}.{h}'),
+          i('fmla', f'v{k}.{h}', f'v{A2}.{h}', f'v{B2}.{h}'),
+          i('fmla', f'v{T + k}.{h}', f'v{A1}.{h}', f'v{B0}.{h}'),
+          i('fmla', f'v{T + k}.{h}', f'v{A2}.{h}', f'v{B1}.{h}'),
+          i('fmla', f'v{T + k}.{h}', f'v{A3}.{h}', f'v{B2}.{h}'),
+          i('fmla', f'v{2 * T + k}.{h}', f'v{A0}.{h}', f'v{B3}.{h}'),
+          i('fmla', f'v{2 * T + k}.{h}', f'v{A1}.{h}', f'v{B4}.{h}'),
+          i('fmla', f'v{2 * T + k}.{h}', f'v{A2}.{h}', f'v{B5}.{h}'),
+          i('fmla', f'v{3 * T + k}.{h}', f'v{A1}.{h}', f'v{B3}.{h}'),
+          i('fmla', f'v{3 * T + k}.{h}', f'v{A2}.{h}', f'v{B4}.{h}'),
+          i('fmla', f'v{3 * T + k}.{h}', f'v{A3}.{h}', f'v{B5}.{h}')]
     return L
 
 
@@ -1126,9 +1526,11 @@ def set_tap_rows(t, p, stride_reg, col):
 
 
 def acc_init(t, p, isa, bias_reg):
-    # acc = set<0>(biases[ii]) on all 2T accumulators: ldr s zeroes the other lanes
+    # acc = set<0>(biases[ii]) on all 2T accumulators: ldr s zeroes the other lanes.
+    # acc16: bias is f16 in memory; LDR H into a scalar reg zeroes the whole vector reg,
+    # so the faddp hsum adds the bias exactly once.
     i = t.i
-    L = [i('ldr', 's0', f'[{bias_reg}]')]
+    L = [i('ldr', 'h0', f'[{bias_reg}]')] if isa.acc16 else [i('ldr', 's0', f'[{bias_reg}]')]
     for k in range(1, 2 * TROWS):
         L.append(i('mov', f'v{k}.16b', 'v0.16b'))
     for k in range(min(2 * TROWS, TROWS + 4)):   # C1[k] mirrors, writes into A regs too (dead here)
@@ -1138,12 +1540,16 @@ def acc_init(t, p, isa, bias_reg):
 
 def acc_init2(t, p, isa, bias_reg):
     # OB2: 4T accumulators = bias[ii] (ch0, v0..v(2T-1)) and bias[ii+1] (ch1, v2T..v4T-1),
-    # broadcast with zeroed upper lanes (ldr s semantics) exactly like acc_init.
+    # broadcast with zeroed upper lanes (ldr s/h semantics) exactly like acc_init.
     i, T = t.i, TROWS
-    L = [i('ldr', 's0', f'[{bias_reg}]')]
+    if isa.acc16:
+        L = [i('ldr', 'h0', f'[{bias_reg}]')]
+    else:
+        L = [i('ldr', 's0', f'[{bias_reg}]')]
     for k in range(1, 2 * T):
         L.append(i('mov', f'v{k}.16b', 'v0.16b'))
-    L.append(i('ldr', f's{2 * T}', f'[{bias_reg}, #4]'))
+    L.append(i('ldr', f'h{2 * T}', f'[{bias_reg}, #2]') if isa.acc16
+             else i('ldr', f's{2 * T}', f'[{bias_reg}, #4]'))
     for k in range(1, 2 * T):
         L.append(i('mov', f'v{2 * T + k}.16b', f'v{2 * T}.16b'))
     return L
@@ -1229,8 +1635,9 @@ def hdr_site_arm(t, p, isa, n, col, tag):
     # powf/expf clobber x0-x17 + v-regs: const base + store address are rematerialized
     # after the calls (adr range covers the pool placed right after the function).
     i = t.i
-    L = [i('ldr', 's0', f'[sp, #{A_SC + 4 * n}]'),
-         i('adr', 'x14', f'{p.tag}_hdr_c'),
+    L = ([i('ldr', 'h0', f'[sp, #{A_SC + 4 * n}]'), i('fcvt', 's0', 'h0')] if isa.acc16
+         else [i('ldr', 's0', f'[sp, #{A_SC + 4 * n}]')])
+    L += [i('adr', 'x14', f'{p.tag}_hdr_c'),
                  i('ldr', 's1', '[x14, #0]'), i('fmul', 's0', 's0', 's1'),   # * norm_scale
                  i('ldr', 's1', '[x14, #4]'), i('fcmp', 's0', 's1'), i('b.le', f'L{tag}_lo'),
                  i('ldr', 's1', '[x14, #8]'), i('fcmp', 's0', 's1'), i('b.le', f'L{tag}_mi'),
@@ -1255,6 +1662,18 @@ def hdr_site_arm(t, p, isa, n, col, tag):
     return L
 
 
+def store_arm(t, p, isa, n):
+    # One scalar output store at [x8, x12] (x8 = row base + PIX*k, x12 = OE*ii). fp16 output:
+    # FCVTN vector form + STR h - the same FCVTN v.4h, v.4s the vcvt_f16_f32 intrinsic emits (the
+    # scalar H-form spelling is rejected by armasm64 and older GAS); lane 0 carries the value.
+    # acc16: the hsum/ReLU scalar is ALREADY f16 - STR h straight out of the accumulator lane.
+    if p.OE == 2:
+        if isa.acc16:
+            return [t.i('str', f'h{n}', '[x8, x12]')]
+        return [t.i('fcvtn', f'v{n}.4h', f'v{n}.4s'), t.i('str', f'h{n}', '[x8, x12]')]
+    return [t.i('str', f's{n}', '[x8, x12]')]
+
+
 def store_block_arm(t, p, isa, row_half):
     # hsum + ReLU + clipped scalar stores for one output row (row_half = 0/1 of the y pair);
     # caller has already shifted x28 to the right row.
@@ -1266,7 +1685,7 @@ def store_block_arm(t, p, isa, row_half):
         L += hsum_arm(t, isa, T * row_half + k)
         L.append(smax_arm(t, T * row_half + k, ZR))
         L.append(i('add', 'x8', 'x28', f'#{p.PIX * k}'))
-        L.append(i('str', f's{T * row_half + k}', '[x8, x12]'))
+        L += store_arm(t, p, isa, T * row_half + k)
         L.append(f'Lc{row_half}_{k}')
     return L
 
@@ -1286,9 +1705,9 @@ def store_block_arm2(t, p, isa, row_half):
         L.append(smax_arm(t, a0, ZR))
         L.append(smax_arm(t, a1, ZR))
         L.append(i('add', 'x8', 'x28', f'#{p.PIX * k}'))
-        L.append(i('str', f's{a0}', '[x8, x12]'))
-        L.append(i('add', 'x8', 'x8', '#4'))
-        L.append(i('str', f's{a1}', '[x8, x12]'))
+        L += store_arm(t, p, isa, a0)
+        L.append(i('add', 'x8', 'x8', f'#{p.OE}'))
+        L += store_arm(t, p, isa, a1)
         L.append(f'Lc{row_half}_{k}')
     return L
 
@@ -1298,7 +1717,8 @@ def body_arm(t, p, isa):
         return body_cc2_arm(t, p, isa)
     i, L = t.i, []
     add = L.append
-    js, T = p.j_step(isa), TROWS
+    js, T = p.j_step(isa), TROWS      # js walks the WEIGHT bytes (x2 cursor, fp32 taps)
+    js1 = p.js_in(isa)                # input row bases x4-x7 walk input bytes (fp16: half steps)
     ds = 1 if p.downsample else 0
 
     add('y_loop')
@@ -1341,11 +1761,11 @@ def body_arm(t, p, isa):
         for reg, base in ((B3, 'x9'), (B4, 'x10'), (B5, 'x11')):
             add(i('ldr', f'q{reg}', f'[{base}, x2]'))
     for k in range(T):
-        L += kblock_arm2(t, p, isa, k, p.COL) if OB2 else kblock_arm(t, p, isa, k, p.COL)
+        L += kblock_arm2(t, p, isa, k, p.COL, p.IE) if OB2 else kblock_arm(t, p, isa, k, p.COL, p.IE)
     add(i('add', 'x2', 'x2', str(js)))
     for rr in ('x4', 'x5', 'x6', 'x7'):                    # channel window walks the row bases
-        add(i('add', rr, rr, str(js)))                    # (loads use [xrow, #k*COL] immediates)
-    add(i('cmp', 'x2', str(p.J_END))); add(i('b.lt', 'j_loop'))
+        add(i('add', rr, rr, str(js1)))                   # (loads use [xrow, #k*COL] immediates)
+    add(i('cmp', 'x2', str(p.JW_END))); add(i('b.lt', 'j_loop'))
 
     if p.downsample:
         # downsample epilogue: hsum + ReLU all, then 2x2 max-pool, store at half coords
@@ -1368,9 +1788,9 @@ def body_arm(t, p, isa):
                 add(smax_arm(t, 3 * T + k + 1, 2 * T + k + 1))
                 add(smax_arm(t, 3 * T + k + 1, ZR))
                 add(i('add', 'x8', 'x28', f'#{p.PIX * (k // 2)}'))
-                add(i('str', f's{T + k + 1}', '[x8, x12]'))
-                add(i('add', 'x8', 'x8', '#4'))
-                add(i('str', f's{3 * T + k + 1}', '[x8, x12]'))
+                L += store_arm(t, p, isa, T + k + 1)
+                add(i('add', 'x8', 'x8', f'#{p.OE}'))
+                L += store_arm(t, p, isa, 3 * T + k + 1)
                 add(f'Lp{k}')
         else:
             for n in list(range(T, 2 * T)) + list(range(T)):
@@ -1383,7 +1803,7 @@ def body_arm(t, p, isa):
                 add(smax_arm(t, T + k + 1, k + 1))            # max of the two pairs
                 add(smax_arm(t, T + k + 1, ZR))               # std::max(0.0f, m)
                 add(i('add', 'x8', 'x28', f'#{p.PIX * (k // 2)}'))
-                add(i('str', f's{T + k + 1}', '[x8, x12]'))
+                L += store_arm(t, p, isa, T + k + 1)
                 add(f'Lp{k}')
     elif p.post_op == 'hdr':
         # hdr epilogue: spill all 2T hsum+ReLU scalars to slots first (powf/expf clobber
@@ -1394,12 +1814,13 @@ def body_arm(t, p, isa):
         for k in range(T):
             L += hsum_arm(t, isa, T + k)
             add(smax_arm(t, T + k, ZR))
-            add(i('str', f's{T+k}', f'[sp, #{A_SC + 4 * (T + k)}]'))
+            add(i('str', f'h{T + k}' if isa.acc16 else f's{T + k}',
+                    f'[sp, #{A_SC + 4 * (T + k)}]'))
         add('Lrow0_spill')
         for k in range(T):
             L += hsum_arm(t, isa, k)
             add(smax_arm(t, k, ZR))
-            add(i('str', f's{k}', f'[sp, #{A_SC + 4 * k}]'))
+            add(i('str', f'h{k}' if isa.acc16 else f's{k}', f'[sp, #{A_SC + 4 * k}]'))
         add(i('str', 'x0', f'[sp, #{A_S_Y}]')); add(i('str', 'x1', f'[sp, #{A_S_X}]'))
         add(i('str', 'x12', f'[sp, #{A_S_II}]')); add(i('str', 'x16', f'[sp, #{A_S_W2}]'))
         add(i('str', 'x15', f'[sp, #{A_S_B2}]'))
@@ -1436,8 +1857,9 @@ def body_arm(t, p, isa):
 
     add(i('mov', 'x8', str(2 * p.W_ROW if OB2 else p.W_ROW)))
     add(i('add', 'x16', 'x16', 'x8')); add(i('add', 'x17', 'x17', 'x8')); add(i('add', 'x13', 'x13', 'x8'))
-    add(i('add', 'x15', 'x15', '#8' if OB2 else '#4'))
-    add(i('add', 'x12', 'x12', '#8' if OB2 else '#4'))
+    bs = f'#{4 if OB2 else 2}' if isa.acc16 else ('#8' if OB2 else '#4')
+    add(i('add', 'x15', 'x15', bs))                             # biases: f16 (acc16) or fp32 per channel
+    add(i('add', 'x12', 'x12', f'#{2 * p.OE if OB2 else p.OE}'))  # out ch byte offset: OE per channel
     add(i('b', 'ii_loop'))
     add('Lii_done')
     add(i('add', 'x1', 'x1', str(T))); add(i('b', 'x_loop'))
@@ -1457,7 +1879,8 @@ def body_cc2_arm(t, p, isa):
     the earlier form (j2 re-issuing bases) corrupted every ii past the first."""
     i, L = t.i, []
     add = L.append
-    js, T = p.j_step(isa), TROWS
+    js, T = p.j_step(isa), TROWS      # weight-byte cursor steps (x2/x17/x13, fp32 taps)
+    js1, js2 = p.js_in(isa, 1), p.js_in(isa, 2)  # input-byte window steps (fp16: half)
 
     add('y_loop')
     add(i('cmp', 'x0', 'x26')); add(i('b.ge', 'Ly_done'))
@@ -1524,20 +1947,27 @@ def body_cc2_arm(t, p, isa):
         # row groups: (R reg, B reg feeding C0 or None, B reg feeding C1 or None)
         for rreg, c0b, c1b in (('x11', B0, None), ('x8', B1, B0), ('x9', B2, B1), ('x10', None, B2)):
             for k in range(T):
-                add(i('ldr', f'q{A0 + k}', f'[x{4 + k}, {rreg}]'))
+                if isa.acc16:
+                    add(i('ldr', f'q{A0 + k}', f'[x{4 + k}, {rreg}]'))
+                elif p.IE == 2:
+                    add(i('ldr', f'd{A0 + k}', f'[x{4 + k}, {rreg}]'))
+                    add(i('fcvtl', f'v{A0 + k}.4s', f'v{A0 + k}.4h'))
+                else:
+                    add(i('ldr', f'q{A0 + k}', f'[x{4 + k}, {rreg}]'))
+            h = '8h' if isa.acc16 else '4s'
             for k in range(T):
                 if c0b is not None:
-                    add(i('fmla', f'v{k}.4s', f'v{A0 + k}.4s', f'v{c0b}.4s'))
+                    add(i('fmla', f'v{k}.{h}', f'v{A0 + k}.{h}', f'v{c0b}.{h}'))
                     if OB2:
-                        add(i('fmla', f'v{2 * T + k}.4s', f'v{A0 + k}.4s', f'v{c0b + 3}.4s'))
+                        add(i('fmla', f'v{2 * T + k}.{h}', f'v{A0 + k}.{h}', f'v{c0b + 3}.{h}'))
                 if c1b is not None:
-                    add(i('fmla', f'v{T + k}.4s', f'v{A0 + k}.4s', f'v{c1b}.4s'))
+                    add(i('fmla', f'v{T + k}.{h}', f'v{A0 + k}.{h}', f'v{c1b}.{h}'))
                     if OB2:
-                        add(i('fmla', f'v{3 * T + k}.4s', f'v{A0 + k}.4s', f'v{c1b + 3}.4s'))
+                        add(i('fmla', f'v{3 * T + k}.{h}', f'v{A0 + k}.{h}', f'v{c1b + 3}.{h}'))
         add(i('add', 'x2', 'x2', str(js))); add(i('add', 'x17', 'x17', str(js))); add(i('add', 'x13', 'x13', str(js)))
         for k in range(T):
-            add(i('add', f'x{4 + k}', f'x{4 + k}', str(js)))
-        add(i('cmp', 'x2', f'{(tap + 1) * p.in_ch * 4}')); add(i('b.lt', f'j1w{tap}'))
+            add(i('add', f'x{4 + k}', f'x{4 + k}', str(js1)))   # column ptrs walk input bytes
+        add(i('cmp', 'x2', f'{(tap + 1) * p.in_ch * p.WE}')); add(i('b.lt', f'j1w{tap}'))
 
     # ---- j2: input2, plain tap window (kblock over COL2) ----
     add(i('ldr', 'x8', f'[sp, #{A_S_D2}]'))
@@ -1567,11 +1997,11 @@ def body_cc2_arm(t, p, isa):
         add(i('ldr', f'q{B4}', '[x3, x17]'))
         add(i('ldr', f'q{B5}', '[x3, x13]'))
     for k in range(T):
-        L += kblock_arm2(t, p, isa, k, p.COL2) if OB2 else kblock_arm(t, p, isa, k, p.COL2)
+        L += kblock_arm2(t, p, isa, k, p.COL2, p.IE2) if OB2 else kblock_arm(t, p, isa, k, p.COL2, p.IE2)
     add(i('add', 'x2', 'x2', str(js))); add(i('add', 'x17', 'x17', str(js))); add(i('add', 'x13', 'x13', str(js)))
     for rr in ('x4', 'x5', 'x6', 'x7'):                     # channel window walks the row bases
-        add(i('add', rr, rr, str(js)))
-    add(i('cmp', 'x2', str(p.J2_END))); add(i('b.lt', 'j2_loop'))
+        add(i('add', rr, rr, str(js2)))
+    add(i('cmp', 'x2', str(p.J2W_END))); add(i('b.lt', 'j2_loop'))
 
     # ---- epilogue: same as the plain kernel (hsum + ReLU + clipped scalar stores) ----
     add(i('add', 'x8', 'x0', '#1')); add(i('cmp', 'x8', 'x26')); add(i('b.ge', 'Lrow0'))
@@ -1583,8 +2013,10 @@ def body_cc2_arm(t, p, isa):
 
     add(i('mov', 'x8', str(2 * p.W_ROW if OB2 else p.W_ROW)))
     add(i('add', 'x16', 'x16', 'x8'))                        # single weight cursor; x17/x13 offsets are
-    b8 = '#8' if OB2 else '#4'                               # re-materialized per ii
-    add(i('add', 'x14', 'x14', b8)); add(i('add', 'x12', 'x12', b8))
+                                                              # re-materialized per ii
+    b8 = f'#{4 if OB2 else 2}' if isa.acc16 else ('#8' if OB2 else '#4')
+    add(i('add', 'x14', 'x14', b8))                          # biases: f16 (acc16) or fp32 per channel
+    add(i('add', 'x12', 'x12', f'#{2 * p.OE if OB2 else p.OE}'))  # out ch byte offset: OE per channel
     add(i('b', 'ii_loop'))
     add('Lii_done')
     add(i('add', 'x1', 'x1', str(T))); add(i('b', 'x_loop'))
@@ -1595,22 +2027,34 @@ def body_cc2_arm(t, p, isa):
 
 
 def header(t, p, isa):
+    def pt(is16):
+        return 'uint16_t' if (is16 and isa.f16) else 'float'
+    acc = ('\n; fp16 accumulation (AVX512-FP16): .16h VFMADD231PH chains over f16 weights + f16 bias -\n'
+           '; GPU conv numerics; hsum/ReLU run in f32 (like the C++ f16 kernel), one f16 store rounding.\n'
+           '; NOT bit-identical to the C++ kernel (16-channel windows vs its 8).\n'
+           if getattr(isa, 'acc16', False) and isa.arch == 'x64' else
+           ('\n; fp16 accumulation (ARMv8.2-FP16): .8h FMLA/FMAX/FADDP over f16 weights + f16 bias - GPU conv\n'
+            '; numerics (float16_t chains), NOT bit-identical to the C++ kernel.\n'
+            if getattr(isa, 'acc16', False) else ''))
+    wt = 'uint16_t' if getattr(isa, 'acc16', False) else 'float'
     if p.kind == 'concat2':
         return """; generated by src/Ray/scripts/gen_conv_asm.py - do not edit by hand
-; UNet conv pass %d (%s), %s kernel, bit-identical to
+; UNet conv pass %d (%s), %s kernel%s
 ; NS::ConvolutionConcat3x3<%d, %d, %d, %d, Upsample, None, ReLU> (Convolution.h):
 ; same FMA chains (j1 over input1 with Upsample addressing, then j2 over input2), hsum, ReLU.
-; void %s(const float* data1, const float* data2, int rect_x, int rect_y, int rect_w, int rect_h,
-;         int stride1, int stride2, const float* weights, const float* biases,
-;         float* output, int output_stride)
-""" % (p.num, p.res_desc, isa.name.upper(), isa.V, p.in_ch, p.in2, p.out_ch, t.sym(p, isa))
+; void %s(const %s* data1, const %s* data2, int rect_x, int rect_y, int rect_w, int rect_h,
+;         int stride1, int stride2, const %s* weights, const %s* biases,
+;         %s* output, int output_stride)
+""" % (p.num, p.res_desc, isa.name.upper(), acc, isa.V, p.in_ch, p.in2, p.out_ch, t.sym(p, isa),
+       pt(p.i16), pt(p.i2_16 if p.i2_16 is not None else p.i16), wt, wt, pt(p.o16))
     return """; generated by src/Ray/scripts/gen_conv_asm.py - do not edit by hand
-; UNet conv pass %d (%s), %s kernel, bit-identical to
+; UNet conv pass %d (%s), %s kernel%s
 ; NS::Convolution3x3<%d, %d, %d> (Convolution.h): same FMA chains, hsum, ReLU.
-; void %s(const float* data, int rect_x, int rect_y, int rect_w, int rect_h,
-;         int stride, const float* weights, const float* biases,
-;         float* output, int output_stride)
-""" % (p.num, p.res_desc, isa.name.upper(), isa.V, p.in_ch, p.out_ch, t.sym(p, isa))
+; void %s(const %s* data, int rect_x, int rect_y, int rect_w, int rect_h,
+;         int stride, const %s* weights, const %s* biases,
+;         %s* output, int output_stride)
+""" % (p.num, p.res_desc, isa.name.upper(), acc, isa.V, p.in_ch, p.out_ch,
+       t.sym(p, isa), pt(p.i16), wt, wt, pt(p.o16))
 
 
 def wrap_gas(t, p, isa):
@@ -1704,7 +2148,12 @@ def wrap_gas_arm(t, p, isa):
     _set_plan(p, isa)
     macos = 'macos' in t.name
     sym = t.sym(p, isa)  # '_' prefix on macOS: Mach-O decorates C symbols with '_' on arm64 too (proven by ld64: RendererNEON.cpp.o references _ray_convN_neon)
-    lines = ['.section __TEXT,__text,regular,pure_instructions' if macos else '.text']
+    # acc16 kernels spell .8h FMLA/FMAX/FADDP + H-scalar accesses: ARMv8.2-FP16 (fullfp16).
+    # 'fp16' is the alias binutils AND clang>=16 accept (clang <16 lacks it and silently ignores
+    # the suffix - those old clangs only matter for a linux-aarch64 host; Android never assembles
+    # these files, CMake excludes it; Apple clang implies fp16 anyway; armasm64 needs no directive).
+    lines = (['.arch armv8.2-a+fp16'] if getattr(isa, 'acc16', False) else [])
+    lines += ['.section __TEXT,__text,regular,pure_instructions' if macos else '.text']
     lines.append(f'.globl {sym}')
     if not macos:
         lines.append(f'.type {sym}, @function')
@@ -1777,12 +2226,16 @@ def main():
         Target('macos_gas_arm', 'gas_arm', 'sysv'),
     ]
     suffix_arm = {'win_armasm64': '.asm', 'linux_gas_arm': '_linux.s', 'macos_gas_arm': '_macos.s'}
+
+    def arm_isas(p):
+        return ISAS_ARM
+
     for p in PASSES:
         for isa in ISAS:
             for t in targets:
                 lines = wrap_masm(t, p, isa) if t.syntax == 'masm' else wrap_gas(t, p, isa)
                 write_asm(os.path.join(out_dir, f'{p.tag}_{isa.name}{suffix[t.name]}'), ns_labels(lines, t, p, isa))
-        for isa in ISAS_ARM:
+        for isa in arm_isas(p):
             for t in targets_arm:
                 lines = wrap_armasm64(t, p, isa) if t.syntax == 'armasm64' else wrap_gas_arm(t, p, isa)
                 write_asm(os.path.join(out_dir, f'{p.tag}_{isa.name}{suffix_arm[t.name]}'), ns_labels(lines, t, p, isa))
@@ -1799,17 +2252,18 @@ def main():
                 ' per-kernel sources carry no END, it is supplied here)',
                 [f'INCLUDE {p.tag}_{isa.name}.asm' for p in PASSES for isa in ISAS], ['END'])
     emit_master('conv_all_win_arm64.asm',
-                '; master TU: assembles all 15 NEON kernels into one object (armasm64 + /I<generated'
-                ' dir>; GET includes are per-unit: each kernel file ends with its own indented END)',
-                [f'\tGET {p.tag}_{isa.name}.asm' for p in PASSES for isa in ISAS_ARM], ['\tEND'])
-    for fname, sfx, isas, isa0 in [('conv_all_linux_x86_64.s', '_linux.s', ISAS, None),
-                                   ('conv_all_macos_x86_64.s', '_macos.s', ISAS, None),
-                                   ('conv_all_linux_aarch64.s', '_linux.s', ISAS_ARM, None),
-                                   ('conv_all_macos_aarch64.s', '_macos.s', ISAS_ARM, None)]:
+                '; master TU: assembles all NEON kernels into one object (armasm64 +'
+                ' /I<generated dir>; GET includes are per-unit: each kernel file ends with its'
+                ' own indented END)',
+                [f'\tGET {p.tag}_{isa.name}.asm' for p in PASSES for isa in arm_isas(p)], ['\tEND'])
+    for fname, sfx, isas_fn, isa0 in [('conv_all_linux_x86_64.s', '_linux.s', lambda p: ISAS, None),
+                                      ('conv_all_macos_x86_64.s', '_macos.s', lambda p: ISAS, None),
+                                      ('conv_all_linux_aarch64.s', '_linux.s', arm_isas, None),
+                                      ('conv_all_macos_aarch64.s', '_macos.s', arm_isas, None)]:
         emit_master(fname,
                     '# master TU: assembles all kernels for this target/arch into one object '
                     '(assemble with -I<generated dir>)',
-                    [f'.include "{p.tag}_{isa.name}{sfx}"' for p in PASSES for isa in isas], [])
+                    [f'.include "{p.tag}_{isa.name}{sfx}"' for p in PASSES for isa in isas_fn(p)], [])
 
 
 if __name__ == '__main__':

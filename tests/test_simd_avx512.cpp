@@ -1,5 +1,6 @@
 #include "test_common.h"
 
+#include <cmath>
 #include <iostream>
 
 #include "../internal/Core.h"

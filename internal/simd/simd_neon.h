@@ -66,6 +66,31 @@ template <> class fixed_size_simd<float, 4> {
         const float *_f = (const float *)__builtin_assume_aligned(f, 16);
         vec_ = vld1q_f32(_f);
     }
+#if defined(__aarch64__) || defined(_M_ARM64)
+    static force_inline fixed_size_simd vectorcall load_f16(const unsigned short *p) {
+#if defined(_MSC_VER)
+        return fixed_size_simd(vcvt_f32_f16(vld1_f16(p)));
+#else
+        return fixed_size_simd(vcvt_f32_f16(vld1_f16((const __fp16 *)p)));
+#endif
+    }
+    force_inline void vectorcall store_f16(unsigned short *p) const {
+#if defined(_MSC_VER)
+        vst1_f16(p, vcvt_f16_f32(vec_));
+#else
+        vst1_f16((__fp16 *)p, vcvt_f16_f32(vec_));
+#endif
+    }
+#else
+    // Software half-float load/store through the conversions in fp16.h (ARMv7 has no FCVTL/FCVTN).
+    static force_inline fixed_size_simd vectorcall load_f16(const unsigned short *p) {
+        return fixed_size_simd{float16::f16_to_f32(p[0]), float16::f16_to_f32(p[1]), float16::f16_to_f32(p[2]),
+                               float16::f16_to_f32(p[3])};
+    }
+    force_inline void vectorcall store_f16(unsigned short *p) const {
+        UNROLLED_FOR(i, 4, { p[i] = float16::f32_to_f16(comp_[i]); })
+    }
+#endif
 
     force_inline float operator[](const int i) const { return comp_[i]; }
     force_inline float operator[](const long i) const { return operator[](int(i)); }
@@ -1114,6 +1139,368 @@ force_inline fixed_size_simd<unsigned, 4> vectorcall select(const fixed_size_sim
     validate_mask(mask);
     return vbslq_u32(_vcast<uint32x4_t>(mask.vec_), vec1.vec_, vec2.vec_);
 }
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
+// C++ UNet conv kernels may bind hw f16vec8 storage (consumed by CoreSIMD.h/Convolution.h)
+#define RAY_NEON_FP16_CONV
+
+// hw half vectors exist only as .4h/.8h (f16vec16/32 stay soft); converts go through scalar __fp16
+// casts because f16<->f32 vector convert intrinsics are absent in some toolchains.
+template <> class fixed_size_simd<float16, 8> {
+    union {
+        float16x8_t vec_;
+        float16 comp_[8];
+    };
+
+    force_inline fixed_size_simd(const float16x8_t vec) : vec_(vec) {}
+
+  public:
+    force_inline fixed_size_simd() = default;
+    force_inline fixed_size_simd(const float f) : vec_(vdupq_n_f16((__fp16)f)) {}
+    force_inline fixed_size_simd(const float16 f0, const float16 f1, const float16 f2, const float16 f3,
+                                 const float16 f4, const float16 f5, const float16 f6, const float16 f7) {
+        const float16 data[8] = {f0, f1, f2, f3, f4, f5, f6, f7};
+        vec_ = vld1q_f16(reinterpret_cast<const __fp16 *>(data));
+    }
+    force_inline explicit fixed_size_simd(const float16 *f) { vec_ = vld1q_f16(reinterpret_cast<const __fp16 *>(f)); }
+    force_inline explicit fixed_size_simd(const uint16_t *f) { vec_ = vld1q_f16(reinterpret_cast<const __fp16 *>(f)); }
+    force_inline fixed_size_simd(const float16 *f, vector_aligned_tag) {
+        vec_ = vld1q_f16(reinterpret_cast<const __fp16 *>(f));
+    }
+    force_inline fixed_size_simd(const uint16_t *f, vector_aligned_tag) {
+        vec_ = vld1q_f16(reinterpret_cast<const __fp16 *>(f));
+    }
+
+    force_inline float16 operator[](const int i) const { return comp_[i & 7]; }
+    force_inline float16 operator[](const long i) const { return operator[](int(i)); }
+
+    template <int i> force_inline float16 get() const { return comp_[i & 7]; }
+    template <int i> force_inline void set(const float16 v) { comp_[i & 7] = v; }
+    force_inline void set(const int i, const float16 v) { comp_[i & 7] = v; }
+
+    force_inline fixed_size_simd<float16, 8> &vectorcall operator+=(const fixed_size_simd<float16, 8> rhs) {
+        vec_ = vaddq_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 8> &vectorcall operator-=(const fixed_size_simd<float16, 8> rhs) {
+        vec_ = vsubq_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 8> &vectorcall operator*=(const fixed_size_simd<float16, 8> rhs) {
+        vec_ = vmulq_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 8> &vectorcall operator/=(const fixed_size_simd<float16, 8> rhs) {
+        vec_ = vdivq_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 8> &vectorcall operator|=(const fixed_size_simd<float16, 8> rhs) {
+        vec_ = vreinterpretq_f16_u16(vorrq_u16(vreinterpretq_u16_f16(vec_), vreinterpretq_u16_f16(rhs.vec_)));
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 8> &vectorcall operator&=(const fixed_size_simd<float16, 8> rhs) {
+        vec_ = vreinterpretq_f16_u16(vandq_u16(vreinterpretq_u16_f16(vec_), vreinterpretq_u16_f16(rhs.vec_)));
+        return *this;
+    }
+
+    force_inline fixed_size_simd<float16, 8> operator~() const {
+        return vreinterpretq_f16_u16(vmvnq_u16(vreinterpretq_u16_f16(vec_)));
+    }
+    force_inline fixed_size_simd<float16, 8> operator-() const { return vnegq_f16(vec_); }
+
+    force_inline fixed_size_simd<float16, 8> sqrt() const { return vsqrtq_f16(vec_); }
+
+    force_inline float hsum() const {
+        float s = 0.0f;
+        UNROLLED_FOR(i, 8, { s += float(vgetq_lane_f16(vec_, i)); })
+        return s;
+    }
+
+    force_inline void store_to(float16 *f) const { vst1q_f16(reinterpret_cast<__fp16 *>(f), vec_); }
+    force_inline void store_to(float16 *f, vector_aligned_tag) const { store_to(f); }
+
+    force_inline void vectorcall blend_to(const fixed_size_simd<float16, 8> mask,
+                                          const fixed_size_simd<float16, 8> v1) {
+        validate_mask(mask);
+        vec_ = vbslq_f16(mask.vec_, v1.vec_, vec_);
+    }
+    force_inline void vectorcall blend_inv_to(const fixed_size_simd<float16, 8> mask,
+                                              const fixed_size_simd<float16, 8> v1) {
+        validate_mask(mask);
+        vec_ = vbslq_f16(mask.vec_, vec_, v1.vec_);
+    }
+
+    friend force_inline fixed_size_simd<float16, 8> vectorcall min(fixed_size_simd<float16, 8> v1,
+                                                                   fixed_size_simd<float16, 8> v2) {
+        return vminq_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall max(fixed_size_simd<float16, 8> v1,
+                                                                   fixed_size_simd<float16, 8> v2) {
+        return vmaxq_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall clamp(fixed_size_simd<float16, 8> v1,
+                                                                     fixed_size_simd<float16, 8> _min,
+                                                                     fixed_size_simd<float16, 8> _max) {
+        return max(_min, min(v1, _max));
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall saturate(const fixed_size_simd<float16, 8> v1) {
+        return clamp(v1, 0.0f, 1.0f);
+    }
+
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator+(fixed_size_simd<float16, 8> v1,
+                                                                         fixed_size_simd<float16, 8> v2) {
+        return vaddq_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator-(fixed_size_simd<float16, 8> v1,
+                                                                         fixed_size_simd<float16, 8> v2) {
+        return vsubq_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator*(fixed_size_simd<float16, 8> v1,
+                                                                         fixed_size_simd<float16, 8> v2) {
+        return vmulq_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator/(fixed_size_simd<float16, 8> v1,
+                                                                         fixed_size_simd<float16, 8> v2) {
+        return vdivq_f16(v1.vec_, v2.vec_);
+    }
+
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator<(fixed_size_simd<float16, 8> v1,
+                                                                         fixed_size_simd<float16, 8> v2) {
+        return vreinterpretq_f16_u16(vcltq_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator<=(fixed_size_simd<float16, 8> v1,
+                                                                          fixed_size_simd<float16, 8> v2) {
+        return vreinterpretq_f16_u16(vcleq_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator>(fixed_size_simd<float16, 8> v1,
+                                                                         fixed_size_simd<float16, 8> v2) {
+        return vreinterpretq_f16_u16(vcgtq_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator>=(fixed_size_simd<float16, 8> v1,
+                                                                          fixed_size_simd<float16, 8> v2) {
+        return vreinterpretq_f16_u16(vcgeq_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator==(fixed_size_simd<float16, 8> v1,
+                                                                          fixed_size_simd<float16, 8> v2) {
+        return vreinterpretq_f16_u16(vceqq_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 8> vectorcall operator!=(fixed_size_simd<float16, 8> v1,
+                                                                          fixed_size_simd<float16, 8> v2) {
+        return vreinterpretq_f16_u16(veorq_u16(vceqq_f16(v1.vec_, v2.vec_), vdupq_n_u16(0xffffu)));
+    }
+
+    friend force_inline fixed_size_simd<float16, 8>
+        vectorcall fmadd(fixed_size_simd<float16, 8> a, fixed_size_simd<float16, 8> b, fixed_size_simd<float16, 8> c) {
+        return a.vec_ * b.vec_ + c.vec_; // C op fuses to VFMA; Apple's vfmaq_f16 arg order breaks ACLE
+    }
+    friend force_inline fixed_size_simd<float16, 8>
+        vectorcall fmsub(fixed_size_simd<float16, 8> a, fixed_size_simd<float16, 8> b, fixed_size_simd<float16, 8> c) {
+        return a.vec_ * b.vec_ - c.vec_;
+    }
+
+    friend force_inline fixed_size_simd<float16, 8> vectorcall copysign(fixed_size_simd<float16, 8> val,
+                                                                        fixed_size_simd<float16, 8> sign) {
+        const uint16x8_t sign_mask = vdupq_n_u16(0x8000u);
+        const uint16x8_t s = vandq_u16(vreinterpretq_u16_f16(sign.vec_), sign_mask);
+        const uint16x8_t v = vbicq_u16(vreinterpretq_u16_f16(val.vec_), sign_mask);
+        return vreinterpretq_f16_u16(vorrq_u16(v, s));
+    }
+
+#ifndef NDEBUG
+    friend void vectorcall __assert_valid_mask(const fixed_size_simd<float16, 8> mask) {
+        const uint16_t *p = reinterpret_cast<const uint16_t *>(&mask.vec_);
+        UNROLLED_FOR(i, 8, { assert(p[i] == 0u || p[i] == 0xffffu); })
+    }
+#endif
+
+    friend force_inline const float16 *value_ptr(const fixed_size_simd<float16, 8> &v1) {
+        return reinterpret_cast<const float16 *>(&v1.vec_);
+    }
+    friend force_inline float16 *value_ptr(fixed_size_simd<float16, 8> &v1) {
+        return reinterpret_cast<float16 *>(&v1.vec_);
+    }
+
+    static int size() { return 8; }
+    static bool is_native() { return true; }
+};
+
+template <> class fixed_size_simd<float16, 4> {
+    union {
+        float16x4_t vec_;
+        float16 comp_[4];
+    };
+
+    force_inline fixed_size_simd(const float16x4_t vec) : vec_(vec) {}
+
+  public:
+    force_inline fixed_size_simd() = default;
+    force_inline fixed_size_simd(const float f) : vec_(vdup_n_f16((__fp16)f)) {}
+    force_inline fixed_size_simd(const float16 f0, const float16 f1, const float16 f2, const float16 f3) {
+        const float16 data[4] = {f0, f1, f2, f3};
+        vec_ = vld1_f16(reinterpret_cast<const __fp16 *>(data));
+    }
+    force_inline explicit fixed_size_simd(const float16 *f) { vec_ = vld1_f16(reinterpret_cast<const __fp16 *>(f)); }
+    force_inline explicit fixed_size_simd(const uint16_t *f) { vec_ = vld1_f16(reinterpret_cast<const __fp16 *>(f)); }
+    force_inline fixed_size_simd(const float16 *f, vector_aligned_tag) {
+        vec_ = vld1_f16(reinterpret_cast<const __fp16 *>(f));
+    }
+    force_inline fixed_size_simd(const uint16_t *f, vector_aligned_tag) {
+        vec_ = vld1_f16(reinterpret_cast<const __fp16 *>(f));
+    }
+
+    force_inline float16 operator[](const int i) const { return comp_[i & 3]; }
+    force_inline float16 operator[](const long i) const { return operator[](int(i)); }
+
+    template <int i> force_inline float16 get() const { return comp_[i & 3]; }
+    template <int i> force_inline void set(const float16 v) { comp_[i & 3] = v; }
+    force_inline void set(const int i, const float16 v) { comp_[i & 3] = v; }
+
+    force_inline fixed_size_simd<float16, 4> &vectorcall operator+=(const fixed_size_simd<float16, 4> rhs) {
+        vec_ = vadd_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 4> &vectorcall operator-=(const fixed_size_simd<float16, 4> rhs) {
+        vec_ = vsub_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 4> &vectorcall operator*=(const fixed_size_simd<float16, 4> rhs) {
+        vec_ = vmul_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 4> &vectorcall operator/=(const fixed_size_simd<float16, 4> rhs) {
+        vec_ = vdiv_f16(vec_, rhs.vec_);
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 4> &vectorcall operator|=(const fixed_size_simd<float16, 4> rhs) {
+        vec_ = vreinterpret_f16_u16(vorr_u16(vreinterpret_u16_f16(vec_), vreinterpret_u16_f16(rhs.vec_)));
+        return *this;
+    }
+    force_inline fixed_size_simd<float16, 4> &vectorcall operator&=(const fixed_size_simd<float16, 4> rhs) {
+        vec_ = vreinterpret_f16_u16(vand_u16(vreinterpret_u16_f16(vec_), vreinterpret_u16_f16(rhs.vec_)));
+        return *this;
+    }
+
+    force_inline fixed_size_simd<float16, 4> operator~() const {
+        return vreinterpret_f16_u16(vmvn_u16(vreinterpret_u16_f16(vec_)));
+    }
+    force_inline fixed_size_simd<float16, 4> operator-() const { return vneg_f16(vec_); }
+
+    force_inline fixed_size_simd<float16, 4> sqrt() const { return vsqrt_f16(vec_); }
+
+    force_inline float hsum() const {
+        float s = 0.0f;
+        UNROLLED_FOR(i, 4, { s += float(vget_lane_f16(vec_, i)); })
+        return s;
+    }
+
+    force_inline void store_to(float16 *f) const { vst1_f16(reinterpret_cast<__fp16 *>(f), vec_); }
+    force_inline void store_to(float16 *f, vector_aligned_tag) const { store_to(f); }
+
+    force_inline void vectorcall blend_to(const fixed_size_simd<float16, 4> mask,
+                                          const fixed_size_simd<float16, 4> v1) {
+        validate_mask(mask);
+        vec_ = vbsl_f16(mask.vec_, v1.vec_, vec_);
+    }
+    force_inline void vectorcall blend_inv_to(const fixed_size_simd<float16, 4> mask,
+                                              const fixed_size_simd<float16, 4> v1) {
+        validate_mask(mask);
+        vec_ = vbsl_f16(mask.vec_, vec_, v1.vec_);
+    }
+
+    friend force_inline fixed_size_simd<float16, 4> vectorcall min(fixed_size_simd<float16, 4> v1,
+                                                                   fixed_size_simd<float16, 4> v2) {
+        return vmin_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall max(fixed_size_simd<float16, 4> v1,
+                                                                   fixed_size_simd<float16, 4> v2) {
+        return vmax_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall clamp(fixed_size_simd<float16, 4> v1,
+                                                                     fixed_size_simd<float16, 4> _min,
+                                                                     fixed_size_simd<float16, 4> _max) {
+        return max(_min, min(v1, _max));
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall saturate(const fixed_size_simd<float16, 4> v1) {
+        return clamp(v1, 0.0f, 1.0f);
+    }
+
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator+(fixed_size_simd<float16, 4> v1,
+                                                                         fixed_size_simd<float16, 4> v2) {
+        return vadd_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator-(fixed_size_simd<float16, 4> v1,
+                                                                         fixed_size_simd<float16, 4> v2) {
+        return vsub_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator*(fixed_size_simd<float16, 4> v1,
+                                                                         fixed_size_simd<float16, 4> v2) {
+        return vmul_f16(v1.vec_, v2.vec_);
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator/(fixed_size_simd<float16, 4> v1,
+                                                                         fixed_size_simd<float16, 4> v2) {
+        return vdiv_f16(v1.vec_, v2.vec_);
+    }
+
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator<(fixed_size_simd<float16, 4> v1,
+                                                                         fixed_size_simd<float16, 4> v2) {
+        return vreinterpret_f16_u16(vclt_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator<=(fixed_size_simd<float16, 4> v1,
+                                                                          fixed_size_simd<float16, 4> v2) {
+        return vreinterpret_f16_u16(vcle_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator>(fixed_size_simd<float16, 4> v1,
+                                                                         fixed_size_simd<float16, 4> v2) {
+        return vreinterpret_f16_u16(vcgt_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator>=(fixed_size_simd<float16, 4> v1,
+                                                                          fixed_size_simd<float16, 4> v2) {
+        return vreinterpret_f16_u16(vcge_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator==(fixed_size_simd<float16, 4> v1,
+                                                                          fixed_size_simd<float16, 4> v2) {
+        return vreinterpret_f16_u16(vceq_f16(v1.vec_, v2.vec_));
+    }
+    friend force_inline fixed_size_simd<float16, 4> vectorcall operator!=(fixed_size_simd<float16, 4> v1,
+                                                                          fixed_size_simd<float16, 4> v2) {
+        return vreinterpret_f16_u16(veor_u16(vceq_f16(v1.vec_, v2.vec_), vdup_n_u16(0xffffu)));
+    }
+
+    friend force_inline fixed_size_simd<float16, 4>
+        vectorcall fmadd(fixed_size_simd<float16, 4> a, fixed_size_simd<float16, 4> b, fixed_size_simd<float16, 4> c) {
+        return a.vec_ * b.vec_ + c.vec_; // C op fuses to VFMA; Apple's vfma_f16 arg order breaks ACLE
+    }
+    friend force_inline fixed_size_simd<float16, 4>
+        vectorcall fmsub(fixed_size_simd<float16, 4> a, fixed_size_simd<float16, 4> b, fixed_size_simd<float16, 4> c) {
+        return a.vec_ * b.vec_ - c.vec_;
+    }
+
+    friend force_inline fixed_size_simd<float16, 4> vectorcall copysign(fixed_size_simd<float16, 4> val,
+                                                                        fixed_size_simd<float16, 4> sign) {
+        const uint16x4_t sign_mask = vdup_n_u16(0x8000u);
+        const uint16x4_t s = vand_u16(vreinterpret_u16_f16(sign.vec_), sign_mask);
+        const uint16x4_t v = vbic_u16(vreinterpret_u16_f16(val.vec_), sign_mask);
+        return vreinterpret_f16_u16(vorr_u16(v, s));
+    }
+
+#ifndef NDEBUG
+    friend void vectorcall __assert_valid_mask(const fixed_size_simd<float16, 4> mask) {
+        const uint16_t *p = reinterpret_cast<const uint16_t *>(&mask.vec_);
+        UNROLLED_FOR(i, 4, { assert(p[i] == 0u || p[i] == 0xffffu); })
+    }
+#endif
+
+    friend force_inline const float16 *value_ptr(const fixed_size_simd<float16, 4> &v1) {
+        return reinterpret_cast<const float16 *>(&v1.vec_);
+    }
+    friend force_inline float16 *value_ptr(fixed_size_simd<float16, 4> &v1) {
+        return reinterpret_cast<float16 *>(&v1.vec_);
+    }
+
+    static int size() { return 4; }
+    static bool is_native() { return true; }
+};
+#endif
 
 } // namespace NS
 } // namespace Ray

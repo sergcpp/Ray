@@ -15,6 +15,8 @@ std::string_view RendererTypeName(const eRendererType rt) {
         return "AVX2";
     case eRendererType::SIMD_AVX512:
         return "AVX512";
+    case eRendererType::SIMD_AVX512_FP16:
+        return "AVX512_FP16";
     case eRendererType::SIMD_NEON:
         return "NEON";
     case eRendererType::Vulkan:
@@ -37,6 +39,8 @@ eRendererType RendererTypeFromName(std::string_view name) {
         return eRendererType::SIMD_AVX2;
     } else if (name == "AVX512") {
         return eRendererType::SIMD_AVX512;
+    } else if (name == "AVX512_FP16") {
+        return eRendererType::SIMD_AVX512_FP16;
     } else if (name == "NEON") {
         return eRendererType::SIMD_NEON;
     } else if (name == "VK") {
@@ -54,6 +58,7 @@ bool RendererSupportsMultithreading(const eRendererType rt) {
     case eRendererType::SIMD_AVX:
     case eRendererType::SIMD_AVX2:
     case eRendererType::SIMD_AVX512:
+    case eRendererType::SIMD_AVX512_FP16:
     case eRendererType::SIMD_NEON:
         return true;
     default:

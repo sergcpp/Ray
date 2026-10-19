@@ -226,8 +226,9 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-    static const char *ArchListFull[] = {"REF", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", "DX", nullptr};
-    static const char *ArchListFullNoGPU[] = {"REF", "SSE41", "AVX", "AVX2", "AVX512", "NEON", nullptr};
+    static const char *ArchListFull[] = {"REF",         "SSE41", "AVX", "AVX2", "AVX512",
+                                         "AVX512_FP16", "NEON",  "VK",  "DX",   nullptr};
+    static const char *ArchListFullNoGPU[] = {"REF", "SSE41", "AVX", "AVX2", "AVX512", "AVX512_FP16", "NEON", nullptr};
     static const char *ArchListDefault[] = {"AVX2", "NEON", "VK", "DX", nullptr};
 #ifndef __APPLE__
     static const char *ArchListDefaultNoGPU[] = {"AVX2", "NEON", nullptr};

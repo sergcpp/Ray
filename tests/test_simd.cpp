@@ -1,5 +1,7 @@
 #include "test_common.h"
 
+#include <cmath>
+
 #include "../internal/Core.h"
 #include "../internal/simd/detect.h"
 
@@ -26,9 +28,9 @@ void test_simd_sse41();
 void test_simd_avx();
 void test_simd_avx2();
 void test_simd_avx512();
+void test_simd_avx512_fp16();
 
-#else // !defined(__aarch64__)
-
+#else // aarch64/arm: single config; hw f16vec8 compiles silently when the target has FP16 (simd_neon.h gate)
 #define NS Neon
 #define USE_NEON
 #include "../internal/simd/simd.h"
@@ -36,6 +38,8 @@ void test_simd_avx512();
 void test_simd_neon() {
 #include "test_simd.ipp"
 }
+#undef USE_NEON
+#undef NS
 
 #endif
 
@@ -77,6 +81,13 @@ void test_simd() {
     puts(" SIMD AVX512:");
     if (features.avx512_supported) {
         test_simd_avx512();
+    } else {
+        puts("Skipping... (not supported)");
+    }
+
+    puts(" SIMD AVX512_FP16:");
+    if (features.avx512fp16_supported) {
+        test_simd_avx512_fp16();
     } else {
         puts("Skipping... (not supported)");
     }

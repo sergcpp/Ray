@@ -14,14 +14,14 @@
 #define validate_mask(m) ((void)m)
 #endif
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
 #define USE_FMA
 #endif
 
 #pragma warning(push)
 #pragma warning(disable : 4752)
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
 #define avx2_inline force_inline
 #else
 #define avx2_inline inline
@@ -56,6 +56,24 @@ template <> class fixed_size_simd<float, 8> {
     }
     force_inline explicit fixed_size_simd(const float *f) { vec_ = _mm256_loadu_ps(f); }
     force_inline fixed_size_simd(const float *f, vector_aligned_tag) { vec_ = _mm256_load_ps(f); }
+#if defined(USE_AVX2) || defined(USE_AVX512)
+    static force_inline fixed_size_simd vectorcall load_f16(const unsigned short *p) {
+        return fixed_size_simd{_mm256_cvtph_ps(_mm_loadu_si128((const __m128i *)p))};
+    }
+    force_inline void vectorcall store_f16(unsigned short *p) const {
+        _mm_storeu_si128((__m128i *)p, _mm256_cvtps_ph(vec_, _MM_FROUND_TO_NEAREST_INT));
+    }
+#else
+    static force_inline fixed_size_simd vectorcall load_f16(const unsigned short *p) {
+        return fixed_size_simd{_mm256_setr_ps(float16::f16_to_f32(p[0]), float16::f16_to_f32(p[1]),
+                                              float16::f16_to_f32(p[2]), float16::f16_to_f32(p[3]),
+                                              float16::f16_to_f32(p[4]), float16::f16_to_f32(p[5]),
+                                              float16::f16_to_f32(p[6]), float16::f16_to_f32(p[7]))};
+    }
+    force_inline void vectorcall store_f16(unsigned short *p) const {
+        UNROLLED_FOR(i, 8, { p[i] = float16::f32_to_f16(comp_[i]); })
+    }
+#endif
 
     force_inline float operator[](const int i) const { return comp_[i]; }
     force_inline float operator[](const long i) const { return operator[](int(i)); }
@@ -131,7 +149,7 @@ template <> class fixed_size_simd<float, 8> {
 #endif
     }
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     friend force_inline fixed_size_simd<float, 8> vectorcall inclusive_scan(fixed_size_simd<float, 8> v1) {
         v1.vec_ = _mm256_add_ps(v1.vec_, _mm256_castsi256_ps(_mm256_slli_si256(_mm256_castps_si256(v1.vec_), 4)));
         v1.vec_ = _mm256_add_ps(v1.vec_, _mm256_castsi256_ps(_mm256_slli_si256(_mm256_castps_si256(v1.vec_), 8)));
@@ -224,7 +242,7 @@ template <> class fixed_size_simd<float, 8> {
         vectorcall fmsub(fixed_size_simd<float, 8> a, fixed_size_simd<float, 8> b, fixed_size_simd<float, 8> c);
 #endif // USE_FMA
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     friend force_inline fixed_size_simd<float, 8> vectorcall gather(const float *base_addr,
                                                                     fixed_size_simd<int, 8> vindex);
     friend force_inline fixed_size_simd<float, 8> vectorcall gather(fixed_size_simd<float, 8> src,
@@ -294,7 +312,7 @@ template <> class fixed_size_simd<int, 8> {
     force_inline void set(const int i, const int v) { comp_[i] = v; }
 
     avx2_inline fixed_size_simd<int, 8> &vectorcall operator+=(const fixed_size_simd<int, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] += rhs.comp_[i]; })
@@ -307,7 +325,7 @@ template <> class fixed_size_simd<int, 8> {
     }
 
     avx2_inline fixed_size_simd<int, 8> &vectorcall operator-=(const fixed_size_simd<int, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] -= rhs.comp_[i]; })
@@ -316,7 +334,7 @@ template <> class fixed_size_simd<int, 8> {
     }
 
     avx2_inline fixed_size_simd<int, 8> &vectorcall operator*=(const fixed_size_simd<int, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] *= rhs.comp_[i]; })
@@ -330,7 +348,7 @@ template <> class fixed_size_simd<int, 8> {
     }
 
     avx2_inline fixed_size_simd<int, 8> &vectorcall operator|=(const fixed_size_simd<int, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_or_si256(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] |= rhs.comp_[i]; })
@@ -339,7 +357,7 @@ template <> class fixed_size_simd<int, 8> {
     }
 
     avx2_inline fixed_size_simd<int, 8> &vectorcall operator^=(const fixed_size_simd<int, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_xor_si256(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] ^= rhs.comp_[i]; })
@@ -349,7 +367,7 @@ template <> class fixed_size_simd<int, 8> {
 
     avx2_inline fixed_size_simd<int, 8> vectorcall operator-() const {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_sub_epi32(_mm256_setzero_si256(), vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = -comp_[i]; })
@@ -359,7 +377,7 @@ template <> class fixed_size_simd<int, 8> {
 
     avx2_inline fixed_size_simd<int, 8> vectorcall operator==(const fixed_size_simd<int, 8> rhs) const {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] == rhs.comp_[i]) ? -1 : 0; })
@@ -369,7 +387,7 @@ template <> class fixed_size_simd<int, 8> {
 
     avx2_inline fixed_size_simd<int, 8> vectorcall operator!=(const fixed_size_simd<int, 8> rhs) const {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] != rhs.comp_[i]) ? -1 : 0; })
@@ -378,7 +396,7 @@ template <> class fixed_size_simd<int, 8> {
     }
 
     avx2_inline fixed_size_simd<int, 8> &vectorcall operator&=(const fixed_size_simd<int, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] &= rhs.comp_[i]; })
@@ -417,7 +435,7 @@ template <> class fixed_size_simd<int, 8> {
     force_inline explicit vectorcall operator fixed_size_simd<unsigned, 8>() const;
 
     avx2_inline int hsum() const {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         __m256i temp = _mm256_hadd_epi32(vec_, vec_);
         temp = _mm256_hadd_epi32(temp, temp);
 
@@ -437,7 +455,7 @@ template <> class fixed_size_simd<int, 8> {
 
     force_inline void vectorcall blend_to(const fixed_size_simd<int, 8> mask, const fixed_size_simd<int, 8> v1) {
         validate_mask(mask);
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_blendv_epi8(vec_, v1.vec_, mask.vec_);
 #else
         vec_ = _mm256_castps_si256(
@@ -447,7 +465,7 @@ template <> class fixed_size_simd<int, 8> {
 
     force_inline void vectorcall blend_inv_to(const fixed_size_simd<int, 8> mask, const fixed_size_simd<int, 8> v1) {
         validate_mask(mask);
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_blendv_epi8(v1.vec_, vec_, mask.vec_);
 #else
         vec_ = _mm256_castps_si256(
@@ -457,7 +475,7 @@ template <> class fixed_size_simd<int, 8> {
 
     force_inline int movemask() const { return _mm256_movemask_ps(_mm256_castsi256_ps(vec_)); }
     force_inline int movemask8() const {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_movemask_epi8(vec_);
 #else
         const __m128i lo = _mm256_castsi256_si128(vec_);      // low 128 bits
@@ -483,7 +501,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall min(const fixed_size_simd<int, 8> v1,
                                                               const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_min_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = std::min(v1.comp_[i], v2.comp_[i]); })
@@ -494,7 +512,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall max(const fixed_size_simd<int, 8> v1,
                                                               const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_max_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
@@ -511,7 +529,7 @@ template <> class fixed_size_simd<int, 8> {
     friend force_inline fixed_size_simd<int, 8> vectorcall cmpeq8(const fixed_size_simd<int, 8> &v1,
                                                                   const fixed_size_simd<int, 8> &v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_cmpeq_epi8(v1.vec_, v2.vec_);
 #else
         // Extract lower and upper 128-bit lanes
@@ -532,7 +550,7 @@ template <> class fixed_size_simd<int, 8> {
 
     force_inline static fixed_size_simd<int, 8> vectorcall and_not(const fixed_size_simd<int, 8> v1,
                                                                    const fixed_size_simd<int, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_andnot_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -541,7 +559,7 @@ template <> class fixed_size_simd<int, 8> {
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator&(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_and_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -550,7 +568,7 @@ template <> class fixed_size_simd<int, 8> {
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator|(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_or_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -559,7 +577,7 @@ template <> class fixed_size_simd<int, 8> {
 
     friend force_inline fixed_size_simd<int, 8> vectorcall operator^(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_xor_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -569,7 +587,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator+(const fixed_size_simd<int, 8> v1,
                                                                     const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_add_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
@@ -580,7 +598,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator-(const fixed_size_simd<int, 8> v1,
                                                                     const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_sub_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
@@ -591,7 +609,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator*(const fixed_size_simd<int, 8> v1,
                                                                     const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_mullo_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
@@ -609,7 +627,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator<(const fixed_size_simd<int, 8> v1,
                                                                     const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_cmpgt_epi32(v2.vec_, v1.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] < v2.comp_[i]) ? -1 : 0; })
@@ -620,7 +638,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator>(const fixed_size_simd<int, 8> v1,
                                                                     const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] > v2.comp_[i]) ? -1 : 0; })
@@ -631,7 +649,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator>=(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpgt_epi32(v2.vec_, v1.vec_), _mm256_set1_epi32(-1));
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >= v2.comp_[i]) ? -1 : 0; })
@@ -642,7 +660,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator>>(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_srlv_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) >> unsigned(v2.comp_[i])); })
@@ -652,7 +670,7 @@ template <> class fixed_size_simd<int, 8> {
 
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator>>(const fixed_size_simd<int, 8> v1, const int v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) >> v2); })
@@ -663,7 +681,7 @@ template <> class fixed_size_simd<int, 8> {
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator<<(const fixed_size_simd<int, 8> v1,
                                                                      const fixed_size_simd<int, 8> v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_sllv_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) << unsigned(v2.comp_[i])); })
@@ -673,7 +691,7 @@ template <> class fixed_size_simd<int, 8> {
 
     friend avx2_inline fixed_size_simd<int, 8> vectorcall operator<<(const fixed_size_simd<int, 8> v1, const int v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_slli_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) << v2); })
@@ -683,7 +701,7 @@ template <> class fixed_size_simd<int, 8> {
 
     avx2_inline fixed_size_simd<int, 8> operator~() const {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = ~comp_[i]; })
@@ -693,7 +711,7 @@ template <> class fixed_size_simd<int, 8> {
 
     friend avx2_inline fixed_size_simd<int, 8> vectorcall srai(const fixed_size_simd<int, 8> v1, const int v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_srai_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2); })
@@ -703,7 +721,7 @@ template <> class fixed_size_simd<int, 8> {
 
     friend avx2_inline fixed_size_simd<int, 8> vectorcall srli(const fixed_size_simd<int, 8> v1, const int v2) {
         fixed_size_simd<int, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = int(unsigned(v1.comp_[i]) >> v2); })
@@ -712,7 +730,7 @@ template <> class fixed_size_simd<int, 8> {
     }
 
     friend avx2_inline bool vectorcall is_equal(const fixed_size_simd<int, 8> v1, const fixed_size_simd<int, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
 #else
@@ -722,7 +740,7 @@ template <> class fixed_size_simd<int, 8> {
 #endif
     }
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     friend force_inline fixed_size_simd<int, 8> vectorcall inclusive_scan(fixed_size_simd<int, 8> v1) {
         v1.vec_ = _mm256_add_epi32(v1.vec_, _mm256_slli_si256(v1.vec_, 4));
         v1.vec_ = _mm256_add_epi32(v1.vec_, _mm256_slli_si256(v1.vec_, 8));
@@ -736,7 +754,7 @@ template <> class fixed_size_simd<int, 8> {
     }
 #endif
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     friend force_inline fixed_size_simd<float, 8> vectorcall gather(const float *base_addr,
                                                                     fixed_size_simd<int, 8> vindex);
     friend force_inline fixed_size_simd<float, 8> vectorcall gather(fixed_size_simd<float, 8> src,
@@ -784,7 +802,7 @@ template <> class fixed_size_simd<int, 8> {
 
     static int size() { return 8; }
     static bool is_native() {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return true;
 #else
         // mostly not native, so return false here
@@ -824,7 +842,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     force_inline void set(const int i, const unsigned v) { comp_[i] = v; }
 
     avx2_inline fixed_size_simd<unsigned, 8> &vectorcall operator+=(const fixed_size_simd<unsigned, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] += rhs.comp_[i]; })
@@ -837,7 +855,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 
     avx2_inline fixed_size_simd<unsigned, 8> &vectorcall operator-=(const fixed_size_simd<unsigned, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] -= rhs.comp_[i]; })
@@ -850,7 +868,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 
     avx2_inline fixed_size_simd<unsigned, 8> &vectorcall operator*=(const fixed_size_simd<unsigned, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] *= rhs.comp_[i]; })
@@ -872,7 +890,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 
     avx2_inline fixed_size_simd<unsigned, 8> &vectorcall operator|=(const fixed_size_simd<unsigned, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_or_si256(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] |= rhs.comp_[i]; })
@@ -881,7 +899,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 
     avx2_inline fixed_size_simd<unsigned, 8> &vectorcall operator^=(const fixed_size_simd<unsigned, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_xor_si256(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] ^= rhs.comp_[i]; })
@@ -891,7 +909,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator==(const fixed_size_simd<unsigned, 8> rhs) const {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] == rhs.comp_[i]) ? 0xffffffff : 0; })
@@ -901,7 +919,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator!=(const fixed_size_simd<unsigned, 8> rhs) const {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (comp_[i] != rhs.comp_[i]) ? 0xffffffff : 0; })
@@ -910,7 +928,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 
     avx2_inline fixed_size_simd<unsigned, 8> &vectorcall operator&=(const fixed_size_simd<unsigned, 8> rhs) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
 #else
         UNROLLED_FOR(i, 8, { comp_[i] &= rhs.comp_[i]; })
@@ -927,7 +945,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 
     avx2_inline unsigned hsum() const {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         __m256i temp = _mm256_hadd_epi32(vec_, vec_);
         temp = _mm256_hadd_epi32(temp, temp);
 
@@ -948,7 +966,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     force_inline void vectorcall blend_to(const fixed_size_simd<unsigned, 8> mask,
                                           const fixed_size_simd<unsigned, 8> v1) {
         validate_mask(mask);
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_blendv_epi8(vec_, v1.vec_, mask.vec_);
 #else
         vec_ = _mm256_castps_si256(
@@ -959,7 +977,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     force_inline void vectorcall blend_inv_to(const fixed_size_simd<unsigned, 8> mask,
                                               const fixed_size_simd<unsigned, 8> v1) {
         validate_mask(mask);
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         vec_ = _mm256_blendv_epi8(v1.vec_, vec_, mask.vec_);
 #else
         vec_ = _mm256_castps_si256(
@@ -969,7 +987,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     force_inline int movemask() const { return _mm256_movemask_ps(_mm256_castsi256_ps(vec_)); }
     force_inline int movemask8() const {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_movemask_epi8(vec_);
 #else
         const __m128i lo = _mm256_castsi256_si128(vec_);      // low 128 bits
@@ -995,7 +1013,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall min(const fixed_size_simd<unsigned, 8> v1,
                                                                    const fixed_size_simd<unsigned, 8> v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_min_epu32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = std::min(v1.comp_[i], v2.comp_[i]); })
@@ -1006,7 +1024,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall max(const fixed_size_simd<unsigned, 8> v1,
                                                                    const fixed_size_simd<unsigned, 8> v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_max_epu32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
@@ -1023,7 +1041,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall cmpeq8(const fixed_size_simd<unsigned, 8> &v1,
                                                                        const fixed_size_simd<unsigned, 8> &v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_cmpeq_epi8(v1.vec_, v2.vec_);
 #else
         // Extract lower and upper 128-bit lanes
@@ -1044,7 +1062,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     force_inline static fixed_size_simd<unsigned, 8> vectorcall and_not(const fixed_size_simd<unsigned, 8> v1,
                                                                         const fixed_size_simd<unsigned, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_andnot_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -1053,7 +1071,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator&(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_and_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -1062,7 +1080,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator|(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_or_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -1071,7 +1089,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall operator^(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return _mm256_xor_si256(v1.vec_, v2.vec_);
 #else
         return _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
@@ -1081,7 +1099,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator+(const fixed_size_simd<unsigned, 8> v1,
                                                                          const fixed_size_simd<unsigned, 8> v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_add_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
@@ -1092,7 +1110,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator-(const fixed_size_simd<unsigned, 8> v1,
                                                                          const fixed_size_simd<unsigned, 8> v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_sub_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
@@ -1117,7 +1135,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator>>(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_srlv_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2.comp_[i]); })
@@ -1128,7 +1146,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator>>(const fixed_size_simd<unsigned, 8> v1,
                                                                           const unsigned v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2); })
@@ -1139,7 +1157,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator<<(const fixed_size_simd<unsigned, 8> v1,
                                                                           const fixed_size_simd<unsigned, 8> v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_sllv_epi32(v1.vec_, v2.vec_);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] << v2.comp_[i]); })
@@ -1150,7 +1168,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall operator<<(const fixed_size_simd<unsigned, 8> v1,
                                                                           const unsigned v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_slli_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] << v2); })
@@ -1160,7 +1178,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     avx2_inline fixed_size_simd<unsigned, 8> operator~() const {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = ~comp_[i]; })
@@ -1171,7 +1189,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     friend avx2_inline fixed_size_simd<unsigned, 8> vectorcall srli(const fixed_size_simd<unsigned, 8> v1,
                                                                     const unsigned v2) {
         fixed_size_simd<unsigned, 8> ret;
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
 #else
         UNROLLED_FOR(i, 8, { ret.comp_[i] = (v1.comp_[i] >> v2); })
@@ -1181,7 +1199,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     friend avx2_inline bool vectorcall is_equal(const fixed_size_simd<unsigned, 8> v1,
                                                 const fixed_size_simd<unsigned, 8> v2) {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
 #else
@@ -1191,7 +1209,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 #endif
     }
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     friend force_inline fixed_size_simd<unsigned, 8> vectorcall inclusive_scan(fixed_size_simd<unsigned, 8> v1) {
         v1.vec_ = _mm256_add_epi32(v1.vec_, _mm256_slli_si256(v1.vec_, 4));
         v1.vec_ = _mm256_add_epi32(v1.vec_, _mm256_slli_si256(v1.vec_, 8));
@@ -1205,7 +1223,7 @@ template <> class fixed_size_simd<unsigned, 8> {
     }
 #endif
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     // friend force_inline fixed_size_simd<float, 8> vectorcall gather(const float *base_addr, fixed_size_simd<int, 8>
     // vindex); friend force_inline fixed_size_simd<float, 8> vectorcall gather(fixed_size_simd<float, 8> src, const
     // float *base_addr,
@@ -1250,7 +1268,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 
     static int size() { return 8; }
     static bool is_native() {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
         return true;
 #else
         // mostly not native, so return false here
@@ -1260,7 +1278,7 @@ template <> class fixed_size_simd<unsigned, 8> {
 };
 
 avx2_inline fixed_size_simd<float, 8> fixed_size_simd<float, 8>::operator~() const {
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     fixed_size_simd<float, 8> ret;
     ret.vec_ = _mm256_castsi256_ps(_mm256_andnot_si256(_mm256_castps_si256(vec_), _mm256_set1_epi32(~0)));
     return ret;
@@ -1433,7 +1451,7 @@ force_inline fixed_size_simd<float, 8> vectorcall fmsub(const fixed_size_simd<fl
 }
 #endif // USE_FMA
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
 force_inline fixed_size_simd<float, 8> vectorcall gather(const float *base_addr, const fixed_size_simd<int, 8> vindex) {
     fixed_size_simd<float, 8> ret;
     ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, sizeof(float));
@@ -1491,7 +1509,7 @@ force_inline fixed_size_simd<int, 8> vectorcall select(const fixed_size_simd<U, 
                                                        const fixed_size_simd<int, 8> vec1,
                                                        const fixed_size_simd<int, 8> vec2) {
     validate_mask(mask);
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     return _mm256_blendv_epi8(vec2.vec_, vec1.vec_, mask.vec_);
 #else
     return _mm256_castps_si256(
@@ -1504,7 +1522,7 @@ force_inline fixed_size_simd<unsigned, 8> vectorcall select(const fixed_size_sim
                                                             const fixed_size_simd<unsigned, 8> vec1,
                                                             const fixed_size_simd<unsigned, 8> vec2) {
     validate_mask(mask);
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#if defined(USE_AVX2) || defined(USE_AVX512) || defined(USE_AVX512_FP16)
     return _mm256_blendv_epi8(vec2.vec_, vec1.vec_, mask.vec_);
 #else
     return _mm256_castps_si256(

@@ -15,6 +15,7 @@
 #include "internal/RendererAVX.h"
 #include "internal/RendererAVX2.h"
 #include "internal/RendererAVX512.h"
+#include "internal/RendererAVX512FP16.h"
 #include "internal/RendererSSE41.h"
 #elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 #include "internal/RendererNEON.h"
@@ -80,6 +81,10 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
 #if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #ifdef RAY_ENABLE_SIMD_IMPL
     const CpuFeatures features = GetCpuFeatures();
+    if ((enabled_types & eRendererType::SIMD_AVX512_FP16) && features.avx512fp16_supported) {
+        log->Info("Ray: Creating AVX512 FP16 renderer %ix%i", s.w, s.h);
+        return Avx512_fp16::CreateRenderer(s, log);
+    }
     if ((enabled_types & eRendererType::SIMD_AVX512) && features.avx512_supported) {
         log->Info("Ray: Creating AVX512 renderer %ix%i", s.w, s.h);
         return Avx512::CreateRenderer(s, log);

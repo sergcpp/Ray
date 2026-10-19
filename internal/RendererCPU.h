@@ -5,6 +5,7 @@
 #include <functional>
 #include <mutex>
 #include <random>
+#include <type_traits>
 
 #include "../Log.h"
 #include "../RendererBase.h"
@@ -32,6 +33,9 @@ class SIMDPolicy {
     using ShadowRayType = Ref::shadow_ray_t;
     using HitDataType = Ref::hit_data_t;
     using RayHashType = uint32_t;
+    using tensor_t = float;     // the reference renderer keeps fp32 UNet tensors
+    using unet_w_t = float;     // REF conv: fp32 weights/biases (no asm kernels)
+    using unet_stage_t = float; // pass 0/13 staging buffer element type (always fp32 for REF)
 
   protected:
     static force_inline eRendererType type() { return eRendererType::Reference; }
@@ -215,25 +219,28 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     std::vector<cache_data_t> temp_cache_data_;
 
     aligned_vector<float, 64> unet_weights_;
+    aligned_vector<uint16_t, 64> unet_weights16_; // f16 conv consumers (NEON asm kernels or C++ f16 kernels)
     unet_weight_offsets_t unet_offsets_;
     bool unet_alias_memory_ = true;
-    aligned_vector<float, 64> unet_tensors_heap_;
+    using tensor_t = typename SIMDPolicy::tensor_t; // fp32 or fp16 per policy (SIMDPolicyBase::tensor_t)
+    using unet_w_t = typename SIMDPolicy::unet_w_t; // conv weights+biases element type
+    aligned_vector<tensor_t, 64> unet_tensors_heap_;
     struct {
-        float *encConv0 = nullptr;
-        float *pool1 = nullptr;
-        float *pool2 = nullptr;
-        float *pool3 = nullptr;
-        float *pool4 = nullptr;
-        float *enc_conv5a = nullptr;
-        float *upsample4 = nullptr;
-        float *dec_conv4a = nullptr;
-        float *upsample3 = nullptr;
-        float *dec_conv3a = nullptr;
-        float *upsample2 = nullptr;
-        float *dec_conv2a = nullptr;
-        float *upsample1 = nullptr;
-        float *dec_conv1a = nullptr;
-        float *dec_conv1b = nullptr;
+        tensor_t *encConv0 = nullptr;
+        tensor_t *pool1 = nullptr;
+        tensor_t *pool2 = nullptr;
+        tensor_t *pool3 = nullptr;
+        tensor_t *pool4 = nullptr;
+        tensor_t *enc_conv5a = nullptr;
+        tensor_t *upsample4 = nullptr;
+        tensor_t *dec_conv4a = nullptr;
+        tensor_t *upsample3 = nullptr;
+        tensor_t *dec_conv3a = nullptr;
+        tensor_t *upsample2 = nullptr;
+        tensor_t *dec_conv2a = nullptr;
+        tensor_t *upsample1 = nullptr;
+        tensor_t *dec_conv1a = nullptr;
+        tensor_t *dec_conv1b = nullptr;
     } unet_tensors_;
     SmallVector<int, 16> unet_alias_dependencies_[UNetFilterPasses];
     void UpdateUNetFilterMemory();
@@ -340,7 +347,8 @@ template <typename SIMDPolicy> struct PassData {
     aligned_vector<color_rgba_t, 16> variance_buf;
     aligned_vector<color_rgba_t, 16> filtered_variance_buf;
     aligned_vector<color_rgba_t, 16> feature_buf1, feature_buf2;
-    aligned_vector<float, 64> temp_data;
+    aligned_vector<typename SIMDPolicy::unet_stage_t, 64>
+        temp_data; // pass 0/13 UNet staging (float, or f16 in C++ f16 mode)
 
     aligned_vector<typename SIMDPolicy::RayHashType> hash_values;
     std::vector<int> head_flags;
@@ -980,7 +988,12 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
 
     PassData<SIMDPolicy> &p = get_per_thread_pass_data<SIMDPolicy>();
 
-    const float *weights = unet_weights_.data();
+    // NEON asm kernels consume the f16 weights+bias mirror packed in InitUNetFilter (GPU parity)
+    const unet_w_t *weights;
+    if constexpr (std::is_same_v<unet_w_t, uint16_t>)
+        weights = unet_weights16_.data();
+    else
+        weights = unet_weights_.data();
     const unet_weight_offsets_t *offsets = &unet_offsets_;
 
     switch (pass) {
@@ -1452,6 +1465,12 @@ Ray::unet_filter_properties_t Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(
     const int total_count = SetupUNetWeights<float>(8, nullptr, nullptr);
     unet_weights_.resize(total_count);
     SetupUNetWeights(8, &unet_offsets_, unet_weights_.data());
+    if constexpr (std::is_same_v<unet_w_t, uint16_t>) {
+        // pack f16 weights+biases once at load, like the GPU path: SetupUNetWeights<uint16_t> rewrites
+        // unet_offsets_ for the f16 layout (el_align 128 - all block bases 256 B aligned)
+        unet_weights16_.resize(SetupUNetWeights<uint16_t>(8, nullptr, nullptr));
+        SetupUNetWeights(8, &unet_offsets_, unet_weights16_.data());
+    }
 
     unet_alias_memory_ = alias_memory;
     UpdateUNetFilterMemory();
@@ -1479,9 +1498,13 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::UpdateUNetFi
     const int required_memory = SetupUNetFilter(w_, h_, unet_alias_memory_, false, tensors, unet_alias_dependencies_);
 
 #ifndef NDEBUG
-    unet_tensors_heap_.resize(required_memory, NAN);
+    // Poison with quiet NaN: 0x7FC0 is the fp16 NaN pattern when tensors are stored as halfs
+    if constexpr (std::is_same_v<tensor_t, float>)
+        unet_tensors_heap_.resize(required_memory, NAN);
+    else
+        unet_tensors_heap_.resize(required_memory, tensor_t(0x7FC0));
 #else
-    unet_tensors_heap_.resize(required_memory, 0.0f);
+    unet_tensors_heap_.resize(required_memory, tensor_t(0));
 #endif
 
     unet_tensors_.encConv0 = unet_tensors_heap_.data() + tensors.enc_conv0_offset;

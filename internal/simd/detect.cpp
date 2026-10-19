@@ -71,6 +71,7 @@ Ray::CpuFeatures Ray::GetCpuFeatures() {
             }
 
             bool cpu_FMA_support = (info[2] & ((int)1 << 12)) != 0;
+            bool cpu_F16C_support = (info[2] & ((int)1 << 29)) != 0;
 
             bool cpu_AVX_support = (info[2] & (1 << 28)) != 0;
             g_cpu_features.avx_supported = os_saves_YMM && cpu_AVX_support;
@@ -80,9 +81,10 @@ Ray::CpuFeatures Ray::GetCpuFeatures() {
 
                 bool cpu_AVX2_support = (info[1] & (1 << 5)) != 0;
                 // use fma in conjunction with avx2 support (like microsoft compiler does)
-                g_cpu_features.avx2_supported = os_saves_YMM && cpu_AVX2_support && cpu_FMA_support;
+                g_cpu_features.avx2_supported = os_saves_YMM && cpu_AVX2_support && cpu_FMA_support && cpu_F16C_support;
 
                 g_cpu_features.avx512_supported = (info[1] & (1 << 16)) != 0; // HW_AVX512F
+                g_cpu_features.avx512_supported &= cpu_F16C_support;          // VCVTPH2PS for fp16 tensors
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 28)) != 0;   // HW_AVX512CD
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 26)) != 0;   // HW_AVX512PF
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 27)) != 0;   // HW_AVX512ER
@@ -91,6 +93,9 @@ Ray::CpuFeatures Ray::GetCpuFeatures() {
                 g_cpu_features.avx512_supported &= (info[1] & (1 << 17)) != 0; // HW_AVX512DQ
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 21)) != 0;   // HW_AVX512IFMA
                 // g_cpu_features.avx512_supported &= (info[2] & (1 << 1)) != 0;    // HW_AVX512VBMI
+
+                g_cpu_features.avx512fp16_supported =
+                    g_cpu_features.avx512_supported && (info[3] & (1 << 23)) != 0; // HW_AVX512FP16
             }
         }
 #elif defined(__i386__) || defined(__x86_64__)

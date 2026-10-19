@@ -1,4 +1,4 @@
-; master TU: assembles all 15 NEON kernels into one object (armasm64 + /I<generated dir>; GET includes are per-unit: each kernel file ends with its own indented END)
+; master TU: assembles all NEON kernels into one object (armasm64 + /I<generated dir>; GET includes are per-unit: each kernel file ends with its own indented END)
 	GET conv0_neon.asm
 	GET conv1_neon.asm
 	GET conv2_neon.asm

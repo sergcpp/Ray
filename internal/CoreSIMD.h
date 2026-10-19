@@ -5,9 +5,12 @@
 //  Template parameter S defines width of vectors used. Usualy it is equal to ray packet size.
 
 #include <array>
+#include <type_traits>
 #include <vector>
 
+#include <cassert>
 #include <cfloat>
+#include <cstdlib>
 
 #include "simd/simd.h"
 
@@ -31,93 +34,87 @@ extern const float ggx_Eavg_glass[][16];
 extern const float ggx_Eavg_glass_inv[][16];
 
 #if defined(RAY_ENABLE_ASM_CONV)
-// generated kernels (scripts/gen_conv_asm.py): all 16 denoise passes, bit-identical to the C++ path
-// (pass 10 reuses conv6; 7/9/11/13 are the concat kernels; 0/13 walk C++-staged buffers)
+// generated kernels (scripts/gen_conv_asm.py): all 16 passes; fp32 x86 bit-identical to the C++
+// path, NEON + AVX512-FP16 GPU-parity (f16 tensors/weights/accumulation).
 #define RAY_ASM_CONV_DECL(sym)                                                                                         \
     extern "C" void sym(const float *data, int rect_x, int rect_y, int rect_w, int rect_h, int stride,                 \
                         const float *weights, const float *biases, float *output, int output_stride);
-// 2-input concat kernels (passes 7/9/11, PreOp1=Upsample), bit-identical to ConvolutionConcat3x3
+#define RAY_ASM_CONV_DECL16(sym)                                                                                       \
+    extern "C" void sym(const uint16_t *data, int rect_x, int rect_y, int rect_w, int rect_h, int stride,              \
+                        const uint16_t *weights, const uint16_t *biases, uint16_t *output, int output_stride);
+// pass 0: fp32 staged network input, fp16 tensor output
+#define RAY_ASM_CONV_DECL_F16OUT(sym)                                                                                  \
+    extern "C" void sym(const float *data, int rect_x, int rect_y, int rect_w, int rect_h, int stride,                 \
+                        const uint16_t *weights, const uint16_t *biases, uint16_t *output, int output_stride);
+// pass 15: fp16 tensor input, fp32 output (final denoised image)
+#define RAY_ASM_CONV_DECL_F16IN(sym)                                                                                   \
+    extern "C" void sym(const uint16_t *data, int rect_x, int rect_y, int rect_w, int rect_h, int stride,              \
+                        const uint16_t *weights, const uint16_t *biases, float *output, int output_stride);
+// 2-input concat kernels (passes 7/9/11/13, PreOp1=Upsample)
 #define RAY_ASM_CC2_DECL(sym)                                                                                          \
     extern "C" void sym(const float *data1, const float *data2, int rect_x, int rect_y, int rect_w, int rect_h,        \
                         int stride1, int stride2, const float *weights, const float *biases, float *output,            \
                         int output_stride);
-RAY_ASM_CONV_DECL(ray_conv0_avx2)
-RAY_ASM_CONV_DECL(ray_conv1_avx2)
-RAY_ASM_CONV_DECL(ray_conv2_avx2)
-RAY_ASM_CONV_DECL(ray_conv3_avx2)
-RAY_ASM_CONV_DECL(ray_conv4_avx2)
-RAY_ASM_CONV_DECL(ray_conv5_avx2)
-RAY_ASM_CONV_DECL(ray_conv6_avx2)
-RAY_ASM_CONV_DECL(ray_conv8_avx2)
-RAY_ASM_CONV_DECL(ray_conv12_avx2)
-RAY_ASM_CONV_DECL(ray_conv14_avx2)
-RAY_ASM_CONV_DECL(ray_conv15_avx2)
-RAY_ASM_CONV_DECL(ray_conv0_avx1)
-RAY_ASM_CONV_DECL(ray_conv1_avx1)
-RAY_ASM_CONV_DECL(ray_conv2_avx1)
-RAY_ASM_CONV_DECL(ray_conv3_avx1)
-RAY_ASM_CONV_DECL(ray_conv4_avx1)
-RAY_ASM_CONV_DECL(ray_conv5_avx1)
-RAY_ASM_CONV_DECL(ray_conv6_avx1)
-RAY_ASM_CONV_DECL(ray_conv8_avx1)
-RAY_ASM_CONV_DECL(ray_conv12_avx1)
-RAY_ASM_CONV_DECL(ray_conv14_avx1)
-RAY_ASM_CONV_DECL(ray_conv15_avx1)
-RAY_ASM_CONV_DECL(ray_conv0_sse41)
-RAY_ASM_CONV_DECL(ray_conv1_sse41)
-RAY_ASM_CONV_DECL(ray_conv2_sse41)
-RAY_ASM_CONV_DECL(ray_conv3_sse41)
-RAY_ASM_CONV_DECL(ray_conv4_sse41)
-RAY_ASM_CONV_DECL(ray_conv5_sse41)
-RAY_ASM_CONV_DECL(ray_conv6_sse41)
-RAY_ASM_CONV_DECL(ray_conv8_sse41)
-RAY_ASM_CONV_DECL(ray_conv12_sse41)
-RAY_ASM_CONV_DECL(ray_conv14_sse41)
-RAY_ASM_CONV_DECL(ray_conv15_sse41)
-RAY_ASM_CONV_DECL(ray_conv0_avx512)
-RAY_ASM_CONV_DECL(ray_conv1_avx512)
-RAY_ASM_CONV_DECL(ray_conv2_avx512)
-RAY_ASM_CONV_DECL(ray_conv3_avx512)
-RAY_ASM_CONV_DECL(ray_conv4_avx512)
-RAY_ASM_CONV_DECL(ray_conv5_avx512)
-RAY_ASM_CONV_DECL(ray_conv6_avx512)
-RAY_ASM_CONV_DECL(ray_conv8_avx512)
-RAY_ASM_CONV_DECL(ray_conv12_avx512)
-RAY_ASM_CONV_DECL(ray_conv14_avx512)
-RAY_ASM_CONV_DECL(ray_conv15_avx512)
-RAY_ASM_CC2_DECL(ray_conv7_avx2)
-RAY_ASM_CC2_DECL(ray_conv9_avx2)
-RAY_ASM_CC2_DECL(ray_conv11_avx2)
-RAY_ASM_CC2_DECL(ray_conv13_avx2)
-RAY_ASM_CC2_DECL(ray_conv7_avx1)
-RAY_ASM_CC2_DECL(ray_conv9_avx1)
-RAY_ASM_CC2_DECL(ray_conv11_avx1)
-RAY_ASM_CC2_DECL(ray_conv13_avx1)
-RAY_ASM_CC2_DECL(ray_conv7_sse41)
-RAY_ASM_CC2_DECL(ray_conv9_sse41)
-RAY_ASM_CC2_DECL(ray_conv11_sse41)
-RAY_ASM_CC2_DECL(ray_conv13_sse41)
-RAY_ASM_CC2_DECL(ray_conv7_avx512)
-RAY_ASM_CC2_DECL(ray_conv9_avx512)
-RAY_ASM_CC2_DECL(ray_conv11_avx512)
-RAY_ASM_CC2_DECL(ray_conv13_avx512)
-RAY_ASM_CONV_DECL(ray_conv0_neon)
-RAY_ASM_CONV_DECL(ray_conv1_neon)
-RAY_ASM_CONV_DECL(ray_conv2_neon)
-RAY_ASM_CONV_DECL(ray_conv3_neon)
-RAY_ASM_CONV_DECL(ray_conv4_neon)
-RAY_ASM_CONV_DECL(ray_conv5_neon)
-RAY_ASM_CONV_DECL(ray_conv6_neon)
-RAY_ASM_CONV_DECL(ray_conv8_neon)
-RAY_ASM_CONV_DECL(ray_conv12_neon)
-RAY_ASM_CONV_DECL(ray_conv14_neon)
-RAY_ASM_CONV_DECL(ray_conv15_neon)
-RAY_ASM_CC2_DECL(ray_conv7_neon)
-RAY_ASM_CC2_DECL(ray_conv9_neon)
-RAY_ASM_CC2_DECL(ray_conv11_neon)
-RAY_ASM_CC2_DECL(ray_conv13_neon)
+#define RAY_ASM_CC2_DECL16(sym)                                                                                        \
+    extern "C" void sym(const uint16_t *data1, const uint16_t *data2, int rect_x, int rect_y, int rect_w, int rect_h,  \
+                        int stride1, int stride2, const uint16_t *weights, const uint16_t *biases, uint16_t *output,   \
+                        int output_stride);
+// pass 13: fp16 tensor data1 + C++-staged fp32 aux (3+3+3ch)
+#define RAY_ASM_CC2_DECL_MIX(sym)                                                                                      \
+    extern "C" void sym(const uint16_t *data1, const float *data2, int rect_x, int rect_y, int rect_w, int rect_h,     \
+                        int stride1, int stride2, const uint16_t *weights, const uint16_t *biases, uint16_t *output,   \
+                        int output_stride);
+// clang-format off
+#define RAY_ASM_F16_SET(isa)                                                                                           \
+    RAY_ASM_CONV_DECL_F16OUT(ray_conv0_##isa##_f16)                                                                     \
+    RAY_ASM_CONV_DECL16(ray_conv1_##isa##_f16)                                                                         \
+    RAY_ASM_CONV_DECL16(ray_conv2_##isa##_f16)                                                                         \
+    RAY_ASM_CONV_DECL16(ray_conv3_##isa##_f16)                                                                         \
+    RAY_ASM_CONV_DECL16(ray_conv4_##isa##_f16)                                                                         \
+    RAY_ASM_CONV_DECL16(ray_conv5_##isa##_f16)                                                                         \
+    RAY_ASM_CONV_DECL16(ray_conv6_##isa##_f16)                                                                         \
+    RAY_ASM_CONV_DECL16(ray_conv8_##isa##_f16)                                                                         \
+    RAY_ASM_CONV_DECL16(ray_conv12_##isa##_f16)                                                                        \
+    RAY_ASM_CONV_DECL16(ray_conv14_##isa##_f16)                                                                        \
+    RAY_ASM_CONV_DECL_F16IN(ray_conv15_##isa##_f16)                                                                    \
+    RAY_ASM_CC2_DECL16(ray_conv7_##isa##_f16)                                                                          \
+    RAY_ASM_CC2_DECL16(ray_conv9_##isa##_f16)                                                                          \
+    RAY_ASM_CC2_DECL16(ray_conv11_##isa##_f16)                                                                         \
+    RAY_ASM_CC2_DECL_MIX(ray_conv13_##isa##_f16)
+// fp32 tensor family (all x86 archs: tensor_t = float there, no native FP16 FMA)
+#define RAY_ASM_F32_SET(isa)                                                                                           \
+    RAY_ASM_CONV_DECL(ray_conv0_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv1_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv2_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv3_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv4_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv5_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv6_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv8_##isa)                                                                                 \
+    RAY_ASM_CONV_DECL(ray_conv12_##isa)                                                                                \
+    RAY_ASM_CONV_DECL(ray_conv14_##isa)                                                                                \
+    RAY_ASM_CONV_DECL(ray_conv15_##isa)                                                                                \
+    RAY_ASM_CC2_DECL(ray_conv7_##isa)                                                                                  \
+    RAY_ASM_CC2_DECL(ray_conv9_##isa)                                                                                  \
+    RAY_ASM_CC2_DECL(ray_conv11_##isa)                                                                                 \
+    RAY_ASM_CC2_DECL(ray_conv13_##isa)
+RAY_ASM_F32_SET(avx2)
+RAY_ASM_F32_SET(avx512)
+RAY_ASM_F32_SET(avx1)
+RAY_ASM_F32_SET(sse41)
+RAY_ASM_F16_SET(neon)
+// AVX512-FP16 renderer kernels: ray_conv<N>_avx512_f16 symbols (generated ISA name avx512f16)
+RAY_ASM_F16_SET(avx512)
+#undef RAY_ASM_F16_SET
+#undef RAY_ASM_F32_SET
+// clang-format on
 #undef RAY_ASM_CONV_DECL
+#undef RAY_ASM_CONV_DECL16
+#undef RAY_ASM_CONV_DECL_F16OUT
+#undef RAY_ASM_CONV_DECL_F16IN
 #undef RAY_ASM_CC2_DECL
+#undef RAY_ASM_CC2_DECL16
+#undef RAY_ASM_CC2_DECL_MIX
 #endif
 
 //
@@ -639,6 +636,26 @@ class SIMDPolicyBase {
     using ShadowRayType = shadow_ray_t<RPSize>;
     using HitDataType = hit_data_t<RPSize>;
     using RayHashType = ivec<RPSize>;
+    // UNet tensor storage: f16 on aarch64 NEON + AVX512-FP16 (GPU-parity f16 conv); plain x86
+    // stays fp32 - F16C is convert-only, f16 walks measured 3-21% slower than fp32 on SKX.
+#if defined(RAY_ENABLE_ASM_CONV) && defined(USE_NEON) && (defined(__aarch64__) || defined(_M_ARM64))
+    using tensor_t = uint16_t;
+#elif defined(RAY_NEON_FP16_CONV) && defined(__aarch64__)
+    using tensor_t = uint16_t;
+#elif defined(USE_AVX512_FP16)
+    using tensor_t = uint16_t;
+#else
+    using tensor_t = float;
+#endif
+    // conv weights+biases element type: f16 exactly where the conv consumers take f16
+    using unet_w_t = tensor_t;
+    // pass 0/13 staging buffer element type: the asm kernels pack f32->f16 in-kernel, the C++
+    // f16 path wants pre-rounded f16 staging
+#if defined(RAY_ENABLE_ASM_CONV)
+    using unet_stage_t = float;
+#else
+    using unet_stage_t = tensor_t;
+#endif
 
   protected:
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
@@ -738,17 +755,19 @@ class SIMDPolicyBase {
     }
 
     template <int InChannels, int OutChannels, int OutPxPitch = OutChannels, ePostOp PostOp = ePostOp::None,
-              eActivation Activation = eActivation::ReLU>
-    static force_inline void Convolution3x3(const float data[], const rect_t &rect, const int w, const int h,
-                                            const int stride, const float weights[], const float biases[],
-                                            float output[], const int output_stride) {
-// asm kernels are AVX2/AVX1/SSE41/AVX512/NEON prototypes - every SIMD arch whose TU includes this
-// header; REF stays on the C++ kernel. The chain below has an explicit branch per arch, so a future
-// arch without kernels fails to compile instead of silently binding a kernel family.
+              eActivation Activation = eActivation::ReLU, class TD, class TO, class TW>
+    static force_inline void Convolution3x3(const TD data[], const rect_t &rect, const int w, const int h,
+                                            const int stride, const TW weights[], const TW biases[], TO output[],
+                                            const int output_stride) {
+// asm kernels: explicit per-arch branch below so an arch without kernels fails to compile rather
+// than bind another arch's family; AVX512-FP16/NEON kernels are GPU-parity (not bit-identical).
 #if defined(RAY_ENABLE_ASM_CONV)
 #define RAY_ASM_CAT2(a, b) a##b
 #define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
-#if defined(USE_AVX512)
+#if defined(USE_AVX512_FP16)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512_f16)
+#elif defined(USE_AVX512)
 #define RAY_ASM_CONV_RP 16
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
 #elif defined(USE_AVX2)
@@ -759,7 +778,7 @@ class SIMDPolicyBase {
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
 #elif defined(USE_NEON)
 #define RAY_ASM_CONV_RP 4
-#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon), _f16)
 #elif defined(USE_SSE41)
 #define RAY_ASM_CONV_RP 4
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
@@ -770,20 +789,25 @@ class SIMDPolicyBase {
         RAY_ASM_CONV(n)(data, rect.x, rect.y, rect.w, rect.h, stride, weights, biases, output, output_stride);         \
         return;                                                                                                        \
     }
-        if constexpr (RPSize == RAY_ASM_CONV_RP && PostOp == ePostOp::None && Activation == eActivation::ReLU) {
+        // the generated kernels match each policy's tensor storage (tensor_t: uint16_t on the f16
+        // archs, where the _f16 symbol family above is bound; float on AVX1/SSE4.1)
+        if constexpr (RPSize == RAY_ASM_CONV_RP && std::is_same_v<TD, tensor_t> && std::is_same_v<TO, tensor_t> &&
+                      PostOp == ePostOp::None && Activation == eActivation::ReLU) {
             RAY_ASM_CONV_CASE(5, 80, 96, 96)    // pass 5
             RAY_ASM_CONV_CASE(6, 96, 96, 96)    // passes 6 and 10 (same channel config)
             RAY_ASM_CONV_CASE(8, 112, 112, 112) // pass 8
             RAY_ASM_CONV_CASE(12, 64, 64, 64)   // pass 12
             RAY_ASM_CONV_CASE(14, 64, 32, 32)   // pass 14
         }
-        if constexpr (RPSize == RAY_ASM_CONV_RP && PostOp == ePostOp::Downsample && Activation == eActivation::ReLU) {
+        if constexpr (RPSize == RAY_ASM_CONV_RP && std::is_same_v<TD, tensor_t> && std::is_same_v<TO, tensor_t> &&
+                      PostOp == ePostOp::Downsample && Activation == eActivation::ReLU) {
             RAY_ASM_CONV_CASE(1, 32, 32, 32) // pass 1
             RAY_ASM_CONV_CASE(2, 32, 48, 48) // pass 2
             RAY_ASM_CONV_CASE(3, 48, 64, 64) // pass 3
             RAY_ASM_CONV_CASE(4, 64, 80, 80) // pass 4
         }
-        if constexpr (RPSize == RAY_ASM_CONV_RP && PostOp == ePostOp::HDRTransfer && Activation == eActivation::ReLU) {
+        if constexpr (RPSize == RAY_ASM_CONV_RP && std::is_same_v<TD, tensor_t> && std::is_same_v<TO, float> &&
+                      PostOp == ePostOp::HDRTransfer && Activation == eActivation::ReLU) {
             RAY_ASM_CONV_CASE(15, 32, 3, 4) // pass 15 (final output, HDR transfer post-op)
         }
 #undef RAY_ASM_CAT2
@@ -792,25 +816,39 @@ class SIMDPolicyBase {
 #undef RAY_ASM_CONV
 #undef RAY_ASM_CONV_CASE
 #endif
-        NS::Convolution3x3<RPSize, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
-            data, rect, w, h, stride, weights, biases, output, output_stride);
+        // C++ f16 kernels exist only with hw NEON f16 (RAY_NEON_FP16_CONV): an f16-tensor policy
+        // must bind an asm family or the config is broken. TO deduced (pass 15 ends in float).
+        if constexpr (std::is_same_v<TD, float> && std::is_same_v<TO, float>)
+            NS::Convolution3x3<RPSize, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
+                data, rect, w, h, stride, weights, biases, output, output_stride);
+#if (defined(RAY_NEON_FP16_CONV) || defined(RAY_AVX512_FP16_CONV)) && !defined(RAY_ENABLE_ASM_CONV)
+        else if constexpr (std::is_same_v<TD, tensor_t> && std::is_same_v<TW, unet_w_t>)
+            NS::Convolution3x3<RPSize, InChannels, OutChannels, OutPxPitch, PostOp, Activation, tensor_t, unet_w_t, TO>(
+                data, rect, w, h, stride, weights, biases, output, output_stride);
+#endif
+        else {
+            assert(!"fp16 UNet tensor conv has no matching asm kernel");
+            std::abort();
+        }
     }
 
     template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels,
               ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
-              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
-    static force_inline void Convolution3x3(const float data1[], const float data2[], const float data3[],
-                                            const rect_t &rect, const int in_w, const int in_h, const int w,
-                                            const int h, const int stride, const float weights[], const float biases[],
-                                            float output[], const int output_stride,
-                                            aligned_vector<float, 64> &temp_data) {
+              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU, class TO, class TW>
+    static force_inline void
+    Convolution3x3(const float data1[], const float data2[], const float data3[], const rect_t &rect, const int in_w,
+                   const int in_h, const int w, const int h, const int stride, const TW weights[], const TW biases[],
+                   TO output[], const int output_stride, aligned_vector<unet_stage_t, 64> &temp_data) {
 // pass 0: C++ staging + generated walk over the staged 9-channel buffer (see StageConv3x3). The
 // staged buffer is rect-relative (1px halo); the asm kernel addresses data absolutely, so hand it
 // the base that maps absolute (x,y) onto the halo: staged + In123 * ((1-ry)*s + (1-rx)).
 #if defined(RAY_ENABLE_ASM_CONV)
 #define RAY_ASM_CAT2(a, b) a##b
 #define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
-#if defined(USE_AVX512)
+#if defined(USE_AVX512_FP16)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512_f16)
+#elif defined(USE_AVX512)
 #define RAY_ASM_CONV_RP 16
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
 #elif defined(USE_AVX2)
@@ -821,15 +859,15 @@ class SIMDPolicyBase {
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
 #elif defined(USE_NEON)
 #define RAY_ASM_CONV_RP 4
-#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon), _f16)
 #elif defined(USE_SSE41)
 #define RAY_ASM_CONV_RP 4
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
 #endif
-        if constexpr (RPSize == RAY_ASM_CONV_RP && InChannels1 == 3 && InChannels2 == 3 && InChannels3 == 3 &&
-                      PxPitch == 4 && OutChannels == 32 && PreOp1 == ePreOp::HDRTransfer && PreOp2 == ePreOp::None &&
-                      PreOp3 == ePreOp::PositiveNormalize && PostOp == ePostOp::None &&
-                      Activation == eActivation::ReLU) {
+        if constexpr (RPSize == RAY_ASM_CONV_RP && std::is_same_v<TO, tensor_t> && InChannels1 == 3 &&
+                      InChannels2 == 3 && InChannels3 == 3 && PxPitch == 4 && OutChannels == 32 &&
+                      PreOp1 == ePreOp::HDRTransfer && PreOp2 == ePreOp::None && PreOp3 == ePreOp::PositiveNormalize &&
+                      PostOp == ePostOp::None && Activation == eActivation::ReLU) {
             NS::StageConv3x3<InChannels1, InChannels2, InChannels3, PxPitch, PreOp1, PreOp2, PreOp3>(
                 data1, data2, data3, rect, in_w, in_h, stride, temp_data);
             const int In123 = InChannels1 + InChannels2 + InChannels3, s123 = rect.w + 2;
@@ -842,24 +880,38 @@ class SIMDPolicyBase {
 #undef RAY_ASM_CONV_RP
 #undef RAY_ASM_CONV
 #endif
-        NS::Convolution3x3<RPSize, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3,
-                           PostOp, Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights, biases,
-                                               output, output_stride, temp_data);
+        // inputs are always the C++-staged buffer (float, or pre-rounded f16 in the C++ f16 mode);
+        // only the output tensor type varies
+        if constexpr (std::is_same_v<TO, float>)
+            NS::Convolution3x3<RPSize, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2,
+                               PreOp3, PostOp, Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights,
+                                                           biases, output, output_stride, temp_data);
+#if (defined(RAY_NEON_FP16_CONV) || defined(RAY_AVX512_FP16_CONV)) && !defined(RAY_ENABLE_ASM_CONV)
+        else if constexpr (std::is_same_v<TO, tensor_t> && std::is_same_v<TW, unet_w_t>)
+            NS::Convolution3x3<RPSize, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2,
+                               PreOp3, PostOp, Activation, unet_w_t, tensor_t, unet_stage_t>(
+                data1, data2, data3, rect, in_w, in_h, w, h, stride, weights, biases, output, output_stride, temp_data);
+#endif
+        else {
+            assert(!"fp16 UNet tensor conv has no matching asm kernel");
+            std::abort();
+        }
     }
 
     template <int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1 = ePreOp::None,
-              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
-    static force_inline void ConvolutionConcat3x3(const float data1[], const float data2[], const rect_t &rect,
-                                                  const int w, const int h, const int stride1, const int stride2,
-                                                  const float weights[], const float biases[], float output[],
-                                                  const int output_stride) {
-// asm kernels are AVX2/AVX1/SSE41/AVX512/NEON prototypes - every SIMD arch whose TU includes this
-// header; REF stays on the C++ kernel. The chain below has an explicit branch per arch, so a future
-// arch without kernels fails to compile instead of silently binding a kernel family.
+              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU, class TD, class TO, class TW>
+    static force_inline void ConvolutionConcat3x3(const TD data1[], const TD data2[], const rect_t &rect, const int w,
+                                                  const int h, const int stride1, const int stride2, const TW weights[],
+                                                  const TW biases[], TO output[], const int output_stride) {
+// asm kernels: explicit per-arch branch below so an arch without kernels fails to compile rather
+// than bind another arch's family; AVX512-FP16/NEON kernels are GPU-parity (not bit-identical).
 #if defined(RAY_ENABLE_ASM_CONV)
 #define RAY_ASM_CAT2(a, b) a##b
 #define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
-#if defined(USE_AVX512)
+#if defined(USE_AVX512_FP16)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512_f16)
+#elif defined(USE_AVX512)
 #define RAY_ASM_CONV_RP 16
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
 #elif defined(USE_AVX2)
@@ -870,7 +922,7 @@ class SIMDPolicyBase {
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
 #elif defined(USE_NEON)
 #define RAY_ASM_CONV_RP 4
-#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon), _f16)
 #elif defined(USE_SSE41)
 #define RAY_ASM_CONV_RP 4
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
@@ -882,8 +934,8 @@ class SIMDPolicyBase {
                         output_stride);                                                                                \
         return;                                                                                                        \
     }
-        if constexpr (RPSize == RAY_ASM_CONV_RP && PreOp1 == ePreOp::Upsample && PostOp == ePostOp::None &&
-                      Activation == eActivation::ReLU) {
+        if constexpr (RPSize == RAY_ASM_CONV_RP && std::is_same_v<TD, tensor_t> && std::is_same_v<TO, tensor_t> &&
+                      PreOp1 == ePreOp::Upsample && PostOp == ePostOp::None && Activation == eActivation::ReLU) {
             RAY_ASM_CC2_CASE(7, 96, 64, 112) // pass 7
             RAY_ASM_CC2_CASE(9, 112, 48, 96) // pass 9
             RAY_ASM_CC2_CASE(11, 96, 32, 64) // pass 11
@@ -894,24 +946,39 @@ class SIMDPolicyBase {
 #undef RAY_ASM_CONV
 #undef RAY_ASM_CC2_CASE
 #endif
-        NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
-            data1, data2, rect, w, h, stride1, stride2, weights, biases, output, output_stride);
+        if constexpr (std::is_same_v<TD, float> && std::is_same_v<TO, float>)
+            NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
+                data1, data2, rect, w, h, stride1, stride2, weights, biases, output, output_stride);
+#if (defined(RAY_NEON_FP16_CONV) || defined(RAY_AVX512_FP16_CONV)) && !defined(RAY_ENABLE_ASM_CONV)
+        else if constexpr (std::is_same_v<TD, tensor_t> && std::is_same_v<TO, tensor_t> && std::is_same_v<TW, unet_w_t>)
+            NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation,
+                                     tensor_t, tensor_t, unet_w_t, tensor_t>(data1, data2, rect, w, h, stride1, stride2,
+                                                                             weights, biases, output, output_stride);
+#endif
+        else {
+            assert(!"fp16 UNet tensor conv has no matching asm kernel");
+            std::abort();
+        }
     }
 
     template <int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
               ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
-              ePreOp PreOp4 = ePreOp::None, ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
-    static force_inline void ConvolutionConcat3x3(const float data1[], const float data2[], const float data3[],
-                                                  const float data4[], const rect_t &rect, const int w, const int h,
-                                                  const int w2, const int h2, const int stride1, const int stride2,
-                                                  const float weights[], const float biases[], float output[],
-                                                  const int output_stride, aligned_vector<float, 64> &temp_data) {
+              ePreOp PreOp4 = ePreOp::None, ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU,
+              class TD, class TO, class TW>
+    static force_inline void
+    ConvolutionConcat3x3(const TD data1[], const float data2[], const float data3[], const float data4[],
+                         const rect_t &rect, const int w, const int h, const int w2, const int h2, const int stride1,
+                         const int stride2, const TW weights[], const TW biases[], TO output[], const int output_stride,
+                         aligned_vector<unet_stage_t, 64> &temp_data) {
 // pass 13: C++ staging of the three aux inputs + generated concat walk (data1 with Upsample
 // addressing + the staged 9-channel buffer via the absolute base pointer, see the pass-0 hook).
 #if defined(RAY_ENABLE_ASM_CONV)
 #define RAY_ASM_CAT2(a, b) a##b
 #define RAY_ASM_CAT(a, b) RAY_ASM_CAT2(a, b)
-#if defined(USE_AVX512)
+#if defined(USE_AVX512_FP16)
+#define RAY_ASM_CONV_RP 16
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512_f16)
+#elif defined(USE_AVX512)
 #define RAY_ASM_CONV_RP 16
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx512)
 #elif defined(USE_AVX2)
@@ -922,14 +989,15 @@ class SIMDPolicyBase {
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _avx1)
 #elif defined(USE_NEON)
 #define RAY_ASM_CONV_RP 4
-#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon)
+#define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _neon), _f16)
 #elif defined(USE_SSE41)
 #define RAY_ASM_CONV_RP 4
 #define RAY_ASM_CONV(n) RAY_ASM_CAT(RAY_ASM_CAT(ray_conv, n), _sse41)
 #endif
-        if constexpr (RPSize == RAY_ASM_CONV_RP && InChannels1 == 64 && InChannels2 == 3 && InChannels3 == 3 &&
-                      InChannels4 == 3 && PxPitch2 == 4 && OutChannels == 64 && PreOp1 == ePreOp::Upsample &&
-                      PostOp == ePostOp::None && Activation == eActivation::ReLU) {
+        if constexpr (RPSize == RAY_ASM_CONV_RP && std::is_same_v<TD, tensor_t> && std::is_same_v<TO, tensor_t> &&
+                      InChannels1 == 64 && InChannels2 == 3 && InChannels3 == 3 && InChannels4 == 3 && PxPitch2 == 4 &&
+                      OutChannels == 64 && PreOp1 == ePreOp::Upsample && PostOp == ePostOp::None &&
+                      Activation == eActivation::ReLU) {
             NS::StageConvConcat3x3<InChannels2, InChannels3, InChannels4, PxPitch2, PreOp2, PreOp3, PreOp4>(
                 data2, data3, data4, rect, w2, h2, stride2, temp_data);
             const int In234 = InChannels2 + InChannels3 + InChannels4, s234 = rect.w + 2;
@@ -943,14 +1011,26 @@ class SIMDPolicyBase {
 #undef RAY_ASM_CONV_RP
 #undef RAY_ASM_CONV
 #endif
-        NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2, OutChannels,
-                                 PreOp1, PreOp2, PreOp3, PreOp4, PostOp, Activation>(
-            data1, data2, data3, data4, rect, w, h, w2, h2, stride1, stride2, weights, biases, output, output_stride,
-            temp_data);
+        if constexpr (std::is_same_v<TD, float> && std::is_same_v<TO, float>)
+            NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2, OutChannels,
+                                     PreOp1, PreOp2, PreOp3, PreOp4, PostOp, Activation>(
+                data1, data2, data3, data4, rect, w, h, w2, h2, stride1, stride2, weights, biases, output,
+                output_stride, temp_data);
+#if (defined(RAY_NEON_FP16_CONV) || defined(RAY_AVX512_FP16_CONV)) && !defined(RAY_ENABLE_ASM_CONV)
+        else if constexpr (std::is_same_v<TD, tensor_t> && std::is_same_v<TO, tensor_t> && std::is_same_v<TW, unet_w_t>)
+            NS::ConvolutionConcat3x3<RPSize, InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2, OutChannels,
+                                     PreOp1, PreOp2, PreOp3, PreOp4, PostOp, Activation, tensor_t, unet_w_t, tensor_t,
+                                     unet_stage_t>(data1, data2, data3, data4, rect, w, h, w2, h2, stride1, stride2,
+                                                   weights, biases, output, output_stride, temp_data);
+#endif
+        else {
+            assert(!"fp16 UNet tensor conv has no matching asm kernel");
+            std::abort();
+        }
     }
 
     static force_inline void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_channels,
-                                          float output[]) {
+                                          tensor_t output[]) {
         NS::ClearBorders(rect, w, h, downscaled, out_channels, output);
     }
 };

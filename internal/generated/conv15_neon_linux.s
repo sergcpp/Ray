@@ -1,7 +1,8 @@
+.arch armv8.2-a+fp16
 .text
-.globl ray_conv15_neon
-.type ray_conv15_neon, @function
-ray_conv15_neon:
+.globl ray_conv15_neon_f16
+.type ray_conv15_neon_f16, @function
+ray_conv15_neon_f16:
 .cfi_startproc
     sub sp, sp, 304
     .cfi_def_cfa_offset 304
@@ -36,7 +37,7 @@ ray_conv15_neon:
     mov w27, w1
     add w25, w1, w3
     add w26, w2, w4
-    mov x16, 128
+    mov x16, 64
     mul x21, x5, x16
     mov x22, x6
     mov x23, x7
@@ -65,22 +66,22 @@ conv15_neon_x_loop:
     add x28, x28, x9
     mov x12, xzr
     mov x16, x22
-    add x17, x16, #384
-    add x13, x17, #384
+    add x17, x16, #192
+    add x13, x17, #192
     mov x15, x23
 conv15_neon_ii_loop:
     cmp x12, 12
     b.ge conv15_neon_Lii_done
     mul x8, x0, x21
     sub x9, x1, #1
-    mov x10, 128
+    mov x10, 64
     mul x9, x9, x10
     add x8, x8, x9
     add x5, x19, x8
     sub x4, x5, x21
     add x6, x5, x21
     add x7, x6, x21
-    ldr s0, [x15]
+    ldr h0, [x15]
     mov v1.16b, v0.16b
     mov v2.16b, v0.16b
     mov v3.16b, v0.16b
@@ -105,85 +106,93 @@ conv15_neon_j_loop:
     ldr q9, [x5]
     ldr q10, [x6]
     ldr q11, [x7]
-    fmla v0.4s, v8.4s, v12.4s
-    fmla v0.4s, v9.4s, v13.4s
-    fmla v0.4s, v10.4s, v14.4s
-    fmla v4.4s, v9.4s, v12.4s
-    fmla v4.4s, v10.4s, v13.4s
-    fmla v4.4s, v11.4s, v14.4s
+    fmla v0.8h, v8.8h, v12.8h
+    fmla v0.8h, v9.8h, v13.8h
+    fmla v0.8h, v10.8h, v14.8h
+    fmla v4.8h, v9.8h, v12.8h
+    fmla v4.8h, v10.8h, v13.8h
+    fmla v4.8h, v11.8h, v14.8h
+    ldr q8, [x4, #64]
+    ldr q9, [x5, #64]
+    ldr q10, [x6, #64]
+    ldr q11, [x7, #64]
+    fmla v1.8h, v8.8h, v12.8h
+    fmla v1.8h, v9.8h, v13.8h
+    fmla v1.8h, v10.8h, v14.8h
+    fmla v5.8h, v9.8h, v12.8h
+    fmla v5.8h, v10.8h, v13.8h
+    fmla v5.8h, v11.8h, v14.8h
     ldr q8, [x4, #128]
     ldr q9, [x5, #128]
     ldr q10, [x6, #128]
     ldr q11, [x7, #128]
-    fmla v1.4s, v8.4s, v12.4s
-    fmla v1.4s, v9.4s, v13.4s
-    fmla v1.4s, v10.4s, v14.4s
-    fmla v5.4s, v9.4s, v12.4s
-    fmla v5.4s, v10.4s, v13.4s
-    fmla v5.4s, v11.4s, v14.4s
-    ldr q8, [x4, #256]
-    ldr q9, [x5, #256]
-    ldr q10, [x6, #256]
-    ldr q11, [x7, #256]
-    fmla v2.4s, v8.4s, v12.4s
-    fmla v2.4s, v9.4s, v13.4s
-    fmla v2.4s, v10.4s, v14.4s
-    fmla v6.4s, v9.4s, v12.4s
-    fmla v6.4s, v10.4s, v13.4s
-    fmla v6.4s, v11.4s, v14.4s
-    ldr q8, [x4, #384]
-    ldr q9, [x5, #384]
-    ldr q10, [x6, #384]
-    ldr q11, [x7, #384]
-    fmla v3.4s, v8.4s, v12.4s
-    fmla v3.4s, v9.4s, v13.4s
-    fmla v3.4s, v10.4s, v14.4s
-    fmla v7.4s, v9.4s, v12.4s
-    fmla v7.4s, v10.4s, v13.4s
-    fmla v7.4s, v11.4s, v14.4s
+    fmla v2.8h, v8.8h, v12.8h
+    fmla v2.8h, v9.8h, v13.8h
+    fmla v2.8h, v10.8h, v14.8h
+    fmla v6.8h, v9.8h, v12.8h
+    fmla v6.8h, v10.8h, v13.8h
+    fmla v6.8h, v11.8h, v14.8h
+    ldr q8, [x4, #192]
+    ldr q9, [x5, #192]
+    ldr q10, [x6, #192]
+    ldr q11, [x7, #192]
+    fmla v3.8h, v8.8h, v12.8h
+    fmla v3.8h, v9.8h, v13.8h
+    fmla v3.8h, v10.8h, v14.8h
+    fmla v7.8h, v9.8h, v12.8h
+    fmla v7.8h, v10.8h, v13.8h
+    fmla v7.8h, v11.8h, v14.8h
     add x2, x2, 16
     add x4, x4, 16
     add x5, x5, 16
     add x6, x6, 16
     add x7, x7, 16
-    cmp x2, 384
+    cmp x2, 192
     b.lt conv15_neon_j_loop
     add x8, x0, #1
     cmp x8, x26
     b.ge conv15_neon_Lrow0_spill
-    faddp v4.4s, v4.4s, v4.4s
-    faddp s4, v4.2s
-    fmax s4, s4, s15
-    str s4, [sp, #224]
-    faddp v5.4s, v5.4s, v5.4s
-    faddp s5, v5.2s
-    fmax s5, s5, s15
-    str s5, [sp, #228]
-    faddp v6.4s, v6.4s, v6.4s
-    faddp s6, v6.2s
-    fmax s6, s6, s15
-    str s6, [sp, #232]
-    faddp v7.4s, v7.4s, v7.4s
-    faddp s7, v7.2s
-    fmax s7, s7, s15
-    str s7, [sp, #236]
+    faddp v4.8h, v4.8h, v4.8h
+    faddp v4.4h, v4.4h, v4.4h
+    faddp h4, v4.2h
+    fmax h4, h4, h15
+    str h4, [sp, #224]
+    faddp v5.8h, v5.8h, v5.8h
+    faddp v5.4h, v5.4h, v5.4h
+    faddp h5, v5.2h
+    fmax h5, h5, h15
+    str h5, [sp, #228]
+    faddp v6.8h, v6.8h, v6.8h
+    faddp v6.4h, v6.4h, v6.4h
+    faddp h6, v6.2h
+    fmax h6, h6, h15
+    str h6, [sp, #232]
+    faddp v7.8h, v7.8h, v7.8h
+    faddp v7.4h, v7.4h, v7.4h
+    faddp h7, v7.2h
+    fmax h7, h7, h15
+    str h7, [sp, #236]
 conv15_neon_Lrow0_spill:
-    faddp v0.4s, v0.4s, v0.4s
-    faddp s0, v0.2s
-    fmax s0, s0, s15
-    str s0, [sp, #208]
-    faddp v1.4s, v1.4s, v1.4s
-    faddp s1, v1.2s
-    fmax s1, s1, s15
-    str s1, [sp, #212]
-    faddp v2.4s, v2.4s, v2.4s
-    faddp s2, v2.2s
-    fmax s2, s2, s15
-    str s2, [sp, #216]
-    faddp v3.4s, v3.4s, v3.4s
-    faddp s3, v3.2s
-    fmax s3, s3, s15
-    str s3, [sp, #220]
+    faddp v0.8h, v0.8h, v0.8h
+    faddp v0.4h, v0.4h, v0.4h
+    faddp h0, v0.2h
+    fmax h0, h0, h15
+    str h0, [sp, #208]
+    faddp v1.8h, v1.8h, v1.8h
+    faddp v1.4h, v1.4h, v1.4h
+    faddp h1, v1.2h
+    fmax h1, h1, h15
+    str h1, [sp, #212]
+    faddp v2.8h, v2.8h, v2.8h
+    faddp v2.4h, v2.4h, v2.4h
+    faddp h2, v2.2h
+    fmax h2, h2, h15
+    str h2, [sp, #216]
+    faddp v3.8h, v3.8h, v3.8h
+    faddp v3.4h, v3.4h, v3.4h
+    faddp h3, v3.2h
+    fmax h3, h3, h15
+    str h3, [sp, #220]
     str x0, [sp, #240]
     str x1, [sp, #248]
     str x12, [sp, #256]
@@ -197,7 +206,8 @@ conv15_neon_Lrow0_spill:
     add x8, x8, #0
     cmp x8, x25
     b.ge conv15_neon_Lc1_0
-    ldr s0, [sp, #224]
+    ldr h0, [sp, #224]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -236,7 +246,8 @@ conv15_neon_Lc1_0:
     add x8, x8, #1
     cmp x8, x25
     b.ge conv15_neon_Lc1_1
-    ldr s0, [sp, #228]
+    ldr h0, [sp, #228]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -275,7 +286,8 @@ conv15_neon_Lc1_1:
     add x8, x8, #2
     cmp x8, x25
     b.ge conv15_neon_Lc1_2
-    ldr s0, [sp, #232]
+    ldr h0, [sp, #232]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -314,7 +326,8 @@ conv15_neon_Lc1_2:
     add x8, x8, #3
     cmp x8, x25
     b.ge conv15_neon_Lc1_3
-    ldr s0, [sp, #236]
+    ldr h0, [sp, #236]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -355,7 +368,8 @@ conv15_neon_Lrow0_store:
     add x8, x8, #0
     cmp x8, x25
     b.ge conv15_neon_Lc0_0
-    ldr s0, [sp, #208]
+    ldr h0, [sp, #208]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -394,7 +408,8 @@ conv15_neon_Lc0_0:
     add x8, x8, #1
     cmp x8, x25
     b.ge conv15_neon_Lc0_1
-    ldr s0, [sp, #212]
+    ldr h0, [sp, #212]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -433,7 +448,8 @@ conv15_neon_Lc0_1:
     add x8, x8, #2
     cmp x8, x25
     b.ge conv15_neon_Lc0_2
-    ldr s0, [sp, #216]
+    ldr h0, [sp, #216]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -472,7 +488,8 @@ conv15_neon_Lc0_2:
     add x8, x8, #3
     cmp x8, x25
     b.ge conv15_neon_Lc0_3
-    ldr s0, [sp, #220]
+    ldr h0, [sp, #220]
+    fcvt s0, h0
     adr x14, conv15_neon_conv15_hdr_c
     ldr s1, [x14, #0]
     fmul s0, s0, s1
@@ -513,11 +530,11 @@ conv15_neon_Lc0_3:
     ldr x16, [sp, #264]
     ldr x15, [sp, #272]
     fmov s15, wzr
-    mov x8, 1152
+    mov x8, 576
     add x16, x16, x8
     add x17, x17, x8
     add x13, x13, x8
-    add x15, x15, #4
+    add x15, x15, #2
     add x12, x12, #4
     b conv15_neon_ii_loop
 conv15_neon_Lii_done:
@@ -541,7 +558,7 @@ conv15_neon_Ly_done:
     .cfi_def_cfa_offset 0
     ret 
 .cfi_endproc
-.size ray_conv15_neon, .-ray_conv15_neon
+.size ray_conv15_neon_f16, .-ray_conv15_neon_f16
 .p2align 2
 conv15_neon_conv15_hdr_c:
     .long 1078502858

@@ -27,6 +27,7 @@ enum class eRendererType : uint32_t {
     SIMD_AVX,
     SIMD_AVX2,
     SIMD_AVX512,
+    SIMD_AVX512_FP16,
     SIMD_NEON,
     // GPU renderers
     Vulkan,
@@ -34,9 +35,9 @@ enum class eRendererType : uint32_t {
 };
 
 // All CPU renderers
-const Bitmask<eRendererType> RendererCPU = Bitmask<eRendererType>{eRendererType::Reference} |
-                                           eRendererType::SIMD_SSE41 | eRendererType::SIMD_NEON |
-                                           eRendererType::SIMD_AVX | eRendererType::SIMD_AVX2;
+const Bitmask<eRendererType> RendererCPU =
+    Bitmask<eRendererType>{eRendererType::Reference} | eRendererType::SIMD_SSE41 | eRendererType::SIMD_NEON |
+    eRendererType::SIMD_AVX | eRendererType::SIMD_AVX2 | eRendererType::SIMD_AVX512_FP16;
 // All GPU renderers
 const Bitmask<eRendererType> RendererGPU = Bitmask<eRendererType>{eRendererType::Vulkan} | eRendererType::DirectX12;
 

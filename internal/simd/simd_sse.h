@@ -42,6 +42,23 @@ template <> class fixed_size_simd<float, 4> {
     force_inline explicit fixed_size_simd(const float *f) { vec_ = _mm_loadu_ps(f); }
     force_inline fixed_size_simd(const float *f, vector_aligned_tag) { vec_ = _mm_load_ps(f); }
 
+#if defined(USE_AVX2) || defined(USE_AVX512)
+    static force_inline fixed_size_simd vectorcall load_f16(const unsigned short *p) {
+        return fixed_size_simd(_mm_cvtph_ps(_mm_loadl_epi64((const __m128i *)p)));
+    }
+    force_inline void vectorcall store_f16(unsigned short *p) const {
+        _mm_storel_epi64((__m128i *)p, _mm_cvtps_ph(vec_, _MM_FROUND_TO_NEAREST_INT));
+    }
+#else
+    static force_inline fixed_size_simd vectorcall load_f16(const unsigned short *p) {
+        return fixed_size_simd{_mm_setr_ps(float16::f16_to_f32(p[0]), float16::f16_to_f32(p[1]),
+                                           float16::f16_to_f32(p[2]), float16::f16_to_f32(p[3]))};
+    }
+    force_inline void vectorcall store_f16(unsigned short *p) const {
+        UNROLLED_FOR(i, 4, { p[i] = float16::f32_to_f16(comp_[i]); })
+    }
+#endif
+
     force_inline float operator[](const int i) const { return comp_[i]; }
 
     force_inline float operator[](const long i) const { return operator[](int(i)); }
