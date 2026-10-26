@@ -1696,7 +1696,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &rect, cons
                 const fvec2 lens_rand = get_scrambled_2d_rand(RAND_DIM_LENS, rand_hash, iteration - 1, rand_seq);
 
                 offset = 2.0f * lens_rand - fvec2{1.0f, 1.0f};
-                if (offset.get<0>() != 0.0f && offset.get<1>() != 0.0f) {
+                if (offset.get<0>() != 0.0f || offset.get<1>() != 0.0f) {
                     float theta, r;
                     if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
                         r = offset.get<0>();
@@ -4059,7 +4059,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
 
         fvec2 offset = 2.0f * fvec2{r1, r2} - fvec2{1.0f, 1.0f};
-        if (offset.get<0>() != 0.0f && offset.get<1>() != 0.0f) {
+        if (offset.get<0>() != 0.0f || offset.get<1>() != 0.0f) {
             float theta, r;
             if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
                 r = offset.get<0>();

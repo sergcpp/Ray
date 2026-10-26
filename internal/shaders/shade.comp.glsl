@@ -1407,7 +1407,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const vec3 light_v = l.DISK_V;
 
         vec2 offset = 2.0 * rand_light_uv - vec2(1.0);
-        if (offset[0] != 0.0 && offset[1] != 0.0) {
+        if (offset[0] != 0.0 || offset[1] != 0.0) {
             float theta, r;
             if (abs(offset[0]) > abs(offset[1])) {
                 r = offset[0];

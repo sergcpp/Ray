@@ -3667,8 +3667,9 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &rect, int w
                 fvec<S> sincos_theta[2];
                 portable_sincos(theta, sincos_theta[0], sincos_theta[1]);
 
-                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[0]) = 0.5f * r * sincos_theta[1] / cam.lens_ratio;
-                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[1]) = 0.5f * r * sincos_theta[0];
+                const ivec<S> mask = simd_cast(offset[0] != 0.0f | offset[1] != 0.0f);
+                where(mask, offset[0]) = 0.5f * r * sincos_theta[1] / cam.lens_ratio;
+                where(mask, offset[1]) = 0.5f * r * sincos_theta[0];
 
                 const float coc = 0.5f * (cam.focal_length / cam.fstop);
                 offset[0] *= coc * cam.sensor_height;
@@ -6642,7 +6643,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
             fvec<S> offset[2] = {2.0f * rand_light_uv[0] - 1.0f, 2.0f * rand_light_uv[1] - 1.0f};
-            const ivec<S> mask = simd_cast(offset[0] != 0.0f & offset[1] != 0.0f);
+            const ivec<S> mask = simd_cast(offset[0] != 0.0f | offset[1] != 0.0f);
             if (mask.not_all_zeros()) {
                 fvec<S> theta = 0.5f * PI - 0.25f * PI * safe_div(offset[0], offset[1]), r = offset[1];
 

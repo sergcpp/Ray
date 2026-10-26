@@ -110,7 +110,7 @@ void main() {
         const vec2 lens_rand = get_scrambled_2d_rand(RAND_DIM_LENS, rand_hash, g_params.iteration - 1);
 
         offset = 2.0 * lens_rand - vec2(1.0);
-        if (offset.x != 0.0 && offset.y != 0.0) {
+        if (offset.x != 0.0 || offset.y != 0.0) {
             float theta, r;
             if (abs(offset[0]) > abs(offset[1])) {
                 r = offset[0];
