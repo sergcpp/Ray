@@ -93,7 +93,8 @@ uint insert_entry(const vec3 p, const vec3 n, const cache_grid_params_t params) 
 }
 
 void accumulate_cache_voxel(const uint i, const vec3 r, const uint sample_data) {
-    const uvec3 data = uvec3(r * RAD_CACHE_RADIANCE_SCALE);
+    const vec3 rc = clamp(r, vec3(0.0), vec3(RAD_CACHE_RADIANCE_CLAMP));
+    const uvec3 data = uvec3(rc * RAD_CACHE_RADIANCE_SCALE);
     if (data.x > 0) {
         atomicAdd(g_inout_cache_voxels[4 * i + 0], data.x);
     }

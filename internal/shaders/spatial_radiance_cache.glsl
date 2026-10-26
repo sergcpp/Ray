@@ -124,11 +124,17 @@ uint64_t get_adjacent_level_hash(const uint64_t hash_key, const cache_grid_param
     const int camera_distance_prev = grid_dist2(camera_vector_prev);
 
     if (camera_distance_curr < camera_distance_prev) {
+        if (level >= int(HASH_GRID_LEVEL_BIT_MASK)) {
+            return uint64_t(HASH_GRID_INVALID_HASH_KEY);
+        }
         grid_pos = ivec3(floor(vec3(grid_pos) / params.log_base));
-        level = min(level + 1, int(HASH_GRID_LEVEL_BIT_MASK));
+        level = level + 1;
     } else {
+        if (level <= 1) {
+            return uint64_t(HASH_GRID_INVALID_HASH_KEY);
+        }
         grid_pos = ivec3(floor(vec3(grid_pos) * params.log_base));
-        level = max(level - 1, 1);
+        level = level - 1;
     }
 
     uint64_t modified_hash_key =

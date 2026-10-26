@@ -102,7 +102,8 @@ void main() {
             const uint64_t adjacent_level_hash = get_adjacent_level_hash(hash_key, grid_params);
 
             uint cache_entry = HASH_GRID_INVALID_CACHE_ENTRY, collisions_count;
-            if (hash_map_find(adjacent_level_hash, cache_entry, collisions_count)) {
+            if (adjacent_level_hash != HASH_GRID_INVALID_HASH_KEY &&
+                hash_map_find(adjacent_level_hash, cache_entry, collisions_count)) {
                 const cache_voxel_t adjacent_voxel_prev = unpack_voxel_data(g_in_cache_voxels_prev[cache_entry]);
                 const float adjacent_sample_count = adjacent_voxel_prev.sample_count;
                 if (adjacent_sample_count > RAD_CACHE_SAMPLE_COUNT_THRESHOLD) {
@@ -114,6 +115,7 @@ void main() {
             }
         }
 
+        accumulated_sample_count = min(accumulated_sample_count, RAD_CACHE_SAMPLE_COUNT_CLAMP);
         accumulated_radiance = min(accumulated_radiance, 65504.0);
 
         uvec4 packed_data = uvec4(0);
