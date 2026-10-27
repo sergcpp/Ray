@@ -68,11 +68,17 @@ uint64_t get_adjacent_level_hash(const uint64_t hash_key, const cache_grid_param
     const int camera_distance_prev = grid_dist2(camera_vector_prev);
 
     if (camera_distance_curr < camera_distance_prev) {
+        if (level >= int(HASH_GRID_LEVEL_BIT_MASK)) {
+            return uint64_t(HASH_GRID_INVALID_HASH_KEY);
+        }
         grid_pos = ivec4(floor(fvec4(grid_pos) / params.log_base));
-        level = std::min(level + 1, int(HASH_GRID_LEVEL_BIT_MASK));
+        level = level + 1;
     } else {
+        if (level <= 1) {
+            return uint64_t(HASH_GRID_INVALID_HASH_KEY);
+        }
         grid_pos = ivec4(floor(fvec4(grid_pos) * params.log_base));
-        level = std::max(level - 1, 1);
+        level = level - 1;
     }
 
     uint64_t modified_hash_key =
@@ -130,7 +136,8 @@ fvec4 hash_grid_debug(const fvec4 &p, const fvec4 &n, const cache_grid_params_t 
 }
 
 void accumulate_cache_voxel(packed_cache_voxel_t &voxel, const fvec4 &r, const uint32_t sample_data) {
-    const uvec4 data = uvec4(r * RAD_CACHE_RADIANCE_SCALE);
+    const fvec4 rc = clamp(r, fvec4(0.0f), fvec4(RAD_CACHE_RADIANCE_CLAMP));
+    const uvec4 data = uvec4(rc * RAD_CACHE_RADIANCE_SCALE);
 
     if (data.get<0>()) {
         Ray_InterlockedExchangeAdd(&voxel.v[0], data.get<0>());
@@ -290,7 +297,8 @@ void Ray::Ref::SpatialCacheResolve(const cache_grid_params_t &params, Span<uint6
             const uint64_t adjacent_level_hash = get_adjacent_level_hash(hash_key, params);
 
             uint32_t cache_entry = HASH_GRID_INVALID_CACHE_ENTRY, collisions_count;
-            if (hash_map_find(entries, adjacent_level_hash, cache_entry, collisions_count)) {
+            if (adjacent_level_hash != HASH_GRID_INVALID_HASH_KEY &&
+                hash_map_find(entries, adjacent_level_hash, cache_entry, collisions_count)) {
                 const cache_voxel_t adjacent_voxel_prev = unpack_voxel_data(voxels_prev[cache_entry]);
                 const float adjacent_sample_count = adjacent_voxel_prev.sample_count;
                 if (adjacent_sample_count > RAD_CACHE_SAMPLE_COUNT_THRESHOLD) {
@@ -304,6 +312,7 @@ void Ray::Ref::SpatialCacheResolve(const cache_grid_params_t &params, Span<uint6
             }
         }
 
+        accumulated_sample_count = std::min(accumulated_sample_count, RAD_CACHE_SAMPLE_COUNT_CLAMP);
         accumulated_radiance = min(accumulated_radiance, 65504.0f);
 
         packed_cache_voxel_t packed_data = {};

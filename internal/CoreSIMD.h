@@ -9371,7 +9371,8 @@ force_inline uint32_t hash64(const uint64_t hash_key) {
 }
 
 void accumulate_cache_voxel(packed_cache_voxel_t &voxel, const fvec4 &r, const uint32_t sample_data) {
-    const uvec4 data = uvec4(r * RAD_CACHE_RADIANCE_SCALE);
+    const fvec4 rc = clamp(r, fvec4(0.0f), fvec4(RAD_CACHE_RADIANCE_CLAMP));
+    const uvec4 data = uvec4(rc * RAD_CACHE_RADIANCE_SCALE);
 
     if (data.get<0>()) {
         Ray_InterlockedExchangeAdd(&voxel.v[0], data.get<0>());
