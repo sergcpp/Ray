@@ -1,7 +1,7 @@
 using namespace Ray::NS;
 
 {
-    printf("Test fvec4    (%s)     | ", fvec4::is_native() ? "hard" : "soft");
+    printf("Test fvec4    (%s)    | ", fvec4::is_native() ? "hard" : "soft");
 
     fvec4 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f};
 
@@ -410,7 +410,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test ivec4    (%s)     | ", ivec4::is_native() ? "hard" : "soft");
+    printf("Test ivec4    (%s)    | ", ivec4::is_native() ? "hard" : "soft");
 
     ivec4 v1, v2 = {42}, v3 = {1, 2, 3, 4};
 
@@ -662,7 +662,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test uvec4    (%s)     | ", uvec4::is_native() ? "hard" : "soft");
+    printf("Test uvec4    (%s)    | ", uvec4::is_native() ? "hard" : "soft");
 
     uvec4 v1, v2 = {42}, v3 = {1, 2, 3, 4};
 
@@ -883,7 +883,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test fvec8    (%s)     | ", fvec8::is_native() ? "hard" : "soft");
+    printf("Test fvec8    (%s)    | ", fvec8::is_native() ? "hard" : "soft");
 
     fvec8 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
 
@@ -1317,7 +1317,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test ivec8    (%s)     | ", ivec8::is_native() ? "hard" : "soft");
+    printf("Test ivec8    (%s)    | ", ivec8::is_native() ? "hard" : "soft");
 
     ivec8 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -1591,7 +1591,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test uvec8    (%s)     | ", uvec8::is_native() ? "hard" : "soft");
+    printf("Test uvec8    (%s)    | ", uvec8::is_native() ? "hard" : "soft");
 
     uvec8 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -1852,7 +1852,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test fvec16   (%s)     | ", fvec16::is_native() ? "hard" : "soft");
+    printf("Test fvec16   (%s)    | ", fvec16::is_native() ? "hard" : "soft");
 
     fvec16 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,
                                    9.0f, 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f};
@@ -2519,7 +2519,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test ivec16   (%s)     | ", ivec16::is_native() ? "hard" : "soft");
+    printf("Test ivec16   (%s)    | ", ivec16::is_native() ? "hard" : "soft");
 
     ivec16 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
@@ -2971,7 +2971,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test uvec16   (%s)     | ", uvec16::is_native() ? "hard" : "soft");
+    printf("Test uvec16   (%s)    | ", uvec16::is_native() ? "hard" : "soft");
 
     uvec16 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
@@ -3403,7 +3403,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test f16vec8  (%s)     | ", f16vec8::is_native() ? "hard" : "soft");
+    printf("Test f16vec8  (%s)    | ", f16vec8::is_native() ? "hard" : "soft");
 
     // v2={4,5,6,7,8,10,11,12}, v9={3,5,7,6,9,12,11,11}
     // equal at lanes 1 (5==5) and 6 (11==11)
@@ -3676,7 +3676,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test f16vec16 (%s)     | ", f16vec16::is_native() ? "hard" : "soft");
+    printf("Test f16vec16 (%s)    | ", f16vec16::is_native() ? "hard" : "soft");
 
     // same pattern as f16vec8, repeated for both halves
     f16vec16 v1 = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
@@ -4006,7 +4006,7 @@ using namespace Ray::NS;
     printf("OK\n");
 }
 {
-    printf("Test f16vec32 (%s)     | ", f16vec32::is_native() ? "hard" : "soft");
+    printf("Test f16vec32 (%s)    | ", f16vec32::is_native() ? "hard" : "soft");
 
     // v1[i] = i+1 in {1..32}, v2[i] = 32-i in {1..32}
     Ray::float16 src1[32], src2[32];

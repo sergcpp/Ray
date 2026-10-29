@@ -1116,7 +1116,7 @@ void schedule_render_jobs(ThreadPool &threads, Ray::RendererBase &renderer, cons
         auto render_job = [&](const int j, const int portion) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
-                _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+                _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE, _MCW_EM);
             }
 #endif
             for (int i = 0; i < portion; ++i) {

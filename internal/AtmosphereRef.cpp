@@ -962,7 +962,9 @@ void Ray::Ref::ShadeSky(const pass_settings_t &ps, const float limit, Span<const
 
         float pdf_factor;
         if (USE_HIERARCHICAL_NEE) {
-            pdf_factor = (get_total_depth(r.depth) < ps.max_total_depth) ? safe_div_pos(1.0f, inter.u) : -1.0f;
+            // inter.u == 0 on no-sky-pick lanes: keep pdf_factor finite, IEEE inf would poison cos_theta*pdf (0*inf)
+            pdf_factor =
+                (get_total_depth(r.depth) < ps.max_total_depth) ? 1.0f / (inter.u > 0.0f ? inter.u : FLT_EPS) : -1.0f;
         } else {
             pdf_factor = (get_total_depth(r.depth) < ps.max_total_depth) ? float(sc.li_indices.size()) : -1.0f;
         }
@@ -999,13 +1001,13 @@ void Ray::Ref::ShadeSky(const pass_settings_t &ps, const float limit, Span<const
                 const auto *qtree_mips = reinterpret_cast<const fvec4 *const *>(sc.env.qtree_mips);
 
                 const float light_pdf =
-                    safe_div_pos(Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env.qtree_levels, I), pdf_factor);
+                    Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env.qtree_levels, I) / pdf_factor;
                 const float bsdf_pdf = r.pdf;
 
                 const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
                 color *= mis_weight;
             } else {
-                const float light_pdf = safe_div_pos(0.5f, PI * pdf_factor);
+                const float light_pdf = 0.5f / (PI * pdf_factor);
                 const float bsdf_pdf = r.pdf;
 
                 const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);

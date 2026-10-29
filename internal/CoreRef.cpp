@@ -1473,7 +1473,12 @@ force_inline float angle_between(const fvec4 &v1, const fvec4 &v2) {
     }
 }
 
-force_inline float tan_angle(const fvec4 &a, const fvec4 &b) { return safe_div(length(cross(a, b)), dot(a, b)); }
+// guard is semantic, not exception-only: dot == +-0 must clamp, else spread_attenuation gets -inf -> inf attenuation
+// (REF form: FLT_MAX stub, not a quotient - bit-identical inline of the old safe_div)
+force_inline float tan_angle(const fvec4 &a, const fvec4 &b) {
+    const float d = dot(a, b);
+    return d != 0.0f ? (length(cross(a, b)) / d) : FLT_MAX;
+}
 
 float spread_attenuation(const fvec4 &D, const fvec4 &light_fwd, const float tan_half_spread,
                          const float spread_normalization) {
@@ -1530,7 +1535,7 @@ float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos,
         // compute cu
         const float au = Xi.get<0>() * area + k;
         const fvec2 sincos_au = portable_sincos(au);
-        const float fu = safe_div((sincos_au.get<1>() * b0 - b1), sincos_au.get<0>());
+        const float fu = (sincos_au.get<1>() * b0 - b1) / sincos_au.get<0>();
         float cu = 1.0f / sqrtf(fu * fu + b0sq) * (fu > 0.0f ? 1.0f : -1.0f);
         cu = clamp(cu, -1.0f, 1.0f);
         // compute xu
@@ -1560,6 +1565,12 @@ float Ray::Ref::SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const f
     // Setup spherical triangle
     const fvec4 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
 
+    // duplicated projected vertices (dup pos or P collinear with an edge) degrade the angle algebra
+    // (area becomes a garbage passing angle) and make the s/t divisions hit exact 0/0
+    if (dot(A, B) >= 1.0f || dot(A, C) >= 1.0f || dot(B, C) >= 1.0f) {
+        return 0.0f;
+    }
+
     // calculate internal angles of spherical triangle: alpha, beta and gamma
     const fvec4 BA = orthogonalize(A, B - A);
     const fvec4 CA = orthogonalize(A, C - A);
@@ -1573,7 +1584,7 @@ float Ray::Ref::SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const f
     const float gamma = angle_between(BC, AC);
 
     const float area = alpha + beta + gamma - PI;
-    if (area <= SPHERICAL_AREA_THRESHOLD) {
+    if (!(area > SPHERICAL_AREA_THRESHOLD)) { // NaN-safe: degenerate vertex trees fall back to area sampling
         return 0.0f;
     }
 
@@ -1598,16 +1609,20 @@ float Ray::Ref::SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const f
 
         // Compute the s coordinate as normalized arc length from A to C_s
         const float denom = ((v * p + u * q) * sincos_alpha.get<0>());
+        // exact-zero denoms (coplanar/edge degenerates) do occur here: inf denom reproduces the old guarded quotient
         const float s =
-            safe_div(1.0f, b) *
-            portable_acosf(clamp(safe_div(((v * q - u * p) * sincos_alpha.get<1>() - v), denom), -1.0f, 1.0f));
+            (1.0f / b) *
+            portable_acosf(
+                clamp(((v * q - u * p) * sincos_alpha.get<1>() - v) / (denom != 0.0f ? denom : INFINITY), -1.0f, 1.0f));
 
         // Compute the third vertex of the sub - triangle
         const fvec4 C_s = slerp(A, C, s);
 
         // Compute the t coordinate using C_s and Xi[1]
         const float denom2 = portable_acosf(clamp(dot(C_s, B), -1.0f, 1.0f));
-        const float t = safe_div(portable_acosf(clamp(1.0f - Xi.get<1>() * (1.0f - dot(C_s, B)), -1.0f, 1.0f)), denom2);
+        // C_s landing on B gives denom2 == 0 with an always-0 numerator: inf denom keeps it out of 0/0
+        const float t = portable_acosf(clamp(1.0f - Xi.get<1>() * (1.0f - dot(C_s, B)), -1.0f, 1.0f)) /
+                        (denom2 != 0.0f ? denom2 : INFINITY);
 
         // Construct the corresponding point on the sphere.
         (*out_dir) = slerp(B, C_s, t);
@@ -3728,10 +3743,10 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 
                 if (trans_r > mix_val) {
                     mat = &sc.materials[mat->textures[MIX_MAT1]];
-                    trans_r = safe_div_pos(trans_r - mix_val, 1.0f - mix_val);
+                    trans_r = (trans_r - mix_val) / (1.0f - mix_val);
                 } else {
                     mat = &sc.materials[mat->textures[MIX_MAT2]];
-                    trans_r = safe_div_pos(trans_r, mix_val);
+                    trans_r = trans_r / mix_val;
                 }
             }
 
@@ -4168,7 +4183,9 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
             const fvec4 pvec = cross(ls.L, e2);
             const fvec4 tvec = P - p1, qvec = cross(tvec, e1);
 
-            const float inv_det = safe_div(1.0f, dot(e1, pvec));
+            // coplanar P => det == 0: inf denom gives exact-0 inv (old safe_div value), kills 0 * inf INVALID
+            const float det = dot(e1, pvec);
+            const float inv_det = 1.0f / (det != 0.0f ? det : INFINITY);
             const float tri_u = dot(tvec, pvec) * inv_det, tri_v = dot(ls.L, qvec) * inv_det;
 
             lp = (1.0f - tri_u - tri_v) * p1 + tri_u * p2 + tri_v * p3;
@@ -4183,7 +4200,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
             ls.L = normalize_len(lp - P, ls_dist);
 
             const float cos_theta = -dot(ls.L, light_forward);
-            pdf = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
+            pdf = (ls_dist * ls_dist) / fmaxf(ls.area * cos_theta, FLT_EPS);
         }
 
         float cos_theta = -dot(ls.L, light_forward);
@@ -4425,7 +4442,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
                         const float plane_dist = dot(light_forward, light_pos);
                         const float cos_theta = dot(rd, light_forward);
-                        const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
+                        const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
                         if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                             light_u /= dot(light_u, light_u);
@@ -4699,7 +4716,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
                     const float plane_dist = dot(light_forward, light_pos);
                     const float cos_theta = dot(rd, light_forward);
-                    const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
+                    const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
                     if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                         light_u /= dot(light_u, light_u);
@@ -4897,7 +4914,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 
                     const float plane_dist = dot(light_forward, light_pos);
                     const float cos_theta = dot(rd, light_forward);
-                    const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
+                    const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
                     if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                         light_u /= dot(light_u, light_u);
@@ -5071,7 +5088,7 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t>
 
                 const float plane_dist = dot(light_forward, light_pos);
                 const float cos_theta = dot(rd, light_forward);
-                const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
+                const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
                 if (cos_theta < 0.0f && t > HIT_EPS && t < rdist) {
                     light_u /= dot(light_u, light_u);
@@ -5185,7 +5202,7 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t>
 
                     const float plane_dist = dot(light_forward, light_pos);
                     const float cos_theta = dot(rd, light_forward);
-                    const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
+                    const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
                     if (cos_theta < 0.0f && t > HIT_EPS && t < rdist) {
                         light_u /= dot(light_u, light_u);

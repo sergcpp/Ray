@@ -31,8 +31,6 @@
 
 #pragma pop_macro("NS")
 
-#define USE_SAFE_MATH 1
-
 namespace Ray {
 namespace Cpu {
 class TexStorageBase;
@@ -158,37 +156,7 @@ force_inline float construct_float(uint32_t m) {
 
 force_inline float fract(const float v) { return v - floorf(v); }
 
-force_inline float safe_sqrt(float val) {
-#if USE_SAFE_MATH
-    return sqrtf(fmaxf(val, 0.0f));
-#else
-    return sqrtf(val);
-#endif
-}
-
-force_inline float safe_div(const float a, const float b) {
-#if USE_SAFE_MATH
-    return b != 0.0f ? (a / b) : FLT_MAX;
-#else
-    return (a / b)
-#endif
-}
-
-force_inline float safe_div_pos(const float a, const float b) {
-#if USE_SAFE_MATH
-    return a / fmaxf(b, FLT_EPS);
-#else
-    return (a / b)
-#endif
-}
-
-force_inline float safe_div_neg(const float a, const float b) {
-#if USE_SAFE_MATH
-    return a / fminf(b, -FLT_EPS);
-#else
-    return (a / b)
-#endif
-}
+force_inline float safe_sqrt(float val) { return sqrtf(fmaxf(val, 0.0f)); }
 
 force_inline void safe_invert(const float v[3], float out_v[3]) {
     for (int i = 0; i < 3; ++i) {
@@ -197,12 +165,8 @@ force_inline void safe_invert(const float v[3], float out_v[3]) {
 }
 
 force_inline fvec4 safe_normalize(const fvec4 &a) {
-#if USE_SAFE_MATH
     const float l = length(a);
     return l > 0.0f ? (a / l) : a;
-#else
-    return normalize(a);
-#endif
 }
 
 force_inline fvec4 srgb_to_linear(const fvec4 &col) {
@@ -543,5 +507,3 @@ fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const 
 
 } // namespace Ref
 } // namespace Ray
-
-#undef USE_SAFE_MATH

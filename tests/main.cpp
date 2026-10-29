@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
     // Workaround for Intel SDE crash
     enable_fp_exceptions &= !preferred_arch[0] || strcmp(preferred_arch[0], "AVX") != 0;
     if (enable_fp_exceptions) {
-        _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+        _controlfp_s(nullptr, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE, _MCW_EM);
         g_catch_flt_exceptions = true;
     }
 #endif
