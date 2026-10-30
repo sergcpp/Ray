@@ -125,10 +125,11 @@ template <ePostOp PostOp> force_inline float output(float val) {
 
 // uint16_t is the f16 tensor storage element type (see CoreSIMD.h tensor_t). f16 vector paths
 // require the hardware f16vec8 - a soft fallback here would silently change UNet numerics.
-template <bool Half> using conv_vec = std::conditional_t<Half, f16vec<8>, fvec<8>>;
+// Float vectors must be S-wide to match step: REF/SSE41 conv run at S=4, AVX512 fallback at S=16.
+template <bool Half, int S> using conv_vec = std::conditional_t<Half, f16vec<8>, fvec<S>>;
 
 template <bool Half, int S> struct conv_traits {
-    using V = conv_vec<Half>;
+    using V = conv_vec<Half, S>;
     static constexpr int step = Half ? 8 : S; // f16 vectors are 8 lanes; float vectors follow S
     static constexpr int bias_type = Half ? 1 : 0;
     static_assert(sizeof(f16vec8) == 16, "f16 conv step assumes 8 f16 lanes per vector");
@@ -173,7 +174,7 @@ void Convolution3x3(const TD *restrict data, const rect_t &rect, const int w, co
     static_assert(!std::is_same_v<TD, uint16_t> || half_w, "f16 conv tensors need f16 weights");
     using V = typename conv_traits<half_w, S>::V;
     constexpr int step = conv_traits<half_w, S>::step;
-    assert(V::is_native());
+    assert(!half_w || V::is_native()); // only the f16 path forbids soft vectors; REF/SSE41 float is soft by design
 
     const int RoundedTriple = 8 * ((3 * InChannels + 7) / 8); // stride and offset must be aligned
 
@@ -310,7 +311,7 @@ void Convolution3x3(const float *restrict data1, const float *restrict data2, co
     static_assert(std::is_same_v<TT, TW>, "staged tensor must match the conv vector type");
     using V = typename conv_traits<half_w, S>::V;
     constexpr int step = conv_traits<half_w, S>::step;
-    assert(V::is_native());
+    assert(!half_w || V::is_native()); // only the f16 path forbids soft vectors; REF/SSE41 float is soft by design
 
     const int RoundedTriple = 8 * ((3 * InChannels123 + 7) / 8); // stride and offset must be aligned
     const int stride123 = rect.w + 2;
@@ -400,7 +401,7 @@ void ConvolutionConcat3x3(const TD1 *restrict data1, const TD2 *restrict data2, 
     static_assert(!std::is_same_v<TD2, uint16_t> || half_w, "f16 conv tensors need f16 weights");
     using V = typename conv_traits<half_w, S>::V;
     constexpr int step = conv_traits<half_w, S>::step;
-    assert(V::is_native());
+    assert(!half_w || V::is_native()); // only the f16 path forbids soft vectors; REF/SSE41 float is soft by design
 
     const int RoundedTriple1 = 8 * ((3 * InChannels1 + 7) / 8),
               RoundedTriple2 = 8 * ((3 * InChannels2 + 7) / 8); // stride and offset must be aligned
@@ -572,7 +573,7 @@ void ConvolutionConcat3x3(const TD *restrict data1, const float *restrict data2,
     static_assert(std::is_same_v<TT, TW>, "staged tensor must match the conv vector type");
     using V = typename conv_traits<half_w, S>::V;
     constexpr int step = conv_traits<half_w, S>::step;
-    assert(V::is_native());
+    assert(!half_w || V::is_native()); // only the f16 path forbids soft vectors; REF/SSE41 float is soft by design
 
     const int RoundedTriple1 = 8 * ((3 * InChannels1 + 7) / 8),
               RoundedTriple2 = 8 * ((3 * InChannels234 + 7) / 8); // stride and offset must be aligned
