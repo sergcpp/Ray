@@ -196,7 +196,9 @@ if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND NOT "${CMAKE_APPLE_SIL
         set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
         set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
         if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            set_source_files_properties(internal/RendererAVX512FP16.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX512 /mavx512fp16")
+            # clang-cl rejects the MSVC-style '/mavx512fp16' (treats it as a file name); use the GNU-style flags
+            set_source_files_properties(internal/RendererAVX512FP16.cpp PROPERTIES COMPILE_FLAGS
+                "-mavx2 -mfma -mf16c -mavx512f -mavx512bw -mavx512dq -mavx512vl -mavx512fp16")
         else()
             set_source_files_properties(internal/RendererAVX512FP16.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
         endif()
