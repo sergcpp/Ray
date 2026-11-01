@@ -32,8 +32,8 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             descr_sizes.cbv_srv_uav_count += b.handle.count;
             descr_sizes.sampler_count += b.handle.count;
         } else if (b.trg == eBindTarget::Tex || b.trg == eBindTarget::TexArray || b.trg == eBindTarget::UBuf ||
-                   b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO || b.trg == eBindTarget::SBufRW ||
-                   b.trg == eBindTarget::Image || b.trg == eBindTarget::AccStruct) {
+                   b.trg == eBindTarget::SBufRO || b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image ||
+                   b.trg == eBindTarget::AccStruct) {
             descr_sizes.cbv_srv_uav_count += b.handle.count;
         } else if (b.trg == eBindTarget::Sampler) {
             descr_sizes.sampler_count += b.handle.count;

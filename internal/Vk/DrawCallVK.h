@@ -38,8 +38,9 @@ enum class eBindTarget : uint16_t {
     SBufRO,
     SBufRW,
     Image,
-    Sampler,
     AccStruct,
+    Sampler,
+    DescrTable, // DX-only: bindless SRV/sampler tables; VK binds pre-built descriptor sets in-scene
     _Count
 };
 

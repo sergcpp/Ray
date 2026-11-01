@@ -28,14 +28,13 @@ enum class eBindTarget : uint16_t {
     // TODO: remove these two!
     TexArray,
     TexArraySampled,
-    TBuf,
     UBuf,
     SBufRO,
     SBufRW,
     Image,
     AccStruct,
     Sampler,
-    DescrTable, // TODO: This does not belong here!
+    DescrTable, // DX-only: bindless SRV/sampler tables; VK binds pre-built descriptor sets in-scene
     _Count
 };
 
