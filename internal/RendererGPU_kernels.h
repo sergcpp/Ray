@@ -21,6 +21,12 @@
 #include "shaders/spatial_cache_resolve_interface.h"
 #include "shaders/spatial_cache_update_interface.h"
 
+// Bindless set binding is backend-specific (VK descriptor set vs DX descriptor table)
+namespace Ray::NS {
+void BindBindlessExtra(Context &ctx, CommandBuffer cmd_buf, const Pipeline &pipeline,
+                       const BindlessTexData &bindless_tex, SmallVector<Binding, 32> &bindings);
+} // namespace Ray::NS
+
 void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, const uint32_t rand_seed,
                                                    const rect_t &rect, const int img_w, const int img_h,
                                                    const Buffer &rand_seq, const Buffer &filter_table,
@@ -87,13 +93,13 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
                                               {&inout_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBufRO, IntersectAreaLights::RAYS_BUF_SLOT, rays},
-                                {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
-                                {eBindTarget::SBufRO, IntersectAreaLights::CWNODES_BUF_SLOT, sc_data.light_cwnodes},
-                                {eBindTarget::SBufRO, IntersectAreaLights::LIGHT_LEAF_PRIMS_BUF_SLOT,
-                                 sc_data.light_leaf_prims},
-                                {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
+    const Binding bindings[] = {
+        {eBindTarget::SBufRO, IntersectAreaLights::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
+        {eBindTarget::SBufRO, IntersectAreaLights::CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, IntersectAreaLights::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
+        {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
 
     IntersectAreaLights::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
@@ -799,7 +805,7 @@ void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const 
 
     const Binding bindings[] = {
         {eBindTarget::SBufRO, CacheResolve::IN_CACHE_VOXELS_PREV_BUF_SLOT, inout_voxels_prev},
-        {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries}, 
+        {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_ENTRIES_BUF_SLOT, inout_entries},
         {eBindTarget::SBufRW, CacheResolve::INOUT_CACHE_VOXELS_CURR_BUF_SLOT, inout_voxels_curr}};
 
     CacheResolve::Params uniform_params = {};
@@ -912,4 +918,426 @@ inline void Ray::NS::Renderer::kernel_ShadeSkySecondary(
     const float limit = (clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX;
     kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, counters, sc_data,
                     iteration, out_img);
+}
+
+void Ray::NS::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &ps,
+                                              const scene_data_t &sc_data, const Buffer &rand_seq,
+                                              const uint32_t rand_seed, const int iteration, const rect_t &rect,
+                                              const uint32_t node_index, const float cam_fwd[3], const float clip_dist,
+                                              Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              const Buffer &rays, const Buffer &out_hits) {
+    const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
+                                              {&out_hits, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBufRO, IntersectScene::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBufRO, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBufRO, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBufRO, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, rand_seq},
+        {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
+
+    if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
+
+        BindBindlessExtra(*ctx_, cmd_buf, pi_.intersect_scene, bindless_tex, bindings);
+    } else {
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+    }
+
+    if (use_hwrt_) {
+        bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
+    } else {
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
+    }
+
+    IntersectScene::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.node_index = node_index;
+    uniform_params.clip_dist = clip_dist;
+    uniform_params.min_transp_depth = ps.min_transp_depth;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
+    if (cam_fwd) {
+        memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
+    }
+
+    const uint32_t grp_count[3] = {
+        uint32_t((rect.w + IntersectScene::LOCAL_GROUP_SIZE_X - 1) / IntersectScene::LOCAL_GROUP_SIZE_X),
+        uint32_t((rect.h + IntersectScene::LOCAL_GROUP_SIZE_Y - 1) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
+
+    DispatchCompute(cmd_buf, pi_.intersect_scene, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::NS::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args,
+                                              const int indir_args_index, const Buffer &counters,
+                                              const pass_settings_t &ps, const scene_data_t &sc_data,
+                                              const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
+                                              uint32_t node_index, const float cam_fwd[3], const float clip_dist,
+                                              Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              const Buffer &rays, const Buffer &out_hits) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&counters, eResState::ShaderResource},
+                                              {&rays, eResState::UnorderedAccess},
+                                              {&out_hits, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBufRO, IntersectScene::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBufRO, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBufRO, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBufRO, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, rand_seq},
+        {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, IntersectScene::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
+
+    if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
+
+        BindBindlessExtra(*ctx_, cmd_buf, pi_.intersect_scene_indirect, bindless_tex, bindings);
+    } else {
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+    }
+
+    if (use_hwrt_) {
+        bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
+    } else {
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims);
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
+    }
+
+    IntersectScene::Params uniform_params = {};
+    uniform_params.node_index = node_index;
+    uniform_params.clip_dist = clip_dist;
+    uniform_params.min_transp_depth = ps.min_transp_depth;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
+    if (cam_fwd) {
+        memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
+    }
+
+    DispatchComputeIndirect(cmd_buf, pi_.intersect_scene_indirect, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::NS::Renderer::kernel_ShadePrimaryHits(
+    CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, const environment_t &env,
+    const Buffer &indir_args, const int indir_args_index, const Buffer &hits, const Buffer &rays,
+    const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
+    const rect_t &rect, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Image &out_img,
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
+    const Image &out_base_color, const Image &out_depth_normals) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&hits, eResState::ShaderResource},
+                                              {&rays, eResState::ShaderResource},
+                                              {&rand_seq, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess},
+                                              {&out_rays, eResState::UnorderedAccess},
+                                              {&out_sh_rays, eResState::UnorderedAccess},
+                                              {&out_sky_rays, eResState::UnorderedAccess},
+                                              {&inout_counters, eResState::UnorderedAccess},
+                                              {&out_base_color, eResState::UnorderedAccess},
+                                              {&out_depth_normals, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
+        {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
+        {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
+        {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
+        {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+        {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
+        {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, Shade::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
+        {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+        {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
+        {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
+        {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
+        {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::SHEEN_LTC_LUT_SLOT, sheen_ltc_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_E_LUT_SLOT, ggx_e_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_EAVG_LUT_SLOT, ggx_eavg_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_E_GLASS_LUT_SLOT, ggx_e_glass_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_E_GLASS_INV_LUT_SLOT, ggx_e_glass_inv_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_LUT_SLOT, ggx_eavg_glass_lut_);
+    bindings.emplace_back(eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_INV_LUT_SLOT, ggx_eavg_glass_inv_lut_);
+    if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
+        bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
+    }
+    if (cache_usage == eSpatialCacheMode::Query) {
+        bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_ENTRIES_BUF_SLOT, sc_data.spatial_cache_entries);
+        bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_VOXELS_BUF_SLOT, sc_data.spatial_cache_voxels);
+    }
+    if (out_base_color) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
+    }
+    if (out_depth_normals) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
+    }
+
+    Shade::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.iteration = iteration;
+    uniform_params.li_count = sc_data.li_count;
+    uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
+    uniform_params.regularize_alpha = ps.regularize_alpha;
+
+    uniform_params.max_ray_depth =
+        Ref::pack_ray_depth(ps.max_diff_depth, ps.max_spec_depth, ps.max_refr_depth, ps.max_transp_depth);
+    uniform_params.max_total_depth = ps.max_total_depth;
+    uniform_params.min_total_depth = ps.min_total_depth;
+
+    uniform_params.rand_seed = rand_seed;
+
+    memcpy(&uniform_params.env_col[0], env.env_col, 3 * sizeof(float));
+    memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
+    memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
+    memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
+
+    uniform_params.env_map_res = env.env_map_res;
+    uniform_params.back_map_res = env.back_map_res;
+
+    uniform_params.env_rotation = env.env_map_rotation;
+    uniform_params.back_rotation = env.back_map_rotation;
+    uniform_params.env_light_index = sc_data.env.light_index;
+
+    uniform_params.sky_map_spread_angle = env.sky_map_spread_angle;
+
+    uniform_params.limit_direct = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
+    uniform_params.limit_indirect = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
+
+    memcpy(&uniform_params.cam_pos_and_exposure[0], sc_data.spatial_cache_grid.cam_pos_curr, 3 * sizeof(float));
+    uniform_params.cam_pos_and_exposure[3] = sc_data.spatial_cache_grid.exposure;
+
+    Pipeline *pi = &pi_.shade_primary;
+    if (cache_usage == eSpatialCacheMode::Update) {
+        pi = &pi_.shade_primary_cache_update;
+    } else if (cache_usage == eSpatialCacheMode::Query) {
+        if (sc_data.env.sky_map_spread_angle > 0.0f) {
+            pi = &pi_.shade_primary_cache_query_sky;
+        } else {
+            pi = &pi_.shade_primary_cache_query;
+        }
+    } else if (sc_data.env.sky_map_spread_angle > 0.0f) {
+        pi = &pi_.shade_primary_sky;
+    }
+
+    if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
+
+        BindBindlessExtra(*ctx_, cmd_buf, *pi, bindless_tex, bindings);
+    } else {
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+    }
+
+    DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
+                            &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::NS::Renderer::kernel_ShadeSecondaryHits(
+    CommandBuffer cmd_buf, const pass_settings_t &ps, const eSpatialCacheMode cache_usage, float clamp_direct,
+    const environment_t &env, const Buffer &indir_args, const int indir_args_index, const Buffer &hits,
+    const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
+    const int iteration, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Image &out_img,
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
+    const Image &out_base_color, const Image &out_depth_normals) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&hits, eResState::ShaderResource},
+                                              {&rays, eResState::ShaderResource},
+                                              {&rand_seq, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess},
+                                              {&out_rays, eResState::UnorderedAccess},
+                                              {&out_sh_rays, eResState::UnorderedAccess},
+                                              {&out_sky_rays, eResState::UnorderedAccess},
+                                              {&inout_counters, eResState::UnorderedAccess},
+                                              {&out_base_color, eResState::UnorderedAccess},
+                                              {&out_depth_normals, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
+        {eBindTarget::SBufRO, Shade::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, Shade::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
+        {eBindTarget::SBufRO, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
+        {eBindTarget::SBufRO, Shade::TRIS_BUF_SLOT, sc_data.tris},
+        {eBindTarget::SBufRO, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBufRO, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBufRO, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+        {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, rand_seq},
+        {eBindTarget::SBufRO, Shade::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, Shade::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
+        {eBindTarget::Tex, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+        {eBindTarget::TexSampled, Shade::SHEEN_LTC_LUT_SLOT, sheen_ltc_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_E_LUT_SLOT, ggx_e_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_EAVG_LUT_SLOT, ggx_eavg_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_E_GLASS_LUT_SLOT, ggx_e_glass_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_E_GLASS_INV_LUT_SLOT, ggx_e_glass_inv_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_LUT_SLOT, ggx_eavg_glass_lut_},
+        {eBindTarget::TexSampled, Shade::GGX_EAVG_GLASS_INV_LUT_SLOT, ggx_eavg_glass_inv_lut_},
+        {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
+        {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
+        {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
+        {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
+        bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
+    }
+    if (cache_usage == eSpatialCacheMode::Query) {
+        bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_ENTRIES_BUF_SLOT, sc_data.spatial_cache_entries);
+        bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_VOXELS_BUF_SLOT, sc_data.spatial_cache_voxels);
+    }
+    if (out_base_color) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
+    }
+    if (out_depth_normals) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
+    }
+
+    Shade::Params uniform_params = {};
+    uniform_params.iteration = iteration;
+    uniform_params.li_count = sc_data.li_count;
+    uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
+    uniform_params.regularize_alpha = ps.regularize_alpha;
+
+    uniform_params.max_ray_depth =
+        Ref::pack_ray_depth(ps.max_diff_depth, ps.max_spec_depth, ps.max_refr_depth, ps.max_transp_depth);
+    uniform_params.max_total_depth = ps.max_total_depth;
+    uniform_params.min_total_depth = ps.min_total_depth;
+
+    uniform_params.rand_seed = rand_seed;
+
+    memcpy(&uniform_params.env_col[0], env.env_col, 3 * sizeof(float));
+    memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
+    memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
+    memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
+
+    uniform_params.env_map_res = env.env_map_res;
+    uniform_params.back_map_res = env.back_map_res;
+
+    uniform_params.env_rotation = env.env_map_rotation;
+    uniform_params.back_rotation = env.back_map_rotation;
+    uniform_params.env_light_index = sc_data.env.light_index;
+
+    uniform_params.sky_map_spread_angle = env.sky_map_spread_angle;
+
+    uniform_params.limit_direct = (clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX;
+    uniform_params.limit_indirect = (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX;
+
+    memcpy(&uniform_params.cam_pos_and_exposure[0], sc_data.spatial_cache_grid.cam_pos_curr, 3 * sizeof(float));
+    uniform_params.cam_pos_and_exposure[3] = sc_data.spatial_cache_grid.exposure;
+
+    Pipeline *pi = &pi_.shade_secondary;
+    if (cache_usage == eSpatialCacheMode::Update) {
+        pi = &pi_.shade_secondary_cache_update;
+    } else if (cache_usage == eSpatialCacheMode::Query) {
+        if (sc_data.env.sky_map_spread_angle > 0.0f) {
+            pi = &pi_.shade_secondary_cache_query_sky;
+        } else {
+            pi = &pi_.shade_secondary_cache_query;
+        }
+    } else if (sc_data.env.sky_map_spread_angle > 0.0f) {
+        pi = &pi_.shade_secondary_sky;
+    }
+
+    if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
+
+        BindBindlessExtra(*ctx_, cmd_buf, *pi, bindless_tex, bindings);
+    } else {
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+    }
+
+    DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
+                            &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::NS::Renderer::kernel_IntersectSceneShadow(
+    CommandBuffer cmd_buf, const pass_settings_t &ps, const Buffer &indir_args, const int indir_args_index,
+    const Buffer &counters, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
+    const int iteration, const uint32_t node_index, const float clamp_val, Span<const ImageAtlas> tex_atlases,
+    const BindlessTexData &bindless_tex, const Buffer &sh_rays, const Image &out_img) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&counters, eResState::ShaderResource},
+                                              {&sh_rays, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBufRO, IntersectSceneShadow::TRIS_BUF_SLOT, sc_data.tris},
+        {eBindTarget::SBufRO, IntersectSceneShadow::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
+        {eBindTarget::SBufRO, IntersectSceneShadow::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBufRO, IntersectSceneShadow::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBufRO, IntersectSceneShadow::NODES_BUF_SLOT, sc_data.nodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims},
+        {eBindTarget::SBufRO, IntersectSceneShadow::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+        {eBindTarget::SBufRO, IntersectSceneShadow::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBufRO, IntersectSceneShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBufRO, IntersectSceneShadow::SH_RAYS_BUF_SLOT, sh_rays},
+        {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights.gpu_buf()},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_CWNODES_BUF_SLOT, sc_data.light_cwnodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
+        {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, rand_seq},
+        {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
+
+    if (use_hwrt_) {
+        bindings.emplace_back(eBindTarget::AccStruct, IntersectSceneShadow::TLAS_SLOT, sc_data.rt_tlas);
+    }
+
+    if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
+
+        BindBindlessExtra(*ctx_, cmd_buf, pi_.intersect_scene_shadow, bindless_tex, bindings);
+    } else {
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+    }
+
+    IntersectSceneShadow::Params uniform_params = {};
+    uniform_params.node_index = node_index;
+    uniform_params.max_transp_depth = ps.max_transp_depth;
+    uniform_params.lights_node_index = 0; // tree root
+    uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
+    uniform_params.clamp_val = (clamp_val != 0.0f) ? 3.0f * clamp_val : FLT_MAX;
+    uniform_params.rand_seed = rand_seed;
+    uniform_params.iteration = iteration;
+
+    DispatchComputeIndirect(cmd_buf, pi_.intersect_scene_shadow, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
