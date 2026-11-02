@@ -2364,7 +2364,9 @@ fvec<S> SampleSphericalRectangle(const fvec<S> P[3], const fvec<S> light_pos[3],
     const fvec<S> k = 2 * PI - g2 - g3;
     // compute solid angle from internal angles
     const fvec<S> area = g0 + g1 - k;
-    const ivec<S> mask = simd_cast(area > SPHERICAL_AREA_THRESHOLD);
+    ivec<S> mask = simd_cast(area > SPHERICAL_AREA_THRESHOLD);
+    // all-|nz| saturated -> grazing (z0 << edge dists): angle algebra garbage even above the area gate
+    mask &= simd_cast(min(min(nz[0] * nz[0], nz[1] * nz[1]), min(nz[2] * nz[2], nz[3] * nz[3])) <= 0.99999f);
     if (mask.all_zeros()) {
         return 0.0f;
     }

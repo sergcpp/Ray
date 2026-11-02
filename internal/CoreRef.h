@@ -119,7 +119,7 @@ struct derivatives_t {
 };
 
 struct light_sample_t {
-    fvec4 col, L, lp;
+    fvec4 col{0.0f}, L{0.0f}, lp{0.0f}; // dot(N, ls.L) runs even when sampling is skipped (emissive / no lights)
     float area = 0, dist_mul = 1, pdf = 0;
     uint32_t cast_shadow : 1;
     uint32_t from_env : 1;

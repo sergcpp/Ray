@@ -1527,7 +1527,9 @@ float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos,
     const float k = 2 * PI - g2 - g3;
     // compute solid angle from internal angles
     const float area = g0 + g1 - k;
-    if (area <= SPHERICAL_AREA_THRESHOLD) {
+    // all-|nz| saturated -> grazing (z0 << edge dists): angle algebra garbage even above the area gate
+    if (!(area > SPHERICAL_AREA_THRESHOLD) ||
+        fminf(fminf(fminf(sqr(nz.get<0>()), sqr(nz.get<1>())), sqr(nz.get<2>())), sqr(nz.get<3>())) > 0.99999f) {
         return 0.0f;
     }
 
@@ -4040,7 +4042,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
             pdf = SampleSphericalRectangle(P, light_pos, light_u, light_v, rand_light_uv, &lp);
         }
-        if (pdf <= 0.0f) {
+        if (!(pdf > 0.0f)) { // NaN-safe
             const float r1 = rand_light_uv.get<0>() - 0.5f, r2 = rand_light_uv.get<1>() - 0.5f;
             lp = light_pos + light_u * r1 + light_v * r2;
         }

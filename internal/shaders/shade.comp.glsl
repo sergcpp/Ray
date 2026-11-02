@@ -374,7 +374,7 @@ float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const 
     const float gamma = angle_between(BC, AC);
 
     const float area = alpha + beta + gamma - PI;
-    if (area <= SPHERICAL_AREA_THRESHOLD) {
+    if (!(area > SPHERICAL_AREA_THRESHOLD)) {
         return 0.0;
     }
 
@@ -454,7 +454,9 @@ float SampleSphericalRectangle(const vec3 P, const vec3 light_pos, const vec3 ax
     const float k = 2 * PI - g2 - g3;
     // compute solid angle from internal angles
     const float area = g0 + g1 - k;
-    if (area <= SPHERICAL_AREA_THRESHOLD) {
+    // all-|nz| saturated -> grazing (z0 << edge dists): angle algebra garbage even above the area gate
+    const vec4 nzs = nz * nz;
+    if (!(area > SPHERICAL_AREA_THRESHOLD) || min(min(nzs.x, nzs.y), min(nzs.z, nzs.w)) > 0.99999) {
         return 0.0f;
     }
 
