@@ -1516,17 +1516,16 @@ float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos,
     const fvec4 diff = fvec4{x0, y1, x1, y0} - fvec4{x1, y0, x0, y1};
     fvec4 nz = fvec4{y0, x1, y1, x0} * diff;
     nz = nz / sqrt(max(z0 * z0 * diff * diff + nz * nz, FLT_EPS));
-    const float g0 = portable_acosf(clamp(-nz.get<0>() * nz.get<1>(), -1.0f, 1.0f));
-    const float g1 = portable_acosf(clamp(-nz.get<1>() * nz.get<2>(), -1.0f, 1.0f));
-    const float g2 = portable_acosf(clamp(-nz.get<2>() * nz.get<3>(), -1.0f, 1.0f));
-    const float g3 = portable_acosf(clamp(-nz.get<3>() * nz.get<0>(), -1.0f, 1.0f));
+    const float g0 = portable_asinf(clamp(-nz.get<0>() * nz.get<1>(), -1.0f, 1.0f));
+    const float g1 = portable_asinf(clamp(-nz.get<1>() * nz.get<2>(), -1.0f, 1.0f));
+    const float g2 = portable_asinf(clamp(-nz.get<2>() * nz.get<3>(), -1.0f, 1.0f));
+    const float g3 = portable_asinf(clamp(-nz.get<3>() * nz.get<0>(), -1.0f, 1.0f));
     // compute predefined constants
     const float b0 = nz.get<0>();
     const float b1 = nz.get<2>();
     const float b0sq = b0 * b0;
-    const float k = 2 * PI - g2 - g3;
-    // compute solid angle from internal angles
-    const float area = g0 + g1 - k;
+    // -sum(gamma_asin): acos form subtracts 2*PI from four near-PI/2 angles -> cancellation near the gate
+    const float area = -(g0 + g1 + g2 + g3);
     // all-|nz| saturated -> grazing (z0 << edge dists): angle algebra garbage even above the area gate
     if (!(area > SPHERICAL_AREA_THRESHOLD) ||
         fminf(fminf(fminf(sqr(nz.get<0>()), sqr(nz.get<1>())), sqr(nz.get<2>())), sqr(nz.get<3>())) > 0.99999f) {
@@ -1535,9 +1534,10 @@ float Ray::Ref::SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos,
 
     if (out_p) {
         // compute cu
-        const float au = Xi.get<0>() * area + k;
+        // au = r*area + g2 + g3 is the old (r*area + 2*PI - g2_acos - g3_acos) - PI: sin/cos flip sign, hence + b1
+        const float au = Xi.get<0>() * area + g2 + g3;
         const fvec2 sincos_au = portable_sincos(au);
-        const float fu = (sincos_au.get<1>() * b0 - b1) / sincos_au.get<0>();
+        const float fu = (sincos_au.get<1>() * b0 + b1) / sincos_au.get<0>();
         float cu = 1.0f / sqrtf(fu * fu + b0sq) * (fu > 0.0f ? 1.0f : -1.0f);
         cu = clamp(cu, -1.0f, 1.0f);
         // compute xu

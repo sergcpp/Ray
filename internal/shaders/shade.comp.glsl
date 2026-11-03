@@ -443,17 +443,16 @@ float SampleSphericalRectangle(const vec3 P, const vec3 light_pos, const vec3 ax
     const vec4 diff = vec4(x0, y1, x1, y0) - vec4(x1, y0, x0, y1);
     vec4 nz = vec4(y0, x1, y1, x0) * diff;
     nz = nz / sqrt(z0 * z0 * diff * diff + nz * nz);
-    const float g0 = portable_acosf(clamp(-nz.x * nz.y, -1.0, 1.0));
-    const float g1 = portable_acosf(clamp(-nz.y * nz.z, -1.0, 1.0));
-    const float g2 = portable_acosf(clamp(-nz.z * nz.w, -1.0, 1.0));
-    const float g3 = portable_acosf(clamp(-nz.w * nz.x, -1.0, 1.0));
+    const float g0 = portable_asinf(clamp(-nz.x * nz.y, -1.0, 1.0));
+    const float g1 = portable_asinf(clamp(-nz.y * nz.z, -1.0, 1.0));
+    const float g2 = portable_asinf(clamp(-nz.z * nz.w, -1.0, 1.0));
+    const float g3 = portable_asinf(clamp(-nz.w * nz.x, -1.0, 1.0));
     // compute predefined constants
     const float b0 = nz.x;
     const float b1 = nz.z;
     const float b0sq = b0 * b0;
-    const float k = 2 * PI - g2 - g3;
-    // compute solid angle from internal angles
-    const float area = g0 + g1 - k;
+    // -sum(gamma_asin): acos form subtracts 2*PI from four near-PI/2 angles -> cancellation near the gate
+    const float area = -(g0 + g1 + g2 + g3);
     // all-|nz| saturated -> grazing (z0 << edge dists): angle algebra garbage even above the area gate
     const vec4 nzs = nz * nz;
     if (!(area > SPHERICAL_AREA_THRESHOLD) || min(min(nzs.x, nzs.y), min(nzs.z, nzs.w)) > 0.99999) {
@@ -461,9 +460,10 @@ float SampleSphericalRectangle(const vec3 P, const vec3 light_pos, const vec3 ax
     }
 
     // compute cu
-    const float au = Xi.x * area + k;
+    // au = r*area + g2 + g3 is the old (r*area + 2*PI - g2_acos - g3_acos) - PI: sin/cos flip sign, hence + b1
+    const float au = Xi.x * area + g2 + g3;
     const vec2 sincos_au = portable_sincos(au);
-    const float fu = (sincos_au[1] * b0 - b1) / sincos_au[0];
+    const float fu = (sincos_au[1] * b0 + b1) / sincos_au[0];
     float cu = 1.0 / sqrt(fu * fu + b0sq) * (fu > 0.0 ? 1.0 : -1.0);
     cu = clamp(cu, -1.0, 1.0);
     // compute xu

@@ -2353,17 +2353,16 @@ fvec<S> SampleSphericalRectangle(const fvec<S> P[3], const fvec<S> light_pos[3],
         nz[i] *= diff[i];
         nz[i] /= sqrt(z0 * z0 * diff[i] * diff[i] + nz[i] * nz[i]);
     })
-    const fvec<S> g0 = portable_acosf(clamp(-nz[0] * nz[1], -1.0f, 1.0f));
-    const fvec<S> g1 = portable_acosf(clamp(-nz[1] * nz[2], -1.0f, 1.0f));
-    const fvec<S> g2 = portable_acosf(clamp(-nz[2] * nz[3], -1.0f, 1.0f));
-    const fvec<S> g3 = portable_acosf(clamp(-nz[3] * nz[0], -1.0f, 1.0f));
+    const fvec<S> g0 = portable_asinf(clamp(-nz[0] * nz[1], -1.0f, 1.0f));
+    const fvec<S> g1 = portable_asinf(clamp(-nz[1] * nz[2], -1.0f, 1.0f));
+    const fvec<S> g2 = portable_asinf(clamp(-nz[2] * nz[3], -1.0f, 1.0f));
+    const fvec<S> g3 = portable_asinf(clamp(-nz[3] * nz[0], -1.0f, 1.0f));
     // compute predefined constants
     const fvec<S> b0 = nz[0];
     const fvec<S> b1 = nz[2];
     const fvec<S> b0sq = b0 * b0;
-    const fvec<S> k = 2 * PI - g2 - g3;
-    // compute solid angle from internal angles
-    const fvec<S> area = g0 + g1 - k;
+    // -sum(gamma_asin): acos form subtracts 2*PI from four near-PI/2 angles -> cancellation near the gate
+    const fvec<S> area = -(g0 + g1 + g2 + g3);
     ivec<S> mask = simd_cast(area > SPHERICAL_AREA_THRESHOLD);
     // all-|nz| saturated -> grazing (z0 << edge dists): angle algebra garbage even above the area gate
     mask &= simd_cast(min(min(nz[0] * nz[0], nz[1] * nz[1]), min(nz[2] * nz[2], nz[3] * nz[3])) <= 0.99999f);
@@ -2373,11 +2372,12 @@ fvec<S> SampleSphericalRectangle(const fvec<S> P[3], const fvec<S> light_pos[3],
 
     if (out_p) {
         // compute cu
-        const fvec<S> au = Xi[0] * area + k;
+        // au = r*area + g2 + g3 is the old (r*area + 2*PI - g2_acos - g3_acos) - PI: sin/cos flip sign, hence + b1
+        const fvec<S> au = Xi[0] * area + g2 + g3;
         fvec<S> sincos_au[2];
         portable_sincos(au, sincos_au[0], sincos_au[1]);
         // mask-off (degenerate) lanes still divide: predicate the denominator, their point is dropped at the pdf select
-        const fvec<S> fu = (sincos_au[1] * b0 - b1) / select(mask, sincos_au[0], fvec<S>{1.0f});
+        const fvec<S> fu = (sincos_au[1] * b0 + b1) / select(mask, sincos_au[0], fvec<S>{1.0f});
         fvec<S> cu = 1.0f / sqrt(fu * fu + b0sq);
         where(fu <= 0.0f, cu) = -cu;
         cu = clamp(cu, -1.0f, 1.0f);
