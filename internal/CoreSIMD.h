@@ -2164,26 +2164,6 @@ force_inline void slerp(const fvec<S> start[3], const fvec<S> end[3], const fvec
     UNROLLED_FOR(i, 3, { out_v[i] = start[i] * sincos_theta[1] + relative_vec[i] * sincos_theta[0]; })
 }
 
-// Return arcsine(x) given that .57 < x
-template <int S> force_inline fvec<S> asin_tail(const fvec<S> &x) {
-    return (PI / 2) - ((x + 2.71745038f) * x + 14.0375338f) * (0.00440413551f * ((x - 8.31223679f) * x + 25.3978882f)) *
-                          sqrt(1 - x);
-}
-
-template <int S> force_inline fvec<S> portable_asinf(const fvec<S> &x) {
-    fvec<S> ret;
-
-    const fvec<S> mask = abs(x) > 0.57f;
-    where(mask, ret) = asin_tail(abs(x));
-    where(x < 0.0f, ret) = -ret;
-
-    const fvec<S> x2 = x * x;
-    where(~mask, ret) = x + (0.0517513789f * ((x2 + 1.83372748f) * x2 + 1.56678128f)) * x *
-                                (x2 * ((x2 - 1.48268414f) * x2 + 2.05554748f));
-
-    return ret;
-}
-
 // Equivalent to acosf(dot(a, b)), but more numerically stable
 // Taken from PBRT source code
 template <int S> fvec<S> angle_between(const fvec<S> v1[3], const fvec<S> v2[3]) {
@@ -2263,7 +2243,14 @@ fvec<S> SampleSphericalTriangle(const fvec<S> P[3], const fvec<S> p1[3], const f
     const fvec<S> beta = angle_between(AB, CB);
     const fvec<S> gamma = angle_between(BC, AC);
 
-    const fvec<S> area = alpha + beta + gamma - PI;
+    // solid angle: atan2 form; when P ~ in the light plane num/den are cancellation residue -> keep the (exact) excess
+    // form
+    fvec<S> BxC[3];
+    cross(B, C, BxC);
+    const fvec<S> num = abs(dot3(A, BxC));
+    const fvec<S> den = 1.0f + dot3(A, B) + dot3(B, C) + dot3(A, C);
+    const fvec<S> excess = alpha + beta + gamma - PI;
+    const fvec<S> area = select(num * num + den * den >= 1e-6f, 2.0f * portable_atan2f(num, den), excess);
     ivec<S> mask = simd_cast(area > SPHERICAL_AREA_THRESHOLD);
     // duplicated projected vertices (dup pos or P collinear with an edge) degrade the angle algebra
     // (area becomes a garbage passing angle), so drop those lanes before the divisions

@@ -361,6 +361,12 @@ float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const 
     // setup spherical triangle
     const vec3 A = normalize(p1 - P), B = normalize(p2 - P), C = normalize(p3 - P);
 
+    // duplicated projected vertices (dup pos or P collinear with an edge) degrade the angle algebra
+    // (area becomes a garbage passing angle) and make the s/t divisions hit exact 0/0
+    if (dot(A, B) >= 1.0 || dot(A, C) >= 1.0 || dot(B, C) >= 1.0) {
+        return 0.0;
+    }
+
     // calculate internal angles of spherical triangle: alpha, beta and gamma
     const vec3 BA = orthogonalize(A, B - A);
     const vec3 CA = orthogonalize(A, C - A);
@@ -373,7 +379,11 @@ float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const 
     const float beta = angle_between(AB, CB);
     const float gamma = angle_between(BC, AC);
 
-    const float area = alpha + beta + gamma - PI;
+    // solid angle: atan2 form; when P ~ in the light plane num/den are cancellation residue -> keep the (exact) excess form
+    const float num = abs(dot(A, cross(B, C)));
+    const float den = 1.0 + dot(A, B) + dot(B, C) + dot(A, C);
+    const float excess = alpha + beta + gamma - PI;
+    const float area = (num * num + den * den >= 1e-6) ? 2.0 * portable_atan2f(num, den) : excess;
     if (!(area > SPHERICAL_AREA_THRESHOLD)) {
         return 0.0;
     }
@@ -397,7 +407,8 @@ float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const 
 
     // Compute the s coordinate as normalized arc length from A to C_s
     const float denom = (v * p + u * q) * sincos_alpha[0];
-    const float a1 = ((v * q - u * p) * sincos_alpha[1] - v) / denom;
+    // exact-zero denoms (coplanar/edge degenerates) do occur here: ratio 0 reproduces the guarded +-0 quotient
+    const float a1 = denom != 0.0 ? (((v * q - u * p) * sincos_alpha[1] - v) / denom) : 0.0;
     const float s = (1.0 / b) * portable_acosf(clamp(a1, -1.0, 1.0));
 
     // Compute the third vertex of the sub - triangle
@@ -407,7 +418,8 @@ float SampleSphericalTriangle(const vec3 P, const vec3 p1, const vec3 p2, const 
     const float b0 = dot(C_s, B);
     const float denom2 = portable_acosf(clamp(b0, -1.0, 1.0));
     const float c0 = 1.0 - Xi.y * (1.0 - dot(C_s, B));
-    const float t = portable_acosf(clamp(c0, -1.0, 1.0)) / denom2;
+    // C_s landing on B gives denom2 == 0 with an always-0 numerator (portable_acosf(1) == 0): keep t = 0 out of 0/0
+    const float t = denom2 != 0.0 ? portable_acosf(clamp(c0, -1.0, 1.0)) / denom2 : 0.0;
 
     // Construct the corresponding point on the sphere.
     out_dir = slerp(B, C_s, t);

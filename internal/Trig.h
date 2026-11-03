@@ -112,4 +112,38 @@ template <int S> void portable_sincos(fvec<S> a, fvec<S> &out_sin, fvec<S> &out_
     out_sin = res_sin[0] * selector_sin[0] + res_sin[1] * selector_sin[1] + res_sin[2] * selector_sin[2];
     out_cos = res_cos[0] * selector_cos[0] + res_cos[1] * selector_cos[1] + res_cos[2] * selector_cos[2];
 }
+
+//
+// asinf implemantation. Taken from apple libm source code
+//
+
+// Return arcsine(x) given that .57 < x
+template <int S> force_inline fvec<S> asin_tail(const fvec<S> &x) {
+    return (PI / 2) - ((x + 2.71745038f) * x + 14.0375338f) * (0.00440413551f * ((x - 8.31223679f) * x + 25.3978882f)) *
+                          sqrt(1 - x);
+}
+
+template <int S> force_inline fvec<S> portable_asinf(const fvec<S> &x) {
+    fvec<S> ret;
+
+    const fvec<S> mask = abs(x) > 0.57f;
+    where(mask, ret) = asin_tail(abs(x));
+    where(x < 0.0f, ret) = -ret;
+
+    const fvec<S> x2 = x * x;
+    where(~mask, ret) = x + (0.0517513789f * ((x2 + 1.83372748f) * x2 + 1.56678128f)) * x *
+                                (x2 * ((x2 - 1.48268414f) * x2 + 2.05554748f));
+
+    return ret;
+}
+
+// atan2 for y >= 0 via portable_asinf (shared polynomial family); (0,0) -> 0 so callers gate on the result
+template <int S> force_inline fvec<S> portable_atan2f(const fvec<S> &y, const fvec<S> &x) {
+    const fvec<S> r = sqrt(x * x + y * y);
+    const fvec<S> r_safe = select(r != 0.0f, r, fvec<S>{1.0f});
+    const fvec<S> ax = abs(x);
+    const fvec<S> h = select(y <= ax, portable_asinf(y / r_safe), (PI / 2) - portable_asinf(ax / r_safe));
+    const fvec<S> res = select(x >= 0.0f, h, PI - h);
+    return select(r != 0.0f, res, fvec<S>{0.0f});
+}
 } // namespace Ray::NS

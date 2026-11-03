@@ -5,15 +5,19 @@
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #define NS Sse2
 #define USE_SSE2
+// clang-format off -- simd.h must precede Trig.h (Trig.h needs the fvec aliases)
 #include "../internal/simd/simd.h"
 #include "../internal/Trig.h"
+// clang-format on
 #undef USE_SSE2
 #undef NS
 #else
 #define NS Neon
 #define USE_NEON
+// clang-format off -- simd.h must precede Trig.h (Trig.h needs the fvec aliases)
 #include "../internal/simd/simd.h"
 #include "../internal/Trig.h"
+// clang-format on
 #undef USE_NEON
 #undef NS
 #endif
@@ -41,6 +45,16 @@ void test_trig() {
             max_error = std::max(max_error, std::abs(ref_sin - test_sincos.get<0>()));
         }
         require(max_error < 6.25e-07);
+    }
+    { // Reference version portable_atan2f (y >= 0)
+        double max_error = 0.0;
+        for (float y = 0.0f; y <= 4.0f; y += 0.01f) {
+            for (float x = -4.0f; x <= 4.0f; x += 0.01f) {
+                const double ref_atan2 = std::atan2(double(y), double(x));
+                max_error = std::max(max_error, std::abs(ref_atan2 - double(Ref::portable_atan2f(y, x))));
+            }
+        }
+        require(max_error < 6.417e-07);
     }
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
     { // SIMD version
@@ -78,6 +92,25 @@ void test_trig() {
         }
         require(max_error < 6.417e-07);
     }
+    { // Sse2 portable_atan2f (y >= 0)
+        double max_error = 0.0;
+        for (float y = 0.0f; y <= 4.0f; y += 0.04f) {
+            for (float x = -4.0f; x <= 4.0f; x += 0.004f) {
+                const float fyy[4] = {y, y, y, y};
+                const float fxx[4] = {x, x + 0.001f, x + 0.002f, x + 0.003f};
+                const Sse2::fvec4 res = Sse2::portable_atan2f(Sse2::fvec4{fyy}, Sse2::fvec4{fxx});
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[0]), double(fxx[0])) - double(res.get<0>())));
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[1]), double(fxx[1])) - double(res.get<1>())));
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[2]), double(fxx[2])) - double(res.get<2>())));
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[3]), double(fxx[3])) - double(res.get<3>())));
+            }
+        }
+        require(max_error < 6.417e-07);
+    }
 #else
     { // SIMD version
         double max_error = 0.0;
@@ -111,6 +144,25 @@ void test_trig() {
             max_error = std::max(max_error, std::abs(ref_sin[1] - test_sincos[0].get<1>()));
             max_error = std::max(max_error, std::abs(ref_sin[2] - test_sincos[0].get<2>()));
             max_error = std::max(max_error, std::abs(ref_sin[3] - test_sincos[0].get<3>()));
+        }
+        require(max_error < 6.417e-07);
+    }
+    { // Neon portable_atan2f (y >= 0)
+        double max_error = 0.0;
+        for (float y = 0.0f; y <= 4.0f; y += 0.04f) {
+            for (float x = -4.0f; x <= 4.0f; x += 0.004f) {
+                const float fyy[4] = {y, y, y, y};
+                const float fxx[4] = {x, x + 0.001f, x + 0.002f, x + 0.003f};
+                const Neon::fvec4 res = Neon::portable_atan2f(Neon::fvec4{fyy}, Neon::fvec4{fxx});
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[0]), double(fxx[0])) - double(res.get<0>())));
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[1]), double(fxx[1])) - double(res.get<1>())));
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[2]), double(fxx[2])) - double(res.get<2>())));
+                max_error =
+                    std::max(max_error, std::abs(std::atan2(double(fyy[3]), double(fxx[3])) - double(res.get<3>())));
+            }
         }
         require(max_error < 6.417e-07);
     }

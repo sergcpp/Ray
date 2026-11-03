@@ -1463,6 +1463,16 @@ float portable_acosf(float x) {
     }
 }
 
+// atan2 for y >= 0 via portable_asinf (shared polynomial family); (0,0) -> 0 so callers gate on the result
+float portable_atan2f(float y, float x) {
+    const float r = sqrtf(x * x + y * y);
+    if (r == 0.0f)
+        return 0.0f;
+    const float ax = fabsf(x);
+    const float h = (y <= ax) ? portable_asinf(y / r) : (PI / 2) - portable_asinf(ax / r);
+    return (x >= 0.0f) ? h : (PI - h);
+}
+
 // Equivalent to acosf(dot(a, b)), but more numerically stable
 // Taken from PBRT source code
 force_inline float angle_between(const fvec4 &v1, const fvec4 &v2) {
@@ -1585,7 +1595,12 @@ float Ray::Ref::SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const f
     const float beta = angle_between(AB, CB);
     const float gamma = angle_between(BC, AC);
 
-    const float area = alpha + beta + gamma - PI;
+    // solid angle: atan2 form; when P ~ in the light plane num/den are cancellation residue -> keep the (exact) excess
+    // form
+    const float num = fabsf(dot(A, cross(B, C)));
+    const float den = 1.0f + dot(A, B) + dot(B, C) + dot(A, C);
+    const float excess = alpha + beta + gamma - PI;
+    const float area = (num * num + den * den >= 1e-6f) ? 2.0f * portable_atan2f(num, den) : excess;
     if (!(area > SPHERICAL_AREA_THRESHOLD)) { // NaN-safe: degenerate vertex trees fall back to area sampling
         return 0.0f;
     }
