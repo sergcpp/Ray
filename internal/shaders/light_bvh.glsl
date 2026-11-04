@@ -176,11 +176,11 @@ float calc_lnode_importance(const light_wbvh_node_t n, const vec3 P, out float i
             v_len2 = max(dist2, extent);
 
             const float cos_omega_w = dot(axis, wi);
-            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+            const float sin_omega_w = sqrt(max(1.0 - cos_omega_w * cos_omega_w, 0.0));
 
-            float cos_omega_b = -1.0;
-            if (dist2 >= extent * extent) {
-                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            float cos_omega_b = sqrt(max(1.0 - (extent * extent) / dist2, 0.0));
+            if (dist2 < extent * extent) {
+                cos_omega_b = -1.0;
             }
             const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
 
@@ -199,9 +199,15 @@ float calc_lnode_importance(const light_wbvh_node_t n, const vec3 P, out float i
     return total_importance;
 }
 
-float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, out float importance[8]) {
+// oct8 n_oct quantization angular error is ~0.011 rad; the cull must clear it to stay conservative
+// (margin kept identical to CPU); GRAZE_W_FLOOR guards exact-zero collapse of grazing importance
+const float OCT8_CULL_MARGIN = 0.02;
+const float GRAZE_W_FLOOR = 0.05;
+
+float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, const vec3 N, out float importance[8]) {
     // pow2 quantization step stored in ch_exp (see pow2Extents() on the CPU side)
     const vec3 step = vec3(cwbvh_step(n.ch_exp, 0u), cwbvh_step(n.ch_exp, 1u), cwbvh_step(n.ch_exp, 2u));
+    const bool has_n = abs(N.x) + abs(N.y) + abs(N.z) > 0.0;
 
     float total_importance = 0.0;
     for (uint i = 0; i < 8; ++i) {
@@ -214,7 +220,8 @@ float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, out float 
             const vec3 bbox_max = vec3(n.bbox_min[0] + float((n.ch_bbox_max[0][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[0],
                                        n.bbox_min[1] + float((n.ch_bbox_max[1][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[1],
                                        n.bbox_min[2] + float((n.ch_bbox_max[2][i / 4] >> (8u * (i % 4u))) & 0xffu) * step[2]);
-            const float extent = 0.5 * length(bbox_max - bbox_min);
+            const vec3 ext = bbox_max - bbox_min;
+            const float extent = 0.5 * length(ext);
 
             const vec3 pc = 0.5 * (bbox_min + bbox_max);
             vec3 wi = P - pc;
@@ -226,11 +233,11 @@ float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, out float 
 
             const vec3 axis = decode_oct_dir8(light_axis_at(n, i));
             const float cos_omega_w = dot(axis, wi);
-            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+            const float sin_omega_w = sqrt(max(1.0 - cos_omega_w * cos_omega_w, 0.0));
 
-            float cos_omega_b = -1.0;
-            if (dist2 >= extent * extent) {
-                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            float cos_omega_b = sqrt(max(1.0 - (extent * extent) / dist2, 0.0));
+            if (dist2 < extent * extent) {
+                cos_omega_b = -1.0;
             }
             const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
 
@@ -242,13 +249,29 @@ float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, out float 
             const float cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
             importance[i] *= (cos_omega > cos_omega_ne[1]) ? (cos_omega / v_len2) : 0.0;
+
+            // grazing weight: cos(min footprint angle) on the child's bounding sphere; the plane-support test
+            // with the oct8 margin does the culling. N == 0 disables (transmissive-material gate)
+            if (has_n) {
+                const float cos_i = 0.0 - dot(N, wi);
+                const float sin_i = sqrt(max(1.0 - cos_i * cos_i, 0.0));
+                float w = cos_sub_clamped(sin_i, cos_i, sin_omega_b, cos_omega_b);
+                if (cos_i >= cos_omega_b) {
+                    w = 1.0;
+                }
+                importance[i] *= max(w, GRAZE_W_FLOOR);
+                const float plane_back = dot(N, pc - P) + 0.5 * (ext.x * abs(N.x) + ext.y * abs(N.y) + ext.z * abs(N.z));
+                if (plane_back < -OCT8_CULL_MARGIN * (dist + 2.0 * extent)) {
+                    importance[i] = 0.0;
+                }
+            }
         }
         total_importance += importance[i];
     }
     return total_importance;
 }
 
-float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, const vec3 P_test, out float importance[8]) {
+float calc_lnode_importance_contained(const light_cwbvh_node_t n, const vec3 P, const vec3 P_test, out float importance[8]) {
     // pow2 quantization step stored in ch_exp (see pow2Extents() on the CPU side)
     const vec3 step = vec3(cwbvh_step(n.ch_exp, 0u), cwbvh_step(n.ch_exp, 1u), cwbvh_step(n.ch_exp, 2u));
 
@@ -276,11 +299,11 @@ float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, const vec3
 
             const vec3 axis = decode_oct_dir8(light_axis_at(n, i));
             const float cos_omega_w = dot(axis, wi);
-            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+            const float sin_omega_w = sqrt(max(1.0 - cos_omega_w * cos_omega_w, 0.0));
 
-            float cos_omega_b = -1.0;
-            if (dist2 >= extent * extent) {
-                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            float cos_omega_b = sqrt(max(1.0 - (extent * extent) / dist2, 0.0));
+            if (dist2 < extent * extent) {
+                cos_omega_b = -1.0;
             }
             const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
 
@@ -331,11 +354,11 @@ float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, const vec3
 
             const vec3 axis = decode_oct_dir8(light_axis_at(n, i));
             const float cos_omega_w = dot(axis, wi);
-            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+            const float sin_omega_w = sqrt(max(1.0 - cos_omega_w * cos_omega_w, 0.0));
 
-            float cos_omega_b = -1.0;
-            if (dist2 >= extent * extent) {
-                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            float cos_omega_b = sqrt(max(1.0 - (extent * extent) / dist2, 0.0));
+            if (dist2 < extent * extent) {
+                cos_omega_b = -1.0;
             }
             const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
 
@@ -379,11 +402,11 @@ float calc_lnode_importance(const light_cwbvh_node_t n, const vec3 P, const vec3
 
             const vec3 axis = decode_oct_dir8(light_axis_at(n, i));
             const float cos_omega_w = dot(axis, wi);
-            const float sin_omega_w = sqrt(1.0 - cos_omega_w * cos_omega_w);
+            const float sin_omega_w = sqrt(max(1.0 - cos_omega_w * cos_omega_w, 0.0));
 
-            float cos_omega_b = -1.0;
-            if (dist2 >= extent * extent) {
-                cos_omega_b = sqrt(1.0 - (extent * extent) / dist2);
+            float cos_omega_b = sqrt(max(1.0 - (extent * extent) / dist2, 0.0));
+            if (dist2 < extent * extent) {
+                cos_omega_b = -1.0;
             }
             const float sin_omega_b = sqrt(1.0 - cos_omega_b * cos_omega_b);
 

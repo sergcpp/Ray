@@ -1232,7 +1232,7 @@ float sphere_intersection(const vec3 center, const float radius, const vec3 ro, 
     return (-b - sqrt(max(discriminant, 0.0f))) / (2 * a);
 }
 
-void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_light, const vec2 rand_light_uv,
+void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, vec3 N_pick, const float rand_pick_light, const vec2 rand_light_uv,
                        const vec2 rand_tex_uv, inout light_sample_t ls) {
     float u1 = rand_pick_light;
 
@@ -1243,7 +1243,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, const float rand_pick_lig
         const light_cwbvh_node_t n = g_light_cwnodes[cur];
 
         float importance[8];
-        const float total_importance = calc_lnode_importance(n, P, importance);
+        const float total_importance = calc_lnode_importance(n, P, N_pick, importance);
         [[dont_flatten]] if (total_importance == 0.0) {
             // failed to find lightsource for sampling
             return;
@@ -1621,7 +1621,7 @@ uint g_stack_spill[MAX_STACK_SIZE - SM_STACK_SIZE];
 shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][SM_STACK_SIZE];
 float g_stack_factors_spill[MAX_STACK_SIZE - SM_STACK_SIZE];
 
-float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
+float EvalTriLightFactor(const vec3 P, uint tri_index) {
     uint stack_size = 0;
     STACK_PUSH2(0, 1.0);
 
@@ -1634,7 +1634,9 @@ float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
             const light_cwbvh_node_t n = g_light_cwnodes[cur];
 
             float importance[8];
-            const float total_importance = calc_lnode_importance(n, ro, P, importance);
+            // geometry at surf.P (the pick CDF point); unweighted basis - tri-light emission is two-sided,
+            // grazing weights here would inflate BSDF-hit MIS weights
+            const float total_importance = calc_lnode_importance_contained(n, P, P, importance);
 
             // Drain the candidate mask with findLSB() so only the non-zero-importance children are
             // visited (slot order preserved).
@@ -2600,7 +2602,11 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
         const float rand_pick_light = get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT_PICK, rand_hash, g_params.iteration - 1).x;
         const vec2 rand_light_uv = get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT, rand_hash, g_params.iteration - 1);
 
-        SampleLightSource(surf.P, surf.T, surf.B, surf.N, rand_pick_light, rand_light_uv, tex_rand, ls);
+        // refractive/Principled-transmissive events legitimately sample behind-surface lights; weight/cull off there
+        const vec3 pick_N = (mat.type == RefractiveNode || (mat.type == PrincipledNode && (mat.metallic_and_transmission >> 16u) != 0u))
+                                ? vec3(0.0)
+                                : surf.N;
+        SampleLightSource(surf.P, surf.T, surf.B, surf.N, pick_N, rand_pick_light, rand_light_uv, tex_rand, ls);
     }
     const float N_dot_L = dot(surf.N, ls.L);
 #endif
@@ -2694,7 +2700,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
         [[dont_flatten]] if ((mat.flags & MAT_FLAG_IMP_SAMPLE) != 0) {
 #if USE_HIERARCHICAL_NEE
             // TODO: maybe this can be done more efficiently
-            const float pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index);
+            const float pdf_factor = EvalTriLightFactor(surf.P, tri_index);
 #else
             const float pdf_factor = float(g_params.li_count);
 #endif

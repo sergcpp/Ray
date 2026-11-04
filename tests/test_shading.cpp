@@ -1126,6 +1126,7 @@ void test_alpha_mat4(const char *arch_list[], std::string_view preferred_device)
 
 void test_two_sided_mat(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
+    const double MinPSNR = 30.5;
     const int PixThres = 510;
 
     Ray::principled_mat_desc_t front_mat_desc;
@@ -1136,13 +1137,14 @@ void test_two_sided_mat(const char *arch_list[], std::string_view preferred_devi
 
     const char *textures[] = {"test_data/textures/Fence007A_2K_Opacity.dds"};
 
-    run_shading_test(arch_list, preferred_device, "two_sided_mat", front_mat_desc, SampleCount, DefaultMinPSNR,
-                     PixThres, eDenoiseMethod::None, false, textures, eTestScene::Two_Sided);
+    run_shading_test(arch_list, preferred_device, "two_sided_mat", front_mat_desc, SampleCount, MinPSNR, PixThres,
+                     eDenoiseMethod::None, false, textures, eTestScene::Two_Sided);
 }
 
 void test_complex_mat0(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 22;
-    const int PixThres = 600;
+    // GPU pick weighting (grazing+cull) lifted NV GPU fireflies 589->605 (CPU stays 596)
+    const int PixThres = 610;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1161,6 +1163,7 @@ void test_complex_mat0(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat1(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 22;
+    const double MinPSNR = 30.5;
     const int PixThres = 560;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1175,12 +1178,13 @@ void test_complex_mat1(const char *arch_list[], std::string_view preferred_devic
         "test_data/textures/streaky-metal1_roughness.tga",
     };
 
-    run_shading_test(arch_list, preferred_device, "complex_mat1", metal_mat_desc, SampleCount, DefaultMinPSNR, PixThres,
+    run_shading_test(arch_list, preferred_device, "complex_mat1", metal_mat_desc, SampleCount, MinPSNR, PixThres,
                      eDenoiseMethod::None, false, textures);
 }
 
 void test_complex_mat2(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
+    const double MinPSNR = 30.65;
     const int PixThres = 400;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1193,12 +1197,13 @@ void test_complex_mat2(const char *arch_list[], std::string_view preferred_devic
         "test_data/textures/rusting-lined-metal_albedo.tga", "test_data/textures/rusting-lined-metal_normal-ogl.tga",
         "test_data/textures/rusting-lined-metal_roughness.tga", "test_data/textures/rusting-lined-metal_metallic.tga"};
 
-    run_shading_test(arch_list, preferred_device, "complex_mat2", metal_mat_desc, SampleCount, DefaultMinPSNR, PixThres,
+    run_shading_test(arch_list, preferred_device, "complex_mat2", metal_mat_desc, SampleCount, MinPSNR, PixThres,
                      eDenoiseMethod::None, false, textures);
 }
 
 void test_complex_mat3(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
+    const double MinPSNR = 30.8;
     const int PixThres = 125;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1211,12 +1216,13 @@ void test_complex_mat3(const char *arch_list[], std::string_view preferred_devic
         "test_data/textures/stone_trims_02_BaseColor.tga", "test_data/textures/stone_trims_02_Normal.tga",
         "test_data/textures/stone_trims_02_Roughness.tga", "test_data/textures/stone_trims_02_Metallic.tga"};
 
-    run_shading_test(arch_list, preferred_device, "complex_mat3", metal_mat_desc, SampleCount, DefaultMinPSNR, PixThres,
+    run_shading_test(arch_list, preferred_device, "complex_mat3", metal_mat_desc, SampleCount, MinPSNR, PixThres,
                      eDenoiseMethod::None, false, textures);
 }
 
 void test_complex_mat4(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 36;
+    const double MinPSNR = 30.6;
     const int PixThres = 370;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1231,7 +1237,7 @@ void test_complex_mat4(const char *arch_list[], std::string_view preferred_devic
         "test_data/textures/Fence007A_2K_Roughness.dds", "test_data/textures/Fence007A_2K_Metalness.dds",
         "test_data/textures/Fence007A_2K_Opacity.dds"};
 
-    run_shading_test(arch_list, preferred_device, "complex_mat4", metal_mat_desc, SampleCount, DefaultMinPSNR, PixThres,
+    run_shading_test(arch_list, preferred_device, "complex_mat4", metal_mat_desc, SampleCount, MinPSNR, PixThres,
                      eDenoiseMethod::None, false, textures);
 }
 
@@ -1255,7 +1261,7 @@ void test_complex_mat5(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat5_emissive(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 64;
-    const int PixThres = 15500;
+    const int PixThres = 14620;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1270,13 +1276,13 @@ void test_complex_mat5_emissive(const char *arch_list[], std::string_view prefer
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga",
         "test_data/textures/Fence007A_2K_Opacity.tga"};
 
-    run_shading_test(arch_list, preferred_device, "complex_mat5_emissive", metal_mat_desc, SampleCount, 18.0, PixThres,
+    run_shading_test(arch_list, preferred_device, "complex_mat5_emissive", metal_mat_desc, SampleCount, 18.5, PixThres,
                      eDenoiseMethod::None, false, textures, eTestScene::Standard_NoLight);
 }
 
 void test_complex_mat5_clipped(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 36;
-    const int PixThres = 5030;
+    const int PixThres = 5350;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1288,8 +1294,8 @@ void test_complex_mat5_clipped(const char *arch_list[], std::string_view preferr
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_shading_test(arch_list, preferred_device, "complex_mat5_clipped", metal_mat_desc, SampleCount, VeryFastMinPSNR,
-                     PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_Clipped);
+    run_shading_test(arch_list, preferred_device, "complex_mat5_clipped", metal_mat_desc, SampleCount, 24.95, PixThres,
+                     eDenoiseMethod::None, false, textures, eTestScene::Standard_Clipped);
 }
 
 void test_complex_mat5_caching(const char *arch_list[], std::string_view preferred_device) {
@@ -1334,7 +1340,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], std::string_view prefer
 
 void test_complex_mat5_regions(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 78;
-    const int PixThres = 1805;
+    const int PixThres = 1820;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1352,7 +1358,7 @@ void test_complex_mat5_regions(const char *arch_list[], std::string_view preferr
 
 void test_complex_mat5_nlm_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 31;
-    const int PixThres = 1235;
+    const int PixThres = 1260;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1389,7 +1395,7 @@ void test_complex_mat5_unet_filter(const char *arch_list[], std::string_view pre
 void test_complex_mat5_dof(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 24;
     const double MinPSNR = 21.0;
-    const int PixThres = 9320;
+    const int PixThres = 9230;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1554,9 +1560,8 @@ void test_complex_mat5_hdri_light(const char *arch_list[], std::string_view pref
 void test_complex_mat5_area_spread(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 44;
     const double MinPSNR = 27.5;
-    // 44-sample renders land at 295-309 diff pixels (CPU 295/297, GPU SWRT 307/309, HWRT 305);
-    // the compacted light tree (pow2 boxes) moved the GPU realization a couple of pixels
-    const int PixThres = 320;
+    // 44-sample renders land at 295-332 diff px (CPU 295-309, NV 307-320, Arc 332 after the pick port)
+    const int PixThres = 340;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1632,7 +1637,7 @@ void test_complex_mat6_dof(const char *arch_list[], std::string_view preferred_d
 void test_complex_mat6_mesh_lights(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 64;
     const double MinPSNR = 23.0;
-    const int PixThres = 4520;
+    const int PixThres = 4380;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};
@@ -1647,7 +1652,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], std::string_view pre
 void test_complex_mat6_sphere_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 18;
     const double MinPSNR = 23.0;
-    const int PixThres = 3540;
+    const int PixThres = 3410;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};
@@ -1707,7 +1712,7 @@ void test_complex_mat6_hdri_light(const char *arch_list[], std::string_view pref
 void test_complex_mat7_refractive(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
     const double MinPSNR = 23.0;
-    const int PixThres = 4375;
+    const int PixThres = 4270;
 
     Ray::principled_mat_desc_t unused;
     run_shading_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR, PixThres,

@@ -473,7 +473,7 @@ void IntersectScene(const shadow_ray_t<S> &r, int max_transp_depth, const scene_
 // Pick point on any light source for evaluation
 template <int S>
 void SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fvec<S> B[3], const fvec<S> N[3],
-                       const scene_data_t &sc, const Cpu::TexStorageBase *const tex_atlases[],
+                       const uvec<S> &ray_n_oct, const scene_data_t &sc, const Cpu::TexStorageBase *const tex_atlases[],
                        const fvec<S> &rand_pick_light, const fvec<S> rand_light_uv[2], const fvec<S> rand_tex_uv[2],
                        ivec<S> ray_mask, light_sample_t<S> &ls);
 
@@ -3436,6 +3436,34 @@ template <int S> force_inline std::array<fvec<S>, 3> decode_oct_dir8(const ivec<
     return out_dir;
 }
 
+// Origin normal for light-tree culling: bit16 validity + Ray::EncodeOctDir8 oct8 pair; 0 (zero-initialized ray) = cull
+// disabled
+force_inline fvec4 decode_n_oct(const uint32_t n_oct) {
+    return n_oct != 0u ? decode_oct_dir8(uint16_t(n_oct & 0xffffu)) : fvec4(0.0f);
+}
+
+template <int S> force_inline std::array<fvec<S>, 3> decode_n_oct(const uvec<S> &n_oct) {
+    const std::array<fvec<S>, 3> dir = decode_oct_dir8<S>(ivec<S>(n_oct & 0xffffu));
+    const ivec<S> valid = ivec<S>(n_oct != 0u);
+    std::array<fvec<S>, 3> out;
+    UNROLLED_FOR(j, 3, { out[j] = 0.0f; })
+    UNROLLED_FOR(j, 3, { where(valid, out[j]) = dir[j]; })
+    return out;
+}
+
+template <int S> force_inline uvec<S> encode_n_oct(const fvec<S> N[3]) {
+    // mirrors Ref::encode_n_oct bit-for-bit per lane (bit16 validity + EncodeOctDir8 packing); guarded denom keeps
+    // masked-off lanes trap-free
+    const fvec<S> sum = abs(N[0]) + abs(N[1]) + abs(N[2]);
+    const fvec<S> v0 = N[0] / max(sum, FLT_EPS), v1 = N[1] / max(sum, FLT_EPS), v2 = N[2] / max(sum, FLT_EPS);
+    fvec<S> x = v0, y = v1;
+    where(v2 < 0.0f, x) = (1.0f - abs(v1)) * copysign(1.0f, v0);
+    where(v2 < 0.0f, y) = (1.0f - abs(v0)) * copysign(1.0f, v1);
+    const uvec<S> packed = (uvec<S>(255.0f * max(min((x + 1.0f) / 2.0f, 1.0f), 0.0f) + 0.5f) << 8) |
+                           uvec<S>(255.0f * max(min((y + 1.0f) / 2.0f, 1.0f), 0.0f) + 0.5f);
+    return (packed | uvec<S>(0x10000u)) & uvec<S>(simd_cast(sum > 0.0f));
+}
+
 force_inline fvec2 decode_cosines8(const uint16_t val) {
     const uvec2 ab = uvec2((val >> 8) & 0xff, val & 0xff);
     return 2.0f * (fvec2(ab) / 254.0f) - 1.0f;
@@ -3455,6 +3483,11 @@ template <int S> force_inline fvec<S> decode_flux(const uint8_t *p) {
     const fvec<S> v = fvec<S>(load_cwbvh_bytes<S>(p)) * (1.0f / 255.0f);
     return v * v * v;
 }
+
+// oct8 n_oct quantization angular error is ~0.011 rad; the cull must clear it to stay conservative
+constexpr float OCT8_CULL_MARGIN = 0.02f;
+// grazing-weight floor: guards grazing importance collapsing to exactly 0; measured floor 0 vs 0.05 is golden-neutral
+constexpr float GRAZE_W_FLOOR = 0.05f;
 
 template <int S>
 void calc_lnode_importance(const light_cwbvh_node_t &n, const float bbox_min[3][8], const float bbox_max[3][8],
@@ -3503,10 +3536,12 @@ void calc_lnode_importance(const light_cwbvh_node_t &n, const float bbox_min[3][
     }
 }
 
-template <int S> void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec<S> P[3], fvec<S> importance[8]) {
+template <int S>
+void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec<S> P[3], const fvec<S> N[3], fvec<S> importance[8]) {
     // Unpack bounds (pow2 step, same encoding as the box test)
     const float decode_step[3] = {pow2FromExp(n.ch_exp[0]), pow2FromExp(n.ch_exp[1]), pow2FromExp(n.ch_exp[2])};
     alignas(32) float bbox_min[3][8], bbox_max[3][8];
+    const ivec<S> has_n = simd_cast(abs(N[0]) + abs(N[1]) + abs(N[2]) > fvec<S>{0.0f});
     for (int i = 0; i < 8; ++i) {
         bbox_min[0][i] = bbox_min[1][i] = bbox_min[2][i] = -MAX_DIST;
         bbox_max[0][i] = bbox_max[1][i] = bbox_max[2][i] = MAX_DIST;
@@ -3557,6 +3592,17 @@ template <int S> void calc_lnode_importance(const light_cwbvh_node_t &n, const f
             const fvec<S> cos_omega = cos_sub_clamped(sin_omega_x, cos_omega_x, sin_omega_b, cos_omega_b);
 
             imp *= select(cos_omega > cos_omega_ne.get<1>(), cos_omega / max(v_len2, FLT_EPS), fvec<S>{0.0f});
+
+            // grazing weight: cos(min footprint angle) on the child's bounding sphere; the plane-support test
+            // with the oct8 margin does the culling. N == 0 (gate-off lanes) disables both
+            const fvec<S> cos_i = fvec<S>{0.0f} - (N[0] * wi[0] + N[1] * wi[1] + N[2] * wi[2]);
+            const fvec<S> sin_i = safe_sqrt(1.0f - cos_i * cos_i);
+            fvec<S> w = cos_sub_clamped(sin_i, cos_i, sin_omega_b, cos_omega_b);
+            where(cos_i >= cos_omega_b, w) = 1.0f;
+            where(has_n, imp) *= max(w, fvec<S>{GRAZE_W_FLOOR});
+            const fvec<S> plane_back = N[0] * (pc[0] - P[0]) + N[1] * (pc[1] - P[1]) + N[2] * (pc[2] - P[2]) +
+                                       0.5f * (ext[0] * abs(N[0]) + ext[1] * abs(N[1]) + ext[2] * abs(N[2]));
+            where(has_n & simd_cast(plane_back < -OCT8_CULL_MARGIN * (dist + 2.0f * extent)), imp) = 0.0f;
         }
 
         importance[i] = imp;
@@ -6423,14 +6469,17 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
 // Pick point on any light source for evaluation
 template <int S>
 void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fvec<S> B[3], const fvec<S> N[3],
-                                const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
-                                const fvec<S> &rand_pick_light, const fvec<S> rand_light_uv[2],
-                                const fvec<S> rand_tex_uv[2], ivec<S> ray_mask, light_sample_t<S> &ls) {
+                                const uvec<S> &ray_n_oct, const scene_data_t &sc,
+                                const Cpu::TexStorageBase *const textures[], const fvec<S> &rand_pick_light,
+                                const fvec<S> rand_light_uv[2], const fvec<S> rand_tex_uv[2], ivec<S> ray_mask,
+                                light_sample_t<S> &ls) {
     fvec<S> ri = rand_pick_light;
 
 #if USE_HIERARCHICAL_NEE
     ivec<S> light_index = -1;
     fvec<S> factor = 1.0f;
+    // caller-provided quantized origin normal for the light-tree cull (0-lane = cull disabled)
+    const std::array<fvec<S>, 3> octN = decode_n_oct<S>(ray_n_oct);
 
     { // Traverse light tree structure
         struct {
@@ -6447,7 +6496,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             for (;;) {
                 const light_cwbvh_node_t &n = sc.light_cwnodes[i];
                 fvec<S> importance[8];
-                calc_lnode_importance(n, P, importance);
+                calc_lnode_importance(n, P, octN.data(), importance);
 
                 fvec<S> total_importance = importance[0];
                 UNROLLED_FOR(j, 7, { total_importance += importance[j + 1]; })
@@ -7498,7 +7547,8 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
                     continue;
                 }
                 alignas(32) float importance[8];
-                calc_lnode_importance<SS>(n, bbox_min, bbox_max, _ro, importance);
+                // plane point is surf.P (the pick CDF point); unweighted basis - see REF EvalTri note
+                calc_lnode_importance<SS>(n, bbox_min, bbox_max, _p, importance);
 
                 float total_importance = 0.0f;
                 UNROLLED_FOR(j, 8, { total_importance += importance[j]; })
@@ -8780,6 +8830,13 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
         }
     }
 
+    // refractive/Principled-transmissive events legitimately sample behind-surface lights; cull off there
+    const int *transmission_unorms = reinterpret_cast<const int *>(&sc.materials[0].transmission_unorm);
+    const ivec<S> refractive_mat = (mat_type == int(eShadingNode::Refractive)) |
+                                   (mat_type == int(eShadingNode::Principled) &
+                                    ((gather(transmission_unorms, mat_index * MatDWORDStride) & 0xffff) != 0));
+    const uvec<S> ray_n_oct = encode_n_oct<S>(surf.N) & uvec<S>(~refractive_mat);
+
 #if USE_NEE
     light_sample_t<S> ls;
     if (!sc.light_cwnodes.empty()) {
@@ -8788,8 +8845,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
         const std::array<fvec<S>, 2> rand_light_uv =
             get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT, rand_hash, iteration - 1, rand_seq);
 
-        SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, rand_pick_light, rand_light_uv.data(),
-                          tex_rand.data(), is_active_lane, ls);
+        SampleLightSource(surf.P, surf.T, surf.B, surf.N, ray_n_oct, sc, textures, rand_pick_light,
+                          rand_light_uv.data(), tex_rand.data(), is_active_lane, ls);
     }
     const fvec<S> N_dot_L = dot3(surf.N, ls.L);
 #endif

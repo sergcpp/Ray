@@ -1772,6 +1772,11 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         }
     }
 
+    // refractive/Principled-transmissive events legitimately sample behind-surface lights; cull off there
+    const bool cull_ok = mat->type != eShadingNode::Refractive &&
+                         !(mat->type == eShadingNode::Principled && mat->transmission_unorm != 0);
+    const uint32_t ray_n_oct = cull_ok ? encode_n_oct(surf.N) : 0u;
+
     light_sample_t ls;
     if (USE_NEE && (!sc.light_cwnodes.empty() || !sc.light_nodes.empty()) && mat->type != eShadingNode::Emissive) {
         const float rand_pick_light =
@@ -1779,7 +1784,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         const fvec2 rand_light_uv =
             get_scrambled_2d_rand(rand_dim + RAND_DIM_LIGHT, rand_hash, iteration - 1, rand_seq);
 
-        SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, rand_pick_light, rand_light_uv, tex_rand, ls);
+        SampleLightSource(surf.P, surf.T, surf.B, surf.N, ray_n_oct, sc, textures, rand_pick_light, rand_light_uv,
+                          tex_rand, ls);
     }
     const float N_dot_L = dot(surf.N, ls.L);
 
@@ -1875,8 +1881,9 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
             if (USE_HIERARCHICAL_NEE) {
                 // TODO: maybe this can be done more efficiently
                 if (!sc.light_cwnodes.empty()) {
+                    // chain factor evaluated at surf.P (the pick CDF point), unweighted basis
                     pdf_factor =
-                        EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_cwnodes, sc.light_leaf_prims);
+                        EvalTriLightFactor(surf.P, tri_index, sc.lights, sc.light_cwnodes, sc.light_leaf_prims);
                 } else {
                     pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index, sc.lights, sc.light_nodes);
                 }

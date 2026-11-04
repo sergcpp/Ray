@@ -466,9 +466,13 @@ fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const scene_da
                      const Cpu::TexStorageBase *const textures[]);
 
 // Pick point on any light source for evaluation
-void SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fvec4 &N, const scene_data_t &sc,
-                       const Cpu::TexStorageBase *const textures[], float rand_pick_light, fvec2 rand_light_uv,
-                       fvec2 rand_tex_uv, light_sample_t &ls);
+void SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fvec4 &N, uint32_t n_oct,
+                       const scene_data_t &sc, const Cpu::TexStorageBase *const textures[], float rand_pick_light,
+                       fvec2 rand_light_uv, fvec2 rand_tex_uv, light_sample_t &ls);
+
+// Origin normal packing for the light-tree behind-surface cull: bit16 validity + oct8 pair; 0 = cull disabled
+uint32_t encode_n_oct(const fvec4 &N);
+fvec4 decode_n_oct(const uint32_t n_oct);
 
 // Account for visible lights contribution
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
@@ -484,7 +488,7 @@ float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Sp
                          Span<const light_bvh_node_t> nodes);
 float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_wbvh_node_t> nodes);
-float EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
+float EvalTriLightFactor(const fvec4 &P, uint32_t tri_index, Span<const light_t> lights,
                          Span<const light_cwbvh_node_t> nodes, Span<const uint32_t> leaf_lights);
 
 float Evaluate_EnvQTree(float y_rotation, const fvec4 *const *qtree_mips, int qtree_levels, const fvec4 &L);

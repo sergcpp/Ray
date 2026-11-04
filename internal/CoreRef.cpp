@@ -1027,6 +1027,11 @@ force_inline fvec4 approx_acos(fvec4 x) {
     return negate * PI + ret;
 }
 
+// oct8 n_oct quantization angular error is ~0.011 rad; the cull must clear it to stay conservative
+static constexpr float OCT8_CULL_MARGIN = 0.02f;
+// grazing-weight floor: guards grazing importance collapsing to exactly 0; measured floor 0 vs 0.05 is golden-neutral
+static constexpr float GRAZE_W_FLOOR = 0.05f;
+
 float calc_lnode_importance(const light_bvh_node_t &n, const fvec4 &P) {
     float mul = 1.0f, v_len2 = 1.0f;
     if (n.bbox_min[0] > -MAX_DIST) { // check if this is a local light
@@ -1158,6 +1163,17 @@ force_inline fvec4 decode_flux(const uint8_t *p) {
     return v * v * v;
 }
 
+// Origin normal for light-tree culling: bit16 validity + Ray::EncodeOctDir8 oct8 pair; 0 (zero-initialized ray) = cull
+// disabled
+uint32_t encode_n_oct(const fvec4 &N) {
+    const float sum = fabsf(N.get<0>()) + fabsf(N.get<1>()) + fabsf(N.get<2>());
+    return sum > 0.0f ? 0x10000u | Ray::EncodeOctDir8(value_ptr(N)) : 0u;
+}
+
+fvec4 decode_n_oct(const uint32_t n_oct) {
+    return n_oct != 0u ? decode_oct_dir8(uint16_t(n_oct & 0xffffu)) : fvec4(0.0f);
+}
+
 void calc_lnode_importance(const light_wbvh_node_t &n, const fvec4 &P, float importance[8]) {
     for (int i = 0; i < 8; i += 4) {
         fvec4 mul = 1.0f, v_len2 = 1.0f;
@@ -1204,9 +1220,10 @@ void calc_lnode_importance(const light_wbvh_node_t &n, const fvec4 &P, float imp
     }
 }
 
-void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec4 &P, float importance[8]) {
+void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec4 &P, const fvec4 &N, float importance[8]) {
     alignas(16) float bbox_min[3][8], bbox_max[3][8];
     const float step[3] = {pow2FromExp(n.ch_exp[0]), pow2FromExp(n.ch_exp[1]), pow2FromExp(n.ch_exp[2])};
+    const bool has_n = fabsf(N.get<0>()) + fabsf(N.get<1>()) + fabsf(N.get<2>()) > 0.0f;
 
     for (int i = 0; i < 8; i += 4) {
         fvec4 imp = decode_flux(&n.flux[i]);
@@ -1254,6 +1271,21 @@ void calc_lnode_importance(const light_cwbvh_node_t &n, const fvec4 &P, float im
             fvec4 mul = 0.0f;
             where(cos_omega > cos_omega_ne[1], mul) = (cos_omega / v_len2);
             where(mask, imp) = (imp * mul);
+
+            // grazing weight: cos(min footprint angle) on the child's bounding sphere; the plane-support test
+            // with the oct8 margin does the culling. N == 0 disables (IAL / gate-off lanes)
+            if (has_n) {
+                const fvec4 cos_i = 0.0f - (N.get<0>() * wi[0] + N.get<1>() * wi[1] + N.get<2>() * wi[2]);
+                const fvec4 sin_i = sqrt(max(1.0f - cos_i * cos_i, 0.0f));
+                fvec4 w = cos_sub_clamped(sin_i, cos_i, sin_omega_b, cos_omega_b);
+                where(cos_i >= cos_omega_b, w) = 1.0f;
+                where(mask, imp) = imp * max(w, fvec4(GRAZE_W_FLOOR));
+                const fvec4 plane_back =
+                    N.get<0>() * (pc[0] - P.get<0>()) + N.get<1>() * (pc[1] - P.get<1>()) +
+                    N.get<2>() * (pc[2] - P.get<2>()) +
+                    0.5f * (ext[0] * fabsf(N.get<0>()) + ext[1] * fabsf(N.get<1>()) + ext[2] * fabsf(N.get<2>()));
+                where(mask & simd_cast(plane_back < -OCT8_CULL_MARGIN * (dist + 2.0f * extent)), imp) = 0.0f;
+            }
         }
         imp.store_to(&importance[i], vector_aligned);
     }
@@ -3909,14 +3941,17 @@ Ray::Ref::fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int max_tr
     return rc;
 }
 
-void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fvec4 &N, const scene_data_t &sc,
-                                 const Cpu::TexStorageBase *const textures[], const float rand_pick_light,
-                                 const fvec2 rand_light_uv, const fvec2 rand_tex_uv, light_sample_t &ls) {
+void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fvec4 &N, const uint32_t n_oct,
+                                 const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
+                                 const float rand_pick_light, const fvec2 rand_light_uv, const fvec2 rand_tex_uv,
+                                 light_sample_t &ls) {
     float u1 = rand_pick_light;
 
     uint32_t light_index;
     float factor;
     if (USE_HIERARCHICAL_NEE) {
+        // caller-provided quantized origin normal for the light-tree cull (0 = cull disabled)
+        const fvec4 octN = decode_n_oct(n_oct);
         factor = 1.0f;
         // Importance-weighted descent (CWBVH layout): the CDF pick lands on a child slot;
         // meta4 classifies it (0x40 bit = leaf child, resolved through the parent's
@@ -3926,7 +3961,7 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         for (;;) {
             const light_cwbvh_node_t &n = sc.light_cwnodes[node_ref];
             alignas(16) float importance[8];
-            calc_lnode_importance(n, P, importance);
+            calc_lnode_importance(n, P, octN, importance);
 
             const float total_importance =
                 hsum(fvec4{&importance[0], vector_aligned} + fvec4{&importance[4], vector_aligned});
@@ -4340,7 +4375,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
                 }
 
                 fvec4 importance[2];
-                calc_lnode_importance(n, ro, value_ptr(importance[0]));
+                calc_lnode_importance(n, ro, fvec4(0.0f), value_ptr(importance[0]));
 
                 mask &= ~(simd_cast(importance[0] == 0.0f).movemask() << 0);
                 mask &= ~(simd_cast(importance[1] == 0.0f).movemask() << 4);
@@ -5361,9 +5396,8 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, uint32_t tri
     return 1.0f;
 }
 
-float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, const uint32_t tri_index,
-                                   Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
-                                   Span<const uint32_t> leaf_lights) {
+float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const uint32_t tri_index, Span<const light_t> lights,
+                                   Span<const light_cwbvh_node_t> nodes, Span<const uint32_t> leaf_lights) {
     TraversalStack<MAX_STACK_SIZE, light_cwbvh_stack_entry_t> st;
     st.push(0u /* root_index */, 0u /* masks_L */);
 
@@ -5397,7 +5431,9 @@ float Ray::Ref::EvalTriLightFactor(const fvec4 &P, const fvec4 &ro, const uint32
                 continue;
             }
             fvec4 importance[2];
-            calc_lnode_importance(n, ro, value_ptr(importance[0]));
+            // plane point is surf.P (where the pick CDF is built) but the basis stays unweighted: tri-light
+            // contributions are two-sided (fabsf), zeroing them here inflates BSDF-hit MIS weights instead
+            calc_lnode_importance(n, P, fvec4(0.0f), value_ptr(importance[0]));
 
             mask &= ~(simd_cast(importance[0] == 0.0f).movemask() << 0);
             mask &= ~(simd_cast(importance[1] == 0.0f).movemask() << 4);
