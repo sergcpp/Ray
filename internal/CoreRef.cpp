@@ -1528,6 +1528,85 @@ float spread_attenuation(const fvec4 &D, const fvec4 &light_fwd, const float tan
     return fmaxf((tan_half_spread - tan_a) * spread_normalization, 0.0f);
 }
 
+bool spread_clamp_rect(const fvec4 &P, const float tan_half_spread, fvec4 &pos, fvec4 &u, fvec4 &v, float &area) {
+    const fvec4 fwd = normalize(cross(u, v));
+    const float len_u = length(u), len_v = length(v);
+    const fvec4 un = u * (1.0f / len_u), vn = v * (1.0f / len_v);
+    const float t = dot(fwd, P - pos);
+    const fvec4 closest = P - t * fwd;
+    const float r = t * tan_half_spread;
+    const float su = dot(un, closest - pos), sv = dot(vn, closest - pos);
+    const float min_u = fmaxf(su - r, -0.5f * len_u), max_u = fminf(su + r, 0.5f * len_u);
+    const float min_v = fmaxf(sv - r, -0.5f * len_v), max_v = fminf(sv + r, 0.5f * len_v);
+    if (min_u >= max_u || min_v >= max_v)
+        return false;
+    const float lu = max_u - min_u, lv = max_v - min_v;
+    pos = pos + un * (0.5f * (min_u + max_u)) + vn * (0.5f * (min_v + max_v));
+    u = un * lu;
+    v = vn * lv;
+    area = lu * lv;
+    return true;
+}
+
+int spread_clamp_disk(const fvec4 &P, const float tan_half_spread, fvec4 &pos, fvec4 &u, fvec4 &v, float &area) {
+    const fvec4 fwd = normalize(cross(u, v));
+    const float len_u = length(u), len_v = length(v);
+    const fvec4 un = u * (1.0f / len_u), vn = v * (1.0f / len_v);
+    const float t = dot(fwd, P - pos);
+    const fvec4 closest = P - t * fwd;
+    const float r = t * tan_half_spread;
+    if (r <= 0.0f)
+        return 0;
+    bool sample_spread = false;
+    if (len_u == len_v) {
+        const float rr = 0.5f * len_u;
+        const fvec4 off = pos - closest;
+        const float dist = length(off);
+        if (dist >= rr + r)
+            return 0;
+        sample_spread = (dist <= fabsf(rr - r)) && (r < rr);
+        if (dist > fabsf(rr - r)) {
+            const float lu = rr + r - dist;
+            // lens bounding-box transverse extent: chord through both circle centers' frame
+            const float lv = (fabsf(sqr(rr) - sqr(r)) >= sqr(dist))
+                                 ? 2.0f * fminf(rr, r)
+                                 : sqrtf(fmaxf(sqr(2.0f * r) - sqr(dist + (sqr(r) - sqr(rr)) / dist), 0.0f));
+            if (lu * lv < fminf(PI * rr * rr, PI * r * r)) {
+                const fvec4 au = off * (1.0f / dist), av = cross(fwd, au);
+                pos = 0.5f * (pos + closest + au * (r - rr));
+                u = au * lu;
+                v = av * lv;
+                area = lu * lv;
+                return 3;
+            }
+            sample_spread = (PI * r * r < PI * rr * rr);
+        }
+    } else {
+        const float su = dot(un, closest - pos), sv = dot(vn, closest - pos);
+        const float min_u = fmaxf(su - r, -0.5f * len_u), max_u = fminf(su + r, 0.5f * len_u);
+        const float min_v = fmaxf(sv - r, -0.5f * len_v), max_v = fminf(sv + r, 0.5f * len_v);
+        if (min_u >= max_u || min_v >= max_v)
+            return 0;
+        const float lu = max_u - min_u, lv = max_v - min_v;
+        if (lu * lv < fminf(0.25f * PI * len_u * len_v, PI * r * r)) {
+            pos = pos + un * (0.5f * (min_u + max_u)) + vn * (0.5f * (min_v + max_v));
+            u = un * lu;
+            v = vn * lv;
+            area = lu * lv;
+            return 3;
+        }
+        sample_spread = (PI * r * r < 0.25f * PI * len_u * len_v);
+    }
+    if (sample_spread) {
+        pos = pos + un * dot(un, closest - pos) + vn * dot(vn, closest - pos);
+        u = un * (2.0f * r);
+        v = vn * (2.0f * r);
+        area = PI * r * r;
+        return 2;
+    }
+    return 1;
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -4086,15 +4165,23 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         const fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
         const fvec4 light_forward = normalize(cross(light_u, light_v));
 
-        fvec4 lp;
+        fvec4 cpos = light_pos, cu = light_u, cv = light_v;
+        float carea = l.rect.area;
+        bool in_cone = true;
+        if (l.rect.spread_normalization > 0.0f)
+            in_cone = spread_clamp_rect(P, l.rect.tan_half_spread, cpos, cu, cv, carea);
+
+        fvec4 lp = cpos;
         float pdf = 0.0f;
 
-        if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
-            pdf = SampleSphericalRectangle(P, light_pos, light_u, light_v, rand_light_uv, &lp);
-        }
-        if (!(pdf > 0.0f)) { // NaN-safe
-            const float r1 = rand_light_uv.get<0>() - 0.5f, r2 = rand_light_uv.get<1>() - 0.5f;
-            lp = light_pos + light_u * r1 + light_v * r2;
+        if (in_cone) {
+            if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
+                pdf = SampleSphericalRectangle(P, cpos, cu, cv, rand_light_uv, &lp);
+            }
+            if (!(pdf > 0.0f)) { // NaN-safe
+                const float r1 = rand_light_uv.get<0>() - 0.5f, r2 = rand_light_uv.get<1>() - 0.5f;
+                lp = cpos + cu * r1 + cv * r2;
+            }
         }
 
         float ls_dist;
@@ -4102,10 +4189,10 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         ls.ray_flags = l.ray_visibility;
 
         const float cos_theta = dot(-ls.L, light_forward);
-        if (cos_theta > 0.0f) {
+        if (in_cone && cos_theta > 0.0f) {
             ls.lp = offset_ray(lp, light_forward);
-            ls.pdf = (pdf > 0.0f) ? pdf : (ls_dist * ls_dist) / (l.rect.area * cos_theta);
-            ls.area = l.visible ? l.rect.area : 0.0f;
+            ls.pdf = (pdf > 0.0f) ? pdf : (ls_dist * ls_dist) / (carea * cos_theta);
+            ls.area = l.visible ? carea : 0.0f;
             if (l.sky_portal != 0) {
                 fvec4 env_col = make_fvec3(sc.env.env_col);
                 if (sc.env.env_map != 0xffffffff) {
@@ -4123,26 +4210,40 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         const fvec4 light_pos = make_fvec3(l.disk.pos);
         const fvec4 light_u = make_fvec3(l.disk.u), light_v = make_fvec3(l.disk.v);
 
-        const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
+        fvec4 cpos = light_pos, cu = light_u, cv = light_v;
+        float carea = l.disk.area;
+        int mode = 1;
+        if (l.disk.spread_normalization > 0.0f)
+            mode = spread_clamp_disk(P, l.disk.tan_half_spread, cpos, cu, cv, carea);
 
-        fvec2 offset = 2.0f * fvec2{r1, r2} - fvec2{1.0f, 1.0f};
-        if (offset.get<0>() != 0.0f || offset.get<1>() != 0.0f) {
-            float theta, r;
-            if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
-                r = offset.get<0>();
-                theta = 0.25f * PI * (offset.get<1>() / offset.get<0>());
-            } else {
-                r = offset.get<1>();
-                theta = 0.5f * PI - 0.25f * PI * (offset.get<0>() / offset.get<1>());
+        fvec4 lp;
+        if (mode == 3) {
+            lp = cpos + cu * (rand_light_uv.get<0>() - 0.5f) + cv * (rand_light_uv.get<1>() - 0.5f);
+        } else {
+            const float r1 = rand_light_uv.get<0>(), r2 = rand_light_uv.get<1>();
+
+            fvec2 offset = 2.0f * fvec2{r1, r2} - fvec2{1.0f, 1.0f};
+            if (offset.get<0>() != 0.0f || offset.get<1>() != 0.0f) {
+                float theta, r;
+                if (fabsf(offset.get<0>()) > fabsf(offset.get<1>())) {
+                    r = offset.get<0>();
+                    theta = 0.25f * PI * (offset.get<1>() / offset.get<0>());
+                } else {
+                    r = offset.get<1>();
+                    theta = 0.5f * PI - 0.25f * PI * (offset.get<0>() / offset.get<1>());
+                }
+
+                const fvec2 sincos_theta = portable_sincos(theta);
+
+                offset.set<0>(0.5f * r * sincos_theta.get<1>());
+                offset.set<1>(0.5f * r * sincos_theta.get<0>());
             }
 
-            const fvec2 sincos_theta = portable_sincos(theta);
-
-            offset.set<0>(0.5f * r * sincos_theta.get<1>());
-            offset.set<1>(0.5f * r * sincos_theta.get<0>());
+            lp = cpos + cu * offset.get<0>() + cv * offset.get<1>();
         }
+        if (mode == 0)
+            lp = cpos;
 
-        const fvec4 lp = light_pos + light_u * offset.get<0>() + light_v * offset.get<1>();
         const fvec4 light_forward = normalize(cross(light_u, light_v));
 
         ls.lp = offset_ray(lp, light_forward);
@@ -4152,11 +4253,14 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         ls.ray_flags = l.ray_visibility;
 
         const float cos_theta = dot(-ls.L, light_forward);
-        if (cos_theta > 0.0f) {
-            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
+        if (mode != 0 && cos_theta > 0.0f) {
+            ls.pdf = (ls_dist * ls_dist) / (carea * cos_theta);
         }
 
         if (!l.visible) {
+            ls.area = 0.0f;
+        }
+        if (mode == 0) {
             ls.area = 0.0f;
         }
 
@@ -4171,6 +4275,18 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
         }
         if (l.disk.spread_normalization > 0.0f) {
             ls.col *= spread_attenuation(ls.L, light_forward, l.disk.tan_half_spread, l.disk.spread_normalization);
+            if (mode != 0) {
+                // sub-rect / circle domains can stick out of the emitter: those points radiate nothing
+                const float len_u = length(light_u), len_v = length(light_v);
+                const fvec4 un = light_u * (1.0f / len_u), vn = light_v * (1.0f / len_v);
+                const fvec4 inplane = lp - light_pos;
+                const float su = dot(un, inplane), sv = dot(vn, inplane);
+                const float eps_u = (0.5f + 1e-7f) * len_u + 1e-6f, eps_v = (0.5f + 1e-7f) * len_v + 1e-6f;
+                if (sqr(su / eps_u) + sqr(sv / eps_v) > 1.0f) {
+                    ls.pdf = 0.0f;
+                    ls.area = 0.0f;
+                }
+            }
         }
     } else if (l.type == LIGHT_TYPE_LINE) {
         const fvec4 light_pos = make_fvec3(l.line.pos);

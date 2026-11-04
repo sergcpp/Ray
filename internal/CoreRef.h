@@ -282,6 +282,13 @@ float SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fve
 float SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, const fvec4 &p3, const fvec2 Xi,
                               fvec4 *out_dir);
 
+// Spread-footprint sampling-domain clamp: shrink rect/disk to the hard-cone footprint circle around P
+// (out = clamped shape/area). Every light_pdf site MUST apply the identical clamp or MIS is biased.
+// false/0 = footprint misses the shape: contribution is exactly zero at P, caller keeps pdf = 0.
+bool spread_clamp_rect(const fvec4 &P, float tan_half_spread, fvec4 &pos, fvec4 &u, fvec4 &v, float &area);
+// Disk modes: 0 miss, 1 keep whole disk, 2 footprint circle, 3 sub-rect covering the lens (uniform sample)
+int spread_clamp_disk(const fvec4 &P, float tan_half_spread, fvec4 &pos, fvec4 &u, fvec4 &v, float &area);
+
 // Generation of rays
 void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const uint32_t rand_seq[],
                          uint32_t rand_seed, const float filter_table[], int iteration,

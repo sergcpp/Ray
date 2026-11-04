@@ -1559,9 +1559,9 @@ void test_complex_mat5_hdri_light(const char *arch_list[], std::string_view pref
 
 void test_complex_mat5_area_spread(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 44;
-    const double MinPSNR = 27.5;
-    // 44-sample renders land at 295-332 diff px (CPU 295-309, NV 307-320, Arc 332 after the pick port)
-    const int PixThres = 340;
+    const double MinPSNR = 27.8;
+    // The spread-footprint domain clamp halved the diff pixels: CPU 158-159, NV GPU 158-163 (Arc lands higher)
+    const int PixThres = 220;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};

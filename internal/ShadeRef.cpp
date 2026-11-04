@@ -1502,14 +1502,22 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_d
                 lcol *= spread_attenuation(I, light_forward, l.rect.tan_half_spread, l.rect.spread_normalization);
             }
 
+            fvec4 cpos = light_pos, cu = light_u, cv = light_v;
+            float carea = l.rect.area;
+            bool in_cone = true;
+            if (l.rect.spread_normalization > 0.0f)
+                in_cone = spread_clamp_rect(ro, l.rect.tan_half_spread, cpos, cu, cv, carea);
+
             float light_pdf = 0.0f;
-            if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
-                light_pdf = SampleSphericalRectangle(ro, light_pos, light_u, light_v, {}, nullptr) / pdf_factor;
-            }
-            if (light_pdf == 0.0f) {
-                const float light_area = l.rect.area;
-                const float cos_theta = dot(I, light_forward);
-                light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
+            if (in_cone) {
+                if (USE_SPHERICAL_AREA_LIGHT_SAMPLING) {
+                    light_pdf = SampleSphericalRectangle(ro, cpos, cu, cv, {}, nullptr) / pdf_factor;
+                }
+                if (light_pdf == 0.0f) {
+                    const float light_area = carea;
+                    const float cos_theta = dot(I, light_forward);
+                    light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
+                }
             }
 
             const float bsdf_pdf = ray.pdf;
@@ -1523,10 +1531,16 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_d
                 lcol *= spread_attenuation(I, light_forward, l.disk.tan_half_spread, l.disk.spread_normalization);
             }
 
-            const float light_area = l.disk.area;
+            fvec4 cpos = make_fvec3(l.disk.pos), cu = light_u, cv = light_v;
+            float carea = l.disk.area;
+            bool in_cone = true;
+            if (l.disk.spread_normalization > 0.0f)
+                in_cone = (spread_clamp_disk(ro, l.disk.tan_half_spread, cpos, cu, cv, carea) != 0);
+
+            const float light_area = carea;
             const float cos_theta = dot(I, light_forward);
 
-            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
+            const float light_pdf = in_cone ? (inter.t * inter.t) / (light_area * cos_theta * pdf_factor) : 0.0f;
             const float bsdf_pdf = ray.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);

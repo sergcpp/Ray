@@ -3647,6 +3647,149 @@ fvec<S> spread_attenuation(const fvec<S> D[3], const float light_fwd[3], const f
     return max((tan_half_spread - tan_a) * spread_normalization, 0.0f);
 }
 
+template <int S> struct spread_shape_t {
+    fvec<S> pos[3], u[3], v[3], area;
+    ivec<S> ok, subrect;
+};
+
+// Spread-footprint domain clamp, bit-mirror of Ray::Ref::spread_clamp_rect; ok=false lanes
+// contribute exactly zero at P (caller must zero pdf).
+template <int S> void spread_clamp_rect(const fvec<S> P[3], const light_t &l, spread_shape_t<S> &sh) {
+    UNROLLED_FOR(i, 3, {
+        sh.pos[i] = l.rect.pos[i];
+        sh.u[i] = l.rect.u[i];
+        sh.v[i] = l.rect.v[i];
+    })
+    sh.area = l.rect.area;
+    sh.ok = simd_cast(fvec<S>{1.0f} > fvec<S>{0.0f});
+    sh.subrect = simd_cast(fvec<S>{0.0f} > fvec<S>{1.0f});
+    if (l.rect.spread_normalization <= 0.0f)
+        return; // identity shape, all lanes ok
+
+    float fwd0[3];
+    cross(l.rect.u, l.rect.v, fwd0);
+    normalize(fwd0);
+    const float len_u = sqrtf(l.rect.u[0] * l.rect.u[0] + l.rect.u[1] * l.rect.u[1] + l.rect.u[2] * l.rect.u[2]);
+    const float len_v = sqrtf(l.rect.v[0] * l.rect.v[0] + l.rect.v[1] * l.rect.v[1] + l.rect.v[2] * l.rect.v[2]);
+    const fvec<S> un0[3] = {l.rect.u[0] * (1.0f / len_u), l.rect.u[1] * (1.0f / len_u), l.rect.u[2] * (1.0f / len_u)};
+    const fvec<S> vn0[3] = {l.rect.v[0] * (1.0f / len_v), l.rect.v[1] * (1.0f / len_v), l.rect.v[2] * (1.0f / len_v)};
+
+    fvec<S> dP[3];
+    UNROLLED_FOR(i, 3, { dP[i] = P[i] - sh.pos[i]; })
+    const fvec<S> t = dot3(dP, fwd0);
+    const fvec<S> r = t * l.rect.tan_half_spread;
+    fvec<S> closest[3];
+    UNROLLED_FOR(i, 3, { closest[i] = P[i] - t * fvec<S>{fwd0[i]}; })
+    fvec<S> dc[3];
+    UNROLLED_FOR(i, 3, { dc[i] = closest[i] - sh.pos[i]; })
+    const fvec<S> su = dot3(dc, un0), sv = dot3(dc, vn0);
+    const fvec<S> minu = max(su - r, fvec<S>{-0.5f * len_u}), maxu = min(su + r, fvec<S>{0.5f * len_u});
+    const fvec<S> minv = max(sv - r, fvec<S>{-0.5f * len_v}), maxv = min(sv + r, fvec<S>{0.5f * len_v});
+    sh.ok = ~simd_cast((minu >= maxu) | (minv >= maxv));
+
+    const fvec<S> lu_ = maxu - minu, lv_ = maxv - minv;
+    UNROLLED_FOR(i, 3, {
+        where(sh.ok, sh.pos[i]) =
+            sh.pos[i] + un0[i] * (fvec<S>{0.5f} * (minu + maxu)) + vn0[i] * (fvec<S>{0.5f} * (minv + maxv));
+        where(sh.ok, sh.u[i]) = un0[i] * lu_;
+        where(sh.ok, sh.v[i]) = vn0[i] * lv_;
+    })
+    where(sh.ok, sh.area) = lu_ * lv_;
+}
+
+template <int S> void spread_clamp_disk(const fvec<S> P[3], const light_t &l, spread_shape_t<S> &sh) {
+    UNROLLED_FOR(i, 3, {
+        sh.pos[i] = l.disk.pos[i];
+        sh.u[i] = l.disk.u[i];
+        sh.v[i] = l.disk.v[i];
+    })
+    sh.area = l.disk.area;
+    sh.ok = simd_cast(fvec<S>{1.0f} > fvec<S>{0.0f});
+    sh.subrect = simd_cast(fvec<S>{0.0f} > fvec<S>{1.0f});
+    if (l.disk.spread_normalization <= 0.0f)
+        return; // identity shape, all lanes ok
+
+    float fwd0[3];
+    cross(l.disk.u, l.disk.v, fwd0);
+    normalize(fwd0);
+    const float len_u = sqrtf(l.disk.u[0] * l.disk.u[0] + l.disk.u[1] * l.disk.u[1] + l.disk.u[2] * l.disk.u[2]);
+    const float len_v = sqrtf(l.disk.v[0] * l.disk.v[0] + l.disk.v[1] * l.disk.v[1] + l.disk.v[2] * l.disk.v[2]);
+    const fvec<S> un0[3] = {l.disk.u[0] * (1.0f / len_u), l.disk.u[1] * (1.0f / len_u), l.disk.u[2] * (1.0f / len_u)};
+    const fvec<S> vn0[3] = {l.disk.v[0] * (1.0f / len_v), l.disk.v[1] * (1.0f / len_v), l.disk.v[2] * (1.0f / len_v)};
+
+    fvec<S> dP[3];
+    UNROLLED_FOR(i, 3, { dP[i] = P[i] - sh.pos[i]; })
+    const fvec<S> t = dot3(dP, fwd0);
+    const fvec<S> r = t * l.disk.tan_half_spread;
+    sh.ok = simd_cast(r > fvec<S>{0.0f});
+
+    fvec<S> closest[3];
+    UNROLLED_FOR(i, 3, { closest[i] = P[i] - t * fvec<S>{fwd0[i]}; })
+    fvec<S> dc[3];
+    UNROLLED_FOR(i, 3, { dc[i] = closest[i] - sh.pos[i]; })
+    const fvec<S> su = dot3(dc, un0), sv = dot3(dc, vn0);
+
+    ivec<S> do_bbox, do_spread;
+    if (len_u == len_v) {
+        const float rr = 0.5f * len_u;
+        fvec<S> off[3];
+        UNROLLED_FOR(i, 3, { off[i] = fvec<S>{l.disk.pos[i]} - closest[i]; })
+        const fvec<S> dist = length(off);
+        sh.ok &= simd_cast(dist < fvec<S>{rr} + r);
+        const fvec<S> dev = abs(fvec<S>{rr} - r);
+        const ivec<S> inside = simd_cast(dist <= dev) & simd_cast(r < fvec<S>{rr}) & sh.ok;
+        const ivec<S> intersect = simd_cast(dist > dev) & sh.ok;
+        const fvec<S> sel_dist = select(dist != fvec<S>{0.0f}, dist, fvec<S>{1.0f});
+
+        const fvec<S> lu_ = fvec<S>{rr} + r - dist;
+        const ivec<S> wide = simd_cast(abs(fvec<S>{rr * rr} - r * r) >= dist * dist);
+        const fvec<S> chord = dist + (r * r - fvec<S>{rr * rr}) / sel_dist;
+        const fvec<S> lv_ = select(wide, fvec<S>{2.0f} * min(fvec<S>{rr}, r),
+                                   sqrt(max(fvec<S>{4.0f} * r * r - chord * chord, fvec<S>{0.0f})));
+        do_bbox = intersect & simd_cast(lu_ * lv_ < min(fvec<S>{PI * rr * rr}, fvec<S>{PI} * r * r));
+        do_spread = (inside | (intersect & ~do_bbox & simd_cast(fvec<S>{PI} * r * r < fvec<S>{PI * rr * rr}))) & sh.ok;
+        if (do_bbox.not_all_zeros()) {
+            const fvec<S> fwdS[3] = {fvec<S>{fwd0[0]}, fvec<S>{fwd0[1]}, fvec<S>{fwd0[2]}};
+            fvec<S> au[3], av[3];
+            UNROLLED_FOR(i, 3, { au[i] = off[i] * (fvec<S>{1.0f} / sel_dist); })
+            cross(fwdS, au, av);
+            UNROLLED_FOR(i, 3, {
+                where(do_bbox, sh.pos[i]) =
+                    fvec<S>{0.5f} * (fvec<S>{l.disk.pos[i]} + closest[i] + au[i] * (r - fvec<S>{rr}));
+                where(do_bbox, sh.u[i]) = au[i] * lu_;
+                where(do_bbox, sh.v[i]) = av[i] * lv_;
+            })
+            where(do_bbox, sh.area) = lu_ * lv_;
+            sh.subrect = do_bbox;
+        }
+    } else {
+        const fvec<S> minu = max(su - r, fvec<S>{-0.5f * len_u}), maxu = min(su + r, fvec<S>{0.5f * len_u});
+        const fvec<S> minv = max(sv - r, fvec<S>{-0.5f * len_v}), maxv = min(sv + r, fvec<S>{0.5f * len_v});
+        sh.ok &= ~simd_cast((minu >= maxu) | (minv >= maxv));
+        const fvec<S> lu_ = maxu - minu, lv_ = maxv - minv;
+        do_bbox = sh.ok & simd_cast(lu_ * lv_ < min(fvec<S>{0.25f * PI * len_u * len_v}, fvec<S>{PI} * r * r));
+        do_spread = sh.ok & ~do_bbox & simd_cast(fvec<S>{PI} * r * r < fvec<S>{0.25f * PI * len_u * len_v});
+        if (do_bbox.not_all_zeros()) {
+            UNROLLED_FOR(i, 3, {
+                where(do_bbox, sh.pos[i]) =
+                    sh.pos[i] + un0[i] * (fvec<S>{0.5f} * (minu + maxu)) + vn0[i] * (fvec<S>{0.5f} * (minv + maxv));
+                where(do_bbox, sh.u[i]) = un0[i] * lu_;
+                where(do_bbox, sh.v[i]) = vn0[i] * lv_;
+            })
+            where(do_bbox, sh.area) = lu_ * lv_;
+            sh.subrect = do_bbox;
+        }
+    }
+    if (do_spread.not_all_zeros()) {
+        UNROLLED_FOR(i, 3, {
+            where(do_spread, sh.pos[i]) = sh.pos[i] + un0[i] * su + vn0[i] * sv;
+            where(do_spread, sh.u[i]) = un0[i] * (fvec<S>{2.0f} * r);
+            where(do_spread, sh.v[i]) = vn0[i] * (fvec<S>{2.0f} * r);
+        })
+        where(do_spread, sh.area) = fvec<S>{PI} * r * r;
+    }
+}
+
 } // namespace NS
 } // namespace Ray
 
@@ -6675,17 +6818,16 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
             fvec<S> lp[3];
+            spread_shape_t<S> sh;
+            spread_clamp_rect<S>(P, l, sh);
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-            const fvec<S> vp[3] = {l.rect.pos[0], l.rect.pos[1], l.rect.pos[2]},
-                          vu[3] = {l.rect.u[0], l.rect.u[1], l.rect.u[2]},
-                          vv[3] = {l.rect.v[0], l.rect.v[1], l.rect.v[2]};
-            fvec<S> pdf = SampleSphericalRectangle(P, vp, vu, vv, rand_light_uv, lp);
+            fvec<S> pdf = SampleSphericalRectangle(P, sh.pos, sh.u, sh.v, rand_light_uv, lp);
             const ivec<S> invalid_pdf = ray_queue[index] & simd_cast(pdf <= 0.0f);
             if (invalid_pdf.not_all_zeros())
 #endif
             {
                 const fvec<S> r1 = rand_light_uv[0] - 0.5f, r2 = rand_light_uv[1] - 0.5f;
-                UNROLLED_FOR(i, 3, { lp[i] = l.rect.pos[i] + l.rect.u[i] * r1 + l.rect.v[i] * r2; })
+                UNROLLED_FOR(i, 3, { lp[i] = sh.pos[i] + sh.u[i] * r1 + sh.v[i] * r2; })
             }
 
             fvec<S> to_light[3];
@@ -6703,7 +6845,7 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 where(ray_queue[index], ls.L[i]) = to_light[i];
             })
 
-            where(ray_queue[index], ls.area) = l.rect.area;
+            where(ray_queue[index], ls.area) = sh.area;
             where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             const fvec<S> cos_theta =
@@ -6711,6 +6853,8 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             where(invalid_pdf, pdf) = (ls_dist * ls_dist) / max(ls.area * cos_theta, FLT_EPS);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
+            where(ray_queue[index] & ~sh.ok, ls.pdf) = 0.0f;
+            where(ray_queue[index] & ~sh.ok, ls.area) = 0.0f;
 
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;
@@ -6733,6 +6877,9 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= att; })
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
+            spread_shape_t<S> sh;
+            spread_clamp_disk<S>(P, l, sh);
+
             fvec<S> offset[2] = {2.0f * rand_light_uv[0] - 1.0f, 2.0f * rand_light_uv[1] - 1.0f};
             const ivec<S> mask = simd_cast(offset[0] != 0.0f | offset[1] != 0.0f);
             if (mask.not_all_zeros()) {
@@ -6751,16 +6898,21 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 where(mask, offset[1]) = 0.5f * r * sincos_theta[0];
             }
 
-            const fvec<S> lp[3] = {l.disk.pos[0] + l.disk.u[0] * offset[0] + l.disk.v[0] * offset[1],
-                                   l.disk.pos[1] + l.disk.u[1] * offset[0] + l.disk.v[1] * offset[1],
-                                   l.disk.pos[2] + l.disk.u[2] * offset[0] + l.disk.v[2] * offset[1]};
+            fvec<S> lp[3] = {sh.pos[0] + sh.u[0] * offset[0] + sh.v[0] * offset[1],
+                             sh.pos[1] + sh.u[1] * offset[0] + sh.v[1] * offset[1],
+                             sh.pos[2] + sh.u[2] * offset[0] + sh.v[2] * offset[1]};
+            if (sh.subrect.not_all_zeros()) {
+                // lens-bbox lanes sample the covering quad uniformly
+                const fvec<S> r1 = rand_light_uv[0] - 0.5f, r2 = rand_light_uv[1] - 0.5f;
+                UNROLLED_FOR(i, 3, { where(sh.subrect, lp[i]) = sh.pos[i] + sh.u[i] * r1 + sh.v[i] * r2; })
+            }
 
             fvec<S> to_light[3];
             UNROLLED_FOR(i, 3, { to_light[i] = lp[i] - P[i]; })
             const fvec<S> ls_dist = normalize(to_light);
 
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i]; })
-            where(ray_queue[index], ls.area) = l.disk.area;
+            where(ray_queue[index], ls.area) = sh.area;
             where(ray_queue[index], ls.ray_flags) = l.ray_visibility;
 
             float light_forward[3];
@@ -6776,6 +6928,8 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
             fvec<S> pdf = (ls_dist * ls_dist) / max(ls.area * cos_theta, FLT_EPS);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
+            where(ray_queue[index] & ~sh.ok, ls.pdf) = 0.0f;
+            where(ray_queue[index] & ~sh.ok, ls.area) = 0.0f;
 
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;
@@ -6796,6 +6950,26 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                 const fvec<S> att =
                     spread_attenuation(ls.L, _light_forward, l.disk.tan_half_spread, l.disk.spread_normalization);
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= att; })
+
+                // clamped sub-rect / circle domains can stick out of the emitter: those points radiate nothing
+                const float len_u =
+                    sqrtf(l.disk.u[0] * l.disk.u[0] + l.disk.u[1] * l.disk.u[1] + l.disk.u[2] * l.disk.u[2]);
+                const float len_v =
+                    sqrtf(l.disk.v[0] * l.disk.v[0] + l.disk.v[1] * l.disk.v[1] + l.disk.v[2] * l.disk.v[2]);
+                const fvec<S> un0[3] = {l.disk.u[0] * (1.0f / len_u), l.disk.u[1] * (1.0f / len_u),
+                                        l.disk.u[2] * (1.0f / len_u)};
+                const fvec<S> vn0[3] = {l.disk.v[0] * (1.0f / len_v), l.disk.v[1] * (1.0f / len_v),
+                                        l.disk.v[2] * (1.0f / len_v)};
+                fvec<S> inplane[3];
+                UNROLLED_FOR(i, 3, { inplane[i] = lp[i] - fvec<S>{l.disk.pos[i]}; })
+                const fvec<S> su = dot3(inplane, un0), sv = dot3(inplane, vn0);
+                const fvec<S> epsu = fvec<S>{(0.5f + 1e-7f) * len_u + 1e-6f};
+                const fvec<S> epsv = fvec<S>{(0.5f + 1e-7f) * len_v + 1e-6f};
+                const ivec<S> off_shape =
+                    simd_cast((su / epsu) * (su / epsu) + (sv / epsv) * (sv / epsv) > fvec<S>{1.0f});
+                const ivec<S> reject = ray_queue[index] & sh.ok & off_shape;
+                where(reject, ls.pdf) = 0.0f;
+                where(reject, ls.area) = 0.0f;
             }
         } else if (l.type == LIGHT_TYPE_LINE) {
             fvec<S> center_to_surface[3];
@@ -7766,16 +7940,17 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
 
             const fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
+            spread_shape_t<S> sh;
+            spread_clamp_rect<S>(ray.o, l, sh);
+
             fvec<S> light_pdf = 0.0f;
 #if USE_SPHERICAL_AREA_LIGHT_SAMPLING
-            const fvec<S> vp[3] = {l.rect.pos[0], l.rect.pos[1], l.rect.pos[2]},
-                          vu[3] = {l.rect.u[0], l.rect.u[1], l.rect.u[2]},
-                          vv[3] = {l.rect.v[0], l.rect.v[1], l.rect.v[2]};
-            light_pdf = SampleSphericalRectangle<S>(ray.o, vp, vu, vv, nullptr, nullptr) / pdf_factor;
+            light_pdf = SampleSphericalRectangle<S>(ray.o, sh.pos, sh.u, sh.v, nullptr, nullptr) / pdf_factor;
 #endif
-            const fvec<S> pdf_den = l.rect.area * cos_theta * pdf_factor;
+            const fvec<S> pdf_den = sh.area * cos_theta * pdf_factor;
             where(light_pdf == 0.0f, light_pdf) =
                 (inter.t * inter.t) / select(pdf_den != 0.0f, pdf_den, copysign(fvec<S>{FLT_EPS}, pdf_den));
+            where(~sh.ok, light_pdf) = 0.0f;
             const fvec<S> bsdf_pdf = ray.pdf;
 
             const fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -7793,9 +7968,13 @@ void Ray::NS::Evaluate_LightColor(const fvec<S> P[3], const ray_data_t<S> &ray, 
 
             const fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
-            const fvec<S> pdf_den = l.disk.area * cos_theta * pdf_factor;
-            const fvec<S> light_pdf =
+            spread_shape_t<S> sh;
+            spread_clamp_disk<S>(ray.o, l, sh);
+
+            const fvec<S> pdf_den = sh.area * cos_theta * pdf_factor;
+            fvec<S> light_pdf =
                 (inter.t * inter.t) / select(pdf_den != 0.0f, pdf_den, copysign(fvec<S>{FLT_EPS}, pdf_den));
+            where(~sh.ok, light_pdf) = 0.0f;
             const fvec<S> bsdf_pdf = ray.pdf;
 
             const fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
