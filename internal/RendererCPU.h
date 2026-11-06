@@ -722,12 +722,12 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
         // Use direct clamping value only for the first intersection with lightsource
         const float clamp_direct = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
-        SIMDPolicy::ShadeSecondary(cam.pass_settings, clamp_direct,
-                                   Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
-                                   Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq,
-                                   rand_seed, region.iteration, cache_mode, sc_data, s.tex_storages_,
-                                   &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count,
-                                   &p.deferred_sky_indexes[0], &def_sky_count, w_, temp_buf_.data(), nullptr, nullptr);
+        SIMDPolicy::ShadeSecondary(
+            cam.pass_settings, clamp_direct, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
+            Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count}, rand_seq, rand_seed,
+            region.iteration, cache_mode, sc_data, s.tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+            &p.shadow_rays[0], &shadow_rays_count, &p.deferred_sky_indexes[0], &def_sky_count, w_, temp_buf_.data(),
+            base_color_buf_.data(), depth_normals_buf_.data());
         SIMDPolicy::ShadeSkySecondary(cam.pass_settings, clamp_direct, p.intersections, p.primary_rays,
                                       {&p.deferred_sky_indexes[0], def_sky_count}, sc_data, region.iteration, w_,
                                       temp_buf_.data());

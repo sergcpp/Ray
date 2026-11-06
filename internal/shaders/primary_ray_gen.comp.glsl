@@ -149,6 +149,7 @@ void main() {
     new_ray.d[1] = _d[1];
     new_ray.d[2] = _d[2];
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 1.0;
+    new_ray.fw[0] = new_ray.fw[1] = new_ray.fw[2] = 1.0;
 
     // air ior is implicit
     new_ray.ior[0] = new_ray.ior[1] = new_ray.ior[2] = new_ray.ior[3] = -1.0;

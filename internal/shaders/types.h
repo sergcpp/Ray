@@ -46,6 +46,8 @@ struct ray_data_t {
 	float c[3];
     float ior[4];
 	float cone_width, cone_spread;
+    // feature throughput (mirrors C++ ray_data_t.fw)
+    float fw[3];
 	uint xy;
     uint depth;
 };

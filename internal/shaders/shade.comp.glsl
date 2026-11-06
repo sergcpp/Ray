@@ -2504,7 +2504,8 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
     }
 }
 
-vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t ray, inout vec3 out_base_color, inout vec3 out_normals) {
+vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t ray, inout vec3 out_base_color,
+                  inout vec3 out_normals, inout float out_feature_w) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
@@ -2787,6 +2788,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
 
     ray_data_t new_ray;
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0;
+    new_ray.fw[0] = new_ray.fw[1] = new_ray.fw[2] = 0.0;
     [[unroll]] for (int i = 0; i < 4; ++i) {
         new_ray.ior[i] = ray.ior[i];
     }
@@ -2804,6 +2806,11 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
 
     const float regularize_alpha = (get_diff_depth(ray.depth) > 0) ? g_params.regularize_alpha : 0.0;
 
+    // guide-feature blend state, mirrors Ref::ShadeSurface continuous blend:
+    // default is a fully-diffuse hit deferring base_color
+    float feature_w = 1.0;
+    vec3 feat_defer_col = base_color;
+
     [[dont_flatten]] if (mat.type == DiffuseNode) {
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0 && (ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0 && N_dot_L > 0.0) {
@@ -2815,6 +2822,8 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
             Sample_DiffuseNode(ray, surf, base_color, roughness, rand_bsdf_uv, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == GlossyNode) {
+        // single specular closure: write-vs-defer blend from its diffuse share alone
+        feature_w = smoothstep(0.0, 0.5, smoothstep(0.0, 0.15, roughness * roughness));
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0 && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && N_dot_L > 0.0) {
             col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, regularize_alpha,
@@ -2826,6 +2835,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
                               mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == RefractiveNode) {
+        feature_w = smoothstep(0.0, 0.5, smoothstep(0.0, 0.15, roughness * roughness));
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0 && (ls.ray_flags & RAY_TYPE_REFR_BIT) != 0 && N_dot_L < 0.0) {
             const float eta = is_backfacing ? (mat.ior / ext_ior) : (ext_ior / mat.ior);
@@ -2947,6 +2957,18 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
         lobe_weights_t lobe_weights =
             get_lobe_weights(base_color_lum, sheen_lum, spec_color_lum, ior_level, metallic, transmission, coat_weight);
 
+        // guide-feature blend: closure diffuse shares via smooth GGX alpha (calc_alpha gives
+        // alpha_x*alpha_y = roughness^4, so geometric mean alpha = roughness^2, anisotropy-free)
+        const float spec_ss = smoothstep(0.0, 0.15, roughness * roughness);
+        const float coat_ss = smoothstep(0.0, 0.15, coat_roughness * coat_roughness);
+        const float share = lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.clearcoat * coat_ss +
+                            (lobe_weights.specular + lobe_weights.refraction) * spec_ss;
+        feature_w = smoothstep(0.0, 0.5, share);
+        // Deferral albedo = estimated closure albedo: hemispherical Fresnel for
+        // dielectrics, full tint once transmission closes the energy loop (F+T=1)
+        feat_defer_col = mix(mix(spec.F0, 1.0, FN) * specular_tint, base_color, metallic);
+        feat_defer_col = mix(feat_defer_col, base_color, transmission);
+
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0) {
             col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, N_dot_L,
@@ -2955,6 +2977,27 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
 #endif
         Sample_PrincipledNode(ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_bsdf_uv, mix_rand,
                               mix_weight, regularize_alpha, new_ray);
+    }
+
+    // guide-feature aux outputs (mirror Ref::ShadeSurface): the hit writes feature_w of its
+    // (chain-tinted) albedo and weighted normal; deferred part rides the ray.fw chain
+    [[unroll]] for (int i = 0; i < 3; ++i) {
+        out_base_color[i] = base_color[i] * ray.fw[i];
+#if !CACHE_UPDATE
+        const float n_scale = feature_w * (ray.fw[0] + ray.fw[1] + ray.fw[2]) * (1.0 / 3.0);
+        out_normals[i] = surf.N[i] * n_scale;
+#endif
+    }
+    out_feature_w = feature_w;
+
+    // the deferred (1-feature_w) specular-ish albedo continues the feature chain on the next
+    // bounce; refracted chains carry absorption tint
+    [[flatten]] if (new_ray.pdf > 0.0) {
+        const vec3 feat = get_ray_type(new_ray.depth) == RAY_TYPE_REFR ? base_color : feat_defer_col;
+        const float defer_w = 1.0 - feature_w;
+        [[unroll]] for (int i = 0; i < 3; ++i) {
+            new_ray.fw[i] = ray.fw[i] * feat[i] * defer_w;
+        }
     }
 
 #if USE_PATH_TERMINATION
@@ -3037,18 +3080,45 @@ void main() {
     const ray_data_t ray = g_rays[index];
 
     vec3 base_color = vec3(0.0), normals = vec3(0.0);
-    vec3 col = ShadeSurface(index, inter, ray, base_color, normals);
+    // -1: no surface shading happened (sky / area light / cache hit early-out)
+    float feature_w = -1.0;
+    vec3 col = ShadeSurface(index, inter, ray, base_color, normals, feature_w);
 
 #if !PRIMARY && !CACHE_UPDATE
     col += imageLoad(g_out_img, ivec2(x, y)).rgb;
 #endif
     imageStore(g_out_img, ivec2(x, y), vec4(col, 1.0));
 #if OUTPUT_BASE_COLOR && !CACHE_UPDATE
-    const float norm_factor = max(max(base_color.x, base_color.y), max(base_color.z, 1.0));
-    base_color /= norm_factor;
-    imageStore(g_out_base_color_img, ivec2(x, y), vec4(base_color, 0.0));
+    // guide features: per-sample chain portions accumulate into the tile temps (primary
+    // stores, secondaries add); MixIncremental folds the cross-iteration running mean
+    if (feature_w > 0.0) {
+        const float norm_factor = max(max(base_color.x, max(base_color.y, base_color.z)), 1.0);
+        const vec4 portion = vec4(base_color * feature_w / norm_factor, feature_w);
+    #if PRIMARY
+        imageStore(g_out_base_color_img, ivec2(x, y), portion);
+    #else
+        imageStore(g_out_base_color_img, ivec2(x, y), imageLoad(g_out_base_color_img, ivec2(x, y)) + portion);
+    #endif
+    }
+    #if PRIMARY
+    else {
+        imageStore(g_out_base_color_img, ivec2(x, y), vec4(0.0));
+    }
+    #endif
 #endif
-#if OUTPUT_DEPTH_NORMALS || CACHE_UPDATE
+#if OUTPUT_DEPTH_NORMALS && !CACHE_UPDATE
+    #if PRIMARY
+        vec4 dn_val = vec4(0.0);
+        if (feature_w >= 0.0)
+            dn_val = vec4(normals, inter.t);
+        imageStore(g_out_depth_normals_img, ivec2(x, y), dn_val);
+    #else
+        if (feature_w > 0.0)
+            imageStore(g_out_depth_normals_img, ivec2(x, y),
+                       imageLoad(g_out_depth_normals_img, ivec2(x, y)) + vec4(normals, 0.0));
+    #endif
+#endif
+#if CACHE_UPDATE
     imageStore(g_out_depth_normals_img, ivec2(x, y), vec4(normals, inter.t));
 #endif
 }

@@ -1874,6 +1874,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &rect, cons
                 out_r.o[j] = _origin[j] + _d[j] * clip_start;
                 out_r.d[j] = _d[j];
                 out_r.c[j] = 1.0f;
+                out_r.fw[j] = 1.0f;
             }
 
             // air ior is implicit
@@ -1914,6 +1915,7 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
 
             out_ray.xy = (x << 16) | y;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
+            out_ray.fw[0] = out_ray.fw[1] = out_ray.fw[2] = 1.0f;
             out_inter.v = -1.0f;
         }
     }

@@ -615,7 +615,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, cache_mode, clamp_val, s.env_, indir_args_buf_[0], 0,
                                       prim_hits_buf_, secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed,
                                       region.iteration, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
-                                      prim_rays_buf_, shadow_rays_buf_, ray_hashes_bufs_[0], counters_buf_,
+                                      prim_rays_buf_, shadow_rays_buf_, ray_hashes_bufs_[0], counters_buf_, temp_buf1_,
                                       temp_depth_normals_buf_);
         }
 
@@ -1337,7 +1337,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
                                       indir_args_buf_[1], 0, prim_hits_buf_, secondary_rays_buf_, sc_data,
                                       random_seq_buf_, rand_seed, region.cache_iteration, s.tex_atlases_,
                                       s.bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_, {},
-                                      counters_buf_, temp_depth_normals_buf_);
+                                      counters_buf_, temp_buf1_, temp_depth_normals_buf_);
         }
 
         { // prepare indirect args
@@ -1942,13 +1942,18 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
     const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
     const int iteration, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Image &out_img,
     const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
-    const Image &out_depth_normals) {
-    const TransitionInfo res_transitions[] = {
-        {&indir_args, eResState::IndirectArgument},   {&hits, eResState::ShaderResource},
-        {&rays, eResState::ShaderResource},           {&rand_seq, eResState::ShaderResource},
-        {&out_img, eResState::UnorderedAccess},       {&out_rays, eResState::UnorderedAccess},
-        {&out_sh_rays, eResState::UnorderedAccess},   {&out_sky_rays, eResState::UnorderedAccess},
-        {&inout_counters, eResState::UnorderedAccess}};
+    const Image &out_base_color, const Image &out_depth_normals) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&hits, eResState::ShaderResource},
+                                              {&rays, eResState::ShaderResource},
+                                              {&rand_seq, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess},
+                                              {&out_rays, eResState::UnorderedAccess},
+                                              {&out_sh_rays, eResState::UnorderedAccess},
+                                              {&out_sky_rays, eResState::UnorderedAccess},
+                                              {&inout_counters, eResState::UnorderedAccess},
+                                              {&out_base_color, eResState::UnorderedAccess},
+                                              {&out_depth_normals, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     SmallVector<Binding, 32> bindings = {{eBindTarget::SBufRO, Shade::HITS_BUF_SLOT, hits},
@@ -1980,11 +1985,15 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(
     if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
         bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
     }
-    if (cache_usage == eSpatialCacheMode::Update) {
-        bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
-    } else if (cache_usage == eSpatialCacheMode::Query) {
+    if (cache_usage == eSpatialCacheMode::Query) {
         bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_ENTRIES_BUF_SLOT, sc_data.spatial_cache_entries);
         bindings.emplace_back(eBindTarget::SBufRO, Shade::CACHE_VOXELS_BUF_SLOT, sc_data.spatial_cache_voxels);
+    }
+    if (out_base_color) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
+    }
+    if (out_depth_normals) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     }
 
     Shade::Params uniform_params = {};

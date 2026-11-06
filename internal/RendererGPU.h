@@ -231,7 +231,7 @@ class Renderer : public RendererBase {
                                    int iteration, Span<const ImageAtlas> tex_atlases,
                                    const BindlessTexData &bindless_tex, const Image &out_img, const Buffer &out_rays,
                                    const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
-                                   const Image &out_depth_normals);
+                                   const Image &out_base_color, const Image &out_depth_normals);
     void kernel_ShadeSky(CommandBuffer cmd_buf, const pass_settings_t &ps, float limit, const environment_t &env,
                          const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays,
                          const Buffer &ray_indices, const Buffer &counters, const scene_data_t &sc_data, int iteration,

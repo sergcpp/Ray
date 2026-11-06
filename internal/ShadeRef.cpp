@@ -1818,18 +1818,6 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         base_color *= tex_color;
     }
 
-    if (out_base_color) {
-        memcpy(out_base_color->v, value_ptr(base_color), 3 * sizeof(float));
-    }
-    if (out_depth_normal) {
-        if (cache_mode != eSpatialCacheMode::Update) {
-            memcpy(out_depth_normal->v, value_ptr(surf.N), 3 * sizeof(float));
-        } else {
-            memcpy(out_depth_normal->v, value_ptr(surf.plane_N), 3 * sizeof(float));
-        }
-        out_depth_normal->v[3] = inter.t;
-    }
-
     float roughness = unpack_unorm_16(mat->roughness_unorm);
     if (mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
         const uint32_t roughness_tex = mat->textures[ROUGH_TEXTURE];
@@ -1844,6 +1832,11 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     if (cache_mode == eSpatialCacheMode::Update && mat->type != eShadingNode::Diffuse) {
         roughness = fmaxf(roughness, RAD_CACHE_MIN_ROUGHNESS);
     }
+
+    // guide-feature blend state, mirrors the SIMD/ShaderCore shape: the material
+    // branches below overwrite it; default is a fully-diffuse hit deferring base_color
+    float feature_w = 1.0f;
+    fvec4 feat_defer_col = base_color;
 
     const fvec2 rand_bsdf = get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF, rand_hash, iteration - 1, rand_seq);
 
@@ -1871,6 +1864,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
             Sample_DiffuseNode(ray, surf, base_color, roughness, rand_bsdf, mix_weight, new_ray);
         }
     } else if (mat->type == eShadingNode::Glossy) {
+        // single specular closure: write-vs-defer blend from its diffuse share alone
+        feature_w = smoothstep(0.0f, 0.5f, smoothstep(0.0f, 0.15f, roughness * roughness));
         if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && N_dot_L > 0.0f) {
             col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, regularize_alpha, mix_weight,
                                        (total_depth < ps.max_total_depth), sh_r);
@@ -1879,6 +1874,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
             Sample_GlossyNode(ray, surf, base_color, roughness, regularize_alpha, rand_bsdf, mix_weight, new_ray);
         }
     } else if (mat->type == eShadingNode::Refractive) {
+        feature_w = smoothstep(0.0f, 0.5f, smoothstep(0.0f, 0.15f, roughness * roughness));
         if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_REFR_BIT) != 0 && N_dot_L < 0.0f) {
             const float eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
             col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness, regularize_alpha, eta, mix_weight,
@@ -2001,6 +1997,20 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         const auto lobe_weights =
             get_lobe_weights(base_color_lum, sheen_lum, spec_color_lum, ior_level, metallic, transmission, coat_weight);
 
+        // guide-feature blend: closure diffuse shares via smooth GGX alpha (calc_alpha gives
+        // alpha_x*alpha_y = roughness^4, so geometric mean alpha = roughness^2, anisotropy-free)
+        {
+            const float spec_ss = smoothstep(0.0f, 0.15f, roughness * roughness);
+            const float coat_ss = smoothstep(0.0f, 0.15f, coat_roughness * coat_roughness);
+            const float share = lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.clearcoat * coat_ss +
+                                (lobe_weights.specular + lobe_weights.refraction) * spec_ss;
+            feature_w = smoothstep(0.0f, 0.5f, share);
+            // Deferral albedo = estimated closure albedo: hemispherical Fresnel for
+            // dielectrics, full tint once transmission closes the energy loop (F+T=1)
+            feat_defer_col = mix(mix(spec.F0, 1.0f, FN) * specular_tint, base_color, metallic);
+            feat_defer_col = mix(feat_defer_col, base_color, transmission);
+        }
+
         if (USE_NEE && ls.pdf > 0.0f) {
             col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission,
                                            N_dot_L, mix_weight, (total_depth < ps.max_total_depth), regularize_alpha,
@@ -2011,6 +2021,42 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     } /*else if (mat->type == TransparentNode) {
         assert(false);
     }*/
+
+    if (out_base_color) {
+        if (cache_mode != eSpatialCacheMode::Update) {
+            out_base_color->v[0] = base_color.get<0>() * ray.fw[0];
+            out_base_color->v[1] = base_color.get<1>() * ray.fw[1];
+            out_base_color->v[2] = base_color.get<2>() * ray.fw[2];
+            out_base_color->v[3] = feature_w; // written fraction, the rest defers via ray.fw
+        } else {
+            memcpy(out_base_color->v, value_ptr(base_color), 3 * sizeof(float));
+        }
+    }
+    if (out_depth_normal) {
+        if (cache_mode != eSpatialCacheMode::Update) {
+            // normal feature: N * feature_w * avg(throughput)
+            const float n_scale = feature_w * ((ray.fw[0] + ray.fw[1] + ray.fw[2]) * (1.0f / 3.0f));
+            const float *n_ptr = value_ptr(surf.N);
+            out_depth_normal->v[0] = n_ptr[0] * n_scale;
+            out_depth_normal->v[1] = n_ptr[1] * n_scale;
+            out_depth_normal->v[2] = n_ptr[2] * n_scale;
+        } else {
+            memcpy(out_depth_normal->v, value_ptr(surf.plane_N), 3 * sizeof(float));
+        }
+        out_depth_normal->v[3] = inter.t;
+    }
+
+    // the deferred (1-feature_w) specular-ish albedo continues the feature chain on the next
+    // bounce; refracted chains carry absorption tint
+    if (new_ray.pdf > 0.0f) {
+        memcpy(new_ray.fw, ray.fw, 3 * sizeof(float));
+        const int new_ray_type = get_ray_type(new_ray.depth);
+        const float *feat_ptr = (new_ray_type == RAY_TYPE_REFR) ? value_ptr(base_color) : value_ptr(feat_defer_col);
+        const float defer_w = 1.0f - feature_w;
+        for (int j = 0; j < 3; ++j) {
+            new_ray.fw[j] *= feat_ptr[j] * defer_w;
+        }
+    }
 
     const bool can_terminate_path = USE_PATH_TERMINATION && total_depth > ps.min_total_depth;
 
@@ -2079,14 +2125,18 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
                          out_def_sky, out_def_sky_count, &base_color, &depth_normal);
         out_color[y * img_w + x] = col;
 
+        // Guide-feature portions accumulate across the whole sample chain; the (1-mf) mean fold
+        // happens only here. base_color.v[3] = the hit's feature_w.
         if (out_base_color) {
             if (cache_mode != eSpatialCacheMode::Update) {
                 auto old_val = Ref::fvec4{out_base_color[y * img_w + x].v, Ref::vector_aligned};
+                old_val -= old_val * mix_factor;
                 auto new_val = Ref::fvec4{base_color.v, Ref::vector_aligned};
                 const float norm_factor =
                     fmaxf(fmaxf(new_val.get<0>(), new_val.get<1>()), fmaxf(new_val.get<2>(), 1.0f));
                 new_val /= norm_factor;
-                old_val += (new_val - old_val) * mix_factor;
+                new_val.set<3>(1.0f);
+                old_val += new_val * (base_color.v[3] * mix_factor);
                 old_val.store_to(out_base_color[y * img_w + x].v, Ref::vector_aligned);
             } else {
                 out_base_color[y * img_w + x] = base_color;
@@ -2095,7 +2145,9 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
         if (out_depth_normal) {
             if (cache_mode != eSpatialCacheMode::Update) {
                 auto old_val = Ref::fvec4{out_depth_normal[y * img_w + x].v, Ref::vector_aligned};
-                old_val += (Ref::fvec4{depth_normal.v, Ref::vector_aligned} - old_val) * mix_factor;
+                old_val -= old_val * mix_factor;
+                // rgb portion is pre-scaled by feature_w*avg(fw) in ShadeSurface, w carries inter.t
+                old_val += Ref::fvec4{depth_normal.v, Ref::vector_aligned} * mix_factor;
                 old_val.store_to(out_depth_normal[y * img_w + x].v, Ref::vector_aligned);
             } else {
                 out_depth_normal[y * img_w + x] = depth_normal;
@@ -2113,6 +2165,7 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, const float clamp_direc
                               color_rgba_t *out_base_color, color_rgba_t *out_depth_normal) {
     const float limits[2] = {(clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX,
                              (ps.clamp_indirect != 0.0f) ? 3.0f * ps.clamp_indirect : FLT_MAX};
+    const float mix_factor = 1.0f / float(iteration);
     for (int i = 0; i < int(inters.size()); ++i) {
         const ray_data_t &r = rays[i];
         const hit_data_t &inter = inters[i];
@@ -2132,11 +2185,34 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, const float clamp_direc
         } else {
             out_color[y * img_w + x] = col;
         }
+        // Each secondary hit adds its own feature_w share of albedo (chain tint arrived via
+        // ray.fw); the sample's (1-mf) fold was already applied by the primary hit.
+        const bool has_feature = base_color.v[3] > 0.0f;
         if (out_base_color) {
-            out_base_color[y * img_w + x] = base_color;
+            if (cache_mode != eSpatialCacheMode::Update) {
+                if (has_feature) {
+                    color_rgba_t &dst = out_base_color[y * img_w + x];
+                    const float norm_factor =
+                        fmaxf(fmaxf(fmaxf(base_color.v[0], base_color.v[1]), base_color.v[2]), 1.0f);
+                    const float portion_w = base_color.v[3] * mix_factor;
+                    for (int j = 0; j < 3; ++j)
+                        dst.v[j] += (base_color.v[j] / norm_factor) * portion_w;
+                    dst.v[3] += portion_w;
+                }
+            } else {
+                out_base_color[y * img_w + x] = base_color;
+            }
         }
         if (out_depth_normal) {
-            out_depth_normal[y * img_w + x] = depth_normal;
+            if (cache_mode != eSpatialCacheMode::Update) {
+                if (has_feature) {
+                    color_rgba_t &dst = out_depth_normal[y * img_w + x];
+                    for (int j = 0; j < 3; ++j)
+                        dst.v[j] += depth_normal.v[j] * mix_factor;
+                }
+            } else {
+                out_depth_normal[y * img_w + x] = depth_normal;
+            }
         }
     }
 }

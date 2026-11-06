@@ -166,8 +166,8 @@ void run_shading_test(const char *arch_list[], std::string_view preferred_device
                         printf("\r%s (%6s, %s): %.1f%% ", name_buf, RendererTypeName(rt).data(),
                                s.use_hwrt ? "HWRT" : "SWRT", 100.0);
                     }
-                    printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i, Time: %.2fm)\n", psnr, min_psnr, error_pixels,
-                           pix_thres, test_duration_m);
+                    printf("(PSNR: %.2f/%.2f dB, ff: %i/%i, Time: %.2fm)\n", psnr, min_psnr, error_pixels, pix_thres,
+                           test_duration_m);
                     fflush(stdout);
                 }
 
@@ -1321,7 +1321,8 @@ void test_complex_mat5_adaptive(const char *arch_list[], std::string_view prefer
     const int MinSampleCount = 8;
     const int MaxSampleCount = 48;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 1280;
+    const int PixThres = 1150;
+    const double MinPSNR = 30.05;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1334,7 +1335,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], std::string_view prefer
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_shading_test(arch_list, preferred_device, "complex_mat5_adaptive", metal_mat_desc, MinSampleCount,
-                     MaxSampleCount, VarianceThreshold, DefaultMinPSNR, PixThres, eDenoiseMethod::NLM, false, false,
+                     MaxSampleCount, VarianceThreshold, MinPSNR, PixThres, eDenoiseMethod::NLM, false, false,
                      textures);
 }
 
@@ -1358,7 +1359,7 @@ void test_complex_mat5_regions(const char *arch_list[], std::string_view preferr
 
 void test_complex_mat5_nlm_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 31;
-    const int PixThres = 1260;
+    const int PixThres = 1360;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1376,7 +1377,8 @@ void test_complex_mat5_nlm_filter(const char *arch_list[], std::string_view pref
 
 void test_complex_mat5_unet_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const int PixThres = 1330;
+    const int PixThres = 1160;
+    const double MinPSNR = 30.40;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1389,7 +1391,7 @@ void test_complex_mat5_unet_filter(const char *arch_list[], std::string_view pre
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_shading_test(arch_list, preferred_device, "complex_mat5_unet_filter", metal_mat_desc, SampleCount,
-                     DefaultMinPSNR, PixThres, eDenoiseMethod::UNet, false, textures);
+                     MinPSNR, PixThres, eDenoiseMethod::UNet, false, textures);
 }
 
 void test_complex_mat5_dof(const char *arch_list[], std::string_view preferred_device) {
@@ -1593,7 +1595,7 @@ void test_complex_mat6(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const int PixThres = 1700;
+    const int PixThres = 1850;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};
@@ -1607,7 +1609,7 @@ void test_complex_mat6_nlm_filter(const char *arch_list[], std::string_view pref
 
 void test_complex_mat6_unet_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 28;
-    const int PixThres = 1015;
+    const int PixThres = 970;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};
@@ -1732,7 +1734,7 @@ void test_complex_mat7_principled(const char *arch_list[], std::string_view pref
 void test_ray_flags(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 32;
     const double MinPSNR = 29.50;
-    const int PixThres = 2185;
+    const int PixThres = 2110;
 
     Ray::principled_mat_desc_t unused;
     run_shading_test(arch_list, preferred_device, "ray_flags", unused, SampleCount, MinPSNR, PixThres,

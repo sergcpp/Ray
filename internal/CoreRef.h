@@ -61,12 +61,14 @@ struct ray_data_t {
     float ior[4];
     // ray cone params
     float cone_width, cone_spread;
+    // feature throughput
+    float fw[3];
     // 16-bit pixel coordinates of ray ((x << 16) | y)
     uint32_t xy;
     // four 7-bit ray depth counters
     uint32_t depth;
 };
-static_assert(sizeof(ray_data_t) == 72, "!");
+static_assert(sizeof(ray_data_t) == 84, "!");
 
 // Shadow ray structure
 struct shadow_ray_t {

@@ -5,7 +5,7 @@ import sys
 
 def process_file(f, all_tests):
     for line in f.readlines():
-        m = re.search(r'^Test\s*(\w+).*100.0%.*PSNR:\s*([.\w]+)\/([.\w]+).*Fireflies:\s*([.\w]+)\/([.\w]+).*', line)
+        m = re.search(r'^Test\s*(\w+).*100.0%.*PSNR:\s*([.\w]+)\/([.\w]+).*\bff:\s*([.\w]+)\/([.\w]+).*', line)
         if m:
             test_name, psnr_tested, psnr_threshold, fireflies_tested, fireflies_threshold = m[1], float(m[2]), float(m[3]), int(m[4]), int(m[5])
             if test_name not in all_tests:
@@ -41,7 +41,7 @@ def test_failed(key, value):
 def main():
     all_tests = {}
 
-    # Loop through all test results and keep minimal 'PSNR' and maximal 'Fireflies' values
+    # Loop through all test results and keep minimal 'PSNR' and maximal 'ff' values
     for i in range(1, len(sys.argv)):
         try:
             with open(sys.argv[i], "r", encoding='utf-8') as f:
