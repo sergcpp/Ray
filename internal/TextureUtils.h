@@ -95,6 +95,26 @@ template <int N>
 int Preprocess_BCn(const uint8_t in_data[], int tiles_w, int tiles_h, bool flip_vertical, bool invert_green,
                    uint8_t out_data[], int out_pitch = 0);
 
+//
+// ASTC 4x4 compression (GPU texture atlases only: VK; DX stays on BCn)
+// Fixed-layout single-partition emitter (BC3-class: min/max endpoints, one weight per texel):
+// CEM = LDR direct (RGBA / luminance), no partitions, no dual-plane weights, no HDR.
+// Bit layout follows the Khronos ASTC spec (C.2.x).
+//
+
+const int BlockSize_ASTC4x4 = 16;
+
+int GetRequiredMemory_ASTC4x4(int w, int h, int pitch_align);
+
+// NOTE: intended for realtime compression, quality may be not the best
+template <int SrcChannels> // 3 or 4
+void CompressImage_ASTC4x4_RGBA(const uint8_t img_src[], int w, int h, uint8_t img_dst[], int dst_pitch = 0,
+                                bool is_ycocg = false);
+template <int SrcChannels = 1> // 1 (also used to pull one channel out of wider sources)
+void CompressImage_ASTC4x4_R8(const uint8_t img_src[], int w, int h, uint8_t img_dst[], int dst_pitch = 0);
+template <int SrcChannels = 2> // RG sources packed into CEM_RGBA with constant B/A (BC5 stand-in on ARM)
+void CompressImage_ASTC4x4_RG(const uint8_t img_src[], int w, int h, uint8_t img_dst[], int dst_pitch = 0);
+
 void ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
                          Span<uint32_t> new_vtx_indices, Span<const uint32_t> indices);
 

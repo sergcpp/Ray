@@ -116,6 +116,9 @@ set(INTERNAL_SOURCE_FILES internal/AtmosphereRef.h
                           internal/TextureUtils.cpp
                           internal/TextureUtilsNEON.cpp
                           internal/TextureUtilsSSE2.cpp
+                          internal/TextureUtilsASTC.cpp
+                          internal/TextureUtilsASTC_NEON.cpp
+                          internal/TextureUtilsASTC_SSE2.cpp
                           internal/Time_.h
                           internal/Time.cpp
                           internal/TonemapRef.h
@@ -186,6 +189,7 @@ if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND NOT "${CMAKE_APPLE_SIL
     if(MSVC)
         if(NOT CMAKE_CL_64)
             set_source_files_properties(internal/TextureUtilsSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+            set_source_files_properties(internal/TextureUtilsASTC_SSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
             set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
         if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -205,6 +209,7 @@ if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND NOT "${CMAKE_APPLE_SIL
     else()
         set_source_files_properties(internal/simd/detect.cpp PROPERTIES COMPILE_FLAGS -mxsave)
         set_source_files_properties(internal/TextureUtilsSSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
+        set_source_files_properties(internal/TextureUtilsASTC_SSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
         set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
         set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mf16c")
