@@ -61,8 +61,8 @@ const int GGX_EAVG_GLASS_LUT_SLOT = 27;
 const int GGX_EAVG_GLASS_INV_LUT_SLOT = 28;
 
 // light tree leaf payloads: meta4 rank -> light index (see light_cwbvh_node_t::prim_base)
-// NOTE: keep clear of the atlas texture array range (TEXTURE_ATLASES_SLOT..+7 in the HLSL path)
-const int LIGHT_LEAF_PRIMS_BUF_SLOT = 40;
+// NOTE: keep clear of the atlas texture array range (TEXTURE_ATLASES_SLOT..+8 in the HLSL path)
+const int LIGHT_LEAF_PRIMS_BUF_SLOT = 41;
 
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAYS_BUF_SLOT = 1;

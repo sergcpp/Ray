@@ -841,7 +841,11 @@ void Ray::Dx::_ClearColorImage(Image &tex, const void *rgba, ID3D12GraphicsComma
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(const eFormat format) { return g_formats_dx[size_t(format)]; }
+DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(const eFormat format) {
+    // No ASTC DXGI formats exist on Windows; an ASTC eFormat must never reach D3D12.
+    assert(format != eFormat::ASTC_4x4 && format != eFormat::ASTC_4x4_srgb);
+    return g_formats_dx[size_t(format)];
+}
 
 bool Ray::Dx::CanBeBlockCompressed(int w, int h, const int mip_count) {
     // NOTE: Assume only BC-formats for now

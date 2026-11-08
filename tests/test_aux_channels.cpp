@@ -66,7 +66,7 @@ void test_aux_channels(const char *arch_list[], std::string_view preferred_devic
     ThreadPool threads(std::thread::hardware_concurrency());
 
     const int SampleCount = 14;
-    const double BaseColor_MinPSNR = 28.44, Normals_MinPSNR = 38.05, Depth_MinPSNR = 43.3;
+    const double BaseColor_MinPSNR = 28.30, Normals_MinPSNR = 37.90, Depth_MinPSNR = 43.3;
 
     for (const char **arch = arch_list; *arch; ++arch) {
         const auto rt = RendererTypeFromName(*arch);

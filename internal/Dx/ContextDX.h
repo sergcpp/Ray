@@ -110,6 +110,9 @@ class Context {
 
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
 
+    // DXGI has no ASTC formats on Windows; DX backend always uses BCn.
+    bool astc_supported() const { return false; }
+
     bool image_blit_supported() const { return false; }
 
     // const VkPhysicalDeviceLimits &phys_device_limits() const { return phys_device_limits_; }

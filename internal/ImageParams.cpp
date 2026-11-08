@@ -22,7 +22,7 @@ int Ray::GetChannelCount(const eFormat format) { return g_format_info[int(format
 int Ray::GetPerPixelDataLen(const eFormat format) { return g_format_info[int(format)].pp_data_len; }
 
 int Ray::GetBlockLenBytes(const eFormat format) {
-    static_assert(int(eFormat::_Count) == 37, "Update the list below!");
+    static_assert(int(eFormat::_Count) == 39, "Update the list below!");
     switch (format) {
     case eFormat::BC1:
     case eFormat::BC1_srgb:
@@ -35,6 +35,9 @@ int Ray::GetBlockLenBytes(const eFormat format) {
         return 16;
     case eFormat::BC4:
         return 8;
+    case eFormat::ASTC_4x4:
+    case eFormat::ASTC_4x4_srgb:
+        return 16;
     default:
         return -1;
     }

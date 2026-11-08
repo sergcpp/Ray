@@ -92,9 +92,9 @@ Ray::Vk::Image::Image(std::string_view name, Context *ctx, const ImgParams &p, M
     Init(p, mem_allocs, log);
 }
 
-Ray::Vk::Image::Image(std::string_view name, Context *ctx, const void *data, const uint32_t size,
-                          const ImgParams &p, Buffer &stage_buf, VkCommandBuffer cmd_buf, MemAllocators *mem_allocs,
-                          eImgLoadStatus *load_status, ILog *log)
+Ray::Vk::Image::Image(std::string_view name, Context *ctx, const void *data, const uint32_t size, const ImgParams &p,
+                      Buffer &stage_buf, VkCommandBuffer cmd_buf, MemAllocators *mem_allocs,
+                      eImgLoadStatus *load_status, ILog *log)
     : ctx_(ctx), name_(name) {
     Init(data, size, p, stage_buf, cmd_buf, mem_allocs, load_status, log);
 }
@@ -124,8 +124,7 @@ void Ray::Vk::Image::Init(const ImgParams &p, MemAllocators *mem_allocs, ILog *l
 }
 
 void Ray::Vk::Image::Init(const void *data, const uint32_t size, const ImgParams &p, Buffer &sbuf,
-                            VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, eImgLoadStatus *load_status,
-                            ILog *log) {
+                          VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, eImgLoadStatus *load_status, ILog *log) {
     uint8_t *stage_data = sbuf.Map();
     memcpy(stage_data, data, size);
     sbuf.Unmap();
@@ -152,7 +151,7 @@ void Ray::Vk::Image::Free() {
 }
 
 bool Ray::Vk::Image::Realloc(const int w, const int h, int mip_count, const int samples, const eFormat format,
-                               VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, ILog *log) {
+                             VkCommandBuffer cmd_buf, MemAllocators *mem_allocs, ILog *log) {
     VkImage new_image = VK_NULL_HANDLE;
     VkImageView new_image_view = VK_NULL_HANDLE;
     MemAllocation new_alloc = {};
@@ -373,7 +372,7 @@ bool Ray::Vk::Image::Realloc(const int w, const int h, int mip_count, const int 
 }
 
 void Ray::Vk::Image::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer cmd_buf, MemAllocators *mem_allocs,
-                                       const ImgParams &p, ILog *log) {
+                                     const ImgParams &p, ILog *log) {
     Free();
 
     handle_.generation = TextureHandleCounter++;
@@ -588,9 +587,8 @@ void Ray::Vk::Image::InitFromRAWData(Buffer *sbuf, int data_off, VkCommandBuffer
 }
 
 void Ray::Vk::Image::SetSubImage(const int level, const int offsetx, const int offsety, const int offsetz,
-                                   const int sizex, const int sizey, const int sizez, const eFormat format,
-                                   const Buffer &sbuf, VkCommandBuffer cmd_buf, const int data_off,
-                                   const int data_len) {
+                                 const int sizex, const int sizey, const int sizez, const eFormat format,
+                                 const Buffer &sbuf, VkCommandBuffer cmd_buf, const int data_off, const int data_len) {
     assert(format == params.format);
     assert(params.samples == 1);
     assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
@@ -662,6 +660,16 @@ void Ray::Vk::Image::SetSubImage(const int level, const int offsetx, const int o
 
     region.imageOffset = {int32_t(offsetx), int32_t(offsety), int32_t(offsetz)};
     region.imageExtent = {uint32_t(sizex), uint32_t(sizey), uint32_t(sizez)};
+    if (IsCompressedFormat(format)) {
+        // Compressed copies use whole blocks: floor the offset to the block grid, ceil the extent
+        // but clamp to the mip edge - a partial last block is legal only when it ends exactly at
+        // the subresource extent (odd bindless mips, e.g. 2045 wide).
+        region.imageOffset.x &= ~3;
+        region.imageOffset.y &= ~3;
+        const int mip_w = std::max(params.w >> level, 1), mip_h = std::max(params.h >> level, 1);
+        region.imageExtent.width = uint32_t(std::min((sizex + 3) & ~3, mip_w - region.imageOffset.x));
+        region.imageExtent.height = uint32_t(std::min((sizey + 3) & ~3, mip_h - region.imageOffset.y));
+    }
 
     ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                                        &region);
@@ -697,10 +705,9 @@ void Ray::Vk::Image::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Vk::CopyImageToImage(VkCommandBuffer cmd_buf, Image &src_tex, const uint32_t src_level,
-                               const uint32_t src_x, const uint32_t src_y, Image &dst_tex, const uint32_t dst_level,
-                               const uint32_t dst_x, const uint32_t dst_y, const uint32_t width,
-                               const uint32_t height) {
+void Ray::Vk::CopyImageToImage(VkCommandBuffer cmd_buf, Image &src_tex, const uint32_t src_level, const uint32_t src_x,
+                               const uint32_t src_y, Image &dst_tex, const uint32_t dst_level, const uint32_t dst_x,
+                               const uint32_t dst_y, const uint32_t width, const uint32_t height) {
     assert(src_tex.resource_state == eResState::CopySrc);
     assert(dst_tex.resource_state == eResState::CopyDst);
 

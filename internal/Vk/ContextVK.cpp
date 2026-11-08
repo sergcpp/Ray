@@ -217,7 +217,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
     CheckVkPhysicalDeviceFeatures(api_, physical_device_, device_properties_, mem_properties_, coop_mat_properties_,
                                   graphics_family_index_, raytracing_supported_, ray_query_supported_, fp16_supported_,
                                   int64_supported_, int64_atomics_supported_, pageable_memory_supported_,
-                                  subgroup_size_control_supported_);
+                                  subgroup_size_control_supported_, astc_supported_);
 
     // mask out unsupported stages
     if (!raytracing_supported_) {
@@ -230,7 +230,7 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
     if (!external_ && !InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
                                     ray_query_supported_, fp16_supported_, int64_supported_, int64_atomics_supported_,
                                     coop_mat_properties_.MSize != 0, pageable_memory_supported_,
-                                    subgroup_size_control_supported_, log)) {
+                                    subgroup_size_control_supported_, astc_supported_, log)) {
         return false;
     }
 
@@ -316,6 +316,14 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
             (res == VK_SUCCESS) && (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT);
     }
 
+    { // feature bit alone is not enough: the ASTC_4x4 image must also be creatable and sampleable
+        VkImageFormatProperties props;
+        const VkResult res = api_.vkGetPhysicalDeviceImageFormatProperties(
+            physical_device_, VK_FORMAT_ASTC_4x4_UNORM_BLOCK, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
+            (VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), 0, &props);
+        astc_supported_ &= (res == VK_SUCCESS);
+    }
+
     if (raytracing_supported_) {
         VkPhysicalDeviceProperties2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
         prop2.pNext = &rt_props_;
@@ -341,7 +349,8 @@ bool Ray::Vk::Context::Init(ILog *log, const VulkanDevice &vk_device, const Vulk
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         const int PoolStep = 8;
-        const int MaxImgSamplerCount = 16;
+        // aux shade_primary binds 9 atlases + 7 LUTs + env qtree = 17 combined image samplers
+        const int MaxImgSamplerCount = 24;
         const int MaxImgCount = 16;
         const int MaxSamplerCount = 16;
         const int MaxStoreImgCount = 6;
@@ -580,7 +589,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
     VkPhysicalDeviceMemoryProperties &out_mem_properties, VkCooperativeMatrixPropertiesKHR &out_coop_mat_properties,
     uint32_t &out_graphics_family_index, bool &out_raytracing_supported, bool &out_ray_query_supported,
     bool &out_shader_fp16_supported, bool &out_shader_int64_supported, bool &out_int64_atomics_supported,
-    bool &out_pageable_memory_supported, bool &out_subgroup_size_control_supported) {
+    bool &out_pageable_memory_supported, bool &out_subgroup_size_control_supported, bool &out_astc_ldr_supported) {
     api.vkGetPhysicalDeviceProperties(physical_device, &out_device_properties);
     api.vkGetPhysicalDeviceMemoryProperties(physical_device, &out_mem_properties);
 
@@ -606,7 +615,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
     bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
          shader_fp16_supported = false, shader_int64_supported = false, storage_fp16_supported = false,
          shader_buf_int64_atomics_supported = false, memory_priority_supported = false,
-         pageable_memory_supported = false, subgroup_size_control_supported = false;
+         pageable_memory_supported = false, subgroup_size_control_supported = false, astc_ldr_supported = false;
 
     VkCooperativeMatrixPropertiesKHR coop_mat_properties = {};
 
@@ -655,6 +664,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
 
         shader_int64_supported = (device_features2.features.shaderInt64 == VK_TRUE);
         shader_buf_int64_atomics_supported &= (atomic_int64_features.shaderBufferInt64Atomics == VK_TRUE);
+        astc_ldr_supported = (device_features2.features.textureCompressionASTC_LDR == VK_TRUE);
 
         if (shader_fp16_supported) {
             VkPhysicalDeviceShaderFloat16Int8Features fp16_features = {
@@ -720,6 +730,7 @@ void Ray::Vk::Context::CheckVkPhysicalDeviceFeatures(
     out_coop_mat_properties = coop_mat_properties;
     out_pageable_memory_supported = (memory_priority_supported && pageable_memory_supported);
     out_subgroup_size_control_supported = subgroup_size_control_supported;
+    out_astc_ldr_supported = astc_ldr_supported;
 }
 
 bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
@@ -727,7 +738,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
                                     const bool enable_ray_query, const bool enable_fp16, const bool enable_int64,
                                     const bool enable_int64_atomics, const bool enable_coop_matrix,
                                     const bool enable_pageable_memory, const bool enable_subgroup_size_control,
-                                    ILog *log) {
+                                    const bool enable_astc_ldr, ILog *log) {
     VkDeviceQueueCreateInfo queue_create_infos[2] = {{}, {}};
     const float queue_priorities[] = {1.0f};
 
@@ -797,6 +808,7 @@ bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysical
     features.imageCubeArray = VK_TRUE;
     features.fillModeNonSolid = VK_TRUE;
     features.shaderInt64 = enable_int64 ? VK_TRUE : VK_FALSE;
+    features.textureCompressionASTC_LDR = enable_astc_ldr ? VK_TRUE : VK_FALSE;
     device_info.pEnabledFeatures = &features;
     void **pp_next = const_cast<void **>(&device_info.pNext);
 

@@ -149,10 +149,10 @@ void Ray::Vk::Scene::GenerateTextureMips_nolock() {
         atlas_textures_.Set(info.texture_index, t);
     }
 
-    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC1[%i], BC3[%i], BC4[%i], BC5[%i])",
+    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC1[%i], BC3[%i], BC4[%i], BC5[%i], ASTC[%i])",
                tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
                tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
-               tex_atlases_[6].page_count(), tex_atlases_[7].page_count());
+               tex_atlases_[6].page_count(), tex_atlases_[7].page_count(), tex_atlases_[8].page_count());
 }
 
 void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {

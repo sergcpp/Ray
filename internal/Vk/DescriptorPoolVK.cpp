@@ -226,6 +226,7 @@ VkDescriptorSet Ray::Vk::DescrMultiPoolAlloc::Alloc(const DescrSizes &sizes, con
     pool_index += sbuf_based_index * tbuf_based_count_ * acc_based_count_;
     pool_index += tbuf_based_index * acc_based_count_;
     pool_index += acc_based_index;
+    assert(pool_index < pools_.size()); // a kernel bound more descriptors than the Max* caps above
     return pools_[pool_index].Alloc(layout);
 }
 

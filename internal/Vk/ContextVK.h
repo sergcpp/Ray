@@ -39,6 +39,8 @@ class Context {
 
     bool rgb8_unorm_is_supported_ = false;
 
+    bool astc_supported_ = false;
+
     bool fp16_supported_ = false;
 
     bool int64_supported_ = false;
@@ -91,6 +93,7 @@ class Context {
     bool raytracing_supported() const { return raytracing_supported_; }
     bool ray_query_supported() const { return ray_query_supported_; }
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
+    bool astc_supported() const { return astc_supported_; }
     bool fp16_supported() const { return fp16_supported_; }
     bool int64_supported() const { return int64_supported_; }
     bool int64_atomics_supported() const { return int64_atomics_supported_; }
@@ -152,18 +155,17 @@ class Context {
                                int enabled_layers_count, int validation_level, ILog *log);
     static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device,
                                        std::string_view preferred_device, VkInstance instance, ILog *log);
-    static void CheckVkPhysicalDeviceFeatures(const Api &api, VkPhysicalDevice &physical_device,
-                                              VkPhysicalDeviceProperties &device_properties,
-                                              VkPhysicalDeviceMemoryProperties &mem_properties,
-                                              VkCooperativeMatrixPropertiesKHR &coop_mat_properties,
-                                              uint32_t &graphics_family_index, bool &out_raytracing_supported,
-                                              bool &out_ray_query_supported, bool &out_shader_fp16_supported,
-                                              bool &out_shader_int64_supported, bool &out_int64_atomics_supported,
-                                              bool &out_pageable_memory_supported, bool &out_subgroup_size_control_supported);
+    static void CheckVkPhysicalDeviceFeatures(
+        const Api &api, VkPhysicalDevice &physical_device, VkPhysicalDeviceProperties &device_properties,
+        VkPhysicalDeviceMemoryProperties &mem_properties, VkCooperativeMatrixPropertiesKHR &coop_mat_properties,
+        uint32_t &graphics_family_index, bool &out_raytracing_supported, bool &out_ray_query_supported,
+        bool &out_shader_fp16_supported, bool &out_shader_int64_supported, bool &out_int64_atomics_supported,
+        bool &out_pageable_memory_supported, bool &out_subgroup_size_control_supported, bool &out_astc_ldr_supported);
     static bool InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                              uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
                              bool enable_fp16, bool enable_int64, bool enable_int64_atomics, bool enable_coop_matrix,
-                             bool enable_pageable_memory, bool enable_subgroup_size_control, ILog *log);
+                             bool enable_pageable_memory, bool enable_subgroup_size_control, bool enable_astc_ldr,
+                             ILog *log);
     static bool InitCommandBuffers(const Api &api, VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
                                    VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
                                    VkSemaphore render_finished_semaphores[MaxFramesInFlight],

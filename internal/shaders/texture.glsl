@@ -102,7 +102,7 @@ layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
     atlas_texture_t g_textures[];
 };
 
-layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[8];
+layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[9];
 
 ivec2 texSize(const uint index) {
     const atlas_texture_t t = g_textures[index];

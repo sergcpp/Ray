@@ -23,7 +23,7 @@ extern const VkFormat g_formats_vk[];
 } // namespace Ray::Vk
 
 Ray::Vk::ImageAtlas::ImageAtlas(Context *ctx, std::string_view name, const eFormat format, const eFilter filter,
-                                    const int resx, const int resy, const int pages_count)
+                                const int resx, const int resy, const int pages_count)
     : ctx_(ctx), name_(name), format_(format), filter_(filter), res_{resx, resy} {
     if (!Resize(pages_count)) {
         throw std::runtime_error("ImageAtlas cannot be resized!");
@@ -90,6 +90,19 @@ int Ray::Vk::ImageAtlas::Allocate(const color_t<T, N> *data, const int _res[2], 
                         // NOTE: 1 byte is added due to BC5 compression write outside of memory block
                         compressed_data = std::make_unique<uint8_t[]>(req_size + 1);
                         CompressImage_BC5<2>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
+                    } else if (format_ == eFormat::ASTC_4x4) {
+                        const int req_size = GetRequiredMemory_ASTC4x4(res[0], res[1], 1);
+                        compressed_data = std::make_unique<uint8_t[]>(req_size);
+                        if (N == 1) {
+                            CompressImage_ASTC4x4_R8<1>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
+                        } else if (N == 2) {
+                            CompressImage_ASTC4x4_RG<2>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
+                        } else {
+                            assert(N == 3); // RGB888 source, YCoCg pre-transform
+                            auto temp_YCoCg = ConvertRGB_to_CoCgxY(&temp_storage[0].v[0], res[0], res[1]);
+                            CompressImage_ASTC4x4_RGBA<4>(temp_YCoCg.get(), res[0], res[1], compressed_data.get(), 0,
+                                                          true);
+                        }
                     }
 
                     WritePageData(page_index, pos[0], pos[1], res[0], res[1], compressed_data.get());
@@ -109,8 +122,8 @@ template int Ray::Vk::ImageAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3>
 template int Ray::Vk::ImageAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
 
 template <typename T, int N>
-void Ray::Vk::ImageAtlas::AllocateMips(const color_t<T, N> *data, const int _res[2], const int mip_count,
-                                         int page[16], int pos[16][2]) {
+void Ray::Vk::ImageAtlas::AllocateMips(const color_t<T, N> *data, const int _res[2], const int mip_count, int page[16],
+                                       int pos[16][2]) {
     int src_res[2] = {_res[0], _res[1]};
 
     // TODO: try to get rid of these allocations
@@ -160,13 +173,13 @@ void Ray::Vk::ImageAtlas::AllocateMips(const color_t<T, N> *data, const int _res
 }
 
 template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
+                                                            int mip_count, int page[16], int pos[16][2]);
 template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
+                                                            int mip_count, int page[16], int pos[16][2]);
 template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
+                                                            int mip_count, int page[16], int pos[16][2]);
 template void Ray::Vk::ImageAtlas::AllocateMips<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2],
-                                                              int mip_count, int page[16], int pos[16][2]);
+                                                            int mip_count, int page[16], int pos[16][2]);
 
 int Ray::Vk::ImageAtlas::AllocateRaw(void *data, const int res[2], int pos[2]) {
     for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
@@ -473,7 +486,7 @@ bool Ray::Vk::ImageAtlas::Resize(const int pages_count) {
 }
 
 int Ray::Vk::ImageAtlas::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
-                                            int dst_pos[2]) {
+                                          int dst_pos[2]) {
     const int dst_res[2] = {src_res[0] / 2, src_res[1] / 2};
     const int dst_page = Allocate(dst_res, dst_pos);
     if (dst_page == -1) {
@@ -748,7 +761,7 @@ int Ray::Vk::ImageAtlas::DownsampleRegion(const int src_page, const int src_pos[
 }
 
 void Ray::Vk::ImageAtlas::WritePageData(const int page, const int posx, const int posy, const int sizex,
-                                          const int sizey, const void *data) {
+                                        const int sizey, const void *data) {
     uint32_t data_size = 0;
     if (!IsCompressedFormat(format_)) {
         data_size = sizex * sizey * GetPerPixelDataLen(format_);
@@ -761,6 +774,8 @@ void Ray::Vk::ImageAtlas::WritePageData(const int page, const int posx, const in
             data_size = GetRequiredMemory_BC4(sizex, sizey, 1);
         } else if (format_ == eFormat::BC5) {
             data_size = GetRequiredMemory_BC5(sizex, sizey, 1);
+        } else if (format_ == eFormat::ASTC_4x4) {
+            data_size = GetRequiredMemory_ASTC4x4(sizex, sizey, 1);
         }
     }
 
@@ -857,7 +872,7 @@ void Ray::Vk::ImageAtlas::WritePageData(const int page, const int posx, const in
 }
 
 void Ray::Vk::ImageAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
-                                         const Buffer &dst_buf, VkCommandBuffer cmd_buf, const int data_off) const {
+                                       const Buffer &dst_buf, VkCommandBuffer cmd_buf, const int data_off) const {
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
     SmallVector<VkImageMemoryBarrier, 1> img_barriers;

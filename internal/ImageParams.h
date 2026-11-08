@@ -14,17 +14,17 @@ enum class eFormat : uint8_t {
 #undef X
 
 inline bool IsDepthFormat(const eFormat format) {
-    static_assert(int(eFormat::_Count) == 37, "Update the list below!");
+    static_assert(int(eFormat::_Count) == 39, "Update the list below!");
     return format == eFormat::D16 || format == eFormat::D24_S8 || format == eFormat::D32_S8 || format == eFormat::D32;
 }
 
 inline bool IsDepthStencilFormat(const eFormat format) {
-    static_assert(int(eFormat::_Count) == 37, "Update the list below!");
+    static_assert(int(eFormat::_Count) == 39, "Update the list below!");
     return format == eFormat::D24_S8 || format == eFormat::D32_S8;
 }
 
 inline bool IsCompressedFormat(const eFormat format) {
-    static_assert(int(eFormat::_Count) == 37, "Update the list below!");
+    static_assert(int(eFormat::_Count) == 39, "Update the list below!");
     switch (format) {
     case eFormat::BC1:
     case eFormat::BC1_srgb:
@@ -34,6 +34,8 @@ inline bool IsCompressedFormat(const eFormat format) {
     case eFormat::BC3_srgb:
     case eFormat::BC4:
     case eFormat::BC5:
+    case eFormat::ASTC_4x4:
+    case eFormat::ASTC_4x4_srgb:
         return true;
     default:
         return false;
@@ -42,7 +44,7 @@ inline bool IsCompressedFormat(const eFormat format) {
 }
 
 inline bool IsUintFormat(const eFormat format) {
-    static_assert(int(eFormat::_Count) == 37, "Update the list below!");
+    static_assert(int(eFormat::_Count) == 39, "Update the list below!");
     if (format == eFormat::R16UI || format == eFormat::R32UI || format == eFormat::RG32UI) {
         return true;
     }
@@ -50,7 +52,7 @@ inline bool IsUintFormat(const eFormat format) {
 }
 
 inline eFormat ToSRGBFormat(const eFormat format) {
-    static_assert(int(eFormat::_Count) == 37, "Update the list below!");
+    static_assert(int(eFormat::_Count) == 39, "Update the list below!");
     switch (format) {
     case eFormat::BC1:
         return eFormat::BC1_srgb;
@@ -58,6 +60,8 @@ inline eFormat ToSRGBFormat(const eFormat format) {
         return eFormat::BC2_srgb;
     case eFormat::BC3:
         return eFormat::BC3_srgb;
+    case eFormat::ASTC_4x4:
+        return eFormat::ASTC_4x4_srgb;
     default:
         return format;
     }
