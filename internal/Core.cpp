@@ -181,6 +181,51 @@ void Ray::DirToCanonical(const float d[3], const float y_rotation, float out_p[2
     out_p[1] = phi / (2.0f * PI);
 }
 
+// ∫_a^b max(0, 1-|t-c|) dt - overlap of a 1D bilinear (tent) basis function with an interval
+float Ray::tent_overlap(float a, float b, float c) {
+    const float lo = (a > c - 1.0f ? a : c - 1.0f);
+    const float hi = (b < c + 1.0f ? b : c + 1.0f);
+    if (hi <= lo) {
+        return 0.0f;
+    }
+    const auto F = [](float u) { // ∫_{-1}^{u} (1-|s|) ds
+        if (u <= -1.0f) {
+            return 0.0f;
+        }
+        if (u >= 1.0f) {
+            return 1.0f;
+        }
+        return u < 0.0f ? 0.5f * (u + 1.0f) * (u + 1.0f) : 1.0f - 0.5f * (1.0f - u) * (1.0f - u);
+    };
+    return F(hi - c) - F(lo - c);
+}
+
+// ∫_a^b max(0, 1-|t-c|)·sin(κt) dt - same, with the equirect solid-angle Jacobian folded in
+float Ray::tent_sin_overlap(float a, float b, float c, float kappa) {
+    const float lo = (a > c - 1.0f ? a : c - 1.0f);
+    const float hi = (b < c + 1.0f ? b : c + 1.0f);
+    if (hi <= lo) {
+        return 0.0f;
+    }
+    const float k1 = 1.0f / kappa;
+    const float k2 = k1 * k1;
+    const auto A = [&](float t) { // antiderivative of (1+t-c)·sin(κt)
+        return -(1.0f + t - c) * std::cos(kappa * t) * k1 + std::sin(kappa * t) * k2;
+    };
+    const auto B = [&](float t) { // antiderivative of (1-t+c)·sin(κt)
+        return -(1.0f - t + c) * std::cos(kappa * t) * k1 - std::sin(kappa * t) * k2;
+    };
+    const float m = (c < lo ? lo : (c > hi ? hi : c));
+    float res = 0.0f;
+    if (m > lo) {
+        res += A(m) - A(lo);
+    }
+    if (hi > m) {
+        res += B(hi) - B(m);
+    }
+    return res;
+}
+
 uint32_t Ray::EncodeOctDir(const float d[3]) {
     const float denom = fabsf(d[0]) + fabsf(d[1]) + fabsf(d[2]);
     const float v[3] = {d[0] / denom, d[1] / denom, d[2] / denom};

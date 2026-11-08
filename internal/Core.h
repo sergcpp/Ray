@@ -508,6 +508,11 @@ force_inline void rgbe_to_rgb(const uint8_t rgbe[4], float out_rgb[3]) {
 void CanonicalToDir(const float p[2], float y_rotation, float out_d[3]);
 void DirToCanonical(const float d[3], float y_rotation, float out_p[2]);
 
+// 1D tent (bilinear basis) overlap with an interval, plain and with the equirect sinθ
+// Jacobian folded in - exact envmap qtree cell weights (PrepareEnvMapQTree_nolock)
+float tent_overlap(float a, float b, float c);
+float tent_sin_overlap(float a, float b, float c, float kappa);
+
 uint32_t EncodeOctDir(const float d[3]);
 uint16_t EncodeOctDir8(const float d[3]);
 

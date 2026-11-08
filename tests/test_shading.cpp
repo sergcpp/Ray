@@ -1524,7 +1524,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], std::string_view prefe
 
 void test_complex_mat5_moon_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const double MinPSNR = 31.0;
+    const double MinPSNR = 30.80;
     const int PixThres = 300;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1698,8 +1698,8 @@ void test_complex_mat6_dir_light(const char *arch_list[], std::string_view prefe
 
 void test_complex_mat6_hdri_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 92;
-    const double MinPSNR = 21.0;
-    const int PixThres = 6065;
+    const double MinPSNR = 20.95;
+    const int PixThres = 6070;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};

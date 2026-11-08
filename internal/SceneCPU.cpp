@@ -1,9 +1,12 @@
 #include "SceneCPU.h"
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstring>
 
 #include <functional>
+#include <vector>
 
 #include "../Log.h"
 #include "BVHSplit.h"
@@ -1188,56 +1191,71 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock(
     int cur_res = env_map_qtree_.res;
     float total_lum = 0.0f;
 
-    { // initialize the first quadtree level
+    { // finest quadtree level: exact integral of the bilinearly-filtered env map over each
+      // cell (separable tent-overlap sums; sinθ Jacobian folded into the polar-axis weights)
         env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
 
-        static const float FilterWeights[][5] = {{1 / 273.0f, 4 / 273.0f, 7 / 273.0f, 4 / 273.0f, 1 / 273.0f},    //
-                                                 {4 / 273.0f, 16 / 273.0f, 26 / 273.0f, 16 / 273.0f, 4 / 273.0f}, //
-                                                 {7 / 273.0f, 26 / 273.0f, 41 / 273.0f, 26 / 273.0f, 7 / 273.0f}, //
-                                                 {4 / 273.0f, 16 / 273.0f, 26 / 273.0f, 16 / 273.0f, 4 / 273.0f}, //
-                                                 {1 / 273.0f, 4 / 273.0f, 7 / 273.0f, 4 / 273.0f, 1 / 273.0f}};
-        static const float FilterSize = 0.5f;
+        const int tex_w = size.get<0>();
+        const int tex_h = size.get<1>();
+        assert(tex_w >= cur_res && tex_h >= cur_res);
 
-        parallel_for(0, cur_res / 2, [&](const int yy) {
-            for (int qy = 2 * yy; qy < 2 * yy + 2; ++qy) {
-                for (int qx = 0; qx < cur_res; ++qx) {
-                    for (int jj = -2; jj <= 2; ++jj) {
-                        for (int ii = -2; ii <= 2; ++ii) {
-                            const Ref::fvec2 q = {Ref::fract(1.0f + (float(qx) + 0.5f + ii * FilterSize) / cur_res),
-                                                  Ref::fract(1.0f + (float(qy) + 0.5f + jj * FilterSize) / cur_res)};
-                            Ref::fvec4 dir;
-                            CanonicalToDir(value_ptr(q), 0.0f, value_ptr(dir));
+        const float kappa = PI / float(tex_h); // texture-space polar coord t = θ*h/π
 
-                            const float theta = acosf(clamp(dir.get<1>(), -1.0f, 1.0f)) / PI;
-                            float phi = atan2f(dir.get<2>(), dir.get<0>());
-                            if (phi < 0) {
-                                phi += 2 * PI;
-                            }
-                            if (phi > 2 * PI) {
-                                phi -= 2 * PI;
-                            }
-
-                            const float u = Ref::fract(0.5f * phi / PI);
-
-                            const Ref::fvec2 uvs = Ref::fvec2{u, theta} * Ref::fvec2(size);
-                            const Ref::ivec2 iuvs = clamp(Ref::ivec2(uvs), Ref::ivec2(0), size - 1);
-
-                            const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, iuvs.get<0>(), iuvs.get<1>(), 0);
-                            const Ref::fvec4 col_rgb = Ref::rgbe_to_rgb(col_rgbe);
-                            const float cur_lum = (col_rgb.get<0>() + col_rgb.get<1>() + col_rgb.get<2>());
-
-                            int index = 0;
-                            index |= (qx & 1) << 0;
-                            index |= (qy & 1) << 1;
-
-                            const int _qx = (qx / 2);
-                            const int _qy = (qy / 2);
-
-                            auto &qvec = env_map_qtree_.mips[0][_qy * cur_res / 2 + _qx];
-                            qvec.set(index, qvec[index] + cur_lum * FilterWeights[ii + 2][jj + 2]);
-                        }
-                    }
+        // Azimuth-axis weights per qy: ∫ tent_i(s) ds over [qy*w/res, (qy+1)*w/res],
+        // texel indices wrapped mod w - matches the sampler's REPEAT addressing.
+        // Note: CanonicalToDir carries φ as -sinθ·sinφ, so latlong u = fract(-p1) - the
+        // azimuth texel span of canonical cell qy is counted from the far edge (mirrored).
+        std::vector<std::vector<std::pair<int, float>>> acol(cur_res);
+        const float s_step = float(tex_w) / float(cur_res);
+        for (int qy = 0; qy < cur_res; ++qy) {
+            const float s1 = float(cur_res - qy - 1) * s_step;
+            const float s2 = s1 + s_step;
+            for (int i0 = int(std::floor(s1)) - 1; i0 <= int(std::ceil(s2)) + 1; ++i0) {
+                const float wgt = tent_overlap(s1, s2, float(i0));
+                if (wgt <= 0.0f) {
+                    continue;
                 }
+                const int i = i0 < 0 ? i0 + tex_w : (i0 >= tex_w ? i0 - tex_w : i0);
+                acol[qy].emplace_back(i, wgt);
+            }
+        }
+
+        parallel_for(0, cur_res, [&](const int qx) {
+            if (cur_res <= 1) { // degenerate env map (tiny/1x1): mips[0] is empty, nothing to write
+                return;
+            }
+
+            const float polar_lo = std::acos(clamp(2.0f * float(qx + 1) / float(cur_res) - 1.0f, -1.0f, 1.0f)) / kappa;
+            const float polar_hi = std::acos(clamp(2.0f * float(qx) / float(cur_res) - 1.0f, -1.0f, 1.0f)) / kappa;
+
+            // Mrow[x] = Σ_j lum[x, j]·∫_{polar_lo}^{polar_hi} tent_j(t)·sin(κt) dt, rows folded mod h
+            std::vector<float> Mrow(size_t(tex_w), 0.0f);
+            for (int j0 = int(std::floor(polar_lo)) - 1; j0 <= int(std::ceil(polar_hi)) + 1; ++j0) {
+                const float wgt = tent_sin_overlap(polar_lo, polar_hi, float(j0), kappa);
+                if (wgt <= 0.0f) {
+                    continue;
+                }
+                const int j = j0 < 0 ? j0 + tex_h : (j0 >= tex_h ? j0 - tex_h : j0);
+                for (int x = 0; x < tex_w; ++x) {
+                    const Ref::fvec4 c = Ref::rgbe_to_rgb(tex_storage_rgba_.Get(tex, x, j, 0));
+                    Mrow[x] += wgt * (c.get<0>() + c.get<1>() + c.get<2>());
+                }
+            }
+
+            // Cell weight = mean radiance over the cell (same units as the old filtered taps)
+            const float norm = PI * float(cur_res) * float(cur_res) / (2.0f * float(tex_w * tex_h));
+            for (int qy = 0; qy < cur_res; ++qy) {
+                float sum = 0.0f;
+                for (const auto &ic : acol[qy]) {
+                    sum += ic.second * Mrow[ic.first];
+                }
+
+                int index = 0;
+                index |= (qx & 1) << 0;
+                index |= (qy & 1) << 1;
+
+                auto &qvec = env_map_qtree_.mips[0][(qy / 2) * cur_res / 2 + (qx / 2)];
+                qvec.set(index, norm * sum);
             }
         });
 
