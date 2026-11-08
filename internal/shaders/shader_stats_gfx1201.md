@@ -1,34 +1,34 @@
 # Ray shader stats (gfx1201)
 
-Generated 2026-11-07 19:11 by `Ray/scripts/rga_shader_stats.py`, RGA 2.15.0.30, source: `internal/shaders/output/*.spv` (offline SPIR-V mode, release builds only).
+Generated 2026-11-08 01:47 by `Ray/scripts/rga_shader_stats.py`, RGA 2.15.0.30, source: `internal/shaders/output/*.spv` (offline SPIR-V mode, release builds only).
 
 | # | Shader | SPV, B | ISA, B | VGPRs | SGPRs | VGPR spills | SGPR spills | Scratch, B/thread | LDS, B | Max waves/SIMD | Occ. |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `shade_secondary_atlas_cache_query_sky.comp.spv` | 229,360 | 104,472 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 2 | `shade_secondary_atlas_cache_query.comp.spv` | 228,948 | 104,112 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 3 | `shade_secondary_bindless_cache_query_sky.comp.spv` | 225,876 | 101,868 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 4 | `shade_secondary_bindless_cache_query.comp.spv` | 225,464 | 101,700 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 5 | `shade_secondary_atlas_sky.comp.spv` | 222,636 | 101,516 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 6 | `shade_secondary_atlas.comp.spv` | 222,224 | 101,312 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 7 | `shade_secondary_atlas_cache_update.comp.spv` | 220,584 | 101,044 | 171 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 8 | `shade_secondary_bindless_sky.comp.spv` | 219,152 | 99,248 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 9 | `shade_secondary_bindless.comp.spv` | 218,740 | 99,044 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 10 | `shade_secondary_bindless_cache_update.comp.spv` | 217,100 | 98,728 | 171 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
-| 11 | `shade_primary_atlas_cache_query_sky.comp.spv` | 217,860 | 92,360 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 12 | `shade_primary_atlas_cache_query.comp.spv` | 217,448 | 92,336 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 13 | `shade_primary_bindless_cache_query_sky.comp.spv` | 214,180 | 90,440 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 14 | `shade_primary_bindless_cache_query.comp.spv` | 213,768 | 89,988 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 15 | `shade_primary_atlas_sky.comp.spv` | 211,136 | 89,752 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 16 | `shade_primary_atlas.comp.spv` | 210,724 | 89,544 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 17 | `shade_primary_atlas_cache_update.comp.spv` | 209,180 | 89,128 | 142 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 18 | `shade_primary_bindless_sky.comp.spv` | 207,456 | 87,692 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 19 | `shade_primary_bindless.comp.spv` | 207,044 | 87,484 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
-| 20 | `shade_primary_bindless_cache_update.comp.spv` | 205,500 | 86,900 | 141 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 1 | `shade_secondary_atlas_cache_query_sky.comp.spv` | 229,304 | 104,528 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 2 | `shade_secondary_atlas_cache_query.comp.spv` | 228,892 | 104,148 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 3 | `shade_secondary_bindless_cache_query_sky.comp.spv` | 225,820 | 101,904 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 4 | `shade_secondary_bindless_cache_query.comp.spv` | 225,408 | 101,492 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 5 | `shade_secondary_atlas_sky.comp.spv` | 222,580 | 101,400 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 6 | `shade_secondary_atlas.comp.spv` | 222,168 | 101,204 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 7 | `shade_secondary_atlas_cache_update.comp.spv` | 220,528 | 100,872 | 171 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 8 | `shade_secondary_bindless_sky.comp.spv` | 219,096 | 99,160 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 9 | `shade_secondary_bindless.comp.spv` | 218,684 | 98,980 | 175 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 10 | `shade_secondary_bindless_cache_update.comp.spv` | 217,044 | 98,672 | 171 | 104 | 0 | 0 | 432 | 6,144 | 2 | 12% |
+| 11 | `shade_primary_atlas_cache_query.comp.spv` | 217,392 | 92,276 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 12 | `shade_primary_atlas_cache_query_sky.comp.spv` | 217,804 | 92,276 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 13 | `shade_primary_bindless_cache_query_sky.comp.spv` | 214,124 | 90,376 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 14 | `shade_primary_bindless_cache_query.comp.spv` | 213,712 | 89,860 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 15 | `shade_primary_atlas_sky.comp.spv` | 211,080 | 89,664 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 16 | `shade_primary_atlas.comp.spv` | 210,668 | 89,448 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 17 | `shade_primary_atlas_cache_update.comp.spv` | 209,124 | 88,972 | 142 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 18 | `shade_primary_bindless_sky.comp.spv` | 207,400 | 87,608 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 19 | `shade_primary_bindless.comp.spv` | 206,988 | 87,412 | 145 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
+| 20 | `shade_primary_bindless_cache_update.comp.spv` | 205,444 | 86,756 | 141 | 106 | 0 | 0 | 0 | 0 | 3 | 18% |
 | 21 | `intersect_scene_shadow_swrt_atlas_subgroup.comp.spv` | 56,232 | 20,076 | 88 | 102 | 0 | 0 | 464 | 4,096 | 5 | 31% |
 | 22 | `intersect_scene_shadow_swrt_bindless_subgroup.comp.spv` | 54,704 | 20,028 | 89 | 106 | 0 | 0 | 464 | 4,096 | 5 | 31% |
 | 23 | `intersect_scene_shadow_swrt_bindless.comp.spv` | 54,608 | 19,176 | 89 | 106 | 0 | 0 | 464 | 4,096 | 5 | 31% |
 | 24 | `intersect_scene_shadow_swrt_atlas.comp.spv` | 56,136 | 18,940 | 89 | 106 | 0 | 0 | 464 | 4,096 | 5 | 31% |
-| 25 | `shade_sky.comp.spv` | 43,760 | 17,600 | 89 | 106 | 0 | 0 | 0 | 0 | 5 | 31% |
+| 25 | `shade_sky.comp.spv` | 43,704 | 17,524 | 89 | 106 | 0 | 0 | 0 | 0 | 5 | 31% |
 | 26 | `bake_sky.comp.spv` | 38,572 | 16,924 | 83 | 106 | 0 | 0 | 0 | 0 | 5 | 31% |
 | 27 | `intersect_scene_swrt_atlas_subgroup.comp.spv` | 42,428 | 14,984 | 80 | 102 | 0 | 0 | 224 | 3,072 | 6 | 37% |
 | 28 | `intersect_scene_indirect_swrt_atlas_subgroup.comp.spv` | 42,388 | 14,964 | 80 | 102 | 0 | 0 | 224 | 3,072 | 6 | 37% |
@@ -115,10 +115,10 @@ Notes:
 - Offline-mode numbers come from AMD's standalone compiler (same back end as the driver) and may differ slightly from live-driver ISA.
 - `4` RT pipeline stage shaders (.rgen/.rchit/.rmiss) were skipped.
 - `15` shaders failed to compile:
-  - `convolution_112_112_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
   - `convolution_32_32_Downsample_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
-  - `convolution_32_48_Downsample_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
+  - `convolution_112_112_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
   - `convolution_32_3_img_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
+  - `convolution_32_48_Downsample_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
   - `convolution_48_64_Downsample_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
   - `convolution_64_32_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005
   - `convolution_64_64_coop_8x8x16_CF32.comp.spv`: 2.	Running pass "Lower XDL Tensor operations" on function "lgc.shader.CS.main" Exception Code: 0xC0000005

@@ -1834,7 +1834,7 @@ vec3 Evaluate_EnvColor(const ray_data_t ray, const float pdf_factor, const vec2 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             env_col *= mis_weight;
         } else {
-            const float light_pdf = 0.5 / (PI * float(g_params.li_count));
+            const float light_pdf = 0.5 / (PI * pdf_factor);
             const float bsdf_pdf = ray.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);

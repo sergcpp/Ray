@@ -727,7 +727,7 @@ void main() {
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             sky_color *= mis_weight;
         } else {
-            const float light_pdf = 0.5 / (PI * float(g_params.li_count));
+            const float light_pdf = 0.5 / (PI * pdf_factor);
             const float bsdf_pdf = r.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
