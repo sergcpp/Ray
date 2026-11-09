@@ -277,11 +277,11 @@ float portable_asinf(float x);
 float portable_acosf(float x);
 float portable_atan2f(float y, float x); // y >= 0; (0,0) -> 0
 
-fvec2 get_scrambled_2d_rand(const uint32_t dim, const uint32_t seed, const int sample, const uint32_t rand_seq[]);
+fvec2 get_scrambled_2d_rand(uint32_t dim, uint32_t seed, int sample, const uint32_t rand_seq[]);
 
 float SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fvec4 &axis_u, const fvec4 &axis_v,
                                fvec2 Xi, fvec4 *out_p);
-float SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, const fvec4 &p3, const fvec2 Xi,
+float SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, const fvec4 &p3, fvec2 Xi,
                               fvec4 *out_dir);
 
 // Spread-footprint sampling-domain clamp: shrink rect/disk to the hard-cone footprint circle around P
@@ -409,9 +409,9 @@ force_inline float fast_log2(float val) {
     return (log_2);
 }
 
-float get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const fvec2 &duv_dx,
+float get_texture_lod(const Cpu::TexStorageBase *const textures[], uint32_t index, const fvec2 &duv_dx,
                       const fvec2 &duv_dy);
-float get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const float lambda);
+float get_texture_lod(const Cpu::TexStorageBase *const textures[], uint32_t index, float lambda);
 
 force_inline float power_heuristic(const float a, const float b) {
     const float t = a * a;
@@ -481,7 +481,7 @@ void SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B, const fve
 
 // Origin normal packing for the light-tree behind-surface cull: bit16 validity + oct8 pair; 0 = cull disabled
 uint32_t encode_n_oct(const fvec4 &N);
-fvec4 decode_n_oct(const uint32_t n_oct);
+fvec4 decode_n_oct(uint32_t n_oct);
 
 // Account for visible lights contribution
 void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,

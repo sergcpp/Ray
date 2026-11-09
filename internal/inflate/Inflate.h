@@ -13,18 +13,18 @@ class Inflater {
 
     uint32_t GetBits(int n);
     uint32_t Peek16Bits();
-    void ConsumeBits(const int n);
+    void ConsumeBits(int n);
     void Refill32Bits();
     bool SkipToByteBoundary();
 
     uint32_t CopyUncompressed(Span<uint8_t> output);
     uint32_t DecodeHuffman(bool dynamic, Span<uint8_t> output);
 
-    int ReadRawLengths(const int len_bits, const int read_symbols, const int symbols, uint8_t *code_length);
+    int ReadRawLengths(int len_bits, int read_symbols, int symbols, uint8_t *code_length);
 
     uint32_t ReadValue(const uint32_t *rev_symbol_table, huff_table_t &out_table);
-    int ReadLength(const uint32_t *tables_rev_symbol_table, const int read_symbols, const int symbols,
-                   uint8_t *code_length, huff_table_t &out_table);
+    int ReadLength(const uint32_t *tables_rev_symbol_table, int read_symbols, int symbols, uint8_t *code_length,
+                   huff_table_t &out_table);
 
   public:
     void Feed(Span<const uint8_t> input) {

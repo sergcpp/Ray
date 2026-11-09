@@ -29,7 +29,7 @@ std::unique_ptr<uint8_t[]> ConvertRGB_to_CoCgxY(const uint8_t image_data[], int 
 std::unique_ptr<uint8_t[]> ConvertCoCgxY_to_RGB(const uint8_t image_data[], int w, int h);
 
 uint16_t f32_to_f16(float value);
-float f16_to_f32(const uint16_t h);
+float f16_to_f32(uint16_t h);
 
 extern const uint8_t _blank_BC3_block_4x4[];
 extern const int _blank_BC3_block_4x4_len;

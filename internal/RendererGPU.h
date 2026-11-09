@@ -308,7 +308,7 @@ class Renderer : public RendererBase {
     void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Image &out_pixels);
     void kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const cache_grid_params_t &params, const Buffer &indir_args,
-                                   const int indir_args_index, const Buffer &counters, const int counter_index,
+                                   int indir_args_index, const Buffer &counters, int counter_index,
                                    const Buffer &inters, const Buffer &rays, const Buffer &cache_data,
                                    const Image &radiance_img, const Image &depth_normals_img,
                                    const Buffer &inout_entries, const Buffer &inout_voxels_curr,
