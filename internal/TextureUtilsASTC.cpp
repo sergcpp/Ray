@@ -206,7 +206,7 @@ void write_bits(unsigned value, const unsigned bitcount, const unsigned bitoffse
     }
 }
 
-unsigned read_bits(const unsigned bitcount, const unsigned bitoffset, const uint8_t *data) {
+[[maybe_unused]] unsigned read_bits(const unsigned bitcount, const unsigned bitoffset, const uint8_t *data) {
     const uint8_t *ptr = data + (bitoffset >> 3);
     const unsigned off = bitoffset & 7;
     unsigned res = unsigned(ptr[0]) >> off;

@@ -493,7 +493,7 @@ template <int S>
 fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
                             Span<const uint32_t> leaf_lights);
 template <int S>
-fvec<S> EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &mask, const ivec<S> &tri_index,
+fvec<S> EvalTriLightFactor(const fvec<S> P[3], const ivec<S> &mask, const ivec<S> &tri_index,
                            Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
                            Span<const uint32_t> leaf_lights);
 
@@ -7672,9 +7672,9 @@ Ray::NS::fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<con
 }
 
 template <int S>
-Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> ro[3], const ivec<S> &_mask,
-                                             const ivec<S> &tri_index, Span<const light_t> lights,
-                                             Span<const light_cwbvh_node_t> nodes, Span<const uint32_t> leaf_lights) {
+Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const ivec<S> &_mask, const ivec<S> &tri_index,
+                                             Span<const light_t> lights, Span<const light_cwbvh_node_t> nodes,
+                                             Span<const uint32_t> leaf_lights) {
     const int SS = S <= 8 ? S : 8;
 
     fvec<S> ret = 1.0f;
@@ -7685,7 +7685,7 @@ Ray::NS::fvec<S> Ray::NS::EvalTriLightFactor(const fvec<S> P[3], const fvec<S> r
         }
 
         // recombine in AoS layout
-        const float _p[3] = {P[0][ri], P[1][ri], P[2][ri]}, _ro[3] = {ro[0][ri], ro[1][ri], ro[2][ri]};
+        const float _p[3] = {P[0][ri], P[1][ri], P[2][ri]};
 
         TraversalStateStack_Single<MAX_STACK_SIZE, light_cwbvh_stack_entry_t> st;
         st.push(0u /* root_index */, 0u /* masks_L */);
@@ -9266,7 +9266,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
 #if USE_NEE
                 if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_IMP_SAMPLE)) {
 #if USE_HIERARCHICAL_NEE
-                    const fvec<S> pdf_factor = EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights,
+                    const fvec<S> pdf_factor = EvalTriLightFactor(surf.P, ray_queue[index], tri_index, sc.lights,
                                                                   sc.light_cwnodes, sc.light_leaf_prims);
 #else  // USE_HIERARCHICAL_NEE
                     const float pdf_factor = float(sc.li_indices.size());
