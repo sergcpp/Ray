@@ -98,7 +98,8 @@ int Preprocess_BCn(const uint8_t in_data[], int tiles_w, int tiles_h, bool flip_
 //
 // ASTC 4x4 compression (GPU texture atlases only: VK; DX stays on BCn)
 // Fixed-layout single-partition emitter (BC3-class: min/max endpoints, one weight per texel):
-// CEM = LDR direct (RGBA / luminance), no partitions, no dual-plane weights, no HDR.
+// CEM = LDR direct (RGBA / luminance), no partitions, no HDR. Dual-plane weights are used only
+// for is_ycocg (Co,Cg,scale + Y planes, BC3-style); everything else is single-plane.
 // Bit layout follows the Khronos ASTC spec (C.2.x).
 //
 

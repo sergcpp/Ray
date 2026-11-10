@@ -17,12 +17,20 @@ namespace Ray {
 #define RAY_ASTC_SIMD_SSE2 1
 bool ASTCBlockIsFlat_SSE2(const uint8_t pixels[64]);
 void ASTCGetMinMax_SSE2(const uint8_t pixels[64], uint8_t lo[4], uint8_t hi[4]);
-void ASTCSelectWeights_SSE2(const uint8_t pixels[64], const uint8_t dec[4][8], int nch, uint8_t w[16], unsigned yshift);
+void ASTCSelectWeights_SSE2(const uint8_t pixels[64], const uint8_t dec[4][8], int nch, uint8_t w[16]);
+void ASTCScaleCoCg_SSE2(const uint8_t pixels[64], int sb, uint8_t out[64]);
+int ASTCDiagonalSide_SSE2(const uint8_t scaled[64], int mid0, int mid1);
+uint64_t ASTCSelectWeightsDual_SSE2(const uint8_t pixels[64], const uint8_t scaled[64], const uint8_t d0[4],
+                                    const uint8_t d1[4], const uint8_t dy[4]);
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM64)
 #define RAY_ASTC_SIMD_NEON 1
 bool ASTCBlockIsFlat_NEON(const uint8_t pixels[64]);
 void ASTCGetMinMax_NEON(const uint8_t pixels[64], uint8_t lo[4], uint8_t hi[4]);
-void ASTCSelectWeights_NEON(const uint8_t pixels[64], const uint8_t dec[4][8], int nch, uint8_t w[16], unsigned yshift);
+void ASTCSelectWeights_NEON(const uint8_t pixels[64], const uint8_t dec[4][8], int nch, uint8_t w[16]);
+void ASTCScaleCoCg_NEON(const uint8_t pixels[64], int sb, uint8_t out[64]);
+int ASTCDiagonalSide_NEON(const uint8_t scaled[64], int mid0, int mid1);
+uint64_t ASTCSelectWeightsDual_NEON(const uint8_t pixels[64], const uint8_t scaled[64], const uint8_t d0[4],
+                                    const uint8_t d1[4], const uint8_t dy[4]);
 #endif
 
 namespace {
@@ -464,6 +472,15 @@ void extract4x4_rgba_partial(const uint8_t src[], const int stride, const int bw
 // Scalar reference for the per-block hot leaves (SIMD twins live in the _SSE2/_NEON TUs).
 // SelectWeights: a 4x4 grid makes infill identity, so every texel independently takes the
 // nearest weight level (SSE over the channels carrying signal; first level wins ties).
+
+// Exact integer form of the decoder's chroma scale (byte/8 + 1); sb = scale byte + 8 = scale*8.
+// The float path this replaces ((v-128)*sb/8 is exact in f32, std::lround ties away from zero)
+// is mirrored bit-identically by the SIMD leaves' round-shift.
+int scale_cocg(const int v, const int sb) {
+    const int p = (v - 128) * sb;
+    return std::clamp(p < 0 ? -((-p + 4) / 8) : (p + 4) / 8, -128, 127) + 128;
+}
+
 struct RefLeaves {
     static bool IsFlat(const uint8_t pixels[64]) {
         for (int i = 1; i < 16; i++)
@@ -482,8 +499,7 @@ struct RefLeaves {
                 hi[c] = std::max(hi[c], pixels[i * 4 + c]);
             }
     }
-    static void SelectWeights(const uint8_t pixels[64], const uint8_t dec[4][8], const int nch, uint8_t w[16],
-                              const unsigned yshift) {
+    static void SelectWeights(const uint8_t pixels[64], const uint8_t dec[4][8], const int nch, uint8_t w[16]) {
         for (int t = 0; t < 16; t++) {
             int best_v = 0;
             unsigned best_e = ~0u;
@@ -491,7 +507,7 @@ struct RefLeaves {
                 unsigned te = 0;
                 for (int ch = 0; ch < nch; ch++) {
                     const int d = int(dec[ch][v]) - int(pixels[t * 4 + ch]);
-                    te += (ch == 3 && yshift) ? (unsigned(d * d) << yshift) : unsigned(d * d);
+                    te += unsigned(d * d);
                 }
                 if (te < best_e) {
                     best_e = te;
@@ -501,6 +517,42 @@ struct RefLeaves {
             w[t] = uint8_t(best_v);
         }
     }
+    // Dual-plane YCoCg path leaves (see emit_ycocg_dual_impl).
+    static void ScaleCoCg(const uint8_t pixels[64], const int sb, uint8_t out[64]) {
+        for (int t = 0; t < 16; t++) {
+            out[t * 4 + 0] = uint8_t(scale_cocg(pixels[t * 4 + 0], sb));
+            out[t * 4 + 1] = uint8_t(scale_cocg(pixels[t * 4 + 1], sb));
+            out[t * 4 + 2] = pixels[t * 4 + 2];
+            out[t * 4 + 3] = pixels[t * 4 + 3];
+        }
+    }
+    static int DiagonalSide(const uint8_t scaled[64], const int mid0, const int mid1) {
+        int side = 0;
+        for (int t = 0; t < 16; t++)
+            side += (scaled[t * 4 + 0] >= mid0) ^ (scaled[t * 4 + 1] >= mid1);
+        return side;
+    }
+    static uint64_t SelectWeightsDual(const uint8_t pixels[64], const uint8_t scaled[64], const uint8_t d0[4],
+                                      const uint8_t d1[4], const uint8_t dy[4]) {
+        uint64_t wbits = 0;
+        for (int t = 0; t < 16; t++) {
+            int b0 = 0, b1 = 0, e0 = 1 << 30, e1 = 1 << 30;
+            for (int v = 0; v < 4; v++) {
+                const int a = int(d0[v]) - int(scaled[t * 4 + 0]), b = int(d1[v]) - int(scaled[t * 4 + 1]),
+                          y = int(dy[v]) - int(pixels[t * 4 + 3]);
+                if (a * a + b * b < e0) {
+                    e0 = a * a + b * b;
+                    b0 = v;
+                }
+                if (y * y < e1) {
+                    e1 = y * y;
+                    b1 = v;
+                }
+            }
+            wbits |= uint64_t(b0 | (b1 << 2)) << (4 * t);
+        }
+        return wbits;
+    }
 };
 
 #ifdef RAY_ASTC_SIMD_SSE2
@@ -509,9 +561,18 @@ struct SimdLeaves {
     static void GetMinMax(const uint8_t pixels[64], uint8_t lo[4], uint8_t hi[4]) {
         ASTCGetMinMax_SSE2(pixels, lo, hi);
     }
-    static void SelectWeights(const uint8_t pixels[64], const uint8_t dec[4][8], const int nch, uint8_t w[16],
-                              const unsigned yshift) {
-        ASTCSelectWeights_SSE2(pixels, dec, nch, w, yshift);
+    static void SelectWeights(const uint8_t pixels[64], const uint8_t dec[4][8], const int nch, uint8_t w[16]) {
+        ASTCSelectWeights_SSE2(pixels, dec, nch, w);
+    }
+    static void ScaleCoCg(const uint8_t pixels[64], const int sb, uint8_t out[64]) {
+        ASTCScaleCoCg_SSE2(pixels, sb, out);
+    }
+    static int DiagonalSide(const uint8_t scaled[64], const int mid0, const int mid1) {
+        return ASTCDiagonalSide_SSE2(scaled, mid0, mid1);
+    }
+    static uint64_t SelectWeightsDual(const uint8_t pixels[64], const uint8_t scaled[64], const uint8_t d0[4],
+                                      const uint8_t d1[4], const uint8_t dy[4]) {
+        return ASTCSelectWeightsDual_SSE2(pixels, scaled, d0, d1, dy);
     }
 };
 #elif defined(RAY_ASTC_SIMD_NEON)
@@ -520,20 +581,152 @@ struct SimdLeaves {
     static void GetMinMax(const uint8_t pixels[64], uint8_t lo[4], uint8_t hi[4]) {
         ASTCGetMinMax_NEON(pixels, lo, hi);
     }
-    static void SelectWeights(const uint8_t pixels[64], const uint8_t dec[4][8], const int nch, uint8_t w[16],
-                              const unsigned yshift) {
-        ASTCSelectWeights_NEON(pixels, dec, nch, w, yshift);
+    static void SelectWeights(const uint8_t pixels[64], const uint8_t dec[4][8], const int nch, uint8_t w[16]) {
+        ASTCSelectWeights_NEON(pixels, dec, nch, w);
+    }
+    static void ScaleCoCg(const uint8_t pixels[64], const int sb, uint8_t out[64]) {
+        ASTCScaleCoCg_NEON(pixels, sb, out);
+    }
+    static int DiagonalSide(const uint8_t scaled[64], const int mid0, const int mid1) {
+        return ASTCDiagonalSide_NEON(scaled, mid0, mid1);
+    }
+    static uint64_t SelectWeightsDual(const uint8_t pixels[64], const uint8_t scaled[64], const uint8_t d0[4],
+                                      const uint8_t d1[4], const uint8_t dy[4]) {
+        return ASTCSelectWeightsDual_NEON(pixels, scaled, d0, d1, dy);
     }
 };
 #else
 using SimdLeaves = RefLeaves; // no SIMD form for this target
 #endif
 
+// Dual-plane YCoCg layout, the BC3 analogue: plane 0 = (Co,Cg) with the constant B channel as the
+// decoder's chroma-scale byte, plane 1 = Y (CCS=3, like BC3's separate alpha block). 4x4 grid, 2-bit
+// weights (3-bit dual-plane leaves no room for endpoints), Q_48 trit endpoints.
+const ASTC4x4_mode_cand_t &dual_mode() {
+    struct cache_t {
+        ASTC4x4_mode_cand_t m;
+        cache_t() {
+            bool found = false;
+            for (unsigned bm = 0; bm < 2048 && !found; bm++) {
+                int xw, yw, wq;
+                bool dual;
+                if (!decode_block_mode_2d(bm, xw, yw, dual, wq) || !dual || xw != 4 || yw != 4 || wq != Q_4)
+                    continue;
+                // +2: the CCS field sits between the endpoints and the weights
+                m = {uint16_t(bm), uint8_t(xw), uint8_t(yw), uint8_t(wq),
+                     uint8_t(pick_endpoint_quant(8, ise_bitcount(32, Q_4) + 2))};
+                found = true;
+            }
+            assert(found);
+        }
+    };
+    static const cache_t cache;
+    return cache.m;
+}
+
+// Per chroma half-range m: the largest representable scale byte (scale = byte / 8 + 1, capped at 4 like the
+// BC path) that keeps the scaled block inside [0, 255]. The decoder derives the scale from the quantized byte.
+struct ycocg_scale_t {
+    uint8_t code[129];
+    ycocg_scale_t() {
+        const ASTC4x4_mode_cand_t &cand = dual_mode();
+        const uint8_t *unq = tables().color[cand.eq];
+        for (int m = 0; m <= 128; m++) {
+            int best_code = -1, best_v = -1, zero_code = 0;
+            for (int c = 0; c < g_quant_levels[cand.eq]; c++) {
+                const int v = unq[c];
+                if (v == 0)
+                    zero_code = c;
+                if (v <= 24 && (v / 8.0f + 1.0f) * float(m) <= 127.4f && v > best_v) {
+                    best_v = v;
+                    best_code = c;
+                }
+            }
+            code[m] = uint8_t(best_code < 0 ? zero_code : best_code);
+        }
+    }
+};
+
+// Shrinks [mn, mx] towards the middle (BC InsetYCoCgBBox); 'bits' = fractional bits of the inset grid.
+void inset_range(int &mn, int &mx, const int bits) {
+    const int inset = (mx - mn) - ((1 << (bits - 1)) - 1), sc = 1 << bits;
+    mn = std::max((mn * sc + inset) / sc, 0);
+    mx = std::min((mx * sc - inset) / sc, 255);
+}
+
+// Decoder-exact 8-bit color at weight w (0..64): 16-bit lerp of replicated endpoints, then the
+// decoder's top-8-bit take; the shifts compose into one >>14 (same form as the single-plane path).
+int astc_lerp8(const int e0, const int e1, const int w) {
+    return (((e0 << 8) | e0) * (64 - w) + ((e1 << 8) | e1) * w + 32) >> 14;
+}
+
+template <class LV> void emit_ycocg_dual_impl(const uint8_t pixels[64], uint8_t *&out_data) {
+    static const ycocg_scale_t scale_tab;
+    const ASTC4x4_mode_cand_t &cand = dual_mode();
+    const uint8_t *unq = tables().color[cand.eq], *enc = tables().enc[cand.eq];
+
+    uint8_t lo[4], hi[4];
+    LV::GetMinMax(pixels, lo, hi);
+
+    int m = 0;
+    for (int ch = 0; ch < 2; ch++)
+        m = std::max({m, std::abs(int(lo[ch]) - 128), std::abs(int(hi[ch]) - 128)});
+
+    // Scaling is monotonic: scaled min/max follow from the unscaled ones.
+    const uint8_t scode = scale_tab.code[m];
+    const int sb = int(unq[scode]) + 8; // scale * 8
+    alignas(16) uint8_t scaled[64];
+    LV::ScaleCoCg(pixels, sb, scaled);
+
+    int cmn[2], cmx[2];
+    for (int ch = 0; ch < 2; ch++) {
+        cmn[ch] = scale_cocg(lo[ch], sb);
+        cmx[ch] = scale_cocg(hi[ch], sb);
+        inset_range(cmn[ch], cmx[ch], 3); // finer inset than BC's 4/5: 2-bit weights only have 4 levels
+    }
+    int ymn = lo[3], ymx = hi[3];
+    inset_range(ymn, ymx, 4);
+
+    // BC SelectYCoCgDiagonal: flip Cg when most texels sit on the other diagonal
+    const int mid0 = (cmn[0] + cmx[0] + 1) / 2, mid1 = (cmn[1] + cmx[1] + 1) / 2;
+    if (LV::DiagonalSide(scaled, mid0, mid1) > 8)
+        std::swap(cmn[1], cmx[1]);
+
+    uint8_t code[8] = {enc[cmn[0]], enc[cmx[0]], enc[cmn[1]], enc[cmx[1]], scode, scode, enc[ymn], enc[ymx]};
+    if (int(unq[code[1]]) + unq[code[3]] + unq[code[5]] < int(unq[code[0]]) + unq[code[2]] + unq[code[4]]) {
+        std::swap(code[0], code[1]); // keeps the decoder's blue-contract branch inert
+        std::swap(code[2], code[3]);
+    }
+
+    // Nearest of the four decoded levels per texel and plane (first level wins ties).
+    const uint8_t *wtab = tables().weight[cand.wq];
+    uint8_t d0[4], d1[4], dy[4];
+    for (int v = 0; v < 4; v++) {
+        d0[v] = uint8_t(astc_lerp8(unq[code[0]], unq[code[1]], wtab[v]));
+        d1[v] = uint8_t(astc_lerp8(unq[code[2]], unq[code[3]], wtab[v]));
+        dy[v] = uint8_t(astc_lerp8(unq[code[6]], unq[code[7]], wtab[v]));
+    }
+
+    // Interleaved plane-0/plane-1 weights, bit-reversed from the block top (as in the single-plane packing)
+    const uint64_t wbits = LV::SelectWeightsDual(pixels, scaled, d0, d1, dy);
+    uint8_t blk[16] = {};
+    for (int k = 0; k < 8; k++)
+        blk[8 + k] = g_bitrev8.t[uint8_t(wbits >> (8 * (7 - k)))];
+
+    write_bits(cand.block_mode, 11, 0, blk);
+    write_bits(0, 2, 11, blk);
+    write_bits(CEM_RGBA, 4, 13, blk);
+    encode_ise(cand.eq, 8, code, blk, 17);
+    write_bits(3, 2, 62, blk); // CCS: plane 1 carries alpha (Y)
+
+    memcpy(out_data, blk, 16);
+    out_data += 16;
+}
+
 // Encode one 4x4 block of RGBA8 texels, writing exactly 16 bytes. Fixed BC3-class layout:
 // one weight per texel (4x4 grid, 8 levels) + min/max endpoints. CEM is RGBA (8 endpoint
 // values, alpha from the data) or luminance (2 values from R; decode forces alpha 255).
-// cocg = input is YCoCg-packed (Co,Cg,0,Y): the constant B channel doubles as the decoder's
-// chroma-scale exponent (same trick and same byte encoding as the BC path's ScaleYCoCg).
+// cocg = input is YCoCg-packed (Co,Cg,0,Y): encoded dual-plane by emit_ycocg_dual_impl.
 template <class LV>
 void emit_astc_block_impl(const uint8_t pixels[64], const int cem, const int nch, const bool cocg, uint8_t *&out_data) {
     const int n_e = cem == CEM_RGBA ? 8 : 2;
@@ -550,6 +743,11 @@ void emit_astc_block_impl(const uint8_t pixels[64], const int cem, const int nch
         return;
     }
 
+    if (cocg && cem == CEM_RGBA && nch == 4) {
+        emit_ycocg_dual_impl<LV>(pixels, out_data);
+        return;
+    }
+
     // Endpoint targets: per-channel 8-bit min/max over the block.
     uint8_t lo[4], hi[4];
     LV::GetMinMax(pixels, lo, hi);
@@ -561,34 +759,8 @@ void emit_astc_block_impl(const uint8_t pixels[64], const int cem, const int nch
     const int n_c = cem == CEM_RGBA ? 4 : 1;
     assert(nch >= 1 && nch <= n_c);
 
-    // Chroma amplification (YCoCg blocks): (Co,Cg-128)*s+128 with s in {1,2,3}, B channel
-    // carrying (s-1)*8 for YCoCg_to_RGB's divide-out (same as the BC path's ScaleYCoCg).
-    // Endpoints then ride an s-times finer effective chroma grid; the weight pick stays in the
-    // unscaled final domain (picking on amplified levels overweights chroma by s^2: measured
-    // -2.3 dB on Fabric), which is pick-identical to the un-scaled path (monotonic mapping).
-    int cocg_s = 1;
-    uint8_t lo_u[4], hi_u[4];
-    memcpy(lo_u, lo, 4);
-    memcpy(hi_u, hi, 4);
-    if (cocg && cem == CEM_RGBA && lo[2] == hi[2]) {
-        int m = 0;
-        for (int ch2 = 0; ch2 < 2; ch2++) {
-            m = std::max(m, std::abs(int(lo[ch2]) - 128));
-            m = std::max(m, std::abs(int(hi[ch2]) - 128));
-        }
-        cocg_s = m <= 31 ? 3 : (m <= 63 ? 2 : 1);
-        if (cocg_s > 1) {
-            for (int ch = 0; ch < 2; ch++) {
-                lo[ch] = uint8_t((int(lo_u[ch]) - 128) * cocg_s + 128);
-                hi[ch] = uint8_t((int(hi_u[ch]) - 128) * cocg_s + 128);
-            }
-            lo[2] = hi[2] = uint8_t((cocg_s - 1) * 8);
-        }
-    }
-
     // Endpoints from per-channel min/max; order the pairs so the decoder's blue-uncontract
     // + swap branch stays inert (same guard as its uncontraction).
-    bool swapped = false;
     const uint8_t *enc_tab = tables().enc[cand.eq];
     uint8_t code[8] = {};
     for (int ch = 0; ch < n_c; ch++) {
@@ -599,8 +771,7 @@ void emit_astc_block_impl(const uint8_t pixels[64], const int cem, const int nch
         auto unq = [&](int idx) { return int(tables().color[cand.eq][code[idx]]); };
         const int sum0 = cem == CEM_RGBA ? unq(0) + unq(2) + unq(4) : unq(0);
         const int sum1 = cem == CEM_RGBA ? unq(1) + unq(3) + unq(5) : unq(1);
-        swapped = sum0 > sum1;
-        if (swapped)
+        if (sum0 > sum1)
             for (int ch = 0; ch < n_c; ch++)
                 std::swap(code[2 * ch], code[2 * ch + 1]);
     }
@@ -628,27 +799,9 @@ void emit_astc_block_impl(const uint8_t pixels[64], const int cem, const int nch
             dec[ch][v] = uint8_t((E0 * (64 - int(wtab[v])) + E1 * int(wtab[v]) + 32) >> 14);
     }
 
-    // BC-style index pick (leaf: scalar or SIMD). For amplified blocks pick against the
-    // unscaled level grid (final-domain luma/chroma balance); the same weights decode on the
-    // amplified grid, with the pick's endpoint order following the emitted pair order.
+    // BC-style index pick (leaf: scalar or SIMD).
     uint8_t w[16];
-    // YCoCg: weight Y x4 in the pick - scene noise metrics track luminance (specular), and
-    // the shared plane otherwise lets chroma outvote luma (measured: BC3 beats ASTC's Y by
-    // 0.3-6.5 dB per texture while ASTC wins chroma by 8-21 dB).
-    const unsigned yshift = cocg ? 3u : 0u;
-    if (cocg_s > 1) {
-        uint8_t udec[4][8] = {};
-        for (int ch = 0; ch < nch; ch++) {
-            const int E0 = int(tables().color[cand.eq][enc_tab[swapped ? hi_u[ch] : lo_u[ch]]]);
-            const int E1 = int(tables().color[cand.eq][enc_tab[swapped ? lo_u[ch] : hi_u[ch]]]);
-            for (int v = 0; v < 8; v++)
-                udec[ch][v] =
-                    uint8_t(((((E0 << 8) | E0) * (64 - int(wtab[v])) + ((E1 << 8) | E1) * int(wtab[v]) + 32) >> 14));
-        }
-        LV::SelectWeights(pixels, udec, nch, w, yshift);
-    } else {
-        LV::SelectWeights(pixels, dec, nch, w, yshift);
-    }
+    LV::SelectWeights(pixels, dec, nch, w);
 
     // Pack (layout mirrors astcenc symbolic_to_physical): weights are ISE-encoded, then
     // stored bit-reversed within bytes and byte-reversed at the block top. Q_8 weights are
@@ -672,6 +825,7 @@ void emit_astc_block_impl(const uint8_t pixels[64], const int cem, const int nch
 void emit_astc_block(const uint8_t pixels[64], const int cem, const int nch, const bool cocg, uint8_t *&out_data) {
     emit_astc_block_impl<SimdLeaves>(pixels, cem, nch, cocg, out_data);
 }
+
 } // anonymous namespace
 
 static int astc_round_up(const int v, const int align) { return align == 0 ? v : align * ((v + align - 1) / align); }
