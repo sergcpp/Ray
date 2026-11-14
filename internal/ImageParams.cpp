@@ -5,7 +5,7 @@
 #include <algorithm>
 
 namespace Ray {
-#define X(_0, _1, _2, _3, _4, _5, _6) {_1, _2, _3, _4},
+#define X(_0, _1, _2, _3, _4, _5, _6, _7) {_1, _2, _3, _4},
 struct {
     int channel_count;
     int pp_data_len;

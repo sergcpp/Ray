@@ -24,7 +24,7 @@ extern const VkCompareOp g_compare_ops_vk[];
 
 extern const float AnisotropyLevel;
 
-#define X(_0, _1, _2, _3, _4, _5, _6) _5,
+#define X(_0, _1, _2, _3, _4, _5, _6, _7) _5,
 extern const VkFormat g_formats_vk[] = {
 #include "../Format.inl"
 };

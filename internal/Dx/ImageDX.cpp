@@ -32,7 +32,7 @@ extern const D3D12_COMPARISON_FUNC g_compare_func_dx[];
 
 extern const float AnisotropyLevel;
 
-#define X(_0, _1, _2, _3, _4, _5, _6) _6,
+#define X(_0, _1, _2, _3, _4, _5, _6, _7) _6,
 extern const DXGI_FORMAT g_formats_dx[] = {
 #include "../Format.inl"
 };
