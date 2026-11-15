@@ -23,6 +23,8 @@ std::string_view RendererTypeName(const eRendererType rt) {
         return "VK";
     case eRendererType::DirectX12:
         return "DX";
+    case eRendererType::Metal:
+        return "MTL";
     default:
         return "";
     }
@@ -47,6 +49,8 @@ eRendererType RendererTypeFromName(std::string_view name) {
         return eRendererType::Vulkan;
     } else if (name == "DX") {
         return eRendererType::DirectX12;
+    } else if (name == "MTL") {
+        return eRendererType::Metal;
     }
     return eRendererType::Reference;
 }

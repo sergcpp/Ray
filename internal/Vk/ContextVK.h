@@ -93,6 +93,7 @@ class Context {
     bool raytracing_supported() const { return raytracing_supported_; }
     bool ray_query_supported() const { return ray_query_supported_; }
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
+    bool rgb8_promoted_internally() const { return false; }
     bool astc_supported() const { return astc_supported_; }
     bool fp16_supported() const { return fp16_supported_; }
     bool int64_supported() const { return int64_supported_; }

@@ -6,10 +6,26 @@ OPTION(RAY_ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
     OPTION(RAY_ENABLE_VK_IMPL "Enable Vulkan GPU implementation" ON)
     OPTION(RAY_ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" ON)
+    if(APPLE)
+        OPTION(RAY_ENABLE_MTL_IMPL "Enable Metal GPU implementation" ON)
+    else(APPLE)
+        OPTION(RAY_ENABLE_MTL_IMPL "Enable Metal GPU implementation" OFF)
+    endif(APPLE)
 else(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
     OPTION(RAY_ENABLE_VK_IMPL "Enable Vulkan GPU implementation" OFF)
     OPTION(RAY_ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" OFF)
+    OPTION(RAY_ENABLE_MTL_IMPL "Enable Metal GPU implementation" OFF)
 endif(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+
+# single platform gate for the Metal backend: everything downstream (Config.h, source
+# inclusion, C++ #ifdefs) only checks RAY_ENABLE_MTL_IMPL
+if(NOT APPLE AND RAY_ENABLE_MTL_IMPL)
+    message(STATUS "Ray: Metal backend requires APPLE, forcing RAY_ENABLE_MTL_IMPL off")
+endif()
+if(NOT APPLE)
+    set(RAY_ENABLE_MTL_IMPL OFF CACHE BOOL "Enable Metal GPU implementation" FORCE)
+endif()
+unset(RAY_ENABLE_METAL_IMPL CACHE) # stale entry from the pre-rename caches
 OPTION(RAY_ENABLE_GPU_DEBUG "Enable GPU debugging" OFF)
 OPTION(RAY_ENABLE_PIX "Enable PIX debug/capture API" OFF)
 OPTION(RAY_ENABLE_ASM_CONV "Use generated ASM UNet conv kernels (auto-disabled if unsupported)" ON)
@@ -185,6 +201,20 @@ if(RAY_ENABLE_DX_IMPL AND WIN32)
     )
 endif(RAY_ENABLE_DX_IMPL AND WIN32)
 
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                            internal/RendererMtl.h
+                            internal/RendererMtl.cpp)
+# ShaderMtl.cpp's NS/MTL_PRIVATE_IMPLEMENTATION defines must precede the first metal-cpp header
+# pass; a unity blob's include guard swallows them, leaving Private::Class/Selector symbols undefined
+set_source_files_properties(
+    internal/RendererMtl.cpp
+    internal/Mtl/ShaderMtl.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+)
+if(NOT RAY_ENABLE_MTL_IMPL)
+    set_source_files_properties(internal/RendererMtl.h internal/RendererMtl.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
+endif()
+
 if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND NOT "${CMAKE_APPLE_SILICON_PROCESSOR}" STREQUAL "arm64")
     if(MSVC)
         if(NOT CMAKE_CL_64)
@@ -282,6 +312,38 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/VectorVK.h
                     internal/Vk/VertexInputVK.h
                     internal/Vk/VertexInputVK.cpp)
+
+set(MTL_SOURCE_FILES internal/CoreMtl.h
+                     internal/Mtl/AccStructureMtl.h
+                     internal/Mtl/ApiMtl.h
+                     internal/Mtl/BufferMtl.h
+                     internal/Mtl/BufferMtl.cpp
+                     internal/Mtl/ContextMtl.h
+                     internal/Mtl/ContextMtl.cpp
+                     internal/Mtl/DebugMarkerMtl.h
+                     internal/Mtl/DrawCallMtl.h
+                     internal/Mtl/DrawCallMtl.cpp
+                     internal/Mtl/FenceMtl.h
+                     internal/Mtl/FenceMtl.cpp
+                     internal/Mtl/ImageAtlasMtl.h
+                     internal/Mtl/ImageAtlasMtl.cpp
+                     internal/Mtl/ImageMtl.h
+                     internal/Mtl/ImageMtl.cpp
+                     internal/Mtl/MemoryAllocatorMtl.h
+                     internal/Mtl/PipelineMtl.h
+                     internal/Mtl/PipelineMtl.cpp
+                     internal/Mtl/ProgramMtl.h
+                     internal/Mtl/ProgramMtl.cpp
+                     internal/Mtl/ResourceMtl.h
+                     internal/Mtl/ResourceMtl.cpp
+                     internal/SceneMtl.h
+                     internal/SceneMtl.cpp
+                     internal/Mtl/SamplerMtl.h
+                     internal/Mtl/SamplerMtl.cpp
+                     internal/Mtl/ShaderMtl.h
+                     internal/Mtl/ShaderMtl.cpp
+                     internal/Mtl/SparseStorageMtl.h
+                     internal/Mtl/VectorMtl.h)
 
 if(WIN32)
     set(DX_SOURCE_FILES internal/Dx/AccStructureDX.h
@@ -388,6 +450,13 @@ if(RAY_ENABLE_VK_IMPL)
     source_group("src\\internal\\Vk" FILES ${VK_SOURCE_FILES})
 endif(RAY_ENABLE_VK_IMPL)
 
+list(APPEND ALL_SOURCE_FILES ${MTL_SOURCE_FILES})
+source_group("src\\internal\\Mtl" FILES ${MTL_SOURCE_FILES})
+if(NOT RAY_ENABLE_MTL_IMPL)
+    # keep the Metal sources visible in IDE solutions on non-Mac hosts, out of compilation only
+    set_source_files_properties(${MTL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+endif()
+
 if(RAY_ENABLE_DX_IMPL AND WIN32)
     list(APPEND ALL_SOURCE_FILES ${DX_SOURCE_FILES})
     source_group("src\\internal\\Dx" FILES ${DX_SOURCE_FILES})
@@ -407,6 +476,10 @@ if (RAY_ENABLE_PIX AND WIN32)
 endif (RAY_ENABLE_PIX AND WIN32)
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
+
+if(RAY_ENABLE_MTL_IMPL)
+    target_include_directories(Ray PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third-party/metal-cpp")
+endif(RAY_ENABLE_MTL_IMPL)
 
 # Generated asm UNet conv kernels (scripts/gen_conv_asm.py) for denoise passes 0-9, 11-15:
 # fp32 x86 kernels bit-identical to the C++ ones; the f16 kernels (NEON, AVX512-FP16 ph) use GPU
@@ -694,6 +767,10 @@ if(RAY_ENABLE_DX_IMPL AND WIN32)
     endif(RAY_ENABLE_PIX)
 endif(RAY_ENABLE_DX_IMPL AND WIN32)
 
+if(RAY_ENABLE_MTL_IMPL)
+    target_link_libraries(Ray "-framework Metal" "-framework Foundation")
+endif(RAY_ENABLE_MTL_IMPL)
+
 set_target_properties(Ray PROPERTIES UNITY_BUILD_MODE GROUP)
 
 set_source_files_properties(${SOURCE_FILES}
@@ -707,6 +784,9 @@ set_source_files_properties(${VK_SOURCE_FILES}
                             )
 set_source_files_properties(${DX_SOURCE_FILES}
                             PROPERTIES UNITY_GROUP "dx"
+                            )
+set_source_files_properties(${MTL_SOURCE_FILES}
+                            PROPERTIES UNITY_GROUP "mtl"
                             )
 
 add_subdirectory(samples)

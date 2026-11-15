@@ -4,5 +4,6 @@
 #cmakedefine RAY_ENABLE_SIMD_IMPL
 #cmakedefine RAY_ENABLE_VK_IMPL
 #cmakedefine RAY_ENABLE_DX_IMPL
+#cmakedefine RAY_ENABLE_MTL_IMPL
 #cmakedefine RAY_ENABLE_GPU_DEBUG
 #cmakedefine RAY_ENABLE_PIX

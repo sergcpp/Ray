@@ -32,8 +32,12 @@
 #ifdef RAY_ENABLE_VK_IMPL
 #include "internal/RendererVK.h"
 #endif // RAY_ENABLE_VK_IMPL
+#if defined(RAY_ENABLE_MTL_IMPL)
+#include "internal/Mtl/ContextMtl.h"
+#include "internal/RendererMtl.h"
+#endif // defined(RAY_ENABLE_MTL_IMPL)
 
-#if !(defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)) && !defined(RAY_ENABLE_VK_IMPL)
+#if !(defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)) && !defined(RAY_ENABLE_VK_IMPL) && !defined(RAY_ENABLE_MTL_IMPL)
 #pragma message("Ray: Compiling without GPU support")
 #endif
 
@@ -58,6 +62,16 @@ extern const int KnownGPUVendorsCount = std::size(KnownGPUVendors);
 Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log,
                                        const std::function<void(int, int, ParallelForFunction &&)> &parallel_for,
                                        const Bitmask<eRendererType> enabled_types) {
+#if defined(RAY_ENABLE_MTL_IMPL)
+    if (enabled_types & eRendererType::Metal) {
+        log->Info("Ray: Creating Metal renderer %ix%i", s.w, s.h);
+        try {
+            return Mtl::CreateRenderer(s, log, parallel_for);
+        } catch (std::exception &e) {
+            log->Info("Ray: Failed to create Metal renderer, %s", e.what());
+        }
+    }
+#endif // defined(RAY_ENABLE_MTL_IMPL)
 #if defined(RAY_ENABLE_VK_IMPL)
     if (enabled_types & eRendererType::Vulkan) {
         log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
@@ -138,6 +152,10 @@ int Ray::QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], const i
 #endif
 #if defined(RAY_ENABLE_DX_IMPL) && defined(_WIN32)
     count = Dx::Context::QueryAvailableDevices(log, out_devices, capacity);
+#endif
+#if defined(RAY_ENABLE_MTL_IMPL)
+    // appended, not clobbering: VK stays the first entry in the list on APPLE
+    count += Mtl::Context::QueryAvailableDevices(log, out_devices + count, capacity - count);
 #endif
     return count;
 }

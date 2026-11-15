@@ -12,6 +12,12 @@
 struct ID3D12Resource;
 struct ID3D12DescriptorHeap;
 struct ID3D12GraphicsCommandList;
+#if defined(RAY_ENABLE_MTL_IMPL)
+namespace MTL {
+class Texture;
+class CommandBuffer;
+} // namespace MTL
+#endif
 
 /**
   @file RendererBase.h
@@ -31,7 +37,8 @@ enum class eRendererType : uint32_t {
     SIMD_NEON,
     // GPU renderers
     Vulkan,
-    DirectX12
+    DirectX12,
+    Metal
 };
 
 // All CPU renderers
@@ -39,7 +46,8 @@ const Bitmask<eRendererType> RendererCPU =
     Bitmask<eRendererType>{eRendererType::Reference} | eRendererType::SIMD_SSE41 | eRendererType::SIMD_NEON |
     eRendererType::SIMD_AVX | eRendererType::SIMD_AVX2 | eRendererType::SIMD_AVX512_FP16;
 // All GPU renderers
-const Bitmask<eRendererType> RendererGPU = Bitmask<eRendererType>{eRendererType::Vulkan} | eRendererType::DirectX12;
+const Bitmask<eRendererType> RendererGPU =
+    Bitmask<eRendererType>{eRendererType::Vulkan} | eRendererType::DirectX12 | eRendererType::Metal;
 
 std::string_view RendererTypeName(eRendererType rt);
 eRendererType RendererTypeFromName(std::string_view name);
@@ -100,6 +108,9 @@ struct GpuImage {
     union {
         VkImage vk_image;
         ID3D12Resource *dx_image;
+#if defined(RAY_ENABLE_MTL_IMPL)
+        MTL::Texture *mtl_texture;
+#endif
     };
     union {
         VkImageView vk_image_view;
@@ -116,12 +127,19 @@ struct GpuImage {
     GpuImage(ID3D12Resource *const _dx_image, ID3D12DescriptorHeap *const dx_view_heap, const uint32_t dx_view_offset,
              const eGPUResState _state)
         : dx_image(_dx_image), dx_image_view{dx_view_heap, dx_view_offset}, state(_state) {}
+#if defined(RAY_ENABLE_MTL_IMPL)
+    GpuImage(MTL::Texture *const _mtl_texture, const eGPUResState _state)
+        : mtl_texture(_mtl_texture), vk_image_view{}, state(_state) {}
+#endif
 };
 
 struct GpuCommandBuffer {
     union {
         VkCommandBuffer vk_cmd_buf;
         ID3D12GraphicsCommandList *dx_cmd_buf;
+#if defined(RAY_ENABLE_MTL_IMPL)
+        MTL::CommandBuffer *mtl_cmd_buf;
+#endif
     };
     int index;
 
@@ -129,6 +147,10 @@ struct GpuCommandBuffer {
     GpuCommandBuffer(const VkCommandBuffer _vk_cmd_buf, const int _index) : vk_cmd_buf(_vk_cmd_buf), index(_index) {}
     GpuCommandBuffer(ID3D12GraphicsCommandList *const _dx_cmd_buf, const int _index)
         : dx_cmd_buf(_dx_cmd_buf), index(_index) {}
+#if defined(RAY_ENABLE_MTL_IMPL)
+    GpuCommandBuffer(MTL::CommandBuffer *const _mtl_cmd_buf, const int _index)
+        : mtl_cmd_buf(_mtl_cmd_buf), index(_index) {}
+#endif
 };
 
 /** Base class for all renderer backends

@@ -583,7 +583,9 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                     CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), _t.w, _t.h, stage_data,
                                                            GetRequiredMemory_BC3(_t.w, 1, ImageDataPitchAlignment));
                 }
-            } else if (ctx_->rgb8_unorm_is_supported()) {
+            } else if (ctx_->rgb8_unorm_is_supported() || ctx_->rgb8_promoted_internally()) {
+                // Metal has no RGB8 format: with rgb8_promoted_internally the Image backend
+                // itself stores RGB8 sources as RGBA8, so stage logical RGB8 rows here
                 src_fmt = fmt = eFormat::RGB8;
                 data_size[0] = round_up(_t.w * 3, ImageDataPitchAlignment) * _t.h;
 

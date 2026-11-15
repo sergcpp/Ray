@@ -229,8 +229,8 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-    static const char *ArchListFull[] = {"REF",         "SSE41", "AVX", "AVX2", "AVX512",
-                                         "AVX512_FP16", "NEON",  "VK",  "DX",   nullptr};
+    static const char *ArchListFull[] = {"REF",  "SSE41", "AVX", "AVX2", "AVX512", "AVX512_FP16",
+                                         "NEON", "VK",    "DX",  "MTL",  nullptr};
     static const char *ArchListFullNoGPU[] = {"REF", "SSE41", "AVX", "AVX2", "AVX512", "AVX512_FP16", "NEON", nullptr};
     static const char *ArchListDefault[] = {"AVX2", "NEON", "VK", "DX", nullptr};
 #ifndef __APPLE__
@@ -239,7 +239,7 @@ int main(int argc, char *argv[]) {
     // NOTE: Rosetta doesn't support AVX, so we test SSE4.1 here
     static const char *ArchListDefaultNoGPU[] = {"SSE41", "NEON", nullptr};
 #endif
-    static const char *ArchListGPUOnly[] = {"DX", "VK", nullptr};
+    static const char *ArchListGPUOnly[] = {"DX", "VK", "MTL", nullptr};
 
     bool detailed_material_tests_needed = full_tests;
     bool tests_success_final = g_tests_success;

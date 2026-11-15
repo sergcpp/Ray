@@ -11,5 +11,7 @@ Config.h
 *.spv
 *.cso
 *.hlsl
+*.msl
+*.metallib
 .DS_Store
 .idea

@@ -109,6 +109,7 @@ class Context {
     bool int64_atomics_supported() const { return int64_atomics_supported_; }
 
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
+    bool rgb8_promoted_internally() const { return false; }
 
     // DXGI has no ASTC formats on Windows; DX backend always uses BCn.
     bool astc_supported() const { return false; }

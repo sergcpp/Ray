@@ -1,5 +1,7 @@
 import binascii
 import os
+import re
+import struct
 import sys
 import subprocess
 import threading
@@ -9,10 +11,22 @@ ENABLE_MULTIPLE_THREADS = True
 ENABLE_SPIRV_OPTIMIZATION = True
 ENABLE_COMPRESSION = True
 ENABLE_DXC_COMPILATION = (os.name == "nt")
+ENABLE_METAL_COMPILATION = (sys.platform == "darwin")  # metallib blobs emit on macOS hosts (xcrun metal), like CSO on Windows
 ENABLE_GLSL_REWRITE = False
 ENABLE_SPIRV_CROSS = False
 
+MSL_VERSION = "30000"
+# AIR ray queries need macOS 13; the *load* floor of these blobs is set by the Xcode used to build them
+MTL_TARGET = "air64-apple-macos13.0"
+MTL_STD = "-std=" + "metal" + MSL_VERSION[0] + "." + MSL_VERSION[1]
+# Direct bindings for set 0, device argument buffer (Tier 2) for set 1 bindless textures.
+MSL_CROSS_FLAGS = ("--msl-argument-buffers --msl-argument-buffer-tier 1"
+                   " --msl-discrete-descriptor-set 0 --msl-device-argument-buffer 1")
+
 mutex = threading.Lock()
+
+g_threads = []
+g_failures = []
 
 def spirv_base_path():
     if sys.platform.startswith("linux"):
@@ -58,7 +72,183 @@ def bin2header(data, file_name):
     ret += "\n};\n"
     return ret
 
-def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines="", hlsl_profile="cs_6_0"):
+# --- MSL (Metal) cross-compilation from the optimized SPIR-V ------------------
+# spirv-cross auto-assigns MSL attribute indices; dump-resources gives us the
+# SPIR-V (set, binding) per variable ID. Joined by variable ID into a static
+# binding table so the Metal renderer needs no runtime reflection.
+
+msl_sec_kinds = {
+    "textures": "tex", "separate images": "tex", "separate samplers": "sampler",
+    "images": "image", "ssbos": "buf", "push": "push", "acceleration structures": "acc",
+}
+
+# Must match MslBindingKind in the Metal renderer (RendererMtl.cpp / SceneMtl.h).
+msl_k_sbuf_ro, msl_k_sbuf_rw, msl_k_tex, msl_k_sampler, msl_k_image_ro, \
+msl_k_image_wo, msl_k_image_rw, msl_k_push, msl_k_acc, msl_k_descr_arr = range(10)
+
+def parse_msl_dump(dump_text):
+    # var id -> {set, binding, kind_hint, readonly, writeonly, unsized, size}
+    resources = {}
+    section = None
+    for line in dump_text.splitlines():
+        stripped = line.strip()
+        if line in msl_sec_kinds:
+            section = msl_sec_kinds[line]
+            continue
+        if stripped.startswith("=====") or not stripped:
+            continue
+        m = re.match(r"^\s*ID (\d+) : (\w+)(\[(\d+)?\])?(?: .*)?$", line)
+        if not m or section is None:
+            continue
+        var_id = int(m.group(1))
+        entry = {"kind": section, "unsized": False, "size": 0, "set": 0, "binding": 0,
+                 "readonly": "readonly" in line, "writeonly": "writeonly" in line}
+        sm = re.search(r"Set : (\d+)\) \(Binding : (\d+)", line)
+        if sm:
+            entry["set"], entry["binding"] = int(sm.group(1)), int(sm.group(2))
+        if m.group(3) is not None:
+            if m.group(4) is None:
+                entry["unsized"] = True
+            else:
+                entry["size"] = int(m.group(4))
+        resources[var_id] = entry
+    return resources
+
+def split_msl_args(sig):
+    args, depth, cur = [], 0, ""
+    for ch in sig:
+        if ch in "<([{":
+            depth += 1
+        elif ch in ">)]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            args.append(cur); cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        args.append(cur)
+    return args
+
+def parse_msl_signature(msl_text):
+    m = re.search(r"kernel void main0\((.*?)\)\n\{", msl_text, re.S)
+    if not m:
+        raise RuntimeError("kernel signature not found")
+    args = []
+    for a in split_msl_args(m.group(1)):
+        am = re.search(r"\[\[(buffer|texture|sampler)\((\d+)\)\]\]\s*$", a.strip())
+        if not am:
+            continue  # builtin
+        var = re.search(r"(\w+)\s+\[\[", a)
+        args.append({"text": a, "attr": am.group(1), "index": int(am.group(2)),
+                     "var": var.group(1), "argbuf": "spvDescriptorSetBuffer" in a})
+    return args
+
+def parse_msl_argbuf_structs(msl_text):
+    # struct name -> [(id_slot, var id), ...]
+    struct_body = {}
+    for m in re.finditer(r"struct (spvDescriptorSetBuffer\d+)\s*\{(.*?)\n\}", msl_text, re.S):
+        fields = []
+        for fm in re.finditer(r"(?:spvDescriptor<.+?>|sampler)\s+m_(\d+)\s*\[\[id\((\d+)\)\]\]", m.group(2)):
+            fields.append((int(fm.group(2)), int(fm.group(1))))
+        struct_body[m.group(1)] = fields
+    return struct_body
+
+def build_msl_binding_table(msl_text, dump_text):
+    resources = parse_msl_dump(dump_text)
+    args = parse_msl_signature(msl_text)
+    structs = parse_msl_argbuf_structs(msl_text)
+    push_id = None
+    for line in dump_text.splitlines():
+        pm = re.match(r"^ ID (\d+) : _\d+$", line)
+        if pm:
+            push_id = int(pm.group(1))
+    table = []
+    for a in args:
+        if a["argbuf"]:  # set-N argument buffer (bindless descriptor arrays)
+            tm = re.search(r"spvDescriptorSetBuffer\d+", a["text"])
+            if not tm:
+                continue
+            for (id_slot, var_id) in structs.get(tm.group(0), []):
+                res = resources.get(var_id)
+                if res is None:
+                    continue
+                table.append((res["set"], res["binding"], a["index"], id_slot, res["size"], msl_k_descr_arr))
+            continue
+        if a["attr"] == "buffer":
+            m = re.search(r"_(\d+)$", a["var"])
+            if push_id is not None and m and int(m.group(1)) == push_id:
+                table.append((0, 0, a["index"], 0, 1, msl_k_push))  # push constants: no SPIR-V set/binding
+                continue
+        m = re.search(r"_(\d+)(Smplr)?$", a["var"])
+        if not m:
+            continue
+        res = resources.get(int(m.group(1)))
+        if res is None:
+            continue
+        if m.group(2):  # combined-sampler helper arg, same (set, binding) as its texture
+            kind = msl_k_sampler
+        elif res["kind"] == "buf":
+            kind = msl_k_sbuf_ro if res["readonly"] else msl_k_sbuf_rw
+        elif res["kind"] == "tex":
+            kind = msl_k_tex
+        elif res["kind"] == "sampler":
+            kind = msl_k_sampler
+        elif res["kind"] == "image":
+            kind = msl_k_image_ro if res["readonly"] else (msl_k_image_wo if res["writeonly"] else msl_k_image_rw)
+        elif res["kind"] == "acc":
+            kind = msl_k_acc
+        else:
+            continue
+        table.append((res["set"], res["binding"], a["index"], 0, res["size"], kind))
+    return sorted(set(table))
+
+def parse_msl_workgroup(dump_text):
+    m = re.search(r"LocalSize: \((\d+), (\d+), (\d+)\)", dump_text)
+    if not m:
+        raise RuntimeError("LocalSize execution mode not found")
+    return tuple(int(x) for x in m.groups())
+
+# Blob payload (mirrors DX append_refl_data): [metallib | refl chunk | 8-byte trailer].
+# Refl chunk: 'MLR1', u32 version, u32 workgroup[3], u32 count, count*{6 x u32 MslBindingDesc}.
+# Trailer: refl chunk size (u32), 'MLR1'. Reader slices from EOF; metallib goes to newLibraryWithData.
+def pack_msl_refl(workgroup, table):
+    refl = struct.pack("<4sI3II", b"MLR1", 1, workgroup[0], workgroup[1], workgroup[2], len(table))
+    for e in table:
+        refl += struct.pack("<6I", *e)
+    return refl
+
+def compile_msl(spv_name):
+    msl_name = spv_name[0:-3] + "msl"
+    metallib_name = spv_name[0:-3] + "metallib"
+    base = "internal/shaders/output/"
+    cross_cmd = os.path.join(spirv_base_path(), "spirv-cross " + base + spv_name +
+                                            " --msl --msl-version " + MSL_VERSION + " " + MSL_CROSS_FLAGS +
+                                            " --output " + base + msl_name)
+    cross_result = subprocess.run(cross_cmd, shell=True, capture_output=True, text=True, check=False)
+    if cross_result.returncode != 0:
+        return cross_result, None
+    dump_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-cross " + base + spv_name +
+                                                            " --msl --msl-version " + MSL_VERSION + " " + MSL_CROSS_FLAGS +
+                                                            " --dump-resources"),
+                                 shell=True, capture_output=True, text=True, check=False)
+    with open(base + msl_name, 'r') as f:
+        msl_text = f.read()
+    table = build_msl_binding_table(msl_text, dump_result.stderr)
+    workgroup = parse_msl_workgroup(dump_result.stderr)
+    # default FMA contraction kept: matches MoltenVK's VK ff values bit-identically in 35/37 M4 goldens;
+    # -ffp-contract=off drifted them ~5 ff from VK (max 69)
+    metal_result = subprocess.run("xcrun -sdk macosx metal -x metal " + MTL_STD + " -target " + MTL_TARGET +
+                                                  " -O2 " + base + msl_name + " -o " + base + metallib_name,
+                                  shell=True, capture_output=True, text=True, check=False)
+    if metal_result.returncode != 0:
+        return metal_result, None
+    with open(base + metallib_name, 'rb') as f:
+        metallib_data = f.read()
+    refl = pack_msl_refl(workgroup, table)
+    payload = metallib_data + refl + struct.pack("<I4s", len(refl), b"MLR1")
+    return metal_result, (metallib_name, payload, table, workgroup)
+
+def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines="", hlsl_profile="cs_6_0", metal=True):
     if  spv_name is None:
         spv_name = src_name[0:-4] + "spv"
 
@@ -123,6 +313,17 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
         with open(os.path.join("internal", "shaders", "output", spv_name + ".inl"), 'w') as f:
             f.write(out)
 
+    msl_cross_result = None
+    if ENABLE_METAL_COMPILATION and metal and hlsl_profile is not None:
+        msl_cross_result, msl_out = compile_msl(spv_name)
+        if msl_cross_result.returncode == 0 and msl_out is not None:
+            metallib_name, payload, table, workgroup = msl_out
+            mtl_path = os.path.join("internal", "shaders", "output", metallib_name)
+            # refl (bindings + workgroup) travels inside the payload - no sidecar symbols, single blob per shader
+            out = bin2header(payload, mtl_path)
+            with open(mtl_path + ".inl", 'w') as f:
+                f.write(out)
+
     mutex.acquire()
     try:
         print(compile_result.stdout)
@@ -138,18 +339,33 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
         if dxc_result is not None:
             print(dxc_result.stdout)
             print(dxc_result.stderr)
+        if compile_result.returncode != 0:
+            print("SPIR-V compilation FAILED: " + spv_name)
+            print(compile_result.stderr)
+            g_failures.append(spv_name)
+        if dxc_result is not None and dxc_result.returncode != 0:
+            g_failures.append(spv_name)
+        if msl_cross_result is not None and msl_cross_result.returncode != 0:
+            print("MSL cross-compilation FAILED: " + spv_name)
+            print(msl_cross_result.stdout)
+            print(msl_cross_result.stderr)
+            g_failures.append(spv_name)
     finally:
         mutex.release()
 
-def compile_shader_async(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines = "", hlsl_profile="cs_6_0"):
+def compile_shader_async(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines = "", hlsl_profile="cs_6_0", metal=True):
     if ENABLE_MULTIPLE_THREADS:
-        threading.Thread(target=compile_shader, args=(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile,)).start()
+        g_threads.append(threading.Thread(target=compile_shader, args=(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile, metal,)))
+        g_threads[-1].start()
     else:
-        compile_shader(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile)
+        compile_shader(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile, metal)
 
 def main():
     for item in os.listdir("internal/shaders/output"):
-        if item.endswith(".glsl") or item.endswith(".spv") or item.endswith(".spv.inl") or (ENABLE_DXC_COMPILATION and (item.endswith(".hlsl") or item.endswith(".cso") or item.endswith(".cso.inl"))):
+        if item.endswith(".glsl") or item.endswith(".spv") or item.endswith(".spv.inl") or \
+           (ENABLE_DXC_COMPILATION and (item.endswith(".hlsl") or item.endswith(".cso") or item.endswith(".cso.inl"))) or \
+           (ENABLE_METAL_COMPILATION and (item.endswith(".msl") or item.endswith(".msl.inl") or
+                                          item.endswith(".metallib") or item.endswith(".metallib.inl"))):
             os.remove(os.path.join("internal/shaders/output", item))
 
     # Primary ray generation
@@ -256,7 +472,7 @@ def main():
 
     # Spatial radiance caching
     compile_shader_async(src_name="spatial_cache_update.comp.glsl", spv_name="spatial_cache_update.comp.spv",
-                         defines="-DNO_64BIT_ATOMICS=0", hlsl_profile="cs_6_6")
+                         defines="-DNO_64BIT_ATOMICS=0", hlsl_profile="cs_6_6", metal=False)  # MSL backend rejects 64-bit atomics - Metal uses the _compat build
     compile_shader_async(src_name="spatial_cache_update.comp.glsl", spv_name="spatial_cache_update_compat.comp.spv",
                          defines="-DNO_64BIT_ATOMICS=1")
     compile_shader_async(src_name="spatial_cache_resolve.comp.glsl", spv_name="spatial_cache_resolve.comp.spv")
@@ -432,6 +648,12 @@ def main():
                          defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIMG_INPUT4=1 -DIN_CHANNELS2=9 " \
                                  "-DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DPOS_NORMALIZE4=1 -DUSE_FP16=1 -DCOOP_M=16 -DCOOP_N=16 -DCOOP_K=16",
                          hlsl_profile=None)
+
+    for t in g_threads:
+        t.join()
+    if g_failures:
+        print("FAILED shader compilations (%d): %s" % (len(g_failures), ", ".join(g_failures)))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

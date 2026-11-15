@@ -1,0 +1,1518 @@
+#include "RendererMtl.h"
+
+#include <functional>
+#include <utility>
+
+#include "CDFUtils.h"
+#include "Core.h"
+#include "SceneMtl.h"
+#include "UNetFilter.h"
+#include "inflate/Inflate.h"
+
+#include "Mtl/BufferMtl.h"
+#include "Mtl/DebugMarkerMtl.h"
+#include "Mtl/DrawCallMtl.h"
+#include "Mtl/ImageMtl.h"
+#include "Mtl/PipelineMtl.h"
+#include "Mtl/ProgramMtl.h"
+#include "Mtl/SamplerMtl.h"
+#include "Mtl/ShaderMtl.h"
+
+#include "../Log.h"
+
+#include "shaders/sort_common.h"
+#include "shaders/types.h"
+
+static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t));
+static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t));
+static_assert(sizeof(Types::bvh2_node_t) == sizeof(Ray::bvh2_node_t));
+static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t));
+static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t));
+static_assert(sizeof(Types::cwbvh_node_t) == sizeof(Ray::cwbvh_node_t));
+static_assert(offsetof(Types::cwbvh_node_t, ch_bbox_min) == offsetof(Ray::cwbvh_node_t, ch_bbox_min));
+static_assert(offsetof(Types::cwbvh_node_t, ch_bbox_max) == offsetof(Ray::cwbvh_node_t, ch_bbox_max));
+static_assert(offsetof(Types::cwbvh_node_t, ch_exp) == offsetof(Ray::cwbvh_node_t, ch_exp));
+static_assert(offsetof(Types::cwbvh_node_t, child_base_imask) == offsetof(Ray::cwbvh_node_t, child_base_imask));
+static_assert(offsetof(Types::cwbvh_node_t, prim_base) == offsetof(Ray::cwbvh_node_t, prim_base));
+static_assert(offsetof(Types::cwbvh_node_t, meta4_0) == offsetof(Ray::cwbvh_node_t, meta4[0]));
+static_assert(offsetof(Types::cwbvh_node_t, meta4_1) == offsetof(Ray::cwbvh_node_t, meta4[1]));
+static_assert(sizeof(Types::light_cwbvh_node_t) == sizeof(Ray::light_cwbvh_node_t));
+static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t));
+static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t));
+static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t));
+static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t));
+static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t));
+static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t));
+static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t));
+static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t));
+static_assert(sizeof(Types::atmosphere_params_t) == sizeof(Ray::atmosphere_params_t));
+
+static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE);
+static_assert(Types::LIGHT_TYPE_DIR == Ray::LIGHT_TYPE_DIR);
+static_assert(Types::LIGHT_TYPE_LINE == Ray::LIGHT_TYPE_LINE);
+static_assert(Types::LIGHT_TYPE_RECT == Ray::LIGHT_TYPE_RECT);
+static_assert(Types::LIGHT_TYPE_DISK == Ray::LIGHT_TYPE_DISK);
+static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI);
+static_assert(Types::FILTER_BOX == int(Ray::ePixelFilter::Box));
+static_assert(Types::FILTER_GAUSSIAN == int(Ray::ePixelFilter::Gaussian));
+static_assert(Types::FILTER_BLACKMAN_HARRIS == int(Ray::ePixelFilter::BlackmanHarris));
+static_assert(Types::FILTER_TABLE_SIZE == Ray::FILTER_TABLE_SIZE);
+
+static_assert(int(Ray::eGPUResState::RenderTarget) == int(Ray::Mtl::eResState::RenderTarget));
+static_assert(int(Ray::eGPUResState::UnorderedAccess) == int(Ray::Mtl::eResState::UnorderedAccess));
+static_assert(int(Ray::eGPUResState::DepthRead) == int(Ray::Mtl::eResState::DepthRead));
+static_assert(int(Ray::eGPUResState::DepthWrite) == int(Ray::Mtl::eResState::DepthWrite));
+static_assert(int(Ray::eGPUResState::ShaderResource) == int(Ray::Mtl::eResState::ShaderResource));
+static_assert(int(Ray::eGPUResState::CopyDst) == int(Ray::Mtl::eResState::CopyDst));
+static_assert(int(Ray::eGPUResState::CopySrc) == int(Ray::Mtl::eResState::CopySrc));
+
+namespace Ray {
+extern const int LUT_DIMS;
+extern const uint32_t *transform_luts[];
+namespace Mtl {
+#include "shaders/output/convolution_112_112_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_112_112_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_32_32_Downsample_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_32_32_Downsample_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_32_3_img_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_32_3_img_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_32_48_Downsample_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_32_48_Downsample_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_48_64_Downsample_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_48_64_Downsample_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_64_32_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_64_32_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_64_64_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_64_64_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_64_80_Downsample_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_64_80_Downsample_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_80_96_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_80_96_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_96_96_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_96_96_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_Img_9_32_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_Img_9_32_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_concat_112_48_96_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_concat_112_48_96_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_concat_64_9_64_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_concat_64_9_64_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_concat_96_32_64_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_concat_96_32_64_fp32.comp.metallib.inl"
+#include "shaders/output/convolution_concat_96_64_112_fp16.comp.metallib.inl"
+#include "shaders/output/convolution_concat_96_64_112_fp32.comp.metallib.inl"
+#include "shaders/output/filter_variance.comp.metallib.inl"
+#include "shaders/output/intersect_area_lights.comp.metallib.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_atlas.comp.metallib.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_atlas_subgroup.comp.metallib.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_bindless.comp.metallib.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_bindless_subgroup.comp.metallib.inl"
+#include "shaders/output/intersect_scene_shadow_swrt_atlas.comp.metallib.inl"
+#include "shaders/output/intersect_scene_shadow_swrt_atlas_subgroup.comp.metallib.inl"
+#include "shaders/output/intersect_scene_shadow_swrt_bindless.comp.metallib.inl"
+#include "shaders/output/intersect_scene_shadow_swrt_bindless_subgroup.comp.metallib.inl"
+#include "shaders/output/intersect_scene_swrt_atlas.comp.metallib.inl"
+#include "shaders/output/intersect_scene_swrt_atlas_subgroup.comp.metallib.inl"
+#include "shaders/output/intersect_scene_swrt_bindless.comp.metallib.inl"
+#include "shaders/output/intersect_scene_swrt_bindless_subgroup.comp.metallib.inl"
+#include "shaders/output/mix_incremental.comp.metallib.inl"
+#include "shaders/output/nlm_filter.comp.metallib.inl"
+#include "shaders/output/postprocess.comp.metallib.inl"
+#include "shaders/output/prepare_indir_args.comp.metallib.inl"
+#include "shaders/output/primary_ray_gen_adaptive.comp.metallib.inl"
+#include "shaders/output/primary_ray_gen_simple.comp.metallib.inl"
+#include "shaders/output/shade_primary_atlas.comp.metallib.inl"
+#include "shaders/output/shade_primary_atlas_cache_query.comp.metallib.inl"
+#include "shaders/output/shade_primary_atlas_cache_query_sky.comp.metallib.inl"
+#include "shaders/output/shade_primary_atlas_cache_update.comp.metallib.inl"
+#include "shaders/output/shade_primary_atlas_sky.comp.metallib.inl"
+#include "shaders/output/shade_primary_bindless.comp.metallib.inl"
+#include "shaders/output/shade_primary_bindless_cache_query.comp.metallib.inl"
+#include "shaders/output/shade_primary_bindless_cache_query_sky.comp.metallib.inl"
+#include "shaders/output/shade_primary_bindless_cache_update.comp.metallib.inl"
+#include "shaders/output/shade_primary_bindless_sky.comp.metallib.inl"
+#include "shaders/output/shade_secondary_atlas.comp.metallib.inl"
+#include "shaders/output/shade_secondary_atlas_cache_query.comp.metallib.inl"
+#include "shaders/output/shade_secondary_atlas_cache_query_sky.comp.metallib.inl"
+#include "shaders/output/shade_secondary_atlas_cache_update.comp.metallib.inl"
+#include "shaders/output/shade_secondary_atlas_sky.comp.metallib.inl"
+#include "shaders/output/shade_secondary_bindless.comp.metallib.inl"
+#include "shaders/output/shade_secondary_bindless_cache_query.comp.metallib.inl"
+#include "shaders/output/shade_secondary_bindless_cache_query_sky.comp.metallib.inl"
+#include "shaders/output/shade_secondary_bindless_cache_update.comp.metallib.inl"
+#include "shaders/output/shade_secondary_bindless_sky.comp.metallib.inl"
+#include "shaders/output/shade_sky.comp.metallib.inl"
+#include "shaders/output/sort_hash_rays.comp.metallib.inl"
+#include "shaders/output/sort_init_count_table.comp.metallib.inl"
+#include "shaders/output/sort_reduce.comp.metallib.inl"
+#include "shaders/output/sort_reorder_rays.comp.metallib.inl"
+#include "shaders/output/sort_scan.comp.metallib.inl"
+#include "shaders/output/sort_scan_add.comp.metallib.inl"
+#include "shaders/output/sort_scatter.comp.metallib.inl"
+#include "shaders/output/spatial_cache_resolve.comp.metallib.inl"
+#include "shaders/output/spatial_cache_update_compat.comp.metallib.inl"
+} // namespace Mtl
+} // namespace Ray
+
+namespace Ray::Mtl {
+// Bindless set 1 (msl_k_descr_arr) rides a pre-encoded Tier-2 argument buffer; atlas mode never
+// reaches this (RendererMtl keeps use_bindless_ off until the layout is validated on goldens)
+void BindBindlessExtra(Context &ctx, CommandBuffer cmd_buf, const Pipeline &pipeline,
+                       const BindlessTexData &bindless_tex, SmallVector<Binding, 32> & /*bindings*/) {
+    assert(bindless_tex.arg_buf);
+    const MslBindingDesc *d = pipeline.descr_array();
+    assert(d);
+    ctx.ComputeEncoder(cmd_buf)->setBuffer(bindless_tex.arg_buf, 0, static_cast<NS::UInteger>(d->msl_index));
+}
+} // namespace Ray::Mtl
+
+#define NS Mtl
+#include "RendererGPU.h"
+#include "RendererGPU_kernels.h"
+#undef NS
+
+// Metal submit is fully synchronous (EndSingleTimeCommands waits), so the VK fence/semaphore
+// dance collapses to Begin/End pairs; backend_frame stays 0 and only drives deferred cleanup
+// and the per-frame uniform ring.
+
+Ray::Mtl::Renderer::Renderer(const settings_t &s, ILog *log,
+                             const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    ctx_ = std::make_unique<Context>();
+    const bool res = ctx_->Init(log, s.preferred_device, s.validation_level);
+    if (!res) {
+        throw std::runtime_error("Error initializing Metal context!");
+    }
+
+    assert(Types::RAND_SAMPLES_COUNT == Ray::RAND_SAMPLES_COUNT);
+    assert(Types::RAND_DIMS_COUNT == Ray::RAND_DIMS_COUNT);
+
+    use_hwrt_ = false;     // HWRT not implemented: requires Metal ray queries
+    use_bindless_ = false; // atlas mode for iteration 1; bindless fails its offline validation pass
+    use_tex_compression_ = s.use_tex_compression;
+    use_fp16_ = ctx_->fp16_supported();
+    use_subgroup_ = ctx_->subgroup_supported();
+    use_coop_matrix_ = false; // no cooperative matrices in MSL
+    use_spatial_cache_ = s.use_spatial_cache && ctx_->int64_supported();
+    log->Info("HWRT         is %s", use_hwrt_ ? "enabled" : "disabled");
+    log->Info("Bindless     is %s", use_bindless_ ? "enabled" : "disabled");
+    log->Info("Compression  is %s", use_tex_compression_ ? "enabled" : "disabled");
+    log->Info("Float16      is %s", use_fp16_ ? "enabled" : "disabled");
+    log->Info("Subgroup     is %s", use_subgroup_ ? "enabled" : "disabled");
+    log->Info("CoopMatrix   is disabled");
+    log->Info("SpatialCache is %s", use_spatial_cache_ ? "enabled" : "disabled");
+    log->Info("============================================================================");
+
+    if (!InitPipelines(log, parallel_for)) {
+        throw std::runtime_error("Error initializing Metal pipelines!");
+    }
+
+    random_seq_buf_ = Buffer{"Random Seq", ctx_.get(), eBufType::Storage,
+                             uint32_t(RAND_DIMS_COUNT * 2 * RAND_SAMPLES_COUNT * sizeof(uint32_t))};
+    counters_buf_ = Buffer{"Counters", ctx_.get(), eBufType::Storage, sizeof(uint32_t) * 32};
+    indir_args_buf_[0] =
+        Buffer{"Indir Args (1/2)", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
+    indir_args_buf_[1] =
+        Buffer{"Indir Args (2/2)", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
+
+    { // zero out counters, upload random sequence
+        CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+        const uint32_t zeros[32] = {};
+        counters_buf_.UpdateImmediate(0, 32 * sizeof(uint32_t), zeros, cmd_buf);
+
+        Buffer temp_upload_buf{"Temp upload buf", ctx_.get(), eBufType::Upload, random_seq_buf_.size()};
+        { // update stage buffer
+            uint8_t *mapped_ptr = temp_upload_buf.Map();
+            memcpy(mapped_ptr, __pmj02_samples, RAND_DIMS_COUNT * 2 * RAND_SAMPLES_COUNT * sizeof(uint32_t));
+            temp_upload_buf.Unmap();
+        }
+
+        CopyBufferToBuffer(temp_upload_buf, 0, random_seq_buf_, 0,
+                           RAND_DIMS_COUNT * 2 * RAND_SAMPLES_COUNT * sizeof(uint32_t), cmd_buf);
+
+        ctx_->EndSingleTimeCommands(cmd_buf);
+
+        temp_upload_buf.FreeImmediate();
+    }
+
+    { // create tonemap LUT texture
+        ImgParams params = {};
+        params.w = params.h = params.d = LUT_DIMS;
+        params.usage = Bitmask<eImgUsage>(eImgUsage::Sampled) | eImgUsage::Transfer;
+        params.format = eFormat::RGB10_A2;
+        params.sampling.filter = eFilter::Bilinear;
+        params.sampling.wrap = eWrap::ClampToEdge;
+
+        tonemap_lut_ = Image{"Tonemap LUT", ctx_.get(), params, ctx_->default_mem_allocs(), ctx_->log()};
+    }
+
+    InitEnergyCompensationLUTs();
+
+    Renderer::Resize(s.w, s.h);
+}
+
+Ray::eRendererType Ray::Mtl::Renderer::type() const { return eRendererType::Metal; }
+
+std::string_view Ray::Mtl::Renderer::device_name() const { return ctx_->device_name(); }
+
+void Ray::Mtl::Renderer::Clear(const color_rgba_t &c) {
+    CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+    const TransitionInfo img_transitions[] = {{&full_buf_, ResStateForClear},
+                                              {&half_buf_, ResStateForClear},
+                                              {&final_buf_, ResStateForClear},
+                                              {&raw_filtered_buf_, ResStateForClear},
+                                              {&base_color_buf_, ResStateForClear},
+                                              {&depth_normals_buf_, ResStateForClear},
+                                              {&required_samples_buf_, ResStateForClear}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+
+    ClearColorImage(full_buf_, c.v, cmd_buf);
+    ClearColorImage(half_buf_, c.v, cmd_buf);
+    ClearColorImage(final_buf_, c.v, cmd_buf);
+    ClearColorImage(raw_filtered_buf_, c.v, cmd_buf);
+
+    static const float rgba_zero[] = {0.0f, 0.0f, 0.0f, 0.0f};
+    ClearColorImage(base_color_buf_, rgba_zero, cmd_buf);
+    ClearColorImage(depth_normals_buf_, rgba_zero, cmd_buf);
+
+    { // Clear integer texture
+        static const uint32_t rgba[4] = {0xffff, 0xffff, 0xffff, 0xffff};
+        ClearColorImage(required_samples_buf_, rgba, cmd_buf);
+    }
+
+    ctx_->EndSingleTimeCommands(cmd_buf);
+}
+
+void Ray::Mtl::Renderer::RenderScene(const SceneBase &scene, RegionContext &region) {
+    const auto &s = dynamic_cast<const Mtl::Scene &>(scene);
+
+    float root_min[3], cell_size[3];
+    if (s.tlas_root_ != 0xffffffff) {
+        const bvh_node_t &root_node = s.tlas_root_node_;
+        for (int i = 0; i < 3; ++i) {
+            root_min[i] = root_node.bbox_min[i];
+            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
+        }
+    }
+
+    ++region.iteration;
+
+    const Ray::camera_t &cam = s.cams_[s.current_cam()._index];
+    const float cam_exposure = std::pow(2.0f, cam.exposure);
+
+    if (cam.filter != filter_table_filter_ || cam.filter_width != filter_table_width_) {
+        CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+        UpdateFilterTable(cmd_buf, cam.filter, cam.filter_width);
+        filter_table_filter_ = cam.filter;
+        filter_table_width_ = cam.filter_width;
+
+        ctx_->EndSingleTimeCommands(cmd_buf);
+    }
+
+    if (loaded_view_transform_ != cam.view_transform) {
+        if (cam.view_transform != eViewTransform::Standard) {
+            CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+            const uint32_t data_len = LUT_DIMS * LUT_DIMS * LUT_DIMS * sizeof(uint32_t);
+            Buffer temp_upload_buf{"Temp tonemap LUT upload", ctx_.get(), eBufType::Upload, data_len};
+            { // update stage buffer
+                uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_upload_buf.Map());
+                const uint32_t *lut = transform_luts[int(cam.view_transform)];
+
+                memcpy(mapped_ptr, lut, data_len);
+
+                temp_upload_buf.Unmap();
+            }
+
+            tonemap_lut_.SetSubImage(0, 0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eFormat::RGB10_A2, temp_upload_buf,
+                                     cmd_buf, 0, data_len);
+
+            ctx_->EndSingleTimeCommands(cmd_buf);
+
+            temp_upload_buf.FreeImmediate();
+        }
+        loaded_view_transform_ = cam.view_transform;
+    }
+
+    cache_grid_params_t cache_grid_params;
+    memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
+    cache_grid_params.exposure = cam_exposure;
+
+    // previous frame is complete (synchronous submit): retire it before recording
+    ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
+    ctx_->DestroyDeferredResources(ctx_->backend_frame);
+    ctx_->ResetUniformRing();
+    ctx_->frame_cpu_synced[ctx_->backend_frame] = true;
+
+    stats_.time_primary_ray_gen_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_ray_gen[0], timestamps_[ctx_->backend_frame].primary_ray_gen[1]);
+    stats_.time_primary_trace_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_trace[0], timestamps_[ctx_->backend_frame].primary_trace[1]);
+    stats_.time_primary_shade_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_shade[0], timestamps_[ctx_->backend_frame].primary_shade[1]);
+    stats_.time_primary_shadow_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_shadow[0], timestamps_[ctx_->backend_frame].primary_shadow[1]);
+
+    stats_.time_secondary_sort_us = 0;
+    for (int i = 0; i < int(timestamps_[ctx_->backend_frame].secondary_sort.size()); i += 2) {
+        stats_.time_secondary_sort_us +=
+            ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].secondary_sort[i + 0],
+                                                 timestamps_[ctx_->backend_frame].secondary_sort[i + 1]);
+    }
+
+    stats_.time_secondary_trace_us = 0;
+    for (int i = 0; i < int(timestamps_[ctx_->backend_frame].secondary_trace.size()); i += 2) {
+        stats_.time_secondary_trace_us +=
+            ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].secondary_trace[i + 0],
+                                                 timestamps_[ctx_->backend_frame].secondary_trace[i + 1]);
+    }
+
+    stats_.time_secondary_shade_us = 0;
+    for (int i = 0; i < int(timestamps_[ctx_->backend_frame].secondary_shade.size()); i += 2) {
+        stats_.time_secondary_shade_us +=
+            ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].secondary_shade[i + 0],
+                                                 timestamps_[ctx_->backend_frame].secondary_shade[i + 1]);
+    }
+
+    stats_.time_secondary_shadow_us = 0;
+    for (int i = 0; i < int(timestamps_[ctx_->backend_frame].secondary_shadow.size()); i += 2) {
+        stats_.time_secondary_shadow_us +=
+            ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].secondary_shadow[i + 0],
+                                                 timestamps_[ctx_->backend_frame].secondary_shadow[i + 1]);
+    }
+
+    CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+    DebugMarker render_scene_marker(ctx_.get(), cmd_buf, "Ray::RenderScene");
+
+    const scene_data_t sc_data = {s.env_,
+                                  s.mesh_instances_.gpu_buf(),
+                                  {s.meshes_.data(), s.meshes_.capacity()},
+                                  s.vtx_indices_.gpu_buf(),
+                                  s.vertices_.gpu_buf(),
+                                  s.nodes_.gpu_buf(),
+                                  s.leaf_prims_.gpu_buf(),
+                                  s.tris_.gpu_buf(),
+                                  s.tri_indices_.gpu_buf(),
+                                  s.tri_materials_.gpu_buf(),
+                                  s.materials_.gpu_buf(),
+                                  s.tex_atlases_,
+                                  s.atlas_textures_.gpu_buf(),
+                                  s.lights_,
+                                  s.li_indices_.buf(),
+                                  int(s.li_indices_.size()),
+                                  s.dir_lights_,
+                                  s.visible_lights_count_,
+                                  s.blocker_lights_count_,
+                                  s.light_cwnodes_.buf(),
+                                  s.light_leaf_prims_.buf(),
+                                  s.rt_tlas_,
+                                  s.env_map_qtree_.tex,
+                                  int(s.env_map_qtree_.mips.size()),
+                                  cache_grid_params,
+                                  s.spatial_cache_entries_.buf(),
+                                  s.spatial_cache_voxels_prev_.buf(),
+                                  s.atmosphere_params_buf_,
+                                  s.sky_transmittance_lut_tex_,
+                                  s.sky_multiscatter_lut_tex_,
+                                  s.sky_moon_tex_,
+                                  s.sky_weather_tex_,
+                                  s.sky_cirrus_tex_,
+                                  s.sky_curl_tex_,
+                                  s.sky_noise3d_tex_};
+    TransitionSceneResources(cmd_buf, sc_data);
+
+    const rect_t rect = region.rect();
+    const uint32_t rand_seed = Ref::hash((region.iteration - 1) / RAND_SAMPLES_COUNT);
+
+    { // generate primary rays
+        DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
+        timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(cmd_buf, true);
+        kernel_GeneratePrimaryRays(cmd_buf, cam, rand_seed, rect, w_, h_, random_seq_buf_, filter_table_,
+                                   region.iteration, true, required_samples_buf_, counters_buf_, prim_rays_buf_);
+        timestamps_[ctx_->backend_frame].primary_ray_gen[1] = ctx_->WriteTimestamp(cmd_buf, false);
+    }
+
+    { // prepare indirect args
+        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
+    }
+
+    { // trace primary rays
+        DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
+        timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
+        kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
+                              random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, cam.fwd,
+                              cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
+                              prim_hits_buf_);
+        timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
+    }
+
+    const eSpatialCacheMode cache_mode = use_spatial_cache_ ? eSpatialCacheMode::Query : eSpatialCacheMode::None;
+
+    timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
+
+    { // shade primary hits
+        DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
+        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, cache_mode, s.env_, indir_args_buf_[0], 0, prim_hits_buf_,
+                                prim_rays_buf_, sc_data, random_seq_buf_, rand_seed, region.iteration, rect,
+                                s.tex_atlases_, s.bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_,
+                                ray_hashes_bufs_[0], counters_buf_, temp_buf1_, temp_depth_normals_buf_);
+    }
+
+    { // prepare indirect args
+        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
+    }
+
+    if (sc_data.env.sky_map_spread_angle > 0.0f) {
+        DebugMarker _(ctx_.get(), cmd_buf, "ShadeSkyPrimary");
+        kernel_ShadeSkyPrimary(cmd_buf, cam.pass_settings, s.env_, indir_args_buf_[0], 4, prim_hits_buf_,
+                               prim_rays_buf_, ray_hashes_bufs_[0], counters_buf_, sc_data, region.iteration,
+                               temp_buf0_);
+    }
+
+    timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
+
+    { // trace shadow rays
+        DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+        timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
+        kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
+                                    random_seq_buf_, rand_seed, region.iteration, s.tlas_root_,
+                                    cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
+                                    shadow_rays_buf_, temp_buf0_);
+        timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
+    }
+
+    timestamps_[ctx_->backend_frame].secondary_sort.clear();
+    timestamps_[ctx_->backend_frame].secondary_trace.clear();
+    timestamps_[ctx_->backend_frame].secondary_shade.clear();
+    timestamps_[ctx_->backend_frame].secondary_shadow.clear();
+
+    for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
+        timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, true));
+
+        if (use_subgroup_) {
+            DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
+
+            kernel_SortHashRays(cmd_buf, indir_args_buf_[0], secondary_rays_buf_, counters_buf_, root_min, cell_size,
+                                ray_hashes_bufs_[0]);
+            RadixSort(cmd_buf, indir_args_buf_[0], ray_hashes_bufs_, count_table_buf_, counters_buf_,
+                      reduce_table_buf_);
+            kernel_SortReorderRays(cmd_buf, indir_args_buf_[0], 0, secondary_rays_buf_, ray_hashes_bufs_[0],
+                                   counters_buf_, 1, prim_rays_buf_);
+
+            std::swap(secondary_rays_buf_, prim_rays_buf_);
+        }
+
+        timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, false));
+
+        timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, true));
+        { // trace secondary rays
+            DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
+            kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
+                                  random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, nullptr, -1.0f,
+                                  s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
+        }
+
+        if (sc_data.visible_lights_count) {
+            DebugMarker _(ctx_.get(), cmd_buf, "IntersectAreaLights");
+            kernel_IntersectAreaLights(cmd_buf, sc_data, indir_args_buf_[0], counters_buf_, secondary_rays_buf_,
+                                       prim_hits_buf_);
+        }
+
+        timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, false));
+
+        timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
+
+        const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
+        { // shade secondary hits
+            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
+            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, cache_mode, clamp_val, s.env_, indir_args_buf_[0], 0,
+                                      prim_hits_buf_, secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed,
+                                      region.iteration, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
+                                      prim_rays_buf_, shadow_rays_buf_, ray_hashes_bufs_[0], counters_buf_, temp_buf1_,
+                                      temp_depth_normals_buf_);
+        }
+
+        { // prepare indirect args
+            DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+            kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
+        }
+
+        if (sc_data.env.sky_map_spread_angle > 0.0f) {
+            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSkySecondary");
+            kernel_ShadeSkySecondary(cmd_buf, cam.pass_settings, clamp_val, s.env_, indir_args_buf_[0], 4,
+                                     prim_hits_buf_, secondary_rays_buf_, ray_hashes_bufs_[0], counters_buf_, sc_data,
+                                     region.iteration, temp_buf0_);
+        }
+
+        timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
+
+        { // trace shadow rays
+            DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+            timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
+            kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
+                                        random_seq_buf_, rand_seed, region.iteration, s.tlas_root_,
+                                        cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
+                                        shadow_rays_buf_, temp_buf0_);
+            timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
+        }
+
+        std::swap(secondary_rays_buf_, prim_rays_buf_);
+    }
+
+    { // prepare result
+        DebugMarker _(ctx_.get(), cmd_buf, "Prepare Result");
+
+        // factor used to compute incremental average
+        const float mix_factor = 1.0f / float(region.iteration);
+        const float half_mix_factor = 1.0f / float((region.iteration + 1) / 2);
+
+        kernel_MixIncremental(cmd_buf, mix_factor, half_mix_factor, rect, region.iteration, cam_exposure, temp_buf0_,
+                              temp_buf1_, temp_depth_normals_buf_, required_samples_buf_, full_buf_, half_buf_,
+                              base_color_buf_, depth_normals_buf_);
+    }
+
+    { // output final buffer, prepare variance
+        DebugMarker _(ctx_.get(), cmd_buf, "Postprocess frame");
+
+        tonemap_params_.view_transform = cam.view_transform;
+        tonemap_params_.inv_gamma = (1.0f / cam.gamma);
+
+        variance_threshold_ = region.iteration > cam.pass_settings.min_samples
+                                  ? 0.5f * cam.pass_settings.variance_threshold * cam.pass_settings.variance_threshold
+                                  : 0.0f;
+
+        kernel_Postprocess(cmd_buf, full_buf_, half_buf_, tonemap_params_.inv_gamma, rect, variance_threshold_,
+                           region.iteration, final_buf_, temp_buf0_, required_samples_buf_);
+        // Also store as denosed result until Denoise method will be called
+        const TransitionInfo img_transitions[] = {{&full_buf_, eResState::CopySrc},
+                                                  {&raw_filtered_buf_, eResState::CopyDst}};
+        TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+        CopyImageToImage(cmd_buf, full_buf_, 0, rect.x, rect.y, raw_filtered_buf_, 0, rect.x, rect.y, rect.w, rect.h);
+    }
+
+    render_scene_marker.End();
+
+    ctx_->EndSingleTimeCommands(cmd_buf);
+
+    frame_dirty_ = base_color_dirty_ = depth_normals_dirty_ = true;
+}
+
+void Ray::Mtl::Renderer::DenoiseImage(const RegionContext &region) {
+    CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+    ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
+    ctx_->DestroyDeferredResources(ctx_->backend_frame);
+    ctx_->ResetUniformRing();
+
+    stats_.time_denoise_us = ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].denoise[0],
+                                                                  timestamps_[ctx_->backend_frame].denoise[1]);
+    stats_.time_denoise_span_us = stats_.time_denoise_us;
+
+    DebugMarker denoise_marker(ctx_.get(), cmd_buf, "Ray::DenoiseImage");
+
+    timestamps_[ctx_->backend_frame].denoise[0] = ctx_->WriteTimestamp(cmd_buf, true);
+
+    const rect_t &rect = region.rect();
+
+    const auto &raw_variance = temp_buf0_;
+    const auto &filtered_variance = temp_buf1_;
+
+    { // Filter variance
+        DebugMarker _(ctx_.get(), cmd_buf, "Filter Variance");
+        kernel_FilterVariance(cmd_buf, raw_variance, rect, variance_threshold_, region.iteration, filtered_variance,
+                              required_samples_buf_);
+    }
+
+    { // Apply NLM Filter
+        DebugMarker _(ctx_.get(), cmd_buf, "NLM Filter");
+        kernel_NLMFilter(cmd_buf, full_buf_, filtered_variance, 1.0f, 0.45f, base_color_buf_, 64.0f, depth_normals_buf_,
+                         32.0f, raw_filtered_buf_, tonemap_params_.view_transform, tonemap_params_.inv_gamma, rect,
+                         final_buf_);
+    }
+
+    timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);
+
+    denoise_marker.End();
+
+    ctx_->EndSingleTimeCommands(cmd_buf);
+}
+
+void Ray::Mtl::Renderer::DenoiseImage(const int pass, const RegionContext &region) {
+    CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+    if (pass == 0) {
+        ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
+        ctx_->DestroyDeferredResources(ctx_->backend_frame);
+        ctx_->ResetUniformRing();
+
+        stats_.time_denoise_us = ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].denoise[0],
+                                                                      timestamps_[ctx_->backend_frame].denoise[1]);
+        stats_.time_denoise_span_us = stats_.time_denoise_us;
+
+        timestamps_[ctx_->backend_frame].denoise[0] = ctx_->WriteTimestamp(cmd_buf, true);
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////
+
+    const int w_rounded = round_up(w_, 16);
+    const int h_rounded = round_up(h_, 16);
+
+    rect_t r = region.rect();
+    if (pass < 15) {
+        r.w = round_up(r.w, 16);
+        r.h = round_up(r.h, 16);
+    }
+
+    Buffer *weights = &unet_weights_;
+    const unet_weight_offsets_t *offsets = &unet_offsets_;
+
+    switch (pass) {
+    case 0: {
+        const int output_stride = round_up(w_rounded + 1, 16) + 1;
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 9 32");
+        kernel_Convolution(cmd_buf, 9, 32, full_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
+                           w_rounded, h_rounded, *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias,
+                           unet_tensors_heap_, unet_tensors_.enc_conv0_offset, output_stride);
+    } break;
+    case 1: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 32 Downscale");
+        const int input_stride = round_up(w_rounded + 1, 16) + 1, output_stride = round_up(w_rounded / 2 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 32, 32, unet_tensors_heap_, unet_tensors_.enc_conv0_offset, input_stride, r,
+                           w_rounded, h_rounded, *weights, offsets->enc_conv1_weight, offsets->enc_conv1_bias,
+                           unet_tensors_heap_, unet_tensors_.pool1_offset, output_stride, true);
+    } break;
+    case 2: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 48 Downscale");
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+
+        const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 4 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 32, 48, unet_tensors_heap_, unet_tensors_.pool1_offset, input_stride, r,
+                           w_rounded / 2, h_rounded / 2, *weights, offsets->enc_conv2_weight, offsets->enc_conv2_bias,
+                           unet_tensors_heap_, unet_tensors_.pool2_offset, output_stride, true);
+    } break;
+    case 3: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 48 64 Downscale");
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+
+        const int input_stride = round_up(w_rounded / 4 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 8 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 48, 64, unet_tensors_heap_, unet_tensors_.pool2_offset, input_stride, r,
+                           w_rounded / 4, h_rounded / 4, *weights, offsets->enc_conv3_weight, offsets->enc_conv3_bias,
+                           unet_tensors_heap_, unet_tensors_.pool3_offset, output_stride, true);
+    } break;
+    case 4: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 80 Downscale");
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+
+        const int input_stride = round_up(w_rounded / 8 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 16 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 64, 80, unet_tensors_heap_, unet_tensors_.pool3_offset, input_stride, r,
+                           w_rounded / 8, h_rounded / 8, *weights, offsets->enc_conv4_weight, offsets->enc_conv4_bias,
+                           unet_tensors_heap_, unet_tensors_.pool4_offset, output_stride, true);
+    } break;
+    case 5: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 80 96");
+        r.x = r.x / 16;
+        r.y = r.y / 16;
+        r.w = (r.w + 15) / 16;
+        r.h = (r.h + 15) / 16;
+
+        const int input_stride = round_up(w_rounded / 16 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 16 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 80, 96, unet_tensors_heap_, unet_tensors_.pool4_offset, input_stride, r,
+                           w_rounded / 16, h_rounded / 16, *weights, offsets->enc_conv5a_weight,
+                           offsets->enc_conv5a_bias, unet_tensors_heap_, unet_tensors_.enc_conv5a_offset, output_stride,
+                           false);
+    } break;
+    case 6: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 96 96");
+        r.x = r.x / 16;
+        r.y = r.y / 16;
+        r.w = (r.w + 15) / 16;
+        r.h = (r.h + 15) / 16;
+
+        const int input_stride = round_up(w_rounded / 16 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 16 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 96, 96, unet_tensors_heap_, unet_tensors_.enc_conv5a_offset, input_stride, r,
+                           w_rounded / 16, h_rounded / 16, *weights, offsets->enc_conv5b_weight,
+                           offsets->enc_conv5b_bias, unet_tensors_heap_, unet_tensors_.upsample4_offset, output_stride,
+                           false);
+    } break;
+    case 7: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 96 64 112");
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+
+        const int input_stride1 = round_up(w_rounded / 16 + 1, 16) + 1,
+                  input_stride2 = round_up(w_rounded / 8 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 8 + 1, 16) + 1;
+        kernel_ConvolutionConcat(cmd_buf, 96, 64, 112, unet_tensors_heap_, unet_tensors_.upsample4_offset,
+                                 input_stride1, true, unet_tensors_heap_, unet_tensors_.pool3_offset, input_stride2, r,
+                                 w_rounded / 8, h_rounded / 8, *weights, offsets->dec_conv4a_weight,
+                                 offsets->dec_conv4a_bias, unet_tensors_heap_, unet_tensors_.dec_conv4a_offset,
+                                 output_stride);
+    } break;
+    case 8: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 112 112");
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+
+        const int input_stride = round_up(w_rounded / 8 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 8 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 112, 112, unet_tensors_heap_, unet_tensors_.dec_conv4a_offset, input_stride, r,
+                           w_rounded / 8, h_rounded / 8, *weights, offsets->dec_conv4b_weight, offsets->dec_conv4b_bias,
+                           unet_tensors_heap_, unet_tensors_.upsample3_offset, output_stride, false);
+    } break;
+    case 9: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 112 48 96");
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+
+        const int input_stride1 = round_up(w_rounded / 8 + 1, 16) + 1,
+                  input_stride2 = round_up(w_rounded / 4 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 4 + 1, 16) + 1;
+        kernel_ConvolutionConcat(cmd_buf, 112, 48, 96, unet_tensors_heap_, unet_tensors_.upsample3_offset,
+                                 input_stride1, true, unet_tensors_heap_, unet_tensors_.pool2_offset, input_stride2, r,
+                                 w_rounded / 4, h_rounded / 4, *weights, offsets->dec_conv3a_weight,
+                                 offsets->dec_conv3a_bias, unet_tensors_heap_, unet_tensors_.dec_conv3a_offset,
+                                 output_stride);
+    } break;
+    case 10: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 96 96");
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+
+        const int input_stride = round_up(w_rounded / 4 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 4 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 96, 96, unet_tensors_heap_, unet_tensors_.dec_conv3a_offset, input_stride, r,
+                           w_rounded / 4, h_rounded / 4, *weights, offsets->dec_conv3b_weight, offsets->dec_conv3b_bias,
+                           unet_tensors_heap_, unet_tensors_.upsample2_offset, output_stride, false);
+    } break;
+    case 11: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 96 32 64");
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+
+        const int input_stride1 = round_up(w_rounded / 4 + 1, 16) + 1,
+                  input_stride2 = round_up(w_rounded / 2 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 2 + 1, 16) + 1;
+        kernel_ConvolutionConcat(cmd_buf, 96, 32, 64, unet_tensors_heap_, unet_tensors_.upsample2_offset, input_stride1,
+                                 true, unet_tensors_heap_, unet_tensors_.pool1_offset, input_stride2, r, w_rounded / 2,
+                                 h_rounded / 2, *weights, offsets->dec_conv2a_weight, offsets->dec_conv2a_bias,
+                                 unet_tensors_heap_, unet_tensors_.dec_conv2a_offset, output_stride);
+    } break;
+    case 12: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 64");
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+
+        const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 2 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 64, 64, unet_tensors_heap_, unet_tensors_.dec_conv2a_offset, input_stride, r,
+                           w_rounded / 2, h_rounded / 2, *weights, offsets->dec_conv2b_weight, offsets->dec_conv2b_bias,
+                           unet_tensors_heap_, unet_tensors_.upsample1_offset, output_stride, false);
+    } break;
+    case 13: {
+        const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 9 64");
+        kernel_ConvolutionConcat(cmd_buf, 64, 9, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset, input_stride,
+                                 true, full_buf_, base_color_buf_, depth_normals_buf_, zero_border_sampler_, r,
+                                 w_rounded, h_rounded, *weights, offsets->dec_conv1a_weight, offsets->dec_conv1a_bias,
+                                 unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, output_stride);
+    } break;
+    case 14: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 32");
+        const int input_stride = round_up(w_rounded + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 64, 32, unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, input_stride, r,
+                           w_rounded, h_rounded, *weights, offsets->dec_conv1b_weight, offsets->dec_conv1b_bias,
+                           unet_tensors_heap_, unet_tensors_.dec_conv1b_offset, output_stride, false);
+    } break;
+    case 15: {
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 3 Img ");
+        const int input_stride = round_up(w_rounded + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 32, 3, unet_tensors_heap_, unet_tensors_.dec_conv1b_offset, input_stride,
+                           tonemap_params_.inv_gamma, r, w_, h_, *weights, offsets->dec_conv0_weight,
+                           offsets->dec_conv0_bias, raw_filtered_buf_, final_buf_);
+
+        timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);
+    } break;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////
+
+    ctx_->EndSingleTimeCommands(cmd_buf);
+}
+
+void Ray::Mtl::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext &region) {
+    if (!use_spatial_cache_) {
+        return;
+    }
+
+    const auto &s = dynamic_cast<const Mtl::Scene &>(scene);
+
+    ++region.cache_iteration;
+
+    float root_min[3], cell_size[3];
+    if (s.tlas_root_ != 0xffffffff) {
+        const bvh_node_t &root_node = s.tlas_root_node_;
+        for (int i = 0; i < 3; ++i) {
+            root_min[i] = root_node.bbox_min[i];
+            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
+        }
+    }
+
+    rect_t rect = region.rect();
+    rect.x /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+    rect.y /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+    rect.w /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+    rect.h /= RAD_CACHE_DOWNSAMPLING_FACTOR;
+
+    const camera_t &orig_cam = s.cams_[s.current_cam()._index];
+
+    camera_t cam = s.cams_[s.current_cam()._index];
+    cam.fstop = 0.0f;
+    cam.filter = ePixelFilter::Box;
+
+    // TODO: Filter table is unused, this can be removed
+    if (orig_cam.filter != filter_table_filter_ || orig_cam.filter_width != filter_table_width_) {
+        CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+        UpdateFilterTable(cmd_buf, orig_cam.filter, orig_cam.filter_width);
+        filter_table_filter_ = orig_cam.filter;
+        filter_table_width_ = orig_cam.filter_width;
+
+        ctx_->EndSingleTimeCommands(cmd_buf);
+    }
+
+    cache_grid_params_t cache_grid_params;
+    memcpy(cache_grid_params.cam_pos_curr, cam.origin, 3 * sizeof(float));
+    cache_grid_params.exposure = std::pow(2.0f, cam.exposure);
+
+    const scene_data_t sc_data = {s.env_,
+                                  s.mesh_instances_.gpu_buf(),
+                                  {s.meshes_.data(), s.meshes_.capacity()},
+                                  s.vtx_indices_.gpu_buf(),
+                                  s.vertices_.gpu_buf(),
+                                  s.nodes_.gpu_buf(),
+                                  s.leaf_prims_.gpu_buf(),
+                                  s.tris_.gpu_buf(),
+                                  s.tri_indices_.gpu_buf(),
+                                  s.tri_materials_.gpu_buf(),
+                                  s.materials_.gpu_buf(),
+                                  s.tex_atlases_,
+                                  s.atlas_textures_.gpu_buf(),
+                                  s.lights_,
+                                  s.li_indices_.buf(),
+                                  int(s.li_indices_.size()),
+                                  s.dir_lights_,
+                                  s.visible_lights_count_,
+                                  s.blocker_lights_count_,
+                                  s.light_cwnodes_.buf(),
+                                  s.light_leaf_prims_.buf(),
+                                  s.rt_tlas_,
+                                  s.env_map_qtree_.tex,
+                                  int(s.env_map_qtree_.mips.size()),
+                                  cache_grid_params,
+                                  s.spatial_cache_entries_.buf(),
+                                  s.spatial_cache_voxels_curr_.buf(),
+                                  s.atmosphere_params_buf_,
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  {}};
+
+    ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
+    ctx_->DestroyDeferredResources(ctx_->backend_frame);
+    ctx_->ResetUniformRing();
+
+    stats_.time_cache_update_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].cache_update[0], timestamps_[ctx_->backend_frame].cache_update[1]);
+    stats_.time_cache_resolve_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].cache_resolve[0], timestamps_[ctx_->backend_frame].cache_resolve[1]);
+
+    CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+    DebugMarker update_cache_marker(ctx_.get(), cmd_buf, "Ray::UpdateSpatialCache");
+
+    TransitionSceneResources(cmd_buf, sc_data);
+
+    const uint32_t rand_seed = Ref::hash(Ref::hash((region.cache_iteration - 1) / RAND_SAMPLES_COUNT));
+
+    timestamps_[ctx_->backend_frame].cache_update[0] = ctx_->WriteTimestamp(cmd_buf, true);
+
+    { // generate primary rays
+        DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
+        kernel_GeneratePrimaryRays(cmd_buf, cam, rand_seed, rect, (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR),
+                                   (h_ / RAD_CACHE_DOWNSAMPLING_FACTOR), random_seq_buf_, filter_table_,
+                                   region.cache_iteration, false, required_samples_buf_, counters_buf_, prim_rays_buf_);
+    }
+
+    { // prepare indirect args
+        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
+    }
+
+    { // trace primary rays
+        DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
+        kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
+                              random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, cam.fwd,
+                              cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
+                              prim_hits_buf_);
+    }
+
+    { // shade primary hits
+        DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
+        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, s.env_, indir_args_buf_[0], 0,
+                                prim_hits_buf_, prim_rays_buf_, sc_data, random_seq_buf_, rand_seed,
+                                region.cache_iteration, rect, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
+                                secondary_rays_buf_, shadow_rays_buf_, {}, counters_buf_, temp_buf1_,
+                                temp_depth_normals_buf_);
+    }
+
+    { // prepare indirect args
+        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+        kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[1]);
+    }
+
+    { // trace shadow rays
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::TraceShadow");
+        kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[1], 2, counters_buf_, sc_data,
+                                    random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_,
+                                    cam.pass_settings.clamp_direct, s.tex_atlases_, s.bindless_tex_data_,
+                                    shadow_rays_buf_, temp_buf0_);
+    }
+
+    { // update spatial cache
+        DebugMarker _(ctx_.get(), cmd_buf, "UpdateSpatialCache");
+        temp_cache_data_buf_.Fill(0, temp_cache_data_buf_.size(), 0, cmd_buf);
+        if (!ctx_->int64_atomics_supported()) {
+            temp_lock_buf_.Fill(0, temp_lock_buf_.size(), 0, cmd_buf);
+        }
+        kernel_SpatialCacheUpdate(cmd_buf, cache_grid_params, indir_args_buf_[0], 0, counters_buf_, 0, prim_hits_buf_,
+                                  prim_rays_buf_, temp_cache_data_buf_, temp_buf0_, temp_depth_normals_buf_,
+                                  sc_data.spatial_cache_entries, sc_data.spatial_cache_voxels, temp_lock_buf_);
+    }
+
+    for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
+        if (use_subgroup_) {
+            DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
+
+            kernel_SortHashRays(cmd_buf, indir_args_buf_[1], secondary_rays_buf_, counters_buf_, root_min, cell_size,
+                                ray_hashes_bufs_[0]);
+            RadixSort(cmd_buf, indir_args_buf_[1], ray_hashes_bufs_, count_table_buf_, counters_buf_,
+                      reduce_table_buf_);
+            kernel_SortReorderRays(cmd_buf, indir_args_buf_[1], 0, secondary_rays_buf_, ray_hashes_bufs_[0],
+                                   counters_buf_, 1, prim_rays_buf_);
+
+            std::swap(secondary_rays_buf_, prim_rays_buf_);
+        }
+
+        { // trace secondary rays
+            DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
+            kernel_IntersectScene(cmd_buf, indir_args_buf_[1], 0, counters_buf_, cam.pass_settings, sc_data,
+                                  random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, nullptr, -1.0f,
+                                  s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
+        }
+
+        if (sc_data.visible_lights_count) {
+            DebugMarker _(ctx_.get(), cmd_buf, "IntersectAreaLights");
+            kernel_IntersectAreaLights(cmd_buf, sc_data, indir_args_buf_[1], counters_buf_, secondary_rays_buf_,
+                                       prim_hits_buf_);
+        }
+
+        { // shade secondary hits
+            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
+            const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
+            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, clamp_val, s.env_,
+                                      indir_args_buf_[1], 0, prim_hits_buf_, secondary_rays_buf_, sc_data,
+                                      random_seq_buf_, rand_seed, region.cache_iteration, s.tex_atlases_,
+                                      s.bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_, {},
+                                      counters_buf_, temp_buf1_, temp_depth_normals_buf_);
+        }
+
+        { // prepare indirect args
+            DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
+            kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_[0]);
+        }
+
+        { // trace shadow rays
+            DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
+            kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_[0], 2, counters_buf_, sc_data,
+                                        random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_,
+                                        cam.pass_settings.clamp_indirect, s.tex_atlases_, s.bindless_tex_data_,
+                                        shadow_rays_buf_, temp_buf0_);
+        }
+
+        { // update spatial cache
+            DebugMarker _(ctx_.get(), cmd_buf, "UpdateSpatialCache");
+            kernel_SpatialCacheUpdate(cmd_buf, cache_grid_params, indir_args_buf_[1], 0, counters_buf_, 0,
+                                      prim_hits_buf_, secondary_rays_buf_, temp_cache_data_buf_, temp_buf0_,
+                                      temp_depth_normals_buf_, sc_data.spatial_cache_entries,
+                                      sc_data.spatial_cache_voxels, temp_lock_buf_);
+        }
+
+        std::swap(secondary_rays_buf_, prim_rays_buf_);
+        std::swap(indir_args_buf_[0], indir_args_buf_[1]);
+    }
+
+    timestamps_[ctx_->backend_frame].cache_update[1] = ctx_->WriteTimestamp(cmd_buf, false);
+
+    update_cache_marker.End();
+
+    ctx_->EndSingleTimeCommands(cmd_buf);
+}
+
+void Ray::Mtl::Renderer::ResolveSpatialCache(
+    const SceneBase &scene, const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    if (!use_spatial_cache_) {
+        return;
+    }
+
+    const auto &s = dynamic_cast<const Mtl::Scene &>(scene);
+
+    CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+    DebugMarker resolve_cache_marker(ctx_.get(), cmd_buf, "Ray::ResolveSpatialCache");
+
+    timestamps_[ctx_->backend_frame].cache_resolve[0] = ctx_->WriteTimestamp(cmd_buf, true);
+
+    { // Resolve spatial cache
+        DebugMarker _(ctx_.get(), cmd_buf, "ResolveSpatialCache");
+
+        const camera_t &cam = s.cams_[s.current_cam()._index];
+
+        cache_grid_params_t params;
+        memcpy(params.cam_pos_curr, cam.origin, 3 * sizeof(float));
+        memcpy(params.cam_pos_prev, s.spatial_cache_cam_pos_prev_, 3 * sizeof(float));
+
+        kernel_SpatialCacheResolve(cmd_buf, params, s.spatial_cache_entries_.buf(), s.spatial_cache_voxels_curr_.buf(),
+                                   s.spatial_cache_voxels_prev_.buf());
+
+        std::swap(s.spatial_cache_voxels_prev_, s.spatial_cache_voxels_curr_);
+        s.spatial_cache_voxels_curr_.buf().Fill(0, s.spatial_cache_voxels_curr_.buf().size(), 0, cmd_buf);
+
+        // Store previous camera position
+        memcpy(s.spatial_cache_cam_pos_prev_, cam.origin, 3 * sizeof(float));
+    }
+
+    timestamps_[ctx_->backend_frame].cache_resolve[1] = ctx_->WriteTimestamp(cmd_buf, false);
+
+    resolve_cache_marker.End();
+
+    ctx_->EndSingleTimeCommands(cmd_buf);
+}
+
+void Ray::Mtl::Renderer::ResetSpatialCache(const SceneBase &scene,
+                                           const std::function<void(int, int, ParallelForFunction &&)> &) {
+    if (!use_spatial_cache_) {
+        return;
+    }
+
+    const auto &s = dynamic_cast<const Mtl::Scene &>(scene);
+
+    CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+    { // Reset spatial cache
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::ResetSpatialCache");
+        s.spatial_cache_voxels_prev_.buf().Fill(0, s.spatial_cache_voxels_prev_.buf().size(), 0, cmd_buf);
+    }
+
+    ctx_->EndSingleTimeCommands(cmd_buf);
+}
+
+Ray::color_data_rgba_t Ray::Mtl::Renderer::get_pixels_ref(const bool tonemap) const {
+    if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
+        CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+        { // download result
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Download Result");
+
+            const auto &buffer_to_use = tonemap ? final_buf_ : raw_filtered_buf_;
+
+            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, pixel_readback_buf_, cmd_buf, 0);
+        }
+
+        ctx_->EndSingleTimeCommands(cmd_buf);
+
+        frame_dirty_ = false;
+        pixel_readback_is_tonemapped_ = tonemap;
+    }
+
+    return {frame_pixels_, w_};
+}
+
+Ray::color_data_rgba_t Ray::Mtl::Renderer::get_aux_pixels_ref(const eAUXBuffer buf) const {
+    bool &dirty_flag = (buf == eAUXBuffer::BaseColor) ? base_color_dirty_ : depth_normals_dirty_;
+
+    const auto &buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_buf_ : depth_normals_buf_;
+    const auto &readback_buffer_to_use =
+        (buf == eAUXBuffer::BaseColor) ? base_color_readback_buf_ : depth_normals_readback_buf_;
+
+    if (dirty_flag) {
+        CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
+
+        { // download result
+            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Download Result");
+
+            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, readback_buffer_to_use, cmd_buf, 0);
+        }
+
+        ctx_->EndSingleTimeCommands(cmd_buf);
+
+        dirty_flag = false;
+    }
+
+    return {((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_), w_};
+}
+
+Ray::GpuImage Ray::Mtl::Renderer::get_native_raw_pixels() const {
+    return GpuImage{raw_filtered_buf_.mtl(), eGPUResState(raw_filtered_buf_.resource_state)};
+}
+
+bool Ray::Mtl::Renderer::InitUNetFilterPipelines(
+    const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    ILog *log = ctx_->log();
+
+    // Metal has no cooperative matrices; fp16 storage tensors are used when supported
+    auto select_shader = [this](Span<const uint8_t> fp32_shader, Span<const uint8_t> fp16_shader) {
+        return use_fp16_ ? fp16_shader : fp32_shader;
+    };
+
+    SmallVector<std::tuple<Shader &, Program &, Pipeline &, std::string_view, Span<const uint8_t>, eShaderType, bool>,
+                32>
+        shaders_to_init = {
+            {sh_.convolution_Img_9_32, prog_.convolution_Img_9_32, pi_.convolution_Img_9_32, "Convolution Img 9 32",
+             select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_metallib,
+                           internal_shaders_output_convolution_Img_9_32_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_32_32_Downsample, prog_.convolution_32_32_Downsample, pi_.convolution_32_32_Downsample,
+             "Convolution 32 32 Downsample",
+             select_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_metallib,
+                           internal_shaders_output_convolution_32_32_Downsample_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_32_48_Downsample, prog_.convolution_32_48_Downsample, pi_.convolution_32_48_Downsample,
+             "Convolution 32 48 Downsample",
+             select_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_metallib,
+                           internal_shaders_output_convolution_32_48_Downsample_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_48_64_Downsample, prog_.convolution_48_64_Downsample, pi_.convolution_48_64_Downsample,
+             "Convolution 48 64 Downsample",
+             select_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_metallib,
+                           internal_shaders_output_convolution_48_64_Downsample_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_64_80_Downsample, prog_.convolution_64_80_Downsample, pi_.convolution_64_80_Downsample,
+             "Convolution 64 80 Downsample",
+             select_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_metallib,
+                           internal_shaders_output_convolution_64_80_Downsample_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_64_64, prog_.convolution_64_64, pi_.convolution_64_64, "Convolution 64 64",
+             select_shader(internal_shaders_output_convolution_64_64_fp32_comp_metallib,
+                           internal_shaders_output_convolution_64_64_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_64_32, prog_.convolution_64_32, pi_.convolution_64_32, "Convolution 64 32",
+             select_shader(internal_shaders_output_convolution_64_32_fp32_comp_metallib,
+                           internal_shaders_output_convolution_64_32_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_80_96, prog_.convolution_80_96, pi_.convolution_80_96, "Convolution 80 96",
+             select_shader(internal_shaders_output_convolution_80_96_fp32_comp_metallib,
+                           internal_shaders_output_convolution_80_96_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_96_96, prog_.convolution_96_96, pi_.convolution_96_96, "Convolution 96 96",
+             select_shader(internal_shaders_output_convolution_96_96_fp32_comp_metallib,
+                           internal_shaders_output_convolution_96_96_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_112_112, prog_.convolution_112_112, pi_.convolution_112_112, "Convolution 112 112",
+             select_shader(internal_shaders_output_convolution_112_112_fp32_comp_metallib,
+                           internal_shaders_output_convolution_112_112_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_concat_96_64_112, prog_.convolution_concat_96_64_112, pi_.convolution_concat_96_64_112,
+             "Convolution Concat 96 64 112",
+             select_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_metallib,
+                           internal_shaders_output_convolution_concat_96_64_112_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_concat_112_48_96, prog_.convolution_concat_112_48_96, pi_.convolution_concat_112_48_96,
+             "Convolution Concat 112 48 96",
+             select_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_metallib,
+                           internal_shaders_output_convolution_concat_112_48_96_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_concat_96_32_64, prog_.convolution_concat_96_32_64, pi_.convolution_concat_96_32_64,
+             "Convolution Concat 96 32 64",
+             select_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_metallib,
+                           internal_shaders_output_convolution_concat_96_32_64_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_concat_64_9_64, prog_.convolution_concat_64_9_64, pi_.convolution_concat_64_9_64,
+             "Convolution Concat 64 9 64",
+             select_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_metallib,
+                           internal_shaders_output_convolution_concat_64_9_64_fp16_comp_metallib),
+             eShaderType::Comp, false},
+            {sh_.convolution_32_3_img, prog_.convolution_32_3_img, pi_.convolution_32_3_img, "Convolution 32 3 Img",
+             select_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_metallib,
+                           internal_shaders_output_convolution_32_3_img_fp16_comp_metallib),
+             eShaderType::Comp, false}};
+    parallel_for(0, int(shaders_to_init.size()), [&](const int i) {
+        std::get<6>(shaders_to_init[i]) =
+            std::get<0>(shaders_to_init[i])
+                .Init(std::get<3>(shaders_to_init[i]), ctx_.get(), Inflate(std::get<4>(shaders_to_init[i])),
+                      std::get<5>(shaders_to_init[i]), log);
+        std::get<1>(shaders_to_init[i]) =
+            Program{std::get<3>(shaders_to_init[i]), ctx_.get(), &std::get<0>(shaders_to_init[i]), log};
+        std::get<2>(shaders_to_init[i]).Init(ctx_.get(), &std::get<1>(shaders_to_init[i]), log);
+    });
+
+    bool result = true;
+    for (const auto &sh : shaders_to_init) {
+        result &= std::get<6>(sh);
+    }
+
+    return result;
+}
+
+bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
+                                       const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    auto select_shader = [this](Span<const uint8_t> bindless_shader, Span<const uint8_t> bindless_subgroup_shader,
+                                Span<const uint8_t> atlas_shader, Span<const uint8_t> atlas_subgroup_shader) {
+        return use_bindless_ ? (use_subgroup_ ? bindless_subgroup_shader : bindless_shader)
+                             : (use_subgroup_ ? atlas_subgroup_shader : atlas_shader);
+    };
+
+    SmallVector<std::tuple<Shader &, std::string_view, Span<const uint8_t>, eShaderType, bool>, 32> shaders_to_init = {
+        {sh_.prim_rays_gen_simple, "Primary Raygen Simple",
+         internal_shaders_output_primary_ray_gen_simple_comp_metallib, eShaderType::Comp, false},
+        {sh_.prim_rays_gen_adaptive, "Primary Raygen Adaptive",
+         internal_shaders_output_primary_ray_gen_adaptive_comp_metallib, eShaderType::Comp, false},
+        {sh_.intersect_area_lights, "Intersect Area Lights",
+         internal_shaders_output_intersect_area_lights_comp_metallib, eShaderType::Comp, false},
+        {sh_.shade_primary, "Shade (Primary)",
+         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_metallib}
+                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_primary_sky, "Shade (Primary) (Sky)",
+         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_sky_comp_metallib}
+                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_sky_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_primary_cache_update, "Shade (Primary) (Cache Update)",
+         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_update_comp_metallib}
+                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_update_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_primary_cache_query, "Shade (Primary) (Cache Query)",
+         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_comp_metallib}
+                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_primary_cache_query_sky, "Shade (Primary) (Cache Query) (Sky)",
+         use_bindless_
+             ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_metallib}
+             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_secondary, "Shade (Secondary)",
+         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_metallib}
+                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_secondary_sky, "Shade (Secondary) (Sky)",
+         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_sky_comp_metallib}
+                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_sky_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_secondary_cache_update, "Shade (Secondary) (Cache Update)",
+         use_bindless_
+             ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_update_comp_metallib}
+             : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_update_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_secondary_cache_query, "Shade (Secondary) (Cache Query)",
+         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_comp_metallib}
+                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_secondary_cache_query_sky, "Shade (Secondary) (Cache Query) (Sky)",
+         use_bindless_
+             ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_metallib}
+             : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_metallib},
+         eShaderType::Comp, false},
+        {sh_.shade_sky, "Shade Sky", internal_shaders_output_shade_sky_comp_metallib, eShaderType::Comp, false},
+        {sh_.prepare_indir_args, "Prepare Indir Args", internal_shaders_output_prepare_indir_args_comp_metallib,
+         eShaderType::Comp, false},
+        {sh_.mix_incremental, "Mix Incremental", internal_shaders_output_mix_incremental_comp_metallib,
+         eShaderType::Comp, false},
+        {sh_.postprocess, "Postprocess", internal_shaders_output_postprocess_comp_metallib, eShaderType::Comp, false},
+        {sh_.filter_variance, "Filter Variance", internal_shaders_output_filter_variance_comp_metallib,
+         eShaderType::Comp, false},
+        {sh_.nlm_filter, "NLM Filter", internal_shaders_output_nlm_filter_comp_metallib, eShaderType::Comp, false},
+        {sh_.sort_hash_rays, "Sort Hash Rays", internal_shaders_output_sort_hash_rays_comp_metallib, eShaderType::Comp,
+         false},
+        {sh_.sort_init_count_table, "Sort Init Count Table",
+         internal_shaders_output_sort_init_count_table_comp_metallib, eShaderType::Comp, false},
+        {sh_.sort_reduce, "Sort Reduce", internal_shaders_output_sort_reduce_comp_metallib, eShaderType::Comp, false},
+        {sh_.sort_scan, "Sort Scan", internal_shaders_output_sort_scan_comp_metallib, eShaderType::Comp, false},
+        {sh_.sort_scan_add, "Sort Scan Add", internal_shaders_output_sort_scan_add_comp_metallib, eShaderType::Comp,
+         false},
+        {sh_.sort_scatter, "Sort Scatter", internal_shaders_output_sort_scatter_comp_metallib, eShaderType::Comp,
+         false},
+        {sh_.sort_reorder_rays, "Sort Reorder Rays", internal_shaders_output_sort_reorder_rays_comp_metallib,
+         eShaderType::Comp, false},
+        {sh_.spatial_cache_resolve, "Spatial Cache Resolve",
+         internal_shaders_output_spatial_cache_resolve_comp_metallib, eShaderType::Comp, false}};
+
+    // SWRT only: HWRT requires Metal ray queries, not implemented
+    shaders_to_init.emplace_back(
+        sh_.intersect_scene, "Intersect Scene (Primary) (SWRT)",
+        select_shader(internal_shaders_output_intersect_scene_swrt_bindless_comp_metallib,
+                      internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_metallib,
+                      internal_shaders_output_intersect_scene_swrt_atlas_comp_metallib,
+                      internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_metallib),
+        eShaderType::Comp, false);
+    shaders_to_init.emplace_back(
+        sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (SWRT)",
+        select_shader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_metallib,
+                      internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_metallib,
+                      internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_metallib,
+                      internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_metallib),
+        eShaderType::Comp, false);
+    shaders_to_init.emplace_back(
+        sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (SWRT)",
+        select_shader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_metallib,
+                      internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_metallib,
+                      internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_metallib,
+                      internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_metallib),
+        eShaderType::Comp, false);
+
+    // only the compat variant is compiled for Metal: int64 atomics are not offered
+    shaders_to_init.emplace_back(sh_.spatial_cache_update, "Spatial Cache Update (Compat)",
+                                 internal_shaders_output_spatial_cache_update_compat_comp_metallib, eShaderType::Comp,
+                                 false);
+
+    parallel_for(0, int(shaders_to_init.size()), [&](const int i) {
+        std::get<4>(shaders_to_init[i]) =
+            std::get<0>(shaders_to_init[i])
+                .Init(std::get<1>(shaders_to_init[i]), ctx_.get(), Inflate(std::get<2>(shaders_to_init[i])),
+                      std::get<3>(shaders_to_init[i]), log);
+    });
+
+    bool result = true;
+    for (const auto &sh : shaders_to_init) {
+        result &= std::get<4>(sh);
+    }
+
+    prog_.prim_rays_gen_simple = Program{"Primary Raygen Simple", ctx_.get(), &sh_.prim_rays_gen_simple, log};
+    prog_.prim_rays_gen_adaptive = Program{"Primary Raygen Adaptive", ctx_.get(), &sh_.prim_rays_gen_adaptive, log};
+    prog_.intersect_scene = Program{"Intersect Scene (Primary)", ctx_.get(), &sh_.intersect_scene, log};
+    prog_.intersect_scene_indirect =
+        Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_.intersect_scene_indirect, log};
+    prog_.intersect_area_lights = Program{"Intersect Area Lights", ctx_.get(), &sh_.intersect_area_lights, log};
+    prog_.shade_primary = Program{"Shade (Primary)", ctx_.get(), &sh_.shade_primary, log};
+    prog_.shade_primary_sky = Program{"Shade (Primary) (Sky)", ctx_.get(), &sh_.shade_primary_sky, log};
+    prog_.shade_primary_cache_update =
+        Program{"Shade (Primary) (Cache Update)", ctx_.get(), &sh_.shade_primary_cache_update, log};
+    prog_.shade_primary_cache_query =
+        Program{"Shade (Primary) (Cache Query)", ctx_.get(), &sh_.shade_primary_cache_query, log};
+    prog_.shade_primary_cache_query_sky =
+        Program{"Shade (Primary) (Cache Query) (Sky)", ctx_.get(), &sh_.shade_primary_cache_query_sky, log};
+    prog_.shade_secondary = Program{"Shade (Secondary)", ctx_.get(), &sh_.shade_secondary, log};
+    prog_.shade_secondary_sky = Program{"Shade (Secondary) (Sky)", ctx_.get(), &sh_.shade_secondary_sky, log};
+    prog_.shade_secondary_cache_update =
+        Program{"Shade (Secondary) (Cache Update)", ctx_.get(), &sh_.shade_secondary_cache_update, log};
+    prog_.shade_secondary_cache_query =
+        Program{"Shade (Secondary) (Cache Query)", ctx_.get(), &sh_.shade_secondary_cache_query, log};
+    prog_.shade_secondary_cache_query_sky =
+        Program{"Shade (Secondary) (Cache Query) (Sky)", ctx_.get(), &sh_.shade_secondary_cache_query_sky, log};
+    prog_.shade_sky = Program{"Shade Sky", ctx_.get(), &sh_.shade_sky, log};
+    prog_.intersect_scene_shadow = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_.intersect_scene_shadow, log};
+    prog_.prepare_indir_args = Program{"Prepare Indir Args", ctx_.get(), &sh_.prepare_indir_args, log};
+    prog_.mix_incremental = Program{"Mix Incremental", ctx_.get(), &sh_.mix_incremental, log};
+    prog_.postprocess = Program{"Postprocess", ctx_.get(), &sh_.postprocess, log};
+    prog_.filter_variance = Program{"Filter Variance", ctx_.get(), &sh_.filter_variance, log};
+    prog_.nlm_filter = Program{"NLM Filter", ctx_.get(), &sh_.nlm_filter, log};
+    prog_.sort_hash_rays = Program{"Hash Rays", ctx_.get(), &sh_.sort_hash_rays, log};
+    prog_.sort_init_count_table = Program{"Init Count Table", ctx_.get(), &sh_.sort_init_count_table, log};
+    prog_.sort_reduce = Program{"Sort Reduce", ctx_.get(), &sh_.sort_reduce, log};
+    prog_.sort_scan = Program{"Sort Scan", ctx_.get(), &sh_.sort_scan, log};
+    prog_.sort_scan_add = Program{"Sort Scan Add", ctx_.get(), &sh_.sort_scan_add, log};
+    prog_.sort_scatter = Program{"Sort Scatter", ctx_.get(), &sh_.sort_scatter, log};
+    prog_.sort_reorder_rays = Program{"Reorder Rays", ctx_.get(), &sh_.sort_reorder_rays, log};
+    prog_.spatial_cache_update = Program{"Spatial Cache Update", ctx_.get(), &sh_.spatial_cache_update, log};
+    prog_.spatial_cache_resolve = Program{"Spatial Cache Resolve", ctx_.get(), &sh_.spatial_cache_resolve, log};
+
+    SmallVector<std::tuple<Pipeline &, Program &, int, bool>, 32> pipelines_to_init = {
+        {pi_.prim_rays_gen_simple, prog_.prim_rays_gen_simple, -1, false},
+        {pi_.prim_rays_gen_adaptive, prog_.prim_rays_gen_adaptive, -1, false},
+        {pi_.intersect_scene, prog_.intersect_scene, -1, false},
+        {pi_.intersect_scene_indirect, prog_.intersect_scene_indirect, -1, false},
+        {pi_.intersect_area_lights, prog_.intersect_area_lights, -1, false},
+        {pi_.shade_primary, prog_.shade_primary, -1, false},
+        {pi_.shade_primary_sky, prog_.shade_primary_sky, -1, false},
+        {pi_.shade_secondary, prog_.shade_secondary, -1, false},
+        {pi_.shade_secondary_sky, prog_.shade_secondary_sky, -1, false},
+        {pi_.shade_sky, prog_.shade_sky, -1, false},
+        {pi_.intersect_scene_shadow, prog_.intersect_scene_shadow, -1, false},
+        {pi_.prepare_indir_args, prog_.prepare_indir_args, -1, false},
+        {pi_.mix_incremental, prog_.mix_incremental, -1, false},
+        {pi_.postprocess, prog_.postprocess, -1, false},
+        {pi_.filter_variance, prog_.filter_variance, -1, false},
+        {pi_.nlm_filter, prog_.nlm_filter, -1, false},
+        {pi_.sort_hash_rays, prog_.sort_hash_rays, -1, false},
+        {pi_.sort_reorder_rays, prog_.sort_reorder_rays, -1, false}};
+    if (use_subgroup_) {
+        pipelines_to_init.emplace_back(pi_.sort_init_count_table, prog_.sort_init_count_table, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_reduce, prog_.sort_reduce, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_scan, prog_.sort_scan, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_scan_add, prog_.sort_scan_add, -1, false);
+        pipelines_to_init.emplace_back(pi_.sort_scatter, prog_.sort_scatter, -1, false);
+    }
+    if (use_spatial_cache_) {
+        pipelines_to_init.emplace_back(pi_.shade_primary_cache_update, prog_.shade_primary_cache_update, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_primary_cache_query, prog_.shade_primary_cache_query, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_primary_cache_query_sky, prog_.shade_primary_cache_query_sky, -1,
+                                       false);
+
+        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_update, prog_.shade_secondary_cache_update, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_query, prog_.shade_secondary_cache_query, -1, false);
+        pipelines_to_init.emplace_back(pi_.shade_secondary_cache_query_sky, prog_.shade_secondary_cache_query_sky, -1,
+                                       false);
+
+        pipelines_to_init.emplace_back(pi_.spatial_cache_update, prog_.spatial_cache_update, -1, false);
+        pipelines_to_init.emplace_back(pi_.spatial_cache_resolve, prog_.spatial_cache_resolve, -1, false);
+    }
+    parallel_for(0, int(pipelines_to_init.size()), [&](const int i) {
+        std::get<3>(pipelines_to_init[i]) =
+            std::get<0>(pipelines_to_init[i]).Init(ctx_.get(), &std::get<1>(pipelines_to_init[i]), log);
+    });
+
+    // Release shader modules
+    sh_ = {};
+
+    for (const auto &pi : pipelines_to_init) {
+        result &= std::get<3>(pi);
+    }
+
+    return result;
+}
+
+Ray::RendererBase *Ray::Mtl::CreateRenderer(const settings_t &s, ILog *log,
+                                            const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
+    return new Mtl::Renderer(s, log, parallel_for);
+}
