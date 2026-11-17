@@ -125,6 +125,7 @@ bool g_determine_sample_count = true;
 bool g_minimal_output = false;
 bool g_nohwrt = false;
 bool g_nodx = false;
+bool g_sort_rays_gpu = false;
 int g_validation_level = 1;
 
 #ifdef _WIN32
@@ -184,6 +185,8 @@ int main(int argc, char *argv[]) {
             g_validation_level = atoi(argv[i]);
         } else if (strcmp(argv[i], "--no-hwrt") == 0) {
             g_nohwrt = true;
+        } else if (strcmp(argv[i], "--sort-gpu") == 0) {
+            g_sort_rays_gpu = true;
         }
     }
 

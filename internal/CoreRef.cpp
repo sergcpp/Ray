@@ -2013,9 +2013,18 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
     }
 }
 
-int Ray::Ref::SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3],
-                           uint32_t *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
-                           ray_chunk_t *chunks_temp) {
+int Ray::Ref::GatherRays(Span<const ray_data_t> rays, const uint32_t perm[], Span<ray_data_t> out_rays) {
+    // out_rays[i] = rays[perm[i]]: the sorted order is materialized here, in one pass over the index map
+    assert(uint32_t(out_rays.size()) <= uint32_t(rays.size()));
+    for (uint32_t i = 0; i < uint32_t(out_rays.size()); ++i) {
+        out_rays[i] = rays[perm[i]];
+    }
+    return int(out_rays.size());
+}
+
+int Ray::Ref::SortRays_CPU(Span<const ray_data_t> rays, const float root_min[3], const float cell_size[3],
+                           uint32_t hash_values[], uint32_t scan_values[], ray_chunk_t chunks[],
+                           ray_chunk_t chunks_temp[]) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
 
     // compute ray hash values
@@ -2037,7 +2046,8 @@ int Ray::Ref::SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const
 
     radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
 
-    // decompress sorted spans
+    // decompress sorted spans into the index map: scan_values[dest] = source index. The rays themselves are
+    // never reordered here; hash_values keep their unsorted order (the perm survives the sort).
     size_t counter = 0;
     for (uint32_t i = 0; i < chunks_count; ++i) {
         for (uint32_t j = 0; j < chunks[i].size; j++) {
@@ -2045,23 +2055,17 @@ int Ray::Ref::SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const
         }
     }
 
-    // reorder rays
-    for (uint32_t i = 0; i < uint32_t(rays.size()); ++i) {
-        uint32_t j;
-        while (i != (j = scan_values[i])) {
-            const uint32_t k = scan_values[j];
-            std::swap(rays[j], rays[k]);
-            std::swap(scan_values[i], scan_values[j]);
-        }
-    }
-
+    assert(counter == uint32_t(rays.size()));
     return int(rays.size());
 }
 
-int Ray::Ref::SortRays_GPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3],
-                           uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks,
-                           ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+int Ray::Ref::SortRays_GPU(Span<const ray_data_t> rays, const float root_min[3], const float cell_size[3],
+                           uint32_t hash_values[], int head_flags[], uint32_t scan_values[], ray_chunk_t chunks[],
+                           ray_chunk_t chunks_temp[], uint32_t skeleton[]) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
+    if (rays.empty()) {
+        return 0;
+    }
 
     // compute ray hash values
     for (uint32_t i = 0; i < uint32_t(rays.size()); ++i) {
@@ -2120,7 +2124,8 @@ int Ray::Ref::SortRays_GPU(Span<ray_data_t> rays, const float root_min[3], const
         head_flags[scan_values[i]] = 1;
     }
 
-    { // perform a segmented scan on skeleton array
+    { // segmented scan of the skeleton array yields the index map: scan_values[dest] = source index
+      // (chunk heads seed the sum with the source base, the rest count up by 1) - GatherRays applies it
         uint32_t cur_sum = 0;
         for (uint32_t i = 0; i < uint32_t(rays.size()); ++i) {
             if (head_flags[i]) {
@@ -2131,16 +2136,7 @@ int Ray::Ref::SortRays_GPU(Span<ray_data_t> rays, const float root_min[3], const
         }
     }
 
-    // reorder rays
-    for (uint32_t i = 0; i < uint32_t(rays.size()); ++i) {
-        uint32_t j;
-        while (i != (j = scan_values[i])) {
-            const uint32_t k = scan_values[j];
-            std::swap(rays[j], rays[k]);
-            std::swap(scan_values[i], scan_values[j]);
-        }
-    }
-
+    // Rays are never reordered here - hash_values keep their unsorted order and GatherRays applies the map.
     return int(rays.size());
 }
 

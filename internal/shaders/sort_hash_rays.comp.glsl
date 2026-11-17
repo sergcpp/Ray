@@ -20,9 +20,9 @@ layout(std430, binding = OUT_HASHES_BUF_SLOT) writeonly buffer OutHashes {
     ray_hash_t g_out_hashes[];
 };
 
-const int g_morton_table_16[] = { 0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85 };
+const uint g_morton_table_16[] = { 0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85 };
 
-const int g_morton_table_256[] = {
+const uint g_morton_table_256[] = {
     0,          1,          8,          9,          64,         65,         72,         73,         512,        513,        520,        521,        576,        577,        584,        585,
     4096,       4097,       4104,       4105,       4160,       4161,       4168,       4169,       4608,       4609,       4616,       4617,       4672,       4673,       4680,       4681,
     32768,      32769,      32776,      32777,      32832,      32833,      32840,      32841,      33280,      33281,      33288,      33289,      33344,      33345,      33352,      33353,
@@ -43,11 +43,11 @@ const int g_morton_table_256[] = {
 
 const float g_omega_step = 0.0625;
 
-const int g_omega_table[] = { 15, 14, 13, 12, 12, 11, 11, 11, 10, 10, 9, 9, 9, 8, 8, 8, 8, 7, 7, 7, 6, 6, 6, 5, 5, 4, 4, 4, 3, 3, 2, 1, 0 };
+const uint g_omega_table[] = { 15, 14, 13, 12, 12, 11, 11, 11, 10, 10, 9, 9, 9, 8, 8, 8, 8, 7, 7, 7, 6, 6, 6, 5, 5, 4, 4, 4, 3, 3, 2, 1, 0 };
 
 const float g_phi_step = 0.125;
 
-const int g_phi_table[][17] = {
+const uint g_phi_table[][17] = {
     { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  5,  5,  5,  6  },
     { 1,  2,  2,  2,  2,  2,  3,  3,  4,  4,  4,  5,  5,  5,  5,  6,  6  },
     { 1,  1,  2,  2,  2,  2,  3,  3,  4,  4,  4,  5,  5,  5,  6,  6,  6  },
@@ -68,20 +68,20 @@ const int g_phi_table[][17] = {
 };
 
 uint get_ray_hash(ray_data_t r, vec3 root_min, vec3 cell_size) {
-    int x = clamp(int((r.o[0] - root_min.x) / cell_size.x), 0, 255),
-        y = clamp(int((r.o[1] - root_min.y) / cell_size.y), 0, 255),
-        z = clamp(int((r.o[2] - root_min.z) / cell_size.z), 0, 255);
+    uint x = uint(clamp(int((r.o[0] - root_min.x) / cell_size.x), 0, 255)),
+         y = uint(clamp(int((r.o[1] - root_min.y) / cell_size.y), 0, 255)),
+         z = uint(clamp(int((r.o[2] - root_min.z) / cell_size.z), 0, 255));
 
     x = g_morton_table_256[x];
     y = g_morton_table_256[y];
     z = g_morton_table_256[z];
 
-    int oi = clamp(int((1.0 + r.d[2]) / g_omega_step), 0, 32);
-    int pi = clamp(int((1.0 + r.d[1]) / g_phi_step), 0, 16),
-        pj = clamp(int((1.0 + r.d[0]) / g_phi_step), 0, 16);
+    uint oi = uint(clamp(int((1.0 + r.d[2]) / g_omega_step), 0, 32));
+    uint pi = uint(clamp(int((1.0 + r.d[1]) / g_phi_step), 0, 16)),
+         pj = uint(clamp(int((1.0 + r.d[0]) / g_phi_step), 0, 16));
 
-    int o = g_morton_table_16[g_omega_table[oi]];
-    int p = g_morton_table_16[g_phi_table[pi][pj]];
+    uint o = g_morton_table_16[g_omega_table[oi]];
+    uint p = g_morton_table_16[g_phi_table[pi][pj]];
 
     return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
 }

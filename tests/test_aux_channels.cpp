@@ -14,6 +14,7 @@
 extern bool g_minimal_output;
 extern bool g_nohwrt;
 extern bool g_nodx;
+extern bool g_sort_rays_gpu;
 extern std::mutex g_stdout_mtx;
 extern int g_validation_level;
 
@@ -62,6 +63,7 @@ void test_aux_channels(const char *arch_list[], std::string_view preferred_devic
     s.h = test_img_h;
     s.preferred_device = preferred_device;
     s.validation_level = g_validation_level;
+    s.sort_rays_gpu = g_sort_rays_gpu;
 
     ThreadPool threads(std::thread::hardware_concurrency());
 

@@ -84,10 +84,21 @@ class SIMDPolicy {
                              textures, img_w, out_color);
     }
 
-    static force_inline int SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3],
-                                         uint32_t *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
-                                         ray_chunk_t *chunks_temp) {
+    static force_inline int GatherRays(Span<const ray_data_t> rays, const uint32_t perm[], Span<ray_data_t> out_rays) {
+        return Ref::GatherRays(rays, perm, out_rays);
+    }
+
+    static force_inline int SortRays_CPU(Span<const ray_data_t> rays, const float root_min[3], const float cell_size[3],
+                                         uint32_t hash_values[], uint32_t scan_values[], ray_chunk_t chunks[],
+                                         ray_chunk_t chunks_temp[]) {
         return Ref::SortRays_CPU(rays, root_min, cell_size, hash_values, scan_values, chunks, chunks_temp);
+    }
+
+    static force_inline int SortRays_GPU(Span<const ray_data_t> rays, const float root_min[3], const float cell_size[3],
+                                         uint32_t hash_values[], int head_flags[], uint32_t scan_values[],
+                                         ray_chunk_t chunks[], ray_chunk_t chunks_temp[], uint32_t skeleton[]) {
+        return Ref::SortRays_GPU(rays, root_min, cell_size, hash_values, head_flags, scan_values, chunks, chunks_temp,
+                                 skeleton);
     }
 
     static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters,
@@ -197,7 +208,7 @@ namespace Cpu {
 template <typename SIMDPolicy> class Renderer : public RendererBase, private SIMDPolicy {
     ILog *log_;
 
-    bool use_tex_compression_, use_spatial_cache_;
+    bool use_tex_compression_, use_spatial_cache_, sort_rays_gpu_;
     aligned_vector<color_rgba_t, 16> full_buf_, half_buf_, base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
         raw_filtered_buf_;
     std::vector<uint16_t> required_samples_;
@@ -244,6 +255,22 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     } unet_tensors_;
     SmallVector<int, 16> unet_alias_dependencies_[UNetFilterPasses];
     void UpdateUNetFilterMemory();
+
+    // The CPU run-compression sort is the default; the GPU head-flag form also needs lane-sized scratch
+    template <typename PD>
+    void SortSecondaryRays(PD &p, Span<const typename SIMDPolicy::RayDataType> rays, const float root_min[3],
+                           const float cell_size[3]) const {
+        if (sort_rays_gpu_) {
+            // head_flags/skeleton are one entry per ray lane: the bound scan_values/chunks are already sized to
+            p.head_flags.resize(p.scan_values.size());
+            p.skeleton.resize(p.scan_values.size());
+            SIMDPolicy::SortRays_GPU(rays, root_min, cell_size, &p.hash_values[0], &p.head_flags[0], &p.scan_values[0],
+                                     &p.chunks[0], &p.chunks_temp[0], &p.skeleton[0]);
+        } else {
+            SIMDPolicy::SortRays_CPU(rays, root_min, cell_size, &p.hash_values[0], &p.scan_values[0], &p.chunks[0],
+                                     &p.chunks_temp[0]);
+        }
+    }
 
   public:
     Renderer(const settings_t &s, ILog *log);
@@ -367,7 +394,8 @@ template <typename SIMDPolicy> PassData<SIMDPolicy> &get_per_thread_pass_data() 
 
 template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
-    : log_(log), use_tex_compression_(s.use_tex_compression), use_spatial_cache_(s.use_spatial_cache) {
+    : log_(log), use_tex_compression_(s.use_tex_compression), use_spatial_cache_(s.use_spatial_cache),
+      sort_rays_gpu_(s.sort_rays_gpu) {
     log->Info("============================================================================");
     log->Info("Compression  is %s", use_tex_compression_ ? "enabled" : "disabled");
     log->Info("SpatialCache is %s", use_spatial_cache_ ? "enabled" : "disabled");
@@ -679,9 +707,13 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; ++bounce) {
         const auto time_secondary_sort_start = high_resolution_clock::now();
 
-        secondary_rays_count = SIMDPolicy::SortRays_CPU(
-            Span<typename SIMDPolicy::RayDataType>{&p.secondary_rays[0], secondary_rays_count}, root_min, cell_size,
-            &p.hash_values[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
+        SortSecondaryRays(p, Span<const typename SIMDPolicy::RayDataType>{&p.secondary_rays[0], secondary_rays_count},
+                          root_min, cell_size);
+
+        // the gather materializes the sorted order in p.primary_rays - the previous generation, dead by now
+        secondary_rays_count = SIMDPolicy::GatherRays(
+            Span<const typename SIMDPolicy::RayDataType>{&p.secondary_rays[0], secondary_rays_count}, &p.scan_values[0],
+            Span<typename SIMDPolicy::RayDataType>{&p.primary_rays[0], secondary_rays_count});
 
 #if 0 // debug hash values
         static std::vector<fvec3> color_table;
@@ -692,12 +724,12 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
         }
 
         for (int i = 0; i < secondary_rays_count; i++) {
-            const auto &r = p.secondary_rays[i];
+            const auto &r = p.primary_rays[i];
 
             const int x = r.id.x;
             const int y = r.id.y;
 
-            const fvec3 &c = color_table[hash(p.hash_values[i]) % 1024];
+            const fvec3 &c = color_table[hash(p.hash_values[p.scan_values[i]]) % 1024];
 
             color_rgba_t col = { c[0], c[1], c[2], 1.0f };
             temp_buf_.SetPixel(x, y, col);
@@ -710,7 +742,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
             p.intersections[i] = {};
         }
 
-        SIMDPolicy::TraceRays(Span<typename SIMDPolicy::RayDataType>{p.secondary_rays.data(), secondary_rays_count},
+        SIMDPolicy::TraceRays(Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), secondary_rays_count},
                               cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth, sc_data,
                               tlas_root, true, s.tex_storages_, rand_seq, rand_seed, region.iteration, p.intersections);
 
@@ -718,7 +750,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase &scene, RegionC
 
         int rays_count = secondary_rays_count;
         secondary_rays_count = shadow_rays_count = def_sky_count = 0;
-        std::swap(p.primary_rays, p.secondary_rays);
 
         // Use direct clamping value only for the first intersection with lightsource
         const float clamp_direct = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
@@ -1317,15 +1348,18 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
     p.chunks_temp.resize(round_up(rect.w, 4) * round_up(rect.h, 4));
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; ++bounce) {
-        secondary_rays_count = SIMDPolicy::SortRays_CPU(
-            Span<typename SIMDPolicy::RayDataType>{&p.secondary_rays[0], secondary_rays_count}, root_min, cell_size,
-            &p.hash_values[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
+        SortSecondaryRays(p, Span<const typename SIMDPolicy::RayDataType>{&p.secondary_rays[0], secondary_rays_count},
+                          root_min, cell_size);
+        // the gather materializes the sorted order in p.primary_rays - the previous generation, dead by now
+        secondary_rays_count = SIMDPolicy::GatherRays(
+            Span<const typename SIMDPolicy::RayDataType>{&p.secondary_rays[0], secondary_rays_count}, &p.scan_values[0],
+            Span<typename SIMDPolicy::RayDataType>{&p.primary_rays[0], secondary_rays_count});
 
         for (int i = 0; i < secondary_rays_count; i++) {
             p.intersections[i] = {};
         }
 
-        auto rays = Span<typename SIMDPolicy::RayDataType>{p.secondary_rays.data(), secondary_rays_count};
+        auto rays = Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), secondary_rays_count};
         auto intersections = Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), secondary_rays_count};
 
         SIMDPolicy::TraceRays(rays, cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth, sc_data,
@@ -1334,7 +1368,6 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateSpatialCache(const SceneBase &scene, 
 
         secondary_rays_count = 0;
         shadow_rays_count = 0;
-        std::swap(p.primary_rays, p.secondary_rays);
 
         // Use direct clamping value only for the first intersection with lightsource
         const float clamp_direct = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;

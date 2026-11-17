@@ -11,12 +11,15 @@
 
 namespace Ray {
 namespace Avx {
-template int SortRays_CPU<RPSize>(Span<ray_data_t<RPSize>> rays, const float root_min[3], const float cell_size[3],
-                                  ivec<RPSize> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
-                                  ray_chunk_t *chunks_temp);
-template int SortRays_GPU<RPSize>(Span<ray_data_t<RPSize>> rays, const float root_min[3], const float cell_size[3],
-                                  ivec<RPSize> *hash_values, int *head_flags, uint32_t *scan_values,
-                                  ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
+template int GatherRays<RPSize>(Span<const ray_data_t<RPSize>> rays, const uint32_t perm[],
+                                Span<ray_data_t<RPSize>> out_rays);
+template int SortRays_CPU<RPSize>(Span<const ray_data_t<RPSize>> rays, const float root_min[3],
+                                  const float cell_size[3], uvec<RPSize> hash_values[], uint32_t scan_values[],
+                                  ray_chunk_t chunks[], ray_chunk_t chunks_temp[]);
+template int SortRays_GPU<RPSize>(Span<const ray_data_t<RPSize>> rays, const float root_min[3],
+                                  const float cell_size[3], uvec<RPSize> hash_values[], int head_flags[],
+                                  uint32_t scan_values[], ray_chunk_t chunks[], ray_chunk_t chunks_temp[],
+                                  uint32_t skeleton[]);
 
 template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(const fvec<RPSize> ro[3], const fvec<RPSize> rd[3],
                                                          const uvec<RPSize> &ray_flags, const ivec<RPSize> &ray_mask,

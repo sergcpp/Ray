@@ -18,6 +18,7 @@ extern bool g_determine_sample_count;
 extern bool g_minimal_output;
 extern bool g_nohwrt;
 extern bool g_nodx;
+extern bool g_sort_rays_gpu;
 std::mutex g_stdout_mtx;
 extern int g_validation_level;
 
@@ -53,6 +54,7 @@ void run_shading_test(const char *arch_list[], std::string_view preferred_device
     s.preferred_device = preferred_device;
     s.validation_level = g_validation_level;
     s.use_spatial_cache = caching;
+    s.sort_rays_gpu = g_sort_rays_gpu;
 
     ThreadPool threads(std::thread::hardware_concurrency());
 

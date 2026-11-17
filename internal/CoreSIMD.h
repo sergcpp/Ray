@@ -168,7 +168,7 @@ template <int S> struct ray_data_t {
     fvec<S> ior[4];
     // ray cone params
     fvec<S> cone_width, cone_spread;
-    // feature throughput (mirrors Ref::ray_data_t.fw)
+    // feature throughput
     fvec<S> fw[3];
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
     uvec<S> xy;
@@ -272,14 +272,16 @@ void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const 
                               const uint32_t rand_seq[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                               aligned_vector<hit_data_t<DimX * DimY>> &out_inters);
 
-// Sorting rays
+// Applies the index map: lane l of out packet i is ray perm[i*S + l]; returns the active packet count
+template <int S> int GatherRays(Span<const ray_data_t<S>> rays, const uint32_t perm[], Span<ray_data_t<S>> out_rays);
+// Sorting rays: produces the index map scan_values[dest] = source ray index, rays are never reordered in place
 template <int S>
-int SortRays_CPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3], ivec<S> *hash_values,
-                 uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
+int SortRays_CPU(Span<const ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
+                 uvec<S> hash_values[], uint32_t scan_values[], ray_chunk_t chunks[], ray_chunk_t chunks_temp[]);
 template <int S>
-int SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3], ivec<S> *hash_values,
-                 int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp,
-                 uint32_t *skeleton);
+int SortRays_GPU(Span<const ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
+                 uvec<S> hash_values[], int head_flags[], uint32_t scan_values[], ray_chunk_t chunks[],
+                 ray_chunk_t chunks_temp[], uint32_t skeleton[]);
 
 // Intersect primitives
 template <int S>
@@ -642,7 +644,7 @@ class SIMDPolicyBase {
     using RayDataType = ray_data_t<RPSize>;
     using ShadowRayType = shadow_ray_t<RPSize>;
     using HitDataType = hit_data_t<RPSize>;
-    using RayHashType = ivec<RPSize>;
+    using RayHashType = uvec<RPSize>;
     // UNet tensor storage: f16 on aarch64 NEON + AVX512-FP16 (GPU-parity f16 conv); plain x86
     // stays fp32 - F16C is convert-only, f16 walks measured 3-21% slower than fp32 on SKX.
 #if defined(RAY_ENABLE_ASM_CONV) && defined(USE_NEON) && (defined(__aarch64__) || defined(_M_ARM64))
@@ -701,10 +703,23 @@ class SIMDPolicyBase {
                                     textures, img_w, out_color);
     }
 
-    static force_inline int SortRays_CPU(Span<RayDataType> rays, const float root_min[3], const float cell_size[3],
-                                         RayHashType *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
-                                         ray_chunk_t *chunks_temp) {
+    static force_inline int GatherRays(Span<const RayDataType> rays, const uint32_t perm[],
+                                       Span<RayDataType> out_rays) {
+        return NS::GatherRays<RPSize>(rays, perm, out_rays);
+    }
+
+    static force_inline int SortRays_CPU(Span<const RayDataType> rays, const float root_min[3],
+                                         const float cell_size[3], RayHashType hash_values[], uint32_t scan_values[],
+                                         ray_chunk_t chunks[], ray_chunk_t chunks_temp[]) {
         return NS::SortRays_CPU<RPSize>(rays, root_min, cell_size, hash_values, scan_values, chunks, chunks_temp);
+    }
+
+    static force_inline int SortRays_GPU(Span<const RayDataType> rays, const float root_min[3],
+                                         const float cell_size[3], RayHashType hash_values[], int head_flags[],
+                                         uint32_t scan_values[], ray_chunk_t chunks[], ray_chunk_t chunks_temp[],
+                                         uint32_t skeleton[]) {
+        return NS::SortRays_GPU<RPSize>(rays, root_min, cell_size, hash_values, head_flags, scan_values, chunks,
+                                        chunks_temp, skeleton);
     }
 
     static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const HitDataType> inters,
@@ -1066,13 +1081,6 @@ template <int S> force_inline void safe_normalize(fvec<S> v[3]) {
 template <int S> force_inline fvec<S> safe_sqrtf(const fvec<S> &f) { return sqrt(max(f, 0.0f)); }
 
 #define sqr(x) ((x) * (x))
-
-template <typename T, int S>
-force_inline void swap_elements(fixed_size_simd<T, S> &v1, const int i1, fixed_size_simd<T, S> &v2, const int i2) {
-    const T temp = v1[i1];
-    v1.set(i1, v2[i2]);
-    v2.set(i2, temp);
-}
 
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
@@ -2422,7 +2430,7 @@ force_inline void TransformDirection(const float d[3], const float *xform, float
 
 template <int S> force_inline fvec<S> pow5(const fvec<S> &v) { return (v * v) * (v * v) * v; }
 
-template <int S> ivec<S> get_ray_hash(const ray_data_t<S> &r, const float root_min[3], const float cell_size[3]) {
+template <int S> uvec<S> get_ray_hash(const ray_data_t<S> &r, const float root_min[3], const float cell_size[3]) {
     ivec<S> x = clamp(ivec<S>((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
             y = clamp(ivec<S>((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
             z = clamp(ivec<S>((r.o[2] - root_min[2]) / cell_size[2]), 0, 255);
@@ -2431,26 +2439,23 @@ template <int S> ivec<S> get_ray_hash(const ray_data_t<S> &r, const float root_m
             phi_index_i = clamp(ivec<S>((1.0f + r.d[1]) / phi_step), 0, 16),
             phi_index_j = clamp(ivec<S>((1.0f + r.d[0]) / phi_step), 0, 16);
 
-    ivec<S> o, p;
+    // Masked gather feeds the 256-entry tables: the inactive lanes must keep ~0 (they sort last), and
+    // masking also keeps them from reading the table with indeterminate indices. Live indices are 0..255 by the clamps.
+    const ivec<S> ones{-1};
+    ivec<S> ux = gather(ones, morton_table_256, r.mask, x), uy = gather(ones, morton_table_256, r.mask, y),
+            uz = gather(ones, morton_table_256, r.mask, z);
 
+    ivec<S> o{-1}, p{-1};
     UNROLLED_FOR_S(i, S, {
         if (r.mask[i]) {
-            x.template set<i>(morton_table_256[x.template get<i>()]);
-            y.template set<i>(morton_table_256[y.template get<i>()]);
-            z.template set<i>(morton_table_256[z.template get<i>()]);
             o.template set<i>(morton_table_16[int(omega_table[omega_index.template get<i>()])]);
             p.template set<i>(
                 morton_table_16[int(phi_table[phi_index_i.template get<i>()][phi_index_j.template get<i>()])]);
-        } else {
-            o.template set<i>(0xFFFFFFFF);
-            p.template set<i>(0xFFFFFFFF);
-            x.template set<i>(0xFFFFFFFF);
-            y.template set<i>(0xFFFFFFFF);
-            z.template set<i>(0xFFFFFFFF);
         }
     })
 
-    return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
+    // simd operators are not defined across int/unsigned vectors, so the composition is done in ivec and reinterpreted
+    return static_cast<uvec<S>>((o << 25) | (p << 24) | (uy << 2) | (uz << 1) | (ux << 0));
 }
 
 void _radix_sort_lsb(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1, unsigned maxshift) {
@@ -3103,7 +3108,7 @@ fvec<S> GGX_VNDF_Reflection_Bounded_PDF(const fvec<S> &D, const fvec<S> view_dir
     return ret;
 }
 
-// Smith shadowing function. Takes already-squared alpha (mirrors Ref::G1_lambda)
+// Smith shadowing function. Takes already-squared alpha
 template <int S> force_inline fvec<S> G1_lambda(const fvec<S> Ve[3], const fvec<S> &alpha2_x, const fvec<S> &alpha2_y) {
     return (-1.0f +
             safe_sqrt(1.0f + (alpha2_x * Ve[0] * Ve[0] + alpha2_y * Ve[1] * Ve[1]) / max(Ve[2] * Ve[2], FLT_EPS))) /
@@ -4079,11 +4084,66 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
     }
 }
 
+// Applies the index map produced by SortRays_CPU: lane l of out packet i is ray perm[i*S + l]
 template <int S>
-int Ray::NS::SortRays_CPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
-                          ivec<S> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp) {
+int Ray::NS::GatherRays(Span<const ray_data_t<S>> rays, const uint32_t perm[], Span<ray_data_t<S>> out_rays) {
+    const int rays_count = int(out_rays.size());
+    assert(rays_count <= int(rays.size()));
+
+    // Every ray_data_t field is an array of 4-byte lanes, so a single word-offset index vector feeds all
+    // gathers: word(ray) = (ray >> log2(S)) * struct_words + (ray & (S-1)); the field picks the base address.
+    // gather() is the hardware instruction on AVX2/AVX512 and the portable per-lane form elsewhere.
+    constexpr int struct_words = int(sizeof(ray_data_t<S>) / 4);
+    constexpr int lane_bits = (S == 4 ? 2 : (S == 8 ? 3 : (S == 16 ? 4 : 0)));
+    static_assert((1 << lane_bits) == S, "ray packet size must be a power of two");
+
+    const char *const rb = reinterpret_cast<const char *>(rays.data());
+    const int *const f_mask = reinterpret_cast<const int *>(rb + offsetof(ray_data_t<S>, mask));
+    const float *const f_o = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, o));
+    const float *const f_d = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, d));
+    const float *const f_c = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, c));
+    const float *const f_fw = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, fw));
+    const float *const f_ior = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, ior));
+    const float *const f_pdf = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, pdf));
+    const float *const f_cw = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, cone_width));
+    const float *const f_cs = reinterpret_cast<const float *>(rb + offsetof(ray_data_t<S>, cone_spread));
+    const unsigned *const f_xy = reinterpret_cast<const unsigned *>(rb + offsetof(ray_data_t<S>, xy));
+    const unsigned *const f_depth = reinterpret_cast<const unsigned *>(rb + offsetof(ray_data_t<S>, depth));
+
+    for (int i = 0; i < rays_count; i++) {
+        const ivec<S> src{reinterpret_cast<const int *>(&perm[i * S])};
+        const ivec<S> idx = ((src >> lane_bits) * struct_words) + (src & (S - 1));
+
+        ray_data_t<S> &dst = out_rays[i];
+        dst.mask = gather(f_mask, idx);
+        // Inactive lanes hash to ~0 (get_ray_hash), so they sort last: the first fully-inactive
+        // output packet ends the sorted array and the gather loop with it.
+        if (dst.mask.all_zeros()) {
+            return i;
+        }
+
+        UNROLLED_FOR(k, 3, { dst.o[k] = gather(f_o + k * S, idx); })
+        UNROLLED_FOR(k, 3, { dst.d[k] = gather(f_d + k * S, idx); })
+        UNROLLED_FOR(k, 3, { dst.c[k] = gather(f_c + k * S, idx); })
+        UNROLLED_FOR(k, 3, { dst.fw[k] = gather(f_fw + k * S, idx); })
+        UNROLLED_FOR(k, 4, { dst.ior[k] = gather(f_ior + k * S, idx); })
+
+        dst.pdf = gather(f_pdf, idx);
+        dst.cone_width = gather(f_cw, idx);
+        dst.cone_spread = gather(f_cs, idx);
+        dst.xy = gather(f_xy, idx);
+        dst.depth = gather(f_depth, idx);
+    }
+
+    return rays_count;
+}
+
+template <int S>
+int Ray::NS::SortRays_CPU(Span<const ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
+                          uvec<S> hash_values[], uint32_t scan_values[], ray_chunk_t chunks[],
+                          ray_chunk_t chunks_temp[]) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
-    int rays_count = int(rays.size());
+    const int rays_count = int(rays.size());
 
     // compute ray hash values
     for (int i = 0; i < rays_count; i++) {
@@ -4093,7 +4153,7 @@ int Ray::NS::SortRays_CPU(Span<ray_data_t<S>> rays, const float root_min[3], con
     size_t chunks_count = 0;
 
     // compress codes into spans of indentical values (makes sorting stage faster)
-    int *flat_hash_values = value_ptr(hash_values[0]);
+    unsigned *flat_hash_values = value_ptr(hash_values[0]);
     for (int start = 0, end = 1; end <= rays_count * S; end++) {
         if (end == (rays_count * S) || (flat_hash_values[start] != flat_hash_values[end])) {
             chunks[chunks_count].hash = flat_hash_values[start];
@@ -4105,7 +4165,8 @@ int Ray::NS::SortRays_CPU(Span<ray_data_t<S>> rays, const float root_min[3], con
 
     radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
 
-    // decompress sorted spans
+    // decompress sorted spans into the index map: scan_values[dest] = source ray index. Rays are never
+    // reordered here - GatherRays applies the map - so hash_values keep their unsorted order.
     size_t counter = 0;
     for (uint32_t i = 0; i < chunks_count; i++) {
         for (uint32_t j = 0; j < chunks[i].size; j++) {
@@ -4113,67 +4174,19 @@ int Ray::NS::SortRays_CPU(Span<ray_data_t<S>> rays, const float root_min[3], con
         }
     }
 
-    { // reorder rays
-        for (int i = 0; i < rays_count * S; i++) {
-            int j;
-            while (i != (j = int(scan_values[i]))) {
-                const int k = int(scan_values[j]);
-
-                {
-                    const int jj = j / S, _jj = j % S, kk = k / S, _kk = k % S;
-
-                    swap_elements(rays[jj].mask, _jj, rays[kk].mask, _kk);
-
-                    swap_elements(rays[jj].o[0], _jj, rays[kk].o[0], _kk);
-                    swap_elements(rays[jj].o[1], _jj, rays[kk].o[1], _kk);
-                    swap_elements(rays[jj].o[2], _jj, rays[kk].o[2], _kk);
-
-                    swap_elements(rays[jj].d[0], _jj, rays[kk].d[0], _kk);
-                    swap_elements(rays[jj].d[1], _jj, rays[kk].d[1], _kk);
-                    swap_elements(rays[jj].d[2], _jj, rays[kk].d[2], _kk);
-
-                    swap_elements(rays[jj].pdf, _jj, rays[kk].pdf, _kk);
-
-                    swap_elements(rays[jj].c[0], _jj, rays[kk].c[0], _kk);
-                    swap_elements(rays[jj].c[1], _jj, rays[kk].c[1], _kk);
-                    swap_elements(rays[jj].c[2], _jj, rays[kk].c[2], _kk);
-
-                    swap_elements(rays[jj].fw[0], _jj, rays[kk].fw[0], _kk);
-                    swap_elements(rays[jj].fw[1], _jj, rays[kk].fw[1], _kk);
-                    swap_elements(rays[jj].fw[2], _jj, rays[kk].fw[2], _kk);
-
-                    swap_elements(rays[jj].ior[0], _jj, rays[kk].ior[0], _kk);
-                    swap_elements(rays[jj].ior[1], _jj, rays[kk].ior[1], _kk);
-                    swap_elements(rays[jj].ior[2], _jj, rays[kk].ior[2], _kk);
-                    swap_elements(rays[jj].ior[3], _jj, rays[kk].ior[3], _kk);
-
-                    swap_elements(rays[jj].cone_width, _jj, rays[kk].cone_width, _kk);
-                    swap_elements(rays[jj].cone_spread, _jj, rays[kk].cone_spread, _kk);
-
-                    swap_elements(rays[jj].xy, _jj, rays[kk].xy, _kk);
-                    swap_elements(rays[jj].depth, _jj, rays[kk].depth, _kk);
-                }
-
-                std::swap(flat_hash_values[i], flat_hash_values[j]);
-                std::swap(scan_values[i], scan_values[j]);
-            }
-        }
-    }
-
-    // remove non-active rays
-    while (rays_count && rays[rays_count - 1].mask.all_zeros()) {
-        rays_count--;
-    }
-
+    assert(counter == size_t(rays_count) * S);
     return rays_count;
 }
 
 template <int S>
-int Ray::NS::SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
-                          ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks,
-                          ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+int Ray::NS::SortRays_GPU(Span<const ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
+                          uvec<S> hash_values[], int head_flags[], uint32_t scan_values[], ray_chunk_t chunks[],
+                          ray_chunk_t chunks_temp[], uint32_t skeleton[]) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
-    int rays_count = int(rays.size());
+    const int rays_count = int(rays.size());
+    if (rays_count == 0) {
+        return 0;
+    }
 
     // compute ray hash values
     for (int i = 0; i < rays_count; i++) {
@@ -4200,7 +4213,7 @@ int Ray::NS::SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], con
     // init ray chunks hash and base index
     for (int i = 0; i < rays_count * S; i++) {
         if (head_flags[i]) {
-            chunks[scan_values[i]].hash = uint32_t(hash_values[i / S][i % S]);
+            chunks[scan_values[i]].hash = hash_values[i / S][i % S];
             chunks[scan_values[i]].base = uint32_t(i);
         }
     }
@@ -4222,7 +4235,7 @@ int Ray::NS::SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], con
     }
 
     std::fill(skeleton, skeleton + rays_count * S, 1);
-    memset(head_flags, 0, rays_count * S);
+    std::fill(head_flags, head_flags + rays_count * S, 0);
 
     // init skeleton and head flags array
     for (int i = 0; i < chunks_count; i++) {
@@ -4230,7 +4243,8 @@ int Ray::NS::SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], con
         head_flags[scan_values[i]] = 1;
     }
 
-    { // perform a segmented scan on skeleton array
+    { // segmented scan of the skeleton array yields the index map: scan_values[dest] = source ray index
+      // (chunk heads seed the sum with the source base, the rest count up by 1) - GatherRays applies it
         uint32_t cur_sum = 0;
         for (int i = 0; i < rays_count * S; i++) {
             if (head_flags[i]) {
@@ -4241,53 +4255,7 @@ int Ray::NS::SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], con
         }
     }
 
-    { // reorder rays
-        for (int i = 0; i < rays_count * S; i++) {
-            int j;
-            while (i != (j = scan_values[i])) {
-                const int k = scan_values[j];
-
-                {
-                    const int jj = j / S, _jj = j % S, kk = k / S, _kk = k % S;
-
-                    swap_elements(hash_values[jj], _jj, hash_values[kk], _kk);
-
-                    swap_elements(rays[jj].mask, _jj, rays[kk].mask, _kk);
-
-                    swap_elements(rays[jj].o[0], _jj, rays[kk].o[0], _kk);
-                    swap_elements(rays[jj].o[1], _jj, rays[kk].o[1], _kk);
-                    swap_elements(rays[jj].o[2], _jj, rays[kk].o[2], _kk);
-
-                    swap_elements(rays[jj].d[0], _jj, rays[kk].d[0], _kk);
-                    swap_elements(rays[jj].d[1], _jj, rays[kk].d[1], _kk);
-                    swap_elements(rays[jj].d[2], _jj, rays[kk].d[2], _kk);
-
-                    swap_elements(rays[jj].pdf, _jj, rays[kk].pdf, _kk);
-
-                    swap_elements(rays[jj].c[0], _jj, rays[kk].c[0], _kk);
-                    swap_elements(rays[jj].c[1], _jj, rays[kk].c[1], _kk);
-                    swap_elements(rays[jj].c[2], _jj, rays[kk].c[2], _kk);
-
-                    swap_elements(rays[jj].fw[0], _jj, rays[kk].fw[0], _kk);
-                    swap_elements(rays[jj].fw[1], _jj, rays[kk].fw[1], _kk);
-                    swap_elements(rays[jj].fw[2], _jj, rays[kk].fw[2], _kk);
-
-                    swap_elements(rays[jj].cone_width, _jj, rays[kk].cone_width, _kk);
-                    swap_elements(rays[jj].cone_spread, _jj, rays[kk].cone_spread, _kk);
-
-                    swap_elements(rays[jj].xy, _jj, rays[kk].xy, _kk);
-                }
-
-                std::swap(scan_values[i], scan_values[j]);
-            }
-        }
-    }
-
-    // remove non-active rays
-    while (rays_count && rays[rays_count - 1].mask.all_zeros()) {
-        rays_count--;
-    }
-
+    // trailing inactive packets are dropped by GatherRays, not here
     return rays_count;
 }
 
@@ -9169,8 +9137,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float limits[2], con
     fvec<S> regularize_alpha = 0.0f;
     where(get_diff_depth(ray.depth) > 0, regularize_alpha) = ps.regularize_alpha;
 
-    // guide-feature blend state, mirrors Ref::ShadeSurface continuous blend: material
-    // chunks overwrite via where() below; default is a fully-diffuse hit deferring base_color
+    // guide-feature blend state: material chunks overwrite via where() below; default is a
+    // fully-diffuse hit deferring base_color
     fvec<S> feature_w = {1.0f};
     fvec<S> feat_defer_col[3];
     UNROLLED_FOR(i, 3, { feat_defer_col[i] = base_color[i]; })

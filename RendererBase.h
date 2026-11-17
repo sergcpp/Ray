@@ -57,6 +57,8 @@ struct settings_t {
     bool use_hwrt = true;
     bool use_bindless = true;
     bool use_spatial_cache = false;
+    // secondary-ray sort: false - CPU run-compression form (default), true - GPU head-flag/segmented-scan form
+    bool sort_rays_gpu = false;
     int validation_level = 0;
 
     VulkanDevice vk_device = {};

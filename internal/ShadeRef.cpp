@@ -1833,8 +1833,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         roughness = fmaxf(roughness, RAD_CACHE_MIN_ROUGHNESS);
     }
 
-    // guide-feature blend state, mirrors the SIMD/ShaderCore shape: the material
-    // branches below overwrite it; default is a fully-diffuse hit deferring base_color
+    // guide-feature blend state: the material branches below overwrite it; default is a fully-diffuse
+    // hit deferring base_color
     float feature_w = 1.0f;
     fvec4 feat_defer_col = base_color;
 

@@ -301,12 +301,14 @@ void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const 
                               const uint32_t rand_seq[], aligned_vector<ray_data_t> &out_rays,
                               aligned_vector<hit_data_t> &out_inters);
 
-// Sorting of rays
-int SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3], uint32_t *hash_values,
-                 uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
-int SortRays_GPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3], uint32_t *hash_values,
-                 int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp,
-                 uint32_t *skeleton);
+// Applies the index map: out_rays[i] = rays[perm[i]] (SIMD: lane l of out packet i is rays[perm[i*S+l]])
+int GatherRays(Span<const ray_data_t> rays, const uint32_t perm[], Span<ray_data_t> out_rays);
+// Sorting of rays: produces the index map scan_values[dest] = source index, rays are never reordered in place
+int SortRays_CPU(Span<const ray_data_t> rays, const float root_min[3], const float cell_size[3], uint32_t hash_values[],
+                 uint32_t scan_values[], ray_chunk_t chunks[], ray_chunk_t chunks_temp[]);
+int SortRays_GPU(Span<const ray_data_t> rays, const float root_min[3], const float cell_size[3], uint32_t hash_values[],
+                 int head_flags[], uint32_t scan_values[], ray_chunk_t chunks[], ray_chunk_t chunks_temp[],
+                 uint32_t skeleton[]);
 
 // Intersect primitives
 bool IntersectTris_ClosestHit(const float ro[3], const float rd[3], const tri_accel_t *tris, int tri_start, int tri_end,
