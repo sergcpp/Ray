@@ -39,6 +39,8 @@ const int RAND_DIM_LIGHT_PICK = 2;
 const int RAND_DIM_LIGHT = 3;
 const int RAND_DIM_TEX = 4;
 const int RAND_DIM_CACHE = 5;
+// Mix chain pick stream: the intersect-time and shade-time walks must consume the same values
+const int RAND_DIM_MIX_PICK = 6;
 // 6 and 7 reserved for the future use
 const int RAND_DIM_BOUNCE_COUNT = 8; // separate for each bounce
 

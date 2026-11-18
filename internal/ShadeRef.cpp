@@ -955,8 +955,8 @@ Ray::Ref::fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const fvec4 &T, const 
 }
 
 Ray::Ref::fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                               const fvec4 &base_color, const float roughness, const float mix_weight,
-                                               const bool use_mis, shadow_ray_t &sh_r) {
+                                               const fvec4 &base_color, const float roughness, const bool use_mis,
+                                               shadow_ray_t &sh_r) {
     const fvec4 I = make_fvec3(ray.d);
 
     const fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, surf.N, ls.L, roughness, base_color);
@@ -967,7 +967,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, const r
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
 
-    const fvec4 lcol = ls.col * diff_col * (mix_weight * mis_weight / ls.pdf);
+    const fvec4 lcol = ls.col * diff_col * (mis_weight / ls.pdf);
 
     if (!ls.cast_shadow) {
         // apply light immediately
@@ -981,8 +981,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, const r
 }
 
 void Ray::Ref::Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color,
-                                  const float roughness, const fvec2 rand, const float mix_weight,
-                                  ray_data_t &new_ray) {
+                                  const float roughness, const fvec2 rand, ray_data_t &new_ray) {
     const fvec4 I = make_fvec3(ray.d);
 
     fvec4 V;
@@ -993,15 +992,14 @@ void Ray::Ref::Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, 
 
     memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
     memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-    UNROLLED_FOR(i, 3, { new_ray.c[i] = (F.get<i>() * mix_weight) / fmaxf(F.get<3>(), FLT_EPS); })
+    UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() / fmaxf(F.get<3>(), FLT_EPS); })
     new_ray.pdf = F.get<3>();
     new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT;
 }
 
 Ray::Ref::fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
                                               const fvec4 &base_color, const float roughness,
-                                              const float regularize_alpha, const float mix_weight, const bool use_mis,
-                                              shadow_ray_t &sh_r) {
+                                              const float regularize_alpha, const bool use_mis, shadow_ray_t &sh_r) {
     const fvec4 I = make_fvec3(ray.d);
     const fvec4 H = normalize(ls.L - I);
 
@@ -1022,7 +1020,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, const ra
     if (use_mis && ls.area > 0.0f) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
-    const fvec4 lcol = ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
+    const fvec4 lcol = ls.col * spec_col * (mis_weight / ls.pdf);
 
     if (!ls.cast_shadow) {
         // apply light immediately
@@ -1038,7 +1036,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, const ra
 
 void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color,
                                  const float roughness, const float regularize_alpha, const fvec2 rand,
-                                 const float mix_weight, ray_data_t &new_ray) {
+                                 ray_data_t &new_ray) {
     const fvec4 I = make_fvec3(ray.d);
     const fvec2 alpha = calc_alpha(roughness, 0.0f, regularize_alpha);
 
@@ -1052,15 +1050,15 @@ void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, c
     memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
     memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-    UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (mix_weight / fmaxf(F.get<3>(), FLT_EPS)); })
+    UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (1.0f / fmaxf(F.get<3>(), FLT_EPS)); })
     new_ray.pdf = F.get<3>();
     new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * fminf(alpha.get<0>(), alpha.get<1>());
 }
 
 Ray::Ref::fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray,
                                                   const surface_t &surf, const fvec4 &base_color, const float roughness,
-                                                  const float regularize_alpha, const float eta, const float mix_weight,
-                                                  const bool use_mis, shadow_ray_t &sh_r) {
+                                                  const float regularize_alpha, const float eta, const bool use_mis,
+                                                  shadow_ray_t &sh_r) {
     const fvec4 I = make_fvec3(ray.d);
 
     const fvec4 H = normalize(ls.L - I * eta);
@@ -1077,7 +1075,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls, cons
     if (use_mis && ls.area > 0.0f) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
-    const fvec4 lcol = ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
+    const fvec4 lcol = ls.col * refr_col * (mis_weight / ls.pdf);
 
     if (!ls.cast_shadow) {
         // apply light immediately
@@ -1093,8 +1091,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls, cons
 
 void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color,
                                      const float roughness, const float regularize_alpha, const bool is_backfacing,
-                                     const float int_ior, const float ext_ior, const fvec2 rand, const float mix_weight,
-                                     ray_data_t &new_ray) {
+                                     const float int_ior, const float ext_ior, const fvec2 rand, ray_data_t &new_ray) {
     const fvec4 I = make_fvec3(ray.d);
     const fvec2 alpha = calc_alpha(roughness, 0.0f, regularize_alpha);
     const float eta = is_backfacing ? (int_ior / ext_ior) : (ext_ior / int_ior);
@@ -1105,7 +1102,7 @@ void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &sur
     new_ray.depth = pack_ray_type(RAY_TYPE_REFR);
     new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 0, 1, 0);
 
-    UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (mix_weight / fmaxf(F.get<3>(), FLT_EPS)); })
+    UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (1.0f / fmaxf(F.get<3>(), FLT_EPS)); })
     new_ray.pdf = F.get<3>();
 
     if (!is_backfacing) {
@@ -1126,8 +1123,8 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, cons
                                                   const diff_params_t &diff, const spec_params_t &spec,
                                                   const coat_params_t &coat, const transmission_params_t &trans,
                                                   const float metallic, const float transmission, const float N_dot_L,
-                                                  const float mix_weight, const bool use_mis,
-                                                  const float regularize_alpha, shadow_ray_t &sh_r) {
+                                                  const bool use_mis, const float regularize_alpha,
+                                                  shadow_ray_t &sh_r) {
     const fvec4 I = make_fvec3(ray.d);
 
     fvec4 lcol = 0.0f;
@@ -1213,7 +1210,7 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls, cons
     if (use_mis && ls.area > 0.0f) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
-    lcol *= mix_weight * mis_weight;
+    lcol *= mis_weight;
 
     if (!ls.cast_shadow) {
         // apply light immediately
@@ -1231,8 +1228,8 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
                                      const lobe_weights_t &lobe_weights, const diff_params_t &diff,
                                      const spec_params_t &spec, const coat_params_t &coat,
                                      const transmission_params_t &trans, const float metallic, const float transmission,
-                                     const fvec2 rand, float mix_rand, const float mix_weight,
-                                     const float regularize_alpha, ray_data_t &new_ray) {
+                                     const fvec2 rand, float lobe_rand, const float regularize_alpha,
+                                     ray_data_t &new_ray) {
     const fvec4 I = make_fvec3(ray.d);
 
     const int diff_depth = get_diff_depth(ray.depth), spec_depth = get_spec_depth(ray.depth),
@@ -1240,7 +1237,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
     // NOTE: transparency depth is not accounted here
     const int total_depth = diff_depth + spec_depth + refr_depth;
 
-    if (mix_rand < lobe_weights.diffuse) {
+    if (lobe_rand < lobe_weights.diffuse) {
         //
         // Diffuse lobe
         //
@@ -1269,11 +1266,11 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (mix_weight / fmaxf(pdf, FLT_EPS)); })
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (1.0f / fmaxf(pdf, FLT_EPS)); })
             new_ray.pdf = pdf;
             new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT;
         }
-    } else if (mix_rand < lobe_weights.diffuse + lobe_weights.sheen) {
+    } else if (lobe_rand < lobe_weights.diffuse + lobe_weights.sheen) {
         //
         // Sheen lobe
         //
@@ -1290,11 +1287,11 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (mix_weight / fmaxf(pdf, FLT_EPS)); })
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (1.0f / fmaxf(pdf, FLT_EPS)); })
             new_ray.pdf = pdf;
             new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT;
         }
-    } else if (mix_rand < lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular) {
+    } else if (lobe_rand < lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular) {
         //
         // Main specular lobe
         //
@@ -1309,14 +1306,14 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
             new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (mix_weight / fmaxf(pdf, FLT_EPS)); })
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (1.0f / fmaxf(pdf, FLT_EPS)); })
             new_ray.pdf = pdf;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
             new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * fminf(alpha.get<0>(), alpha.get<1>());
         }
-    } else if (mix_rand < lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat) {
+    } else if (lobe_rand < lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat) {
         //
         // Clearcoat lobe (secondary specular)
         //
@@ -1329,15 +1326,15 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             new_ray.depth = pack_ray_type(RAY_TYPE_SPECULAR);
             new_ray.depth |= mask_ray_depth(ray.depth) + pack_ray_depth(0, 1, 0, 0);
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = coat.weight * F.get<i>() * (mix_weight / fmaxf(pdf, FLT_EPS)); })
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = coat.weight * F.get<i>() * (1.0f / fmaxf(pdf, FLT_EPS)); })
             new_ray.pdf = pdf;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
             new_ray.cone_spread += MAX_CONE_SPREAD_INCREMENT * alpha;
         }
-    } else /*if (mix_rand < lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat +
-              lobe_weights.refraction)*/
+    } else /*if (lobe_rand < lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat
+              + lobe_weights.refraction)*/
     {
         //
         // Refraction/reflection lobes
@@ -1351,14 +1348,14 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         }
         const float trans_fresnel = fresnel_dielectric_cos(dot(view_dir_ts, sampled_normal_ts), 1.0f / trans.eta);
 
-        mix_rand -= lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat;
-        mix_rand = mix_rand / fmaxf(lobe_weights.refraction, FLT_EPS);
-        if (((mix_rand >= trans_fresnel && refr_depth < ps.max_refr_depth) ||
-             (mix_rand < trans_fresnel && spec_depth < ps.max_spec_depth)) &&
+        lobe_rand -= lobe_weights.diffuse + lobe_weights.sheen + lobe_weights.specular + lobe_weights.clearcoat;
+        lobe_rand = lobe_rand / fmaxf(lobe_weights.refraction, FLT_EPS);
+        if (((lobe_rand >= trans_fresnel && refr_depth < ps.max_refr_depth) ||
+             (lobe_rand < trans_fresnel && spec_depth < ps.max_spec_depth)) &&
             total_depth < ps.max_total_depth) {
 
             fvec4 F, V;
-            if (mix_rand < trans_fresnel) {
+            if (lobe_rand < trans_fresnel) {
                 F = Sample_GGXRefractionSpecular_BSDF(surf.T, surf.B, surf.N, I, alpha, (1.0f / trans.eta),
                                                       F0_from_IOR(1.0f / trans.eta), fvec4{1.0f}, fvec4{1.0f}, rand,
                                                       true, V);
@@ -1389,7 +1386,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 
             const float pdf = F.get<3>() * lobe_weights.refraction;
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (mix_weight / fmaxf(pdf, FLT_EPS)); })
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = F.get<i>() * (1.0f / fmaxf(pdf, FLT_EPS)); })
             new_ray.pdf = pdf;
 
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -1691,7 +1688,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     const fvec2 mix_term_rand =
         get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, iteration - 1, rand_seq);
 
-    float mix_rand = mix_term_rand.get<0>();
+    float chain_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_MIX_PICK, rand_hash, iteration - 1, rand_seq).get<0>();
     float mix_weight = 1.0f;
 
     // resolve mix material
@@ -1714,18 +1711,21 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
 
         mix_val *= Ray::saturate(RR);
 
-        if (mix_rand > mix_val) {
+        if (chain_rand > mix_val) {
             mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / (1.0f - mix_val) : 1.0f;
 
             mat = &sc.materials[mat->textures[MIX_MAT1]];
-            mix_rand = (mix_rand - mix_val) / fmaxf(1.0f - mix_val, FLT_EPS);
+            chain_rand = (chain_rand - mix_val) / fmaxf(1.0f - mix_val, FLT_EPS);
         } else {
             mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / mix_val : 1.0f;
 
             mat = &sc.materials[mat->textures[MIX_MAT2]];
-            mix_rand = mix_rand / fmaxf(mix_val, FLT_EPS);
+            chain_rand = chain_rand / fmaxf(mix_val, FLT_EPS);
         }
     }
+
+    // chain selection weight is folded into throughput at the terminals; node functions no longer see it
+    const float eff_c0 = ray.c[0] * mix_weight, eff_c1 = ray.c[1] * mix_weight, eff_c2 = ray.c[2] * mix_weight;
 
     // apply normal map
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
@@ -1779,7 +1779,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
                 if (unpacked.sample_count > RAD_CACHE_SAMPLE_COUNT_THRESHOLD) {
                     fvec4 color = make_fvec3(unpacked.radiance);
                     color /= sc.spatial_cache_grid.exposure;
-                    color *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
+                    color *= fvec4{eff_c0, eff_c1, eff_c2, 0.0f};
                     return color_rgba_t{color.get<0>(), color.get<1>(), color.get<2>(), color.get<3>()};
                 }
             }
@@ -1857,32 +1857,31 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     // Sample materials
     if (mat->type == eShadingNode::Diffuse) {
         if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_DIFFUSE_BIT) != 0 && N_dot_L > 0.0f) {
-            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight,
-                                        (total_depth < ps.max_total_depth), sh_r);
+            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, (total_depth < ps.max_total_depth), sh_r);
         }
         if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
-            Sample_DiffuseNode(ray, surf, base_color, roughness, rand_bsdf, mix_weight, new_ray);
+            Sample_DiffuseNode(ray, surf, base_color, roughness, rand_bsdf, new_ray);
         }
     } else if (mat->type == eShadingNode::Glossy) {
         // single specular closure: write-vs-defer blend from its diffuse share alone
         feature_w = smoothstep(0.0f, 0.5f, smoothstep(0.0f, 0.15f, roughness * roughness));
         if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_SPECULAR_BIT) != 0 && N_dot_L > 0.0f) {
-            col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, regularize_alpha, mix_weight,
+            col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, regularize_alpha,
                                        (total_depth < ps.max_total_depth), sh_r);
         }
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
-            Sample_GlossyNode(ray, surf, base_color, roughness, regularize_alpha, rand_bsdf, mix_weight, new_ray);
+            Sample_GlossyNode(ray, surf, base_color, roughness, regularize_alpha, rand_bsdf, new_ray);
         }
     } else if (mat->type == eShadingNode::Refractive) {
         feature_w = smoothstep(0.0f, 0.5f, smoothstep(0.0f, 0.15f, roughness * roughness));
         if (USE_NEE && ls.pdf > 0.0f && (ls.ray_flags & RAY_TYPE_REFR_BIT) != 0 && N_dot_L < 0.0f) {
             const float eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
-            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness, regularize_alpha, eta, mix_weight,
+            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness, regularize_alpha, eta,
                                            (total_depth < ps.max_total_depth), sh_r);
         }
         if (refr_depth < ps.max_refr_depth && total_depth < ps.max_total_depth) {
             Sample_RefractiveNode(ray, surf, base_color, roughness, regularize_alpha, is_backfacing, mat->ior, ext_ior,
-                                  rand_bsdf, mix_weight, new_ray);
+                                  rand_bsdf, new_ray);
         }
     } else if (mat->type == eShadingNode::Emissive) {
         float mis_weight = 1.0f;
@@ -1923,7 +1922,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             }
         }
-        col += mix_weight * mis_weight * mat->strength * base_color;
+        col += mis_weight * mat->strength * base_color;
     } else if (mat->type == eShadingNode::Principled) {
         float metallic = unpack_unorm_16(mat->metallic_unorm);
         if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
@@ -2013,11 +2012,10 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
 
         if (USE_NEE && ls.pdf > 0.0f) {
             col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission,
-                                           N_dot_L, mix_weight, (total_depth < ps.max_total_depth), regularize_alpha,
-                                           sh_r);
+                                           N_dot_L, (total_depth < ps.max_total_depth), regularize_alpha, sh_r);
         }
         Sample_PrincipledNode(ps, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_bsdf,
-                              mix_rand, mix_weight, regularize_alpha, new_ray);
+                              mix_term_rand.get<0>(), regularize_alpha, new_ray);
     } /*else if (mat->type == TransparentNode) {
         assert(false);
     }*/
@@ -2061,7 +2059,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
     const bool can_terminate_path = USE_PATH_TERMINATION && total_depth > ps.min_total_depth;
 
     if (cache_mode != eSpatialCacheMode::Update) {
-        UNROLLED_FOR(i, 3, { new_ray.c[i] *= ray.c[i]; })
+        UNROLLED_FOR(i, 3, { new_ray.c[i] *= ray.c[i] * mix_weight; })
     }
     const float lum = fmaxf(new_ray.c[0], fmaxf(new_ray.c[1], new_ray.c[2]));
     const float p = mix_term_rand.get<1>();
@@ -2076,7 +2074,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
 
     if (USE_NEE) {
         if (cache_mode != eSpatialCacheMode::Update) {
-            UNROLLED_FOR(i, 3, { sh_r.c[i] *= ray.c[i]; })
+            UNROLLED_FOR(i, 3, { sh_r.c[i] *= ray.c[i] * mix_weight; })
         }
         const float sh_lum = fmaxf(sh_r.c[0], fmaxf(sh_r.c[1], sh_r.c[2]));
         if (sh_lum > 0.0f) {
@@ -2092,7 +2090,10 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const float 
         }
     }
     if (cache_mode != eSpatialCacheMode::Update) {
-        col *= fvec4{ray.c[0], ray.c[1], ray.c[2], 0.0f};
+        col *= fvec4{eff_c0, eff_c1, eff_c2, 0.0f};
+    } else {
+        // the cache store excludes throughput, so it keeps the chain selection weight explicitly
+        col *= mix_weight;
     }
     const float sum = hsum(col);
     if (sum > limits[1]) {

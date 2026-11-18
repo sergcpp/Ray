@@ -126,7 +126,7 @@ void main() {
         const float w = 1.0 - inter.u - inter.v;
         const vec2 uvs = vec2(v1.t[0], v1.t[1]) * w + vec2(v2.t[0], v2.t[1]) * inter.u + vec2(v3.t[0], v3.t[1]) * inter.v;
 
-        const vec2 trans_term_rand = get_scrambled_2d_rand( rand_dim + RAND_DIM_BSDF_PICK, rand_hash, g_params.iteration - 1);
+        const vec2 trans_term_rand = get_scrambled_2d_rand( rand_dim + RAND_DIM_MIX_PICK, rand_hash, g_params.iteration - 1);
         const vec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, g_params.iteration - 1);
 
         float trans_r = trans_term_rand.x;

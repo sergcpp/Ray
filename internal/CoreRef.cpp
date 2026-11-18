@@ -3849,7 +3849,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             const fvec2 uvs = fvec2(v1.t) * w + fvec2(v2.t) * inter.u + fvec2(v3.t) * inter.v;
 
             const fvec2 mix_term_rand =
-                get_scrambled_2d_rand(rand_dim + RAND_DIM_BSDF_PICK, rand_hash, iteration - 1, rand_seq);
+                get_scrambled_2d_rand(rand_dim + RAND_DIM_MIX_PICK, rand_hash, iteration - 1, rand_seq);
             const fvec2 tex_rand = get_scrambled_2d_rand(rand_dim + RAND_DIM_TEX, rand_hash, iteration - 1, rand_seq);
 
             float trans_r = mix_term_rand.get<0>();

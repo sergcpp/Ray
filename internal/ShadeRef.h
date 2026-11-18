@@ -55,23 +55,22 @@ fvec4 Sample_PrincipledClearcoat_BSDF(const fvec4 &T, const fvec4 &B, const fvec
 
 // Evaluate individual nodes
 fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                           const fvec4 &base_color, float roughness, float mix_weight, bool use_mis,
-                           shadow_ray_t &sh_r);
+                           const fvec4 &base_color, float roughness, bool use_mis, shadow_ray_t &sh_r);
 void Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color, float roughness,
-                        fvec2 rand, float mix_weight, ray_data_t &new_ray);
+                        fvec2 rand, ray_data_t &new_ray);
 
 fvec4 Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                          const fvec4 &base_color, float roughness, float regularize_alpha, float mix_weight,
-                          bool use_mis, shadow_ray_t &sh_r);
+                          const fvec4 &base_color, float roughness, float regularize_alpha, bool use_mis,
+                          shadow_ray_t &sh_r);
 void Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color, float roughness,
-                       float regularize_alpha, fvec2 rand, float mix_weight, ray_data_t &new_ray);
+                       float regularize_alpha, fvec2 rand, ray_data_t &new_ray);
 
 fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                              const fvec4 &base_color, float roughness, float regularize_alpha, float eta,
-                              float mix_weight, bool use_mis, shadow_ray_t &sh_r);
+                              const fvec4 &base_color, float roughness, float regularize_alpha, float eta, bool use_mis,
+                              shadow_ray_t &sh_r);
 void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const fvec4 &base_color, float roughness,
                            float regularize_alpha, bool is_backfacing, float int_ior, float ext_ior, fvec2 rand,
-                           float mix_weight, ray_data_t &new_ray);
+                           ray_data_t &new_ray);
 
 struct diff_params_t {
     fvec4 base_color;
@@ -111,12 +110,12 @@ struct lobe_weights_t {
 fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
                               const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
                               const coat_params_t &coat, const transmission_params_t &trans, float metallic,
-                              float transmission, float N_dot_L, float mix_weight, bool use_mis, float regularize_alpha,
+                              float transmission, float N_dot_L, bool use_mis, float regularize_alpha,
                               shadow_ray_t &sh_r);
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
                            const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
                            const coat_params_t &coat, const transmission_params_t &trans, float metallic,
-                           float transmission, fvec2 rand, float mix_rand, float mix_weight, float regularize_alpha,
+                           float transmission, fvec2 rand, float lobe_rand, float regularize_alpha,
                            ray_data_t &new_ray);
 
 // Shade
