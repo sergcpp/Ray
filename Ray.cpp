@@ -38,7 +38,7 @@
 #endif
 
 #ifndef RAY_ENABLE_ASM_CONV
-#pragma message("Ray: Compiling without asm UNet conv kernels")
+#pragma message("Ray: Compiling without ASM UNet conv kernels")
 #endif
 
 #include "internal/simd/detect.h"
