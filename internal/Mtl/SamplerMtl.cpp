@@ -10,8 +10,9 @@ namespace Ray::Mtl {
 // entry order must match the eFilter/eWrap/eCompareOp enum order in SamplingParams.h
 extern const MTL::SamplerMinMagFilter g_min_mag_filter_mtl[] = {
     MTL::SamplerMinMagFilterNearest, MTL::SamplerMinMagFilterLinear, MTL::SamplerMinMagFilterLinear};
-extern const MTL::SamplerMipFilter g_mipmap_filter_mtl[] = {MTL::SamplerMipFilterNotMipmapped,
-                                                            MTL::SamplerMipFilterNearest, MTL::SamplerMipFilterLinear};
+// eFilter::Nearest maps to mip NEAREST like VK/DX Filter.inl: NotMipmapped breaks bindless LOD sampling
+extern const MTL::SamplerMipFilter g_mipmap_filter_mtl[] = {MTL::SamplerMipFilterNearest, MTL::SamplerMipFilterNearest,
+                                                            MTL::SamplerMipFilterLinear};
 extern const MTL::SamplerAddressMode g_wrap_mode_mtl[] = {
     MTL::SamplerAddressModeRepeat, MTL::SamplerAddressModeClampToEdge, MTL::SamplerAddressModeClampToBorderColor};
 extern const MTL::CompareFunction g_compare_ops_mtl[] = {

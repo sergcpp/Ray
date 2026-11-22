@@ -28,6 +28,7 @@ class Context {
 
     bool astc_supported_ = false;
     bool bc_supported_ = false;
+    bool bindless_arg_encoder_ok_ = false;
     std::string device_name_;
 
     // One lazily opened encoder per command buffer: the compute/blit switch replaces VK's
@@ -90,6 +91,13 @@ class Context {
     // Bindless capacity: argument-buffer texture handles are only bound-address limited,
     // so we comfortably clear the renderer's >=16384 bindless gate
     uint32_t max_sampled_images() const { return 65536u; }
+
+    // spirv-cross emits the device-argument-buffer (Tier 2) form for set-1 bindless arrays
+    bool arg_buffers_tier2() const { return device()->argumentBuffersSupport() >= MTL::ArgumentBuffersTier2; }
+
+    // the 64K-texture argument encoder is constructible: without it InitBindlessArray_nolock
+    // fails later and the renderer must stay on the atlas path
+    bool bindless_arg_encoder_ok() const { return bindless_arg_encoder_ok_; }
 
     MTL::ComputeCommandEncoder *ComputeEncoder(CommandBuffer cmd_buf);
     MTL::BlitCommandEncoder *BlitEncoder(CommandBuffer cmd_buf);

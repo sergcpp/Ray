@@ -109,6 +109,29 @@ void Ray::Dx::Scene::SetBindlessTextureSlot_nolock(const uint32_t index, const I
     device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
+void Ray::Dx::Scene::ClearBindlessTextureSlot_nolock(const uint32_t index) {
+    if (!bindless_tex_data_.srv_descr_table.cpu_heap) {
+        return;
+    }
+
+    ID3D12Device *device = ctx_->device();
+    const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dest_handle =
+        bindless_tex_data_.srv_descr_table.cpu_heap->GetCPUDescriptorHandleForHeapStart();
+    dest_handle.ptr += CBV_SRV_UAV_INCR * index;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC null_srv = {};
+    null_srv.Format = DXGI_FORMAT_R8_UNORM;
+    null_srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    null_srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    null_srv.Buffer.NumElements = 0;
+    null_srv.Buffer.StructureByteStride = 0;
+    null_srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+    device->CreateShaderResourceView(nullptr, &null_srv, dest_handle);
+}
+
 void Ray::Dx::Scene::TransitionBindlessTextures_nolock() {}
 
 void Ray::Dx::Scene::FinalizeBindlessTextures_nolock(Buffer &tex_sizes_stage) {

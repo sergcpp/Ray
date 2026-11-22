@@ -20,10 +20,13 @@ struct BindlessTexData {
     Sampler shared_sampler;
     Buffer tex_sizes;
 
-    // Tier-2 argument buffer for the MSL bindless array (spvDescriptorSetBuffer1 at buffer(1)),
-    // laid out from refl kind msl_k_descr_arr; bound per-dispatch by RendererMtl
+    // Bindless array (spvDescriptorSetBuffer1 at buffer(1)): AGX encoder stores driver-private indirect
+    // indices, so slots are only writable via setTextures; bound per-dispatch with setBuffer.
     MTL::ArgumentEncoder *encoder = nullptr;
     MTL::Buffer *arg_buf = nullptr;
+    // Same slots as arg_buf, for the per-dispatch useResource(Sample) registration
+    std::vector<MTL::Texture *> mtl_tex_ptrs;
+    uint32_t tex_count = 0; // filled prefix of mtl_tex_ptrs, not the whole 64K table
 
     explicit BindlessTexData(Context *) {}
 };

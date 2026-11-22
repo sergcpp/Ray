@@ -237,6 +237,7 @@ bool Ray::Mtl::ImageAtlas::Resize(const int pages_count) {
     real_format_ = MtlRealFormat(format_, Bitmask<eImgUsage>(eImgUsage::Transfer) | eImgUsage::Sampled);
 
     MTL::Texture *new_img = nullptr;
+    MemAllocation new_alloc;
     { // create the arrayed page texture (arrayLength > 1 requires TextureType2DArray)
         MTL::TextureDescriptor *desc = MTL::TextureDescriptor::alloc()->init();
         desc->setTextureType(MTL::TextureType2DArray);
@@ -249,7 +250,30 @@ bool Ray::Mtl::ImageAtlas::Resize(const int pages_count) {
         desc->setSampleCount(1);
         desc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite);
         desc->setStorageMode(MTL::StorageModeShared);
-        new_img = ctx_->device()->newTexture(desc);
+
+        NS::UInteger page_bytes;
+        if (IsCompressedFormat(real_format_)) {
+            const NS::UInteger bpr =
+                NS::UInteger(GetBlockCount(res_[0], 1, real_format_)) * NS::UInteger(GetBlockLenBytes(real_format_));
+            page_bytes = bpr * NS::UInteger(GetBlockCount(res_[1], 1, real_format_));
+        } else {
+            page_bytes = NS::UInteger(res_[0]) * NS::UInteger(res_[1]) * NS::UInteger(GetPerPixelDataLen(real_format_));
+        }
+        // conservative container size: page rounding per page + row-align slack + headroom
+        const NS::UInteger bytes =
+            (((page_bytes * NS::UInteger(std::max(pages_count, 1)) + 16383) / 16384) * 16384) + page_bytes / 8 + 65536;
+
+        new_alloc = ctx_->default_mem_allocs()->Allocate(16384, uint32_t(bytes), MTL::StorageModeShared);
+        if (new_alloc) {
+            ZeroHeapRange(new_alloc, bytes);
+            new_img = new_alloc.owner->heap(new_alloc.pool)->newTexture(desc, new_alloc.offset);
+            if (!new_img) {
+                new_alloc = MemAllocation{};
+            }
+        }
+        if (!new_img) {
+            new_img = ctx_->device()->newTexture(desc);
+        }
         desc->release();
         if (!new_img) {
             ctx_->log()->Error("Failed to create Metal atlas texture (%d pages)!", pages_count);
@@ -287,6 +311,7 @@ bool Ray::Mtl::ImageAtlas::Resize(const int pages_count) {
         img_->release();
     }
     img_ = new_img;
+    allocation_ = std::move(new_alloc); // frees the old block after the (completed) page copies
 
     SamplingParams params;
     params.filter = filter_;

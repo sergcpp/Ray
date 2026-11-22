@@ -31,7 +31,11 @@ layout(std430, binding = INOUT_CACHE_DATA_BUF_SLOT) buffer InOutCacheData {
 };
 
 layout(std430, binding = INOUT_CACHE_ENTRIES_BUF_SLOT) buffer InOutCacheEntries {
+#if NO_64BIT_ATOMICS
+    uint g_inout_cache_entries[];
+#else
     uint64_t g_inout_cache_entries[];
+#endif
 };
 
 layout(std430, binding = INOUT_CACHE_VOXELS_BUF_SLOT) buffer InOutCacheVoxels {
@@ -52,22 +56,30 @@ uint64_t AtomicCompSwapEntry(const uint i, const uint64_t compare, const uint64_
 #if !NO_64BIT_ATOMICS
     const uint64_t ret = atomicCompSwap(g_inout_cache_entries[i], compare, data);
 #else
-    const uint Retries = 8;
-    uint fuse = 0;
-    bool busy = true;
+    // Claim-empty-slot CAS without 64-bit atomics: bit0 = claimed, bit1 = published. The winner
+    // publishes with atomicExchange then sets bit1; losers spin on bit1 so they never read a
+    // half-written pair (a torn read drops the insert and starves the cache).
     uint64_t ret = 0xffffffffu;
-    while (busy && fuse < Retries) {
-        const uint state = atomicExchange(g_inout_lock_buffer[i], 0xAAAAAAAAu);
-        busy = (state != 0);
-        if (state != 0xAAAAAAAAu) {
-            ret = g_inout_cache_entries[i];
-            if (ret == compare) {
-                g_inout_cache_entries[i] = data;
+    uint lo = atomicAdd(g_inout_cache_entries[2 * i], 0u);
+    uint hi = atomicAdd(g_inout_cache_entries[2 * i + 1], 0u);
+    if (lo != 0 || hi != 0) {
+        ret = (uint64_t(hi) << 32) | uint64_t(lo);
+    } else if (atomicOr(g_inout_lock_buffer[i], 1u) == 0) {
+        atomicExchange(g_inout_cache_entries[2 * i], uint(data & 0xffffffffu));
+        atomicExchange(g_inout_cache_entries[2 * i + 1], uint(data >> 32));
+        atomicOr(g_inout_lock_buffer[i], 2u);
+        ret = 0;
+    } else {
+        for (uint t = 0; t < 32; ++t) {
+            if ((atomicOr(g_inout_lock_buffer[i], 0u) & 2u) != 0u) {
+                break;
             }
-            atomicExchange(g_inout_lock_buffer[i], state);
-            fuse = Retries;
         }
-        ++fuse;
+        lo = atomicAdd(g_inout_cache_entries[2 * i], 0u);
+        hi = atomicAdd(g_inout_cache_entries[2 * i + 1], 0u);
+        if (lo != 0 || hi != 0) {
+            ret = (uint64_t(hi) << 32) | uint64_t(lo);
+        }
     }
 #endif
     return ret;

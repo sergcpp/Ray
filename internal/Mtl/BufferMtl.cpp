@@ -32,6 +32,7 @@ Ray::Mtl::Buffer &Ray::Mtl::Buffer::operator=(Buffer &&rhs) noexcept {
 
     ctx_ = std::exchange(rhs.ctx_, nullptr);
     handle_ = std::exchange(rhs.handle_, {});
+    allocation_ = std::move(rhs.allocation_);
     name_ = std::move(rhs.name_);
 
     type_ = std::exchange(rhs.type_, eBufType::Undefined);
@@ -67,10 +68,33 @@ void Ray::Mtl::Buffer::Resize(const uint32_t new_size, const bool keep_content) 
     size_ = new_size;
     assert(size_ > 0);
 
-    MTL::Buffer *new_buf = ctx_->device()->newBuffer(AlignMapOffsetUp(size_), MTLOptionsForType(type_));
+    const uint32_t alloc_size = AlignMapOffsetUp(size_);
+
+    MemAllocation new_alloc = ctx_->default_mem_allocs()->Allocate(256, alloc_size, MTL::StorageModeShared);
+    MTL::Buffer *new_buf = nullptr;
+    if (new_alloc) {
+        new_buf =
+            new_alloc.owner->heap(new_alloc.pool)->newBuffer(alloc_size, MTLOptionsForType(type_), new_alloc.offset);
+        if (new_buf) {
+            // recycled heap blocks carry stale memory: plain newBuffer hands out zero pages and some
+            // passes (denoise borders, unused tree slots) rely on zeros; fresh pool ranges arrive zeroed.
+#ifdef RAY_ENABLE_GPU_DEBUG
+            if (new_alloc.reused) {
+                memset(new_buf->contents(), 0, alloc_size);
+            }
+#endif
+        }
+    }
+    if (!new_buf) {
+        new_alloc = MemAllocation{};
+        new_buf = ctx_->device()->newBuffer(alloc_size, MTLOptionsForType(type_));
+    }
     assert(new_buf != nullptr && "Failed to create buffer!");
 #ifdef RAY_ENABLE_GPU_DEBUG
-    new_buf->setLabel(MTLSTR(name_.c_str()));
+    // MTLSTR only accepts literals; buffer names are runtime strings
+    NS::String *label = NS::String::alloc()->init(name_.c_str(), NS::StringEncoding::UTF8StringEncoding);
+    new_buf->setLabel(label);
+    label->release();
 #endif
 
     if (handle_.buf != nullptr) {
@@ -85,6 +109,8 @@ void Ray::Mtl::Buffer::Resize(const uint32_t new_size, const bool keep_content) 
         handle_.buf->release();
     }
 
+    // freeing the old block after the (completed) copy is safe: the renderer submits synchronously
+    allocation_ = std::move(new_alloc);
     handle_.buf = new_buf;
     handle_.generation = g_GenCounter++;
 }
@@ -95,6 +121,7 @@ void Ray::Mtl::Buffer::Free() {
         handle_.buf->release();
 
         handle_ = {};
+        allocation_.Release();
         size_ = 0;
     }
 }
@@ -104,6 +131,7 @@ void Ray::Mtl::Buffer::FreeImmediate() {
     if (handle_.buf != nullptr) {
         handle_.buf->release(); // Metal keeps the storage alive while command buffers reference it
         handle_ = {};
+        allocation_.Release();
         size_ = 0;
     }
 }

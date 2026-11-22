@@ -6,6 +6,7 @@
 #include "CDFUtils.h"
 #include "Core.h"
 #include "SceneMtl.h"
+
 #include "UNetFilter.h"
 #include "inflate/Inflate.h"
 
@@ -154,14 +155,22 @@ namespace Mtl {
 } // namespace Ray
 
 namespace Ray::Mtl {
-// Bindless set 1 (msl_k_descr_arr) rides a pre-encoded Tier-2 argument buffer; atlas mode never
-// reaches this (RendererMtl keeps use_bindless_ off until the layout is validated on goldens)
+// Bindless set 1 (msl_k_descr_arr) rides the arg table built by Scene::InitBindlessArray_nolock;
+// atlas mode never reaches this
 void BindBindlessExtra(Context &ctx, CommandBuffer cmd_buf, const Pipeline &pipeline,
                        const BindlessTexData &bindless_tex, SmallVector<Binding, 32> & /*bindings*/) {
-    assert(bindless_tex.arg_buf);
+    assert(bindless_tex.arg_buf && bindless_tex.encoder);
     const MslBindingDesc *d = pipeline.descr_array();
     assert(d);
-    ctx.ComputeEncoder(cmd_buf)->setBuffer(bindless_tex.arg_buf, 0, static_cast<NS::UInteger>(d->msl_index));
+    MTL::ComputeCommandEncoder *enc = ctx.ComputeEncoder(cmd_buf);
+    enc->setBuffer(bindless_tex.arg_buf, 0, static_cast<NS::UInteger>(d->msl_index));
+    // textures reachable only through the arg buffer must be registered with each encoder (Metal
+    // docs); the AGX driver tolerates it missing, but the contract is explicit
+    for (uint32_t i = 0; i != bindless_tex.tex_count; ++i) {
+        if (bindless_tex.mtl_tex_ptrs[i]) {
+            enc->useResource(bindless_tex.mtl_tex_ptrs[i], MTL::ResourceUsageSample);
+        }
+    }
 }
 } // namespace Ray::Mtl
 
@@ -185,8 +194,8 @@ Ray::Mtl::Renderer::Renderer(const settings_t &s, ILog *log,
     assert(Types::RAND_SAMPLES_COUNT == Ray::RAND_SAMPLES_COUNT);
     assert(Types::RAND_DIMS_COUNT == Ray::RAND_DIMS_COUNT);
 
-    use_hwrt_ = false;     // HWRT not implemented: requires Metal ray queries
-    use_bindless_ = false; // atlas mode for iteration 1; bindless fails its offline validation pass
+    use_hwrt_ = false; // HWRT not implemented: requires Metal ray queries
+    use_bindless_ = DecideBindless_(s) && ctx_->arg_buffers_tier2() && ctx_->bindless_arg_encoder_ok();
     use_tex_compression_ = s.use_tex_compression;
     use_fp16_ = ctx_->fp16_supported();
     use_subgroup_ = ctx_->subgroup_supported();
@@ -959,6 +968,15 @@ void Ray::Mtl::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContex
     stats_.time_cache_resolve_us = ctx_->GetTimestampIntervalDurationUs(
         timestamps_[ctx_->backend_frame].cache_resolve[0], timestamps_[ctx_->backend_frame].cache_resolve[1]);
 
+    { // fills in their own command buffer (blit interleaved between compute dispatches is poisoned at MSL 30000)
+        CommandBuffer fill_cb = ctx_->BeginSingleTimeCommands();
+        temp_cache_data_buf_.Fill(0, temp_cache_data_buf_.size(), 0, fill_cb);
+        if (!ctx_->int64_atomics_supported()) {
+            temp_lock_buf_.Fill(0, temp_lock_buf_.size(), 0, fill_cb);
+        }
+        ctx_->EndSingleTimeCommands(fill_cb);
+    }
+
     CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
 
     DebugMarker update_cache_marker(ctx_.get(), cmd_buf, "Ray::UpdateSpatialCache");
@@ -1013,10 +1031,6 @@ void Ray::Mtl::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContex
 
     { // update spatial cache
         DebugMarker _(ctx_.get(), cmd_buf, "UpdateSpatialCache");
-        temp_cache_data_buf_.Fill(0, temp_cache_data_buf_.size(), 0, cmd_buf);
-        if (!ctx_->int64_atomics_supported()) {
-            temp_lock_buf_.Fill(0, temp_lock_buf_.size(), 0, cmd_buf);
-        }
         kernel_SpatialCacheUpdate(cmd_buf, cache_grid_params, indir_args_buf_[0], 0, counters_buf_, 0, prim_hits_buf_,
                                   prim_rays_buf_, temp_cache_data_buf_, temp_buf0_, temp_depth_normals_buf_,
                                   sc_data.spatial_cache_entries, sc_data.spatial_cache_voxels, temp_lock_buf_);
@@ -1118,7 +1132,6 @@ void Ray::Mtl::Renderer::ResolveSpatialCache(
                                    s.spatial_cache_voxels_prev_.buf());
 
         std::swap(s.spatial_cache_voxels_prev_, s.spatial_cache_voxels_curr_);
-        s.spatial_cache_voxels_curr_.buf().Fill(0, s.spatial_cache_voxels_curr_.buf().size(), 0, cmd_buf);
 
         // Store previous camera position
         memcpy(s.spatial_cache_cam_pos_prev_, cam.origin, 3 * sizeof(float));
@@ -1129,6 +1142,14 @@ void Ray::Mtl::Renderer::ResolveSpatialCache(
     resolve_cache_marker.End();
 
     ctx_->EndSingleTimeCommands(cmd_buf);
+
+    // Zero post-swap curr for next frame. Must run AFTER the resolve cb: an earlier cb would wipe
+    // this frame's deposits before the resolve reads them (silently drops all cache accumulation).
+    {
+        CommandBuffer fill_cb = ctx_->BeginSingleTimeCommands();
+        s.spatial_cache_voxels_curr_.buf().Fill(0, s.spatial_cache_voxels_curr_.buf().size(), 0, fill_cb);
+        ctx_->EndSingleTimeCommands(fill_cb);
+    }
 }
 
 void Ray::Mtl::Renderer::ResetSpatialCache(const SceneBase &scene,
@@ -1203,7 +1224,7 @@ bool Ray::Mtl::Renderer::InitUNetFilterPipelines(
     ILog *log = ctx_->log();
 
     // Metal has no cooperative matrices; fp16 storage tensors are used when supported
-    auto select_shader = [this](Span<const uint8_t> fp32_shader, Span<const uint8_t> fp16_shader) {
+    auto select_unet_shader = [this](Span<const uint8_t> fp32_shader, Span<const uint8_t> fp16_shader) {
         return use_fp16_ ? fp16_shader : fp32_shader;
     };
 
@@ -1211,72 +1232,72 @@ bool Ray::Mtl::Renderer::InitUNetFilterPipelines(
                 32>
         shaders_to_init = {
             {sh_.convolution_Img_9_32, prog_.convolution_Img_9_32, pi_.convolution_Img_9_32, "Convolution Img 9 32",
-             select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_metallib,
-                           internal_shaders_output_convolution_Img_9_32_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_metallib,
+                                internal_shaders_output_convolution_Img_9_32_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_32_32_Downsample, prog_.convolution_32_32_Downsample, pi_.convolution_32_32_Downsample,
              "Convolution 32 32 Downsample",
-             select_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_metallib,
-                           internal_shaders_output_convolution_32_32_Downsample_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_metallib,
+                                internal_shaders_output_convolution_32_32_Downsample_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_32_48_Downsample, prog_.convolution_32_48_Downsample, pi_.convolution_32_48_Downsample,
              "Convolution 32 48 Downsample",
-             select_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_metallib,
-                           internal_shaders_output_convolution_32_48_Downsample_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_metallib,
+                                internal_shaders_output_convolution_32_48_Downsample_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_48_64_Downsample, prog_.convolution_48_64_Downsample, pi_.convolution_48_64_Downsample,
              "Convolution 48 64 Downsample",
-             select_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_metallib,
-                           internal_shaders_output_convolution_48_64_Downsample_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_metallib,
+                                internal_shaders_output_convolution_48_64_Downsample_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_64_80_Downsample, prog_.convolution_64_80_Downsample, pi_.convolution_64_80_Downsample,
              "Convolution 64 80 Downsample",
-             select_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_metallib,
-                           internal_shaders_output_convolution_64_80_Downsample_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_metallib,
+                                internal_shaders_output_convolution_64_80_Downsample_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_64_64, prog_.convolution_64_64, pi_.convolution_64_64, "Convolution 64 64",
-             select_shader(internal_shaders_output_convolution_64_64_fp32_comp_metallib,
-                           internal_shaders_output_convolution_64_64_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_64_64_fp32_comp_metallib,
+                                internal_shaders_output_convolution_64_64_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_64_32, prog_.convolution_64_32, pi_.convolution_64_32, "Convolution 64 32",
-             select_shader(internal_shaders_output_convolution_64_32_fp32_comp_metallib,
-                           internal_shaders_output_convolution_64_32_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_64_32_fp32_comp_metallib,
+                                internal_shaders_output_convolution_64_32_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_80_96, prog_.convolution_80_96, pi_.convolution_80_96, "Convolution 80 96",
-             select_shader(internal_shaders_output_convolution_80_96_fp32_comp_metallib,
-                           internal_shaders_output_convolution_80_96_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_80_96_fp32_comp_metallib,
+                                internal_shaders_output_convolution_80_96_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_96_96, prog_.convolution_96_96, pi_.convolution_96_96, "Convolution 96 96",
-             select_shader(internal_shaders_output_convolution_96_96_fp32_comp_metallib,
-                           internal_shaders_output_convolution_96_96_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_96_96_fp32_comp_metallib,
+                                internal_shaders_output_convolution_96_96_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_112_112, prog_.convolution_112_112, pi_.convolution_112_112, "Convolution 112 112",
-             select_shader(internal_shaders_output_convolution_112_112_fp32_comp_metallib,
-                           internal_shaders_output_convolution_112_112_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_112_112_fp32_comp_metallib,
+                                internal_shaders_output_convolution_112_112_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_concat_96_64_112, prog_.convolution_concat_96_64_112, pi_.convolution_concat_96_64_112,
              "Convolution Concat 96 64 112",
-             select_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_metallib,
-                           internal_shaders_output_convolution_concat_96_64_112_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_metallib,
+                                internal_shaders_output_convolution_concat_96_64_112_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_concat_112_48_96, prog_.convolution_concat_112_48_96, pi_.convolution_concat_112_48_96,
              "Convolution Concat 112 48 96",
-             select_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_metallib,
-                           internal_shaders_output_convolution_concat_112_48_96_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_metallib,
+                                internal_shaders_output_convolution_concat_112_48_96_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_concat_96_32_64, prog_.convolution_concat_96_32_64, pi_.convolution_concat_96_32_64,
              "Convolution Concat 96 32 64",
-             select_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_metallib,
-                           internal_shaders_output_convolution_concat_96_32_64_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_metallib,
+                                internal_shaders_output_convolution_concat_96_32_64_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_concat_64_9_64, prog_.convolution_concat_64_9_64, pi_.convolution_concat_64_9_64,
              "Convolution Concat 64 9 64",
-             select_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_metallib,
-                           internal_shaders_output_convolution_concat_64_9_64_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_metallib,
+                                internal_shaders_output_convolution_concat_64_9_64_fp16_comp_metallib),
              eShaderType::Comp, false},
             {sh_.convolution_32_3_img, prog_.convolution_32_3_img, pi_.convolution_32_3_img, "Convolution 32 3 Img",
-             select_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_metallib,
-                           internal_shaders_output_convolution_32_3_img_fp16_comp_metallib),
+             select_unet_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_metallib,
+                                internal_shaders_output_convolution_32_3_img_fp16_comp_metallib),
              eShaderType::Comp, false}};
     parallel_for(0, int(shaders_to_init.size()), [&](const int i) {
         std::get<6>(shaders_to_init[i]) =
@@ -1298,12 +1319,6 @@ bool Ray::Mtl::Renderer::InitUNetFilterPipelines(
 
 bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
                                        const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
-    auto select_shader = [this](Span<const uint8_t> bindless_shader, Span<const uint8_t> bindless_subgroup_shader,
-                                Span<const uint8_t> atlas_shader, Span<const uint8_t> atlas_subgroup_shader) {
-        return use_bindless_ ? (use_subgroup_ ? bindless_subgroup_shader : bindless_shader)
-                             : (use_subgroup_ ? atlas_subgroup_shader : atlas_shader);
-    };
-
     SmallVector<std::tuple<Shader &, std::string_view, Span<const uint8_t>, eShaderType, bool>, 32> shaders_to_init = {
         {sh_.prim_rays_gen_simple, "Primary Raygen Simple",
          internal_shaders_output_primary_ray_gen_simple_comp_metallib, eShaderType::Comp, false},
@@ -1312,47 +1327,44 @@ bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
         {sh_.intersect_area_lights, "Intersect Area Lights",
          internal_shaders_output_intersect_area_lights_comp_metallib, eShaderType::Comp, false},
         {sh_.shade_primary, "Shade (Primary)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_metallib}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_metallib},
+         PickShader(internal_shaders_output_shade_primary_bindless_comp_metallib,
+                    internal_shaders_output_shade_primary_atlas_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_primary_sky, "Shade (Primary) (Sky)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_sky_comp_metallib}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_sky_comp_metallib},
+         PickShader(internal_shaders_output_shade_primary_bindless_sky_comp_metallib,
+                    internal_shaders_output_shade_primary_atlas_sky_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_primary_cache_update, "Shade (Primary) (Cache Update)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_update_comp_metallib}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_update_comp_metallib},
+         PickShader(internal_shaders_output_shade_primary_bindless_cache_update_comp_metallib,
+                    internal_shaders_output_shade_primary_atlas_cache_update_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_primary_cache_query, "Shade (Primary) (Cache Query)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_comp_metallib}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_comp_metallib},
+         PickShader(internal_shaders_output_shade_primary_bindless_cache_query_comp_metallib,
+                    internal_shaders_output_shade_primary_atlas_cache_query_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_primary_cache_query_sky, "Shade (Primary) (Cache Query) (Sky)",
-         use_bindless_
-             ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_metallib}
-             : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_metallib},
+         PickShader(internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_metallib,
+                    internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_secondary, "Shade (Secondary)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_metallib}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_metallib},
+         PickShader(internal_shaders_output_shade_secondary_bindless_comp_metallib,
+                    internal_shaders_output_shade_secondary_atlas_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_secondary_sky, "Shade (Secondary) (Sky)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_sky_comp_metallib}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_sky_comp_metallib},
+         PickShader(internal_shaders_output_shade_secondary_bindless_sky_comp_metallib,
+                    internal_shaders_output_shade_secondary_atlas_sky_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_secondary_cache_update, "Shade (Secondary) (Cache Update)",
-         use_bindless_
-             ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_update_comp_metallib}
-             : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_update_comp_metallib},
+         PickShader(internal_shaders_output_shade_secondary_bindless_cache_update_comp_metallib,
+                    internal_shaders_output_shade_secondary_atlas_cache_update_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_secondary_cache_query, "Shade (Secondary) (Cache Query)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_comp_metallib}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_comp_metallib},
+         PickShader(internal_shaders_output_shade_secondary_bindless_cache_query_comp_metallib,
+                    internal_shaders_output_shade_secondary_atlas_cache_query_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_secondary_cache_query_sky, "Shade (Secondary) (Cache Query) (Sky)",
-         use_bindless_
-             ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_metallib}
-             : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_metallib},
+         PickShader(internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_metallib,
+                    internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_metallib),
          eShaderType::Comp, false},
         {sh_.shade_sky, "Shade Sky", internal_shaders_output_shade_sky_comp_metallib, eShaderType::Comp, false},
         {sh_.prepare_indir_args, "Prepare Indir Args", internal_shaders_output_prepare_indir_args_comp_metallib,
@@ -1381,24 +1393,24 @@ bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
     // SWRT only: HWRT requires Metal ray queries, not implemented
     shaders_to_init.emplace_back(
         sh_.intersect_scene, "Intersect Scene (Primary) (SWRT)",
-        select_shader(internal_shaders_output_intersect_scene_swrt_bindless_comp_metallib,
-                      internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_metallib,
-                      internal_shaders_output_intersect_scene_swrt_atlas_comp_metallib,
-                      internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_metallib),
+        PickShader(internal_shaders_output_intersect_scene_swrt_bindless_comp_metallib,
+                   internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_metallib,
+                   internal_shaders_output_intersect_scene_swrt_atlas_comp_metallib,
+                   internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_metallib),
         eShaderType::Comp, false);
     shaders_to_init.emplace_back(
         sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (SWRT)",
-        select_shader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_metallib,
-                      internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_metallib,
-                      internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_metallib,
-                      internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_metallib),
+        PickShader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_metallib,
+                   internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_metallib,
+                   internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_metallib,
+                   internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_metallib),
         eShaderType::Comp, false);
     shaders_to_init.emplace_back(
         sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (SWRT)",
-        select_shader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_metallib,
-                      internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_metallib,
-                      internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_metallib,
-                      internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_metallib),
+        PickShader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_metallib,
+                   internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_metallib,
+                   internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_metallib,
+                   internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_metallib),
         eShaderType::Comp, false);
 
     // only the compat variant is compiled for Metal: int64 atomics are not offered

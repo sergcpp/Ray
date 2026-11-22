@@ -22,6 +22,7 @@ class ImageAtlas {
     const int res_[2];
 
     MTL::Texture *img_ = nullptr;
+    MemAllocation allocation_;
     Sampler sampler_;
 
     std::vector<ImageSplitter> splitters_;

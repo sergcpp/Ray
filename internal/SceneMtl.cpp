@@ -50,6 +50,7 @@ Ray::Mtl::Scene::~Scene() {
         bindless_tex_data_.arg_buf->release();
         bindless_tex_data_.arg_buf = nullptr;
     }
+    bindless_tex_data_.mtl_tex_ptrs.clear();
 }
 
 bool Ray::Mtl::Scene::InitPipelines() {
@@ -70,40 +71,52 @@ bool Ray::Mtl::Scene::InitBindlessArray_nolock() {
     const uint32_t tex_cap = ctx_->max_sampled_images();
     assert(bindless_textures_.capacity() <= tex_cap);
 
-    { // Single texture-array argument (index 0) matching spvDescriptorSetBuffer1's
-      // spvDescriptor<texture2d<float>> member emitted by spirv-cross
-        MTL::ArgumentDescriptor *arg_desc = MTL::ArgumentDescriptor::alloc()->init();
-        arg_desc->setIndex(0);
-        arg_desc->setDataType(MTL::DataType::DataTypeTexture);
-        arg_desc->setTextureType(MTL::TextureType::TextureType2D);
-        arg_desc->setArrayLength(tex_cap);
-        arg_desc->setAccess(MTL::BindingAccess::BindingAccessReadOnly);
-
-        NS::Object *objs[] = {arg_desc};
-        NS::Array *args = NS::Array::alloc()->init(objs, 1);
-        bindless_tex_data_.encoder = ctx_->device()->newArgumentEncoder(args);
-        args->release();
-        arg_desc->release();
-
-        if (!bindless_tex_data_.encoder) {
-            log_->Error("Failed to create Metal bindless argument encoder!");
-            return false;
-        }
-
-        bindless_tex_data_.arg_buf =
-            ctx_->device()->newBuffer(bindless_tex_data_.encoder->encodedLength(), MTL::ResourceStorageModeShared);
-        if (!bindless_tex_data_.arg_buf) {
-            log_->Error("Failed to allocate Metal bindless argument buffer!");
-            return false;
-        }
-        bindless_tex_data_.encoder->setArgumentBuffer(bindless_tex_data_.arg_buf, 0);
+    if (bindless_tex_data_.arg_buf) { // re-run (SetEnvironment) reuses the arg table: rebuild = leak + dangling rebind
+        return true;
     }
+
+    MTL::ArgumentDescriptor *arg_desc = MTL::ArgumentDescriptor::alloc()->init();
+    arg_desc->setIndex(0);
+    arg_desc->setDataType(MTL::DataType::DataTypeTexture);
+    arg_desc->setTextureType(MTL::TextureType::TextureType2D);
+    arg_desc->setArrayLength(tex_cap);
+    arg_desc->setAccess(MTL::BindingAccess::BindingAccessReadOnly);
+
+    NS::Object *objs[] = {arg_desc};
+    NS::Array *args = NS::Array::alloc()->init(objs, 1);
+    bindless_tex_data_.encoder = ctx_->device()->newArgumentEncoder(args);
+    args->release();
+    arg_desc->release();
+    if (!bindless_tex_data_.encoder) {
+        log_->Error("Failed to create Metal bindless argument encoder!");
+        return false;
+    }
+
+    bindless_tex_data_.arg_buf =
+        ctx_->device()->newBuffer(bindless_tex_data_.encoder->encodedLength(), MTL::ResourceStorageModeShared);
+    if (!bindless_tex_data_.arg_buf) {
+        log_->Error("Failed to allocate Metal bindless argument buffer!");
+        return false;
+    }
+    bindless_tex_data_.encoder->setArgumentBuffer(bindless_tex_data_.arg_buf, 0);
+    bindless_tex_data_.mtl_tex_ptrs.assign(tex_cap, nullptr);
     return true;
 }
 
 void Ray::Mtl::Scene::SetBindlessTextureSlot_nolock(const uint32_t index, const Image &tex) {
     MTL::Texture *tex_mtl = tex.mtl();
     bindless_tex_data_.encoder->setTextures(&tex_mtl, NS::Range::Make(index, 1));
+    bindless_tex_data_.mtl_tex_ptrs[index] = tex_mtl;
+    bindless_tex_data_.tex_count = std::max(bindless_tex_data_.tex_count, index + 1);
+}
+
+void Ray::Mtl::Scene::ClearBindlessTextureSlot_nolock(const uint32_t index) {
+    if (!bindless_tex_data_.encoder || index >= bindless_tex_data_.mtl_tex_ptrs.size()) {
+        return;
+    }
+    MTL::Texture *tex_mtl = nullptr;
+    bindless_tex_data_.encoder->setTextures(&tex_mtl, NS::Range::Make(index, 1));
+    bindless_tex_data_.mtl_tex_ptrs[index] = nullptr;
 }
 
 void Ray::Mtl::Scene::TransitionBindlessTextures_nolock() {}

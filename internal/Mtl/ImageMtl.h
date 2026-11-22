@@ -59,9 +59,14 @@ inline eFormat MtlRealFormat(const eFormat format, const Bitmask<eImgUsage> usag
 // R replicated); defined in ImageMtl.cpp, shared with ImageAtlas
 void RepackToReal(const uint8_t *src, uint8_t *dst, int px_count, eFormat from, eFormat to);
 
+// zero a reserved heap range before texture placement (shared by Image and ImageAtlas);
+// defined in ImageMtl.cpp
+void ZeroHeapRange(MemAllocation &alloc, NS::UInteger bytes);
+
 class Image {
     Context *ctx_ = nullptr;
     ImgHandle handle_;
+    MemAllocation allocation_;
     Sampler sampler_;
     std::string name_;
     eFormat real_format_ = eFormat::Undefined;

@@ -155,6 +155,7 @@ class Scene : public SceneCommon {
     // per-backend pieces of PrepareBindlessTextures_nolock: the descriptor/argument mechanism
     bool InitBindlessArray_nolock(); // false = skip the whole setup (e.g. backend in atlas mode)
     void SetBindlessTextureSlot_nolock(uint32_t index, const Image &tex);
+    void ClearBindlessTextureSlot_nolock(uint32_t index);
     void TransitionBindlessTextures_nolock();
     void FinalizeBindlessTextures_nolock(Buffer &tex_sizes_stage);
     std::pair<uint32_t, uint32_t> Build_HWRT_BLAS_nolock(uint32_t vert_index, uint32_t vert_count,
@@ -188,6 +189,9 @@ class Scene : public SceneCommon {
     void RemoveTexture(const TextureHandle t) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
         if (use_bindless_) {
+            // drop the table entry first: the descriptor/arg slot and any cached native handle
+            // would otherwise outlive the Image and be sampled as a dangling reference
+            ClearBindlessTextureSlot_nolock(t._index & 0x00ffffff);
             bindless_textures_.Erase(t._block);
         } else {
             atlas_textures_.Erase(t._block);
@@ -817,6 +821,9 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
 inline void Ray::NS::Scene::PrepareBindlessTextures_nolock() {
     if (!InitBindlessArray_nolock()) {
+        if (use_bindless_) {
+            log_->Error("Bindless texture array setup failed, the bindless table will not be usable!");
+        }
         return;
     }
 

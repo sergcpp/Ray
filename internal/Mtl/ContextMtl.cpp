@@ -21,6 +21,33 @@ Context *Context::LookupForCommandBuffer(MTL::CommandBuffer *cb) {
 
 Context::~Context() { Destroy(); }
 
+// build+drop the 64K-texture arg encoder+table: the same calls InitBindlessArray_nolock makes,
+// probed at Init so use_bindless_ can be decided before any bindless state exists
+static bool ProbeBindlessArgEncoder(MTL::Device *device, const uint32_t array_length) {
+    MTL::ArgumentDescriptor *arg_desc = MTL::ArgumentDescriptor::alloc()->init();
+    arg_desc->setIndex(0);
+    arg_desc->setDataType(MTL::DataType::DataTypeTexture);
+    arg_desc->setTextureType(MTL::TextureType::TextureType2D);
+    arg_desc->setArrayLength(array_length);
+    arg_desc->setAccess(MTL::BindingAccess::BindingAccessReadOnly);
+
+    NS::Object *objs[] = {arg_desc};
+    NS::Array *args = NS::Array::alloc()->init(objs, 1);
+    MTL::ArgumentEncoder *encoder = device->newArgumentEncoder(args);
+    args->release();
+    arg_desc->release();
+    if (!encoder) {
+        return false;
+    }
+    MTL::Buffer *arg_buf = device->newBuffer(encoder->encodedLength(), MTL::ResourceStorageModeShared);
+    encoder->release();
+    if (!arg_buf) {
+        return false;
+    }
+    arg_buf->release();
+    return true;
+}
+
 bool Context::Init(ILog *log, std::string_view preferred_device, const int) {
     log_ = log; // Metal validation (frame capture / shader warnings) not wired up yet
 
@@ -79,8 +106,11 @@ bool Context::Init(ILog *log, std::string_view preferred_device, const int) {
 
     astc_supported_ = device_->supportsFamily(MTL::GPUFamilyApple7); // ASTC LDR is native on Apple7+
     bc_supported_ = device_->supportsBCTextureCompression();
+    bindless_arg_encoder_ok_ = ProbeBindlessArgEncoder(device_, max_sampled_images());
 
-    default_mem_allocs_ = std::make_unique<MemAllocators>("Default Allocs", 32 * 1024 * 1024, 1.5f, 128 * 1024 * 1024);
+    default_mem_allocs_ =
+        std::make_unique<MemAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
+                                        1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
 
     device_name_ = device_->name()->utf8String();
     log->Info("Metal device: %s (recommendedMaxWorkingSetSize %llu MB, ASTC %i, BC %i)", device_->name()->utf8String(),
@@ -205,9 +235,13 @@ MTL::RenderCommandEncoder *Context::RenderEncoder(const CommandBuffer cmd_buf, M
         blit_encoder_->release();
         blit_encoder_ = nullptr;
     }
-    if (!render_encoder_) {
-        render_encoder_ = OwnedEncoder([&] { return cmd_buf->renderCommandEncoder(rpd); });
+    if (render_encoder_) {
+        // an encoder is bound to the rpd it was created with: each clear pass needs its own
+        render_encoder_->endEncoding();
+        render_encoder_->release();
+        render_encoder_ = nullptr;
     }
+    render_encoder_ = OwnedEncoder([&] { return cmd_buf->renderCommandEncoder(rpd); });
     return render_encoder_;
 }
 

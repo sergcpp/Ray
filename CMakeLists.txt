@@ -330,6 +330,7 @@ set(MTL_SOURCE_FILES internal/CoreMtl.h
                      internal/Mtl/ImageMtl.h
                      internal/Mtl/ImageMtl.cpp
                      internal/Mtl/MemoryAllocatorMtl.h
+                     internal/Mtl/MemoryAllocatorMtl.cpp
                      internal/Mtl/PipelineMtl.h
                      internal/Mtl/PipelineMtl.cpp
                      internal/Mtl/ProgramMtl.h

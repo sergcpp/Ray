@@ -6,6 +6,7 @@
 
 #include "../SmallVector.h"
 #include "FenceMtl.h"
+#include "MemoryAllocatorMtl.h"
 #include "ResourceMtl.h"
 
 namespace Ray {
@@ -61,6 +62,7 @@ struct RangeFence {
 class Buffer {
     Context *ctx_ = nullptr;
     BufHandle handle_;
+    MemAllocation allocation_;
     std::string name_;
     eBufType type_ = eBufType::Undefined;
     uint32_t size_ = 0;

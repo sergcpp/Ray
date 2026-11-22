@@ -258,6 +258,29 @@ void Ray::Vk::Scene::SetBindlessTextureSlot_nolock(const uint32_t index, const I
     ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
 }
 
+void Ray::Vk::Scene::ClearBindlessTextureSlot_nolock(const uint32_t index) {
+    if (!bindless_tex_data_.descr_set) {
+        return;
+    }
+
+    VkDescriptorImageInfo null_info = {};
+    null_info.imageView = VK_NULL_HANDLE;
+    null_info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VkWriteDescriptorSet descr_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    descr_write.dstBinding = 0;
+    descr_write.dstArrayElement = index;
+    descr_write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    descr_write.descriptorCount = 1;
+    descr_write.pImageInfo = &null_info;
+
+    descr_write.dstSet = bindless_tex_data_.descr_set;
+    ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+
+    descr_write.dstSet = bindless_tex_data_.rt_descr_set;
+    ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+}
+
 void Ray::Vk::Scene::FinalizeBindlessTextures_nolock(Buffer &tex_sizes_stage) {
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
     CopyBufferToBuffer(tex_sizes_stage, 0, bindless_tex_data_.tex_sizes, 0, bindless_tex_data_.tex_sizes.size(),

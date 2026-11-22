@@ -69,7 +69,28 @@ static MTL::TextureUsage to_mtl_texture_usage(const Bitmask<eImgUsage> usage, co
     return ret;
 }
 
-static MTL::Texture *CreateTexture(Context *ctx, const ImgParams &p, const eFormat real_format, ILog *log) {
+// debug-only sanitizer: zero reused heap ranges so MTL matches the fresh-zero pages plain
+// newTexture gets, surfacing any pass that accidentally relies on zeroed storage
+void ZeroHeapRange(MemAllocation &alloc, NS::UInteger bytes) {
+#ifdef RAY_ENABLE_GPU_DEBUG
+    if (!alloc.reused) {
+        return; // fresh pool pages arrive zeroed from the driver
+    }
+    const NS::UInteger pool_size = alloc.owner->pool_size(alloc.pool);
+    assert(bytes <= pool_size - alloc.offset);
+    MTL::Buffer *cover = alloc.owner->heap(alloc.pool)->newBuffer(bytes, MTL::StorageModeShared, alloc.offset);
+    if (cover) {
+        memset(cover->contents(), 0, bytes);
+        cover->release();
+    }
+#else
+    (void)alloc;
+    (void)bytes;
+#endif
+}
+
+static MTL::Texture *CreateTexture(Context *ctx, const ImgParams &p, const eFormat real_format,
+                                   MemAllocators *mem_allocs, MemAllocation &out_alloc, ILog *log) {
     assert(!IsDepthFormat(p.format) && "the GPU renderer does not use depth imagery");
     if (g_formats_mtl[size_t(real_format)] == MTL::PixelFormatInvalid) {
         log->Error("No Metal pixel format for format %d!", int(p.format));
@@ -93,7 +114,25 @@ static MTL::Texture *CreateTexture(Context *ctx, const ImgParams &p, const eForm
     desc->setUsage(to_mtl_texture_usage(p.usage, real_format));
     desc->setStorageMode(MTL::StorageModeShared);
 
-    MTL::Texture *tex = ctx->device()->newTexture(desc);
+    MTL::Texture *tex = nullptr;
+    if (mem_allocs) {
+        // exact container size+alignment from the driver: placement does not validate containment,
+        // an estimated size silently overlaps neighbors
+        const MTL::SizeAndAlign sa = ctx->device()->heapTextureSizeAndAlign(desc);
+        if (sa.size <= 0xffffffffull) {
+            out_alloc = mem_allocs->Allocate(uint32_t(sa.align), uint32_t(sa.size), MTL::StorageModeShared);
+            if (out_alloc) {
+                ZeroHeapRange(out_alloc, sa.size);
+                tex = out_alloc.owner->heap(out_alloc.pool)->newTexture(desc, out_alloc.offset);
+                if (!tex) {
+                    out_alloc = MemAllocation{};
+                }
+            }
+        }
+    }
+    if (!tex) {
+        tex = ctx->device()->newTexture(desc);
+    }
     desc->release();
     if (!tex) {
         log->Error("Failed to create Metal texture (%dx%dx%i, %i mips)!", int(p.w), int(p.h), int(p.d),
@@ -129,7 +168,7 @@ void Ray::Mtl::Image::InitFromRAWData(Buffer *sbuf, const int data_off, CommandB
     params = p;
     real_format_ = MtlRealFormat(p.format, p.usage);
 
-    handle_.tex = CreateTexture(ctx_, p, real_format_, log);
+    handle_.tex = CreateTexture(ctx_, p, real_format_, mem_allocs, allocation_, log);
     if (!handle_.tex) {
         params.format = eFormat::Undefined;
         return;
@@ -177,6 +216,7 @@ Ray::Mtl::Image &Ray::Mtl::Image::operator=(Image &&rhs) noexcept {
 
     ctx_ = std::exchange(rhs.ctx_, nullptr);
     handle_ = std::exchange(rhs.handle_, {});
+    allocation_ = std::move(rhs.allocation_);
     sampler_ = std::move(rhs.sampler_);
     name_ = std::move(rhs.name_);
     real_format_ = std::exchange(rhs.real_format_, eFormat::Undefined);
@@ -197,6 +237,7 @@ void Ray::Mtl::Image::Free() {
         real_format_ = eFormat::Undefined;
         params.format = eFormat::Undefined;
     }
+    allocation_.Release();
 }
 
 void Ray::Mtl::Image::Init(const ImgParams &p, MemAllocators *mem_allocs, ILog *log) {
@@ -240,7 +281,8 @@ bool Ray::Mtl::Image::Realloc(const int w, const int h, int mip_count, const int
     p.sampling = SamplingParams{params.sampling};
 
     const eFormat new_real_format = MtlRealFormat(format, p.usage);
-    MTL::Texture *new_tex = CreateTexture(ctx_, p, new_real_format, log);
+    MemAllocation new_alloc;
+    MTL::Texture *new_tex = CreateTexture(ctx_, p, new_real_format, mem_allocs, new_alloc, log);
     if (!new_tex) {
         return false;
     }
@@ -272,6 +314,7 @@ bool Ray::Mtl::Image::Realloc(const int w, const int h, int mip_count, const int
     if (old_handle.tex) {
         old_handle.tex->release();
     }
+    allocation_ = std::move(new_alloc); // frees the old block: caller's copy CB completes before reuse (sync submits)
 
     params = p;
     real_format_ = new_real_format;
