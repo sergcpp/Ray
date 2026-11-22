@@ -19,6 +19,12 @@ layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
     ray_data_t g_rays[];
 };
 
+#if PERM
+layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
+    ray_hash_t g_sort_ray_indices[];
+};
+#endif
+
 layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
 };
@@ -135,11 +141,18 @@ void main() {
     grid_params.scale = RAD_CACHE_GRID_SCALE;
     grid_params.exposure = g_params.exposure;
 
-    const int x = int((g_rays[index].xy >> 16) & 0xffff);
-    const int y = int(g_rays[index].xy & 0xffff);
+    // hits are slot-space; without the perm resolve rays[index]/hits[index] pair different rays
+#if PERM
+    const int ray_index = int(g_sort_ray_indices[index].index);
+#else
+    const int ray_index = index;
+#endif
+
+    const int x = int((g_rays[ray_index].xy >> 16) & 0xffff);
+    const int y = int(g_rays[ray_index].xy & 0xffff);
 
     const hit_data_t inter = g_hits[index];
-    const ray_data_t ray = g_rays[index];
+    const ray_data_t ray = g_rays[ray_index];
 
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);

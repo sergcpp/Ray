@@ -20,6 +20,7 @@ const int RAYS_BUF_SLOT = 5;
 const int COUNTERS_BUF_SLOT = 6;
 const int RADIANCE_TEX_SLOT = 7;
 const int DEPTH_NORMAL_TEX_SLOT = 8;
+const int SORT_RAY_INDICES_BUF_SLOT = 9;
 
 const int INOUT_CACHE_DATA_BUF_SLOT = 0;
 const int INOUT_CACHE_ENTRIES_BUF_SLOT = 1;

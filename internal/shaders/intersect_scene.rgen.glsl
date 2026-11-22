@@ -24,6 +24,12 @@ layout(std430, binding = RAYS_BUF_SLOT) buffer Rays {
     ray_data_t g_rays[];
 };
 
+#if !PRIMARY
+layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
+    ray_hash_t g_sort_ray_indices[];
+};
+#endif // !PRIMARY
+
 layout(std430, binding = VERTICES_BUF_SLOT) readonly buffer Vertices {
     vertex_t g_vertices[];
 };
@@ -56,24 +62,31 @@ vec2 get_scrambled_2d_rand(const uint dim, const uint seed, const int _sample) {
 void main() {
 #if !INDIRECT
     const int index = int(gl_LaunchIDEXT.y * g_params.rect.z + gl_LaunchIDEXT.x);
+    const int ray_index = index;
 
     const int x = int(g_params.rect.x + gl_LaunchIDEXT.x);
     const int y = int(g_params.rect.y + gl_LaunchIDEXT.y);
 #else // !INDIRECT
     const int index = int(gl_LaunchIDEXT.x);
 
-    const int x = int((g_rays[index].xy >> 16) & 0xffff);
-    const int y = int(g_rays[index].xy & 0xffff);
+#if PRIMARY
+    const int ray_index = index;
+#else // PRIMARY
+    const int ray_index = int(g_sort_ray_indices[index].index);
+#endif // PRIMARY
+
+    const int x = int((g_rays[ray_index].xy >> 16) & 0xffff);
+    const int y = int(g_rays[ray_index].xy & 0xffff);
 #endif // !INDIRECT
 
-    vec3 ro = vec3(g_rays[index].o[0], g_rays[index].o[1], g_rays[index].o[2]);
-    vec3 rd = vec3(g_rays[index].d[0], g_rays[index].d[1], g_rays[index].d[2]);
+    vec3 ro = vec3(g_rays[ray_index].o[0], g_rays[ray_index].o[1], g_rays[ray_index].o[2]);
+    vec3 rd = vec3(g_rays[ray_index].d[0], g_rays[ray_index].d[1], g_rays[ray_index].d[2]);
     vec3 inv_d = safe_invert(rd);
 
-    const uint px_hash = hash(g_rays[index].xy);
+    const uint px_hash = hash(g_rays[ray_index].xy);
     const uint rand_hash = hash_combine(px_hash, g_params.rand_seed);
 
-    uint rand_dim = RAND_DIM_BASE_COUNT + get_total_depth(g_rays[index].depth) * RAND_DIM_BOUNCE_COUNT;
+    uint rand_dim = RAND_DIM_BASE_COUNT + get_total_depth(g_rays[ray_index].depth) * RAND_DIM_BOUNCE_COUNT;
 
     hit_data_t inter;
     inter.obj_index = inter.prim_index = 0;
@@ -152,23 +165,23 @@ void main() {
         }
 
 #if USE_PATH_TERMINATION
-        const bool can_terminate_path = get_transp_depth(g_rays[index].depth) > g_params.min_transp_depth;
+        const bool can_terminate_path = get_transp_depth(g_rays[ray_index].depth) > g_params.min_transp_depth;
 #else
         const bool can_terminate_path = false;
 #endif
 
-        const float lum = max(g_rays[index].c[0], max(g_rays[index].c[1], g_rays[index].c[2]));
+        const float lum = max(g_rays[ray_index].c[0], max(g_rays[ray_index].c[1], g_rays[ray_index].c[2]));
         const float p = trans_term_rand.y;
         const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
-        if (p < q || lum == 0.0 || get_transp_depth(g_rays[index].depth) + 1 >= g_params.max_transp_depth) {
+        if (p < q || lum == 0.0 || get_transp_depth(g_rays[ray_index].depth) + 1 >= g_params.max_transp_depth) {
             // terminate ray
-            g_rays[index].c[0] = g_rays[index].c[1] = g_rays[index].c[2] = 0.0;
+            g_rays[ray_index].c[0] = g_rays[ray_index].c[1] = g_rays[ray_index].c[2] = 0.0;
             break;
         }
 
-        g_rays[index].c[0] *= mat.base_color[0] / (1.0 - q);
-        g_rays[index].c[1] *= mat.base_color[1] / (1.0 - q);
-        g_rays[index].c[2] *= mat.base_color[2] / (1.0 - q);
+        g_rays[ray_index].c[0] *= mat.base_color[0] / (1.0 - q);
+        g_rays[ray_index].c[1] *= mat.base_color[1] / (1.0 - q);
+        g_rays[ray_index].c[2] *= mat.base_color[2] / (1.0 - q);
 
         const float t = inter.t + HIT_BIAS;
         ro += rd * t;
@@ -177,11 +190,11 @@ void main() {
         inter.v = -1.0;
         inter.t = t_val - inter.t;
 
-        g_rays[index].depth += pack_ray_depth(0, 0, 0, 1);
+        g_rays[ray_index].depth += pack_ray_depth(0, 0, 0, 1);
         rand_dim += RAND_DIM_BOUNCE_COUNT;
     }
 
-    inter.t += distance(vec3(g_rays[index].o[0], g_rays[index].o[1], g_rays[index].o[2]), ro);
+    inter.t += distance(vec3(g_rays[ray_index].o[0], g_rays[ray_index].o[1], g_rays[ray_index].o[2]), ro);
 
     g_out_hits[index] = inter;
 }

@@ -24,6 +24,12 @@ layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
     ray_data_t g_rays[];
 };
 
+#if !PRIMARY
+layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
+    ray_hash_t g_sort_ray_indices[];
+};
+#endif
+
 layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
     light_t g_lights[];
 };
@@ -2502,7 +2508,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
     }
 }
 
-vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t ray, inout vec3 out_base_color,
+vec3 ShadeSurface(const int ray_slot, const hit_data_t inter, const ray_data_t ray, inout vec3 out_base_color,
                   inout vec3 out_normals, inout float out_feature_w) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
@@ -2523,7 +2529,7 @@ vec3 ShadeSurface(const int ray_index, const hit_data_t inter, const ray_data_t 
 #if DETAILED_SKY
         if (ray.cone_spread < g_params.sky_map_spread_angle) {
             const uint index = atomicAdd(g_inout_counters[4], 1);
-            g_out_sky_rays[index] = ray_index;
+            g_out_sky_rays[index] = ray_slot;
             return vec3(0.0);
         }
 #endif
@@ -3065,18 +3071,25 @@ void main() {
     const int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
 
     const int index = int(gl_GlobalInvocationID.y * g_params.rect.z) + x;
+    const int ray_index = index;
 #else
     const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
     if (index >= g_inout_counters[1]) {
         return;
     }
 
-    const int x = int((g_rays[index].xy >> 16) & 0xffff);
-    const int y = int(g_rays[index].xy & 0xffff);
+#if PRIMARY
+    const int ray_index = index;
+#else // PRIMARY
+    const int ray_index = int(g_sort_ray_indices[index].index);
+#endif // PRIMARY
+
+    const int x = int((g_rays[ray_index].xy >> 16) & 0xffff);
+    const int y = int(g_rays[ray_index].xy & 0xffff);
 #endif
 
     const hit_data_t inter = g_hits[index];
-    const ray_data_t ray = g_rays[index];
+    const ray_data_t ray = g_rays[ray_index];
 
     vec3 base_color = vec3(0.0), normals = vec3(0.0);
     // -1: no surface shading happened (sky / area light / cache hit early-out)

@@ -15,7 +15,6 @@
 #include "shaders/sort_hash_rays_interface.h"
 #include "shaders/sort_init_count_table_interface.h"
 #include "shaders/sort_reduce_interface.h"
-#include "shaders/sort_reorder_rays_interface.h"
 #include "shaders/sort_scan_interface.h"
 #include "shaders/sort_scatter_interface.h"
 #include "shaders/spatial_cache_resolve_interface.h"
@@ -86,11 +85,12 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
 
 void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const scene_data_t &sc_data,
                                                    const Buffer &indir_args, const Buffer &counters, const Buffer &rays,
-                                                   const Buffer &inout_hits) {
+                                                   const Buffer &sort_perm, const Buffer &inout_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
-                                              {&inout_hits, eResState::UnorderedAccess}};
+                                              {&inout_hits, eResState::UnorderedAccess},
+                                              {&sort_perm, eResState::ShaderResource}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {
@@ -99,7 +99,8 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
         {eBindTarget::SBufRO, IntersectAreaLights::CWNODES_BUF_SLOT, sc_data.light_cwnodes},
         {eBindTarget::SBufRO, IntersectAreaLights::LIGHT_LEAF_PRIMS_BUF_SLOT, sc_data.light_leaf_prims},
         {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
-        {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
+        {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits},
+        {eBindTarget::SBufRO, IntersectAreaLights::SORT_RAY_INDICES_BUF_SLOT, sort_perm}};
 
     IntersectAreaLights::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
@@ -615,30 +616,6 @@ void Ray::NS::Renderer::kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer 
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::NS::Renderer::kernel_SortReorderRays(CommandBuffer cmd_buf, const Buffer &indir_args,
-                                               const int indir_args_index, const Buffer &in_rays, const Buffer &indices,
-                                               const Buffer &counters, const int counter_index,
-                                               const Buffer &out_rays) {
-    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
-                                              {&in_rays, eResState::ShaderResource},
-                                              {&indices, eResState::ShaderResource},
-                                              {&counters, eResState::ShaderResource},
-                                              {&out_rays, eResState::UnorderedAccess}};
-    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
-
-    const Binding bindings[] = {{eBindTarget::SBufRO, SortReorderRays::RAYS_BUF_SLOT, in_rays},
-                                {eBindTarget::SBufRO, SortReorderRays::INDICES_BUF_SLOT, indices},
-                                {eBindTarget::SBufRO, SortReorderRays::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBufRW, SortReorderRays::OUT_RAYS_BUF_SLOT, out_rays}};
-
-    SortReorderRays::Params uniform_params = {};
-    uniform_params.counter = counter_index;
-
-    DispatchComputeIndirect(cmd_buf, pi_.sort_reorder_rays, indir_args,
-                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
-                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
-}
-
 void Ray::NS::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
                                                   const int indir_args_index, const Buffer &hashes,
                                                   const Buffer &counters, const int counter_index,
@@ -754,10 +731,12 @@ void Ray::NS::Renderer::kernel_SortScatter(CommandBuffer cmd_buf, int shift, con
 void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const cache_grid_params_t &params,
                                                   const Buffer &indir_args, const int indir_args_index,
                                                   const Buffer &counters, const int counter_index, const Buffer &inters,
-                                                  const Buffer &rays, const Buffer &cache_data,
+                                                  const Buffer &rays, const Buffer *sort_perm, const Buffer &cache_data,
                                                   const Image &radiance_img, const Image &depth_normals_img,
                                                   const Buffer &inout_entries, const Buffer &inout_voxels_curr,
                                                   const Buffer &inout_lock_buf) {
+    Pipeline &pi = sort_perm ? pi_.spatial_cache_update_perm : pi_.spatial_cache_update;
+
     SmallVector<TransitionInfo, 16> res_transitions = {{&indir_args, eResState::IndirectArgument},
                                                        {&counters, eResState::ShaderResource},
                                                        {&inters, eResState::ShaderResource},
@@ -784,15 +763,17 @@ void Ray::NS::Renderer::kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const c
     if (!ctx_->int64_atomics_supported()) {
         bindings.emplace_back(eBindTarget::SBufRW, CacheUpdate::INOUT_CACHE_LOCK_BUF_SLOT, inout_lock_buf);
     }
+    if (sort_perm) {
+        bindings.emplace_back(eBindTarget::SBufRO, CacheUpdate::SORT_RAY_INDICES_BUF_SLOT, *sort_perm);
+    }
 
     CacheUpdate::Params uniform_params = {};
     memcpy(&uniform_params.cam_pos_curr[0], params.cam_pos_curr, 3 * sizeof(float));
     uniform_params.cache_w = (w_ / RAD_CACHE_DOWNSAMPLING_FACTOR);
     uniform_params.exposure = params.exposure;
 
-    DispatchComputeIndirect(cmd_buf, pi_.spatial_cache_update, indir_args,
-                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
-                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+    DispatchComputeIndirect(cmd_buf, pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
+                            &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const cache_grid_params_t &params,
@@ -826,8 +807,11 @@ void Ray::NS::Renderer::kernel_SpatialCacheResolve(CommandBuffer cmd_buf, const 
 inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass_settings_t &ps, const float limit,
                                                const environment_t &env, const Buffer &indir_args,
                                                const int indir_args_index, const Buffer &hits, const Buffer &rays,
-                                               const Buffer &ray_indices, const Buffer &counters,
-                                               const scene_data_t &sc_data, const int iteration, const Image &out_img) {
+                                               const Buffer &ray_indices, const Buffer *sort_perm,
+                                               const Buffer &counters, const scene_data_t &sc_data, const int iteration,
+                                               const Image &out_img) {
+    Pipeline &pi = sort_perm ? pi_.shade_sky : pi_.shade_sky_primary;
+
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -835,20 +819,24 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
                                               {&out_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::UBuf, ShadeSky::ATMOSPHERE_PARAMS_BUF_SLOT, sc_data.atmosphere_params},
-                                {eBindTarget::SBufRO, ShadeSky::RAY_INDICES_BUF_SLOT, ray_indices},
-                                {eBindTarget::SBufRO, ShadeSky::HITS_BUF_SLOT, hits},
-                                {eBindTarget::SBufRO, ShadeSky::RAYS_BUF_SLOT, rays},
-                                {eBindTarget::SBufRO, ShadeSky::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::Tex, ShadeSky::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
-                                {eBindTarget::TexSampled, ShadeSky::TRANSMITTANCE_LUT_SLOT, sc_data.transmittance_lut},
-                                {eBindTarget::TexSampled, ShadeSky::MULTISCATTER_LUT_SLOT, sc_data.multiscatter_lut},
-                                {eBindTarget::TexSampled, ShadeSky::MOON_TEX_SLOT, sc_data.moon_tex},
-                                {eBindTarget::TexSampled, ShadeSky::WEATHER_TEX_SLOT, sc_data.weather_tex},
-                                {eBindTarget::TexSampled, ShadeSky::CIRRUS_TEX_SLOT, sc_data.cirrus_tex},
-                                {eBindTarget::TexSampled, ShadeSky::CURL_TEX_SLOT, sc_data.curl_tex},
-                                {eBindTarget::TexSampled, ShadeSky::NOISE3D_TEX_SLOT, sc_data.noise3d_tex},
-                                {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, out_img}};
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::UBuf, ShadeSky::ATMOSPHERE_PARAMS_BUF_SLOT, sc_data.atmosphere_params},
+        {eBindTarget::SBufRO, ShadeSky::SKY_RAY_INDICES_BUF_SLOT, ray_indices},
+        {eBindTarget::SBufRO, ShadeSky::HITS_BUF_SLOT, hits},
+        {eBindTarget::SBufRO, ShadeSky::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRO, ShadeSky::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::Tex, ShadeSky::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+        {eBindTarget::TexSampled, ShadeSky::TRANSMITTANCE_LUT_SLOT, sc_data.transmittance_lut},
+        {eBindTarget::TexSampled, ShadeSky::MULTISCATTER_LUT_SLOT, sc_data.multiscatter_lut},
+        {eBindTarget::TexSampled, ShadeSky::MOON_TEX_SLOT, sc_data.moon_tex},
+        {eBindTarget::TexSampled, ShadeSky::WEATHER_TEX_SLOT, sc_data.weather_tex},
+        {eBindTarget::TexSampled, ShadeSky::CIRRUS_TEX_SLOT, sc_data.cirrus_tex},
+        {eBindTarget::TexSampled, ShadeSky::CURL_TEX_SLOT, sc_data.curl_tex},
+        {eBindTarget::TexSampled, ShadeSky::NOISE3D_TEX_SLOT, sc_data.noise3d_tex},
+        {eBindTarget::Image, ShadeSky::OUT_IMG_SLOT, out_img}};
+    if (sort_perm) {
+        bindings.emplace_back(eBindTarget::SBufRO, ShadeSky::SORT_RAY_INDICES_BUF_SLOT, *sort_perm);
+    }
 
     const uint32_t rand_seed = Ref::hash(iteration);
 
@@ -880,9 +868,9 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
                 uniform_params.light_col_point[2] *= (PI * radius * radius);
             }
 
-            DispatchComputeIndirect(cmd_buf, pi_.shade_sky, indir_args,
-                                    indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
-                                    sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+            DispatchComputeIndirect(cmd_buf, pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
+                                    bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
+                                    ctx_->log());
         }
     } else if (sc_data.env.atmosphere.stars_brightness > 0.0f) {
         // Use fake lightsource (to light up the moon)
@@ -894,9 +882,8 @@ inline void Ray::NS::Renderer::kernel_ShadeSky(CommandBuffer cmd_buf, const pass
         memcpy(uniform_params.light_col_point, value_ptr(light_col), 3 * sizeof(float));
         uniform_params.light_col[3] = 0.0f;
 
-        DispatchComputeIndirect(cmd_buf, pi_.shade_sky, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
-                                bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
-                                ctx_->log());
+        DispatchComputeIndirect(cmd_buf, pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
+                                &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     }
 }
 
@@ -907,79 +894,17 @@ inline void Ray::NS::Renderer::kernel_ShadeSkyPrimary(CommandBuffer cmd_buf, con
                                                       const Buffer &counters, const scene_data_t &sc_data,
                                                       const int iteration, const Image &out_img) {
     const float limit = (ps.clamp_direct != 0.0f) ? 3.0f * ps.clamp_direct : FLT_MAX;
-    kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, counters, sc_data,
-                    iteration, out_img);
+    kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, nullptr, counters,
+                    sc_data, iteration, out_img);
 }
 
 inline void Ray::NS::Renderer::kernel_ShadeSkySecondary(
     CommandBuffer cmd_buf, const pass_settings_t &ps, const float clamp_direct, const environment_t &env,
     const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays, const Buffer &ray_indices,
-    const Buffer &counters, const scene_data_t &sc_data, int iteration, const Image &out_img) {
+    const Buffer &sort_perm, const Buffer &counters, const scene_data_t &sc_data, int iteration, const Image &out_img) {
     const float limit = (clamp_direct != 0.0f) ? 3.0f * clamp_direct : FLT_MAX;
-    kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, counters, sc_data,
-                    iteration, out_img);
-}
-
-void Ray::NS::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &ps,
-                                              const scene_data_t &sc_data, const Buffer &rand_seq,
-                                              const uint32_t rand_seed, const int iteration, const rect_t &rect,
-                                              const uint32_t node_index, const float cam_fwd[3], const float clip_dist,
-                                              Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                              const Buffer &rays, const Buffer &out_hits) {
-    const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
-                                              {&out_hits, eResState::UnorderedAccess}};
-    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
-
-    SmallVector<Binding, 32> bindings = {
-        {eBindTarget::SBufRO, IntersectScene::VERTICES_BUF_SLOT, sc_data.vertices},
-        {eBindTarget::SBufRO, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-        {eBindTarget::SBufRO, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
-        {eBindTarget::SBufRO, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBufRO, IntersectScene::RANDOM_SEQ_BUF_SLOT, rand_seq},
-        {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
-        {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
-
-    if (use_bindless_) {
-        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
-        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
-
-        BindBindlessExtra(*ctx_, cmd_buf, pi_.intersect_scene, bindless_tex, bindings);
-    } else {
-        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
-    }
-
-    if (use_hwrt_) {
-        bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
-    } else {
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::LEAF_PRIMS_BUF_SLOT, sc_data.leaf_prims);
-        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
-    }
-
-    IntersectScene::Params uniform_params = {};
-    uniform_params.rect[0] = rect.x;
-    uniform_params.rect[1] = rect.y;
-    uniform_params.rect[2] = rect.w;
-    uniform_params.rect[3] = rect.h;
-    uniform_params.node_index = node_index;
-    uniform_params.clip_dist = clip_dist;
-    uniform_params.min_transp_depth = ps.min_transp_depth;
-    uniform_params.max_transp_depth = ps.max_transp_depth;
-    uniform_params.rand_seed = rand_seed;
-    uniform_params.iteration = iteration;
-    if (cam_fwd) {
-        memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
-    }
-
-    const uint32_t grp_count[3] = {
-        uint32_t((rect.w + IntersectScene::LOCAL_GROUP_SIZE_X - 1) / IntersectScene::LOCAL_GROUP_SIZE_X),
-        uint32_t((rect.h + IntersectScene::LOCAL_GROUP_SIZE_Y - 1) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
-
-    DispatchCompute(cmd_buf, pi_.intersect_scene, grp_count, bindings, &uniform_params, sizeof(uniform_params),
-                    ctx_->default_descr_alloc(), ctx_->log());
+    kernel_ShadeSky(cmd_buf, ps, limit, env, indir_args, indir_args_index, hits, rays, ray_indices, &sort_perm,
+                    counters, sc_data, iteration, out_img);
 }
 
 void Ray::NS::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args,
@@ -988,7 +913,9 @@ void Ray::NS::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
                                               const Buffer &rand_seq, const uint32_t rand_seed, const int iteration,
                                               uint32_t node_index, const float cam_fwd[3], const float clip_dist,
                                               Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                              const Buffer &rays, const Buffer &out_hits) {
+                                              const Buffer &rays, const Buffer *sort_perm, const Buffer &out_hits) {
+    Pipeline &pi = sort_perm ? pi_.intersect_scene_indirect : pi_.intersect_scene_primary;
+
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&rays, eResState::UnorderedAccess},
@@ -1004,12 +931,15 @@ void Ray::NS::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         {eBindTarget::SBufRW, IntersectScene::RAYS_BUF_SLOT, rays},
         {eBindTarget::SBufRO, IntersectScene::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
+    if (sort_perm) {
+        bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::SORT_RAY_INDICES_BUF_SLOT, *sort_perm);
+    }
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_SIZE_SLOT, bindless_tex.tex_sizes);
 
-        BindBindlessExtra(*ctx_, cmd_buf, pi_.intersect_scene_indirect, bindless_tex, bindings);
+        BindBindlessExtra(*ctx_, cmd_buf, pi, bindless_tex, bindings);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::TexArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
@@ -1036,9 +966,8 @@ void Ray::NS::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
     }
 
-    DispatchComputeIndirect(cmd_buf, pi_.intersect_scene_indirect, indir_args,
-                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
-                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+    DispatchComputeIndirect(cmd_buf, pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
+                            &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::NS::Renderer::kernel_ShadePrimaryHits(
@@ -1170,8 +1099,8 @@ void Ray::NS::Renderer::kernel_ShadeSecondaryHits(
     const environment_t &env, const Buffer &indir_args, const int indir_args_index, const Buffer &hits,
     const Buffer &rays, const scene_data_t &sc_data, const Buffer &rand_seq, const uint32_t rand_seed,
     const int iteration, Span<const ImageAtlas> tex_atlases, const BindlessTexData &bindless_tex, const Image &out_img,
-    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &inout_counters,
-    const Image &out_base_color, const Image &out_depth_normals) {
+    const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &out_sky_rays, const Buffer &sort_perm,
+    const Buffer &inout_counters, const Image &out_base_color, const Image &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -1182,7 +1111,8 @@ void Ray::NS::Renderer::kernel_ShadeSecondaryHits(
                                               {&out_sky_rays, eResState::UnorderedAccess},
                                               {&inout_counters, eResState::UnorderedAccess},
                                               {&out_base_color, eResState::UnorderedAccess},
-                                              {&out_depth_normals, eResState::UnorderedAccess}};
+                                              {&out_depth_normals, eResState::UnorderedAccess},
+                                              {&sort_perm, eResState::ShaderResource}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     SmallVector<Binding, 32> bindings = {
@@ -1210,7 +1140,8 @@ void Ray::NS::Renderer::kernel_ShadeSecondaryHits(
         {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
         {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
         {eBindTarget::SBufRW, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
-        {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+        {eBindTarget::SBufRW, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters},
+        {eBindTarget::SBufRO, Shade::SORT_RAY_INDICES_BUF_SLOT, sort_perm}};
     if (sc_data.env.sky_map_spread_angle > 0.0f && cache_usage != eSpatialCacheMode::Update) {
         bindings.emplace_back(eBindTarget::SBufRW, Shade::OUT_SKY_RAYS_BUF_SLOT, out_sky_rays);
     }

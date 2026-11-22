@@ -15,9 +15,16 @@ layout (binding = ATMOSPHERE_PARAMS_BUF_SLOT, std140) uniform AtmosphereParams {
 };
 
 #if !BAKE
-layout(std430, binding = RAY_INDICES_BUF_SLOT) readonly buffer RayIndices {
+layout(std430, binding = SKY_RAY_INDICES_BUF_SLOT) readonly buffer SkyRayIndices {
     uint g_ray_indices[];
 };
+
+#if !PRIMARY
+// a sky record holds the producing ray's sort slot; rays live at g_sort_ray_indices[slot].index
+layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
+    ray_hash_t g_sort_ray_indices[];
+};
+#endif // !PRIMARY
 
 layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
@@ -915,9 +922,13 @@ void main() {
         return;
     }
 
-    const uint ray_index = g_ray_indices[index];
-    const ray_data_t r = g_rays[ray_index];
-    const hit_data_t inter = g_hits[ray_index];
+    const uint ray_slot = g_ray_indices[index];
+#if PRIMARY
+    const ray_data_t r = g_rays[ray_slot];
+#else // PRIMARY
+    const ray_data_t r = g_rays[g_sort_ray_indices[ray_slot].index];
+#endif // PRIMARY
+    const hit_data_t inter = g_hits[ray_slot];
 
     const int x = int((r.xy >> 16) & 0xffff), y = int(r.xy & 0xffff);
 

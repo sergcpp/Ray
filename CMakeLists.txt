@@ -418,8 +418,6 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/sort_init_count_table_interface.h
                     internal/shaders/sort_reduce.comp.glsl
                     internal/shaders/sort_reduce_interface.h
-                    internal/shaders/sort_reorder_rays.comp.glsl
-                    internal/shaders/sort_reorder_rays_interface.h
                     internal/shaders/sort_scan.comp.glsl
                     internal/shaders/sort_scan_interface.h
                     internal/shaders/sort_scatter.comp.glsl

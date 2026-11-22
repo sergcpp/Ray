@@ -34,6 +34,7 @@ const int TLAS_SLOT = 10;
 const int COUNTERS_BUF_SLOT = 11;
 const int RANDOM_SEQ_BUF_SLOT = 12;
 const int LEAF_PRIMS_BUF_SLOT = 13;
+const int SORT_RAY_INDICES_BUF_SLOT = 14;
 
 const int OUT_HITS_BUF_SLOT = 0;
 

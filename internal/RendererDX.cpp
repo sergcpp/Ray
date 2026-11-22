@@ -35,7 +35,6 @@
 
 #define DEBUG_HWRT 0
 #define RUN_IN_LOCKSTEP 0
-#define DISABLE_SORTING 0
 #define ENABLE_RT_PIPELINE 0
 
 static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t));
@@ -122,25 +121,19 @@ namespace Dx {
 // #include "shaders/output/intersect_scene.rchit.cso.inl"
 // #include "shaders/output/intersect_scene.rgen.cso.inl"
 // #include "shaders/output/intersect_scene.rmiss.cso.inl"
-#include "shaders/output/intersect_scene_hwrt_atlas.comp.cso.inl"
-#include "shaders/output/intersect_scene_hwrt_bindless.comp.cso.inl"
 // #include "shaders/output/intersect_scene_indirect.rgen.cso.inl"
 #include "shaders/output/intersect_scene_indirect_hwrt_atlas.comp.cso.inl"
+#include "shaders/output/intersect_scene_indirect_hwrt_atlas_primary.comp.cso.inl"
 #include "shaders/output/intersect_scene_indirect_hwrt_bindless.comp.cso.inl"
-#include "shaders/output/intersect_scene_indirect_swrt_atlas.comp.cso.inl"
+#include "shaders/output/intersect_scene_indirect_hwrt_bindless_primary.comp.cso.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_atlas_subgroup.comp.cso.inl"
-#include "shaders/output/intersect_scene_indirect_swrt_bindless.comp.cso.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_atlas_subgroup_primary.comp.cso.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_bindless_subgroup.comp.cso.inl"
+#include "shaders/output/intersect_scene_indirect_swrt_bindless_subgroup_primary.comp.cso.inl"
 #include "shaders/output/intersect_scene_shadow_hwrt_atlas.comp.cso.inl"
 #include "shaders/output/intersect_scene_shadow_hwrt_bindless.comp.cso.inl"
-#include "shaders/output/intersect_scene_shadow_swrt_atlas.comp.cso.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_atlas_subgroup.comp.cso.inl"
-#include "shaders/output/intersect_scene_shadow_swrt_bindless.comp.cso.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_bindless_subgroup.comp.cso.inl"
-#include "shaders/output/intersect_scene_swrt_atlas.comp.cso.inl"
-#include "shaders/output/intersect_scene_swrt_atlas_subgroup.comp.cso.inl"
-#include "shaders/output/intersect_scene_swrt_bindless.comp.cso.inl"
-#include "shaders/output/intersect_scene_swrt_bindless_subgroup.comp.cso.inl"
 #include "shaders/output/mix_incremental.comp.cso.inl"
 #include "shaders/output/nlm_filter.comp.cso.inl"
 #include "shaders/output/postprocess.comp.cso.inl"
@@ -168,16 +161,18 @@ namespace Dx {
 #include "shaders/output/shade_secondary_bindless_cache_update.comp.cso.inl"
 #include "shaders/output/shade_secondary_bindless_sky.comp.cso.inl"
 #include "shaders/output/shade_sky.comp.cso.inl"
+#include "shaders/output/shade_sky_primary.comp.cso.inl"
 #include "shaders/output/sort_hash_rays.comp.cso.inl"
 #include "shaders/output/sort_init_count_table.comp.cso.inl"
 #include "shaders/output/sort_reduce.comp.cso.inl"
-#include "shaders/output/sort_reorder_rays.comp.cso.inl"
 #include "shaders/output/sort_scan.comp.cso.inl"
 #include "shaders/output/sort_scan_add.comp.cso.inl"
 #include "shaders/output/sort_scatter.comp.cso.inl"
 #include "shaders/output/spatial_cache_resolve.comp.cso.inl"
 #include "shaders/output/spatial_cache_update.comp.cso.inl"
 #include "shaders/output/spatial_cache_update_compat.comp.cso.inl"
+#include "shaders/output/spatial_cache_update_perm.comp.cso.inl"
+#include "shaders/output/spatial_cache_update_perm_compat.comp.cso.inl"
 } // namespace Dx
 } // namespace Ray
 
@@ -236,13 +231,14 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log,
     use_bindless_ = DecideBindless_(s);
     use_tex_compression_ = s.use_tex_compression;
     use_fp16_ = ctx_->fp16_supported();
-    use_subgroup_ = ctx_->subgroup_supported();
+    if (!ctx_->subgroup_supported()) {
+        throw std::runtime_error("DirectX device does not support wave operations!");
+    }
     use_spatial_cache_ = s.use_spatial_cache && ctx_->int64_supported();
     log->Info("HWRT         is %s", use_hwrt_ ? "enabled" : "disabled");
     log->Info("Bindless     is %s", use_bindless_ ? "enabled" : "disabled");
     log->Info("Compression  is %s", use_tex_compression_ ? "enabled" : "disabled");
     log->Info("Float16      is %s", use_fp16_ ? "enabled" : "disabled");
-    log->Info("Subgroup     is %s", use_subgroup_ ? "enabled" : "disabled");
     log->Info("SpatialCache is %s", use_spatial_cache_ ? "enabled" : "disabled");
     log->Info("============================================================================");
 
@@ -539,7 +535,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
                               random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, cam.fwd,
                               cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
-                              prim_hits_buf_);
+                              nullptr, prim_hits_buf_);
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
@@ -585,37 +581,33 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     timestamps_[ctx_->backend_frame].secondary_shadow.clear();
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
-#if !DISABLE_SORTING
         timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, true));
 
-        if (!use_hwrt_ && use_subgroup_) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Sort Rays");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Sort Rays");
 
-            kernel_SortHashRays(cmd_buf, indir_args_buf_[0], secondary_rays_buf_, counters_buf_, root_min, cell_size,
-                                ray_hashes_bufs_[0]);
-            RadixSort(cmd_buf, indir_args_buf_[0], ray_hashes_bufs_, count_table_buf_, counters_buf_,
-                      reduce_table_buf_);
-            kernel_SortReorderRays(cmd_buf, indir_args_buf_[0], 0, secondary_rays_buf_, ray_hashes_bufs_[0],
-                                   counters_buf_, 1, prim_rays_buf_);
-
-            std::swap(secondary_rays_buf_, prim_rays_buf_);
-        }
+        kernel_SortHashRays(cmd_buf, indir_args_buf_[0], secondary_rays_buf_, counters_buf_, root_min, cell_size,
+                            ray_hashes_bufs_[0]);
+        const int perm_index = RadixSort(cmd_buf, indir_args_buf_[0], ray_hashes_bufs_, count_table_buf_, counters_buf_,
+                                         reduce_table_buf_);
+        Buffer &sort_perm = ray_hashes_bufs_[perm_index];
+        // the perm must survive the shade pass, so the sky-ray list goes to the other buffer
+        Buffer &sky_rays_buf = ray_hashes_bufs_[1 - perm_index];
 
         timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, false));
-#endif // !DISABLE_SORTING
 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, true));
         { // trace secondary rays
             DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectSceneSecondary");
             kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
                                   random_seq_buf_, rand_seed, region.iteration, s.tlas_root_, nullptr, -1.0f,
-                                  s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
+                                  s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, &sort_perm,
+                                  prim_hits_buf_);
         }
 
         if (sc_data.visible_lights_count) {
             DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectAreaLights");
             kernel_IntersectAreaLights(cmd_buf, sc_data, indir_args_buf_[0], counters_buf_, secondary_rays_buf_,
-                                       prim_hits_buf_);
+                                       sort_perm, prim_hits_buf_);
         }
 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, false));
@@ -628,8 +620,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, cache_mode, clamp_val, s.env_, indir_args_buf_[0], 0,
                                       prim_hits_buf_, secondary_rays_buf_, sc_data, random_seq_buf_, rand_seed,
                                       region.iteration, s.tex_atlases_, s.bindless_tex_data_, temp_buf0_,
-                                      prim_rays_buf_, shadow_rays_buf_, ray_hashes_bufs_[0], counters_buf_, temp_buf1_,
-                                      temp_depth_normals_buf_);
+                                      prim_rays_buf_, shadow_rays_buf_, sky_rays_buf, sort_perm, counters_buf_,
+                                      temp_buf1_, temp_depth_normals_buf_);
         }
 
         { // prepare indirect args
@@ -640,8 +632,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
         if (sc_data.env.sky_map_spread_angle > 0.0f) {
             DebugMarker _(ctx_.get(), cmd_buf, "Ray::ShadeSkySecondary");
             kernel_ShadeSkySecondary(cmd_buf, cam.pass_settings, clamp_val, s.env_, indir_args_buf_[0], 4,
-                                     prim_hits_buf_, secondary_rays_buf_, ray_hashes_bufs_[0], counters_buf_, sc_data,
-                                     region.iteration, temp_buf0_);
+                                     prim_hits_buf_, secondary_rays_buf_, sky_rays_buf, sort_perm, counters_buf_,
+                                     sc_data, region.iteration, temp_buf0_);
         }
 
         timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
@@ -1256,7 +1248,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         kernel_IntersectScene(cmd_buf, indir_args_buf_[0], 0, counters_buf_, cam.pass_settings, sc_data,
                               random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, cam.fwd,
                               cam.clip_end - cam.clip_start, s.tex_atlases_, s.bindless_tex_data_, prim_rays_buf_,
-                              prim_hits_buf_);
+                              nullptr, prim_hits_buf_);
     }
 
     { // shade primary hits
@@ -1288,37 +1280,31 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
             temp_lock_buf_.Fill(0, temp_lock_buf_.size(), 0, cmd_buf);
         }
         kernel_SpatialCacheUpdate(cmd_buf, cache_grid_params, indir_args_buf_[0], 0, counters_buf_, 0, prim_hits_buf_,
-                                  prim_rays_buf_, temp_cache_data_buf_, temp_buf0_, temp_depth_normals_buf_,
+                                  prim_rays_buf_, nullptr, temp_cache_data_buf_, temp_buf0_, temp_depth_normals_buf_,
                                   sc_data.spatial_cache_entries, sc_data.spatial_cache_voxels, temp_lock_buf_);
     }
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
-#if !DISABLE_SORTING
-        if (!use_hwrt_ && use_subgroup_) {
-            DebugMarker _(ctx_.get(), cmd_buf, "Ray::Sort Rays");
+        DebugMarker _(ctx_.get(), cmd_buf, "Ray::Sort Rays");
 
-            kernel_SortHashRays(cmd_buf, indir_args_buf_[1], secondary_rays_buf_, counters_buf_, root_min, cell_size,
-                                ray_hashes_bufs_[0]);
-            RadixSort(cmd_buf, indir_args_buf_[1], ray_hashes_bufs_, count_table_buf_, counters_buf_,
-                      reduce_table_buf_);
-            kernel_SortReorderRays(cmd_buf, indir_args_buf_[1], 0, secondary_rays_buf_, ray_hashes_bufs_[0],
-                                   counters_buf_, 1, prim_rays_buf_);
-
-            std::swap(secondary_rays_buf_, prim_rays_buf_);
-        }
-#endif // !DISABLE_SORTING
+        kernel_SortHashRays(cmd_buf, indir_args_buf_[1], secondary_rays_buf_, counters_buf_, root_min, cell_size,
+                            ray_hashes_bufs_[0]);
+        const int perm_index = RadixSort(cmd_buf, indir_args_buf_[1], ray_hashes_bufs_, count_table_buf_, counters_buf_,
+                                         reduce_table_buf_);
+        Buffer &sort_perm = ray_hashes_bufs_[perm_index];
 
         { // trace secondary rays
             DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectSceneSecondary");
             kernel_IntersectScene(cmd_buf, indir_args_buf_[1], 0, counters_buf_, cam.pass_settings, sc_data,
                                   random_seq_buf_, rand_seed, region.cache_iteration, s.tlas_root_, nullptr, -1.0f,
-                                  s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
+                                  s.tex_atlases_, s.bindless_tex_data_, secondary_rays_buf_, &sort_perm,
+                                  prim_hits_buf_);
         }
 
         if (sc_data.visible_lights_count) {
             DebugMarker _(ctx_.get(), cmd_buf, "Ray::IntersectAreaLights");
             kernel_IntersectAreaLights(cmd_buf, sc_data, indir_args_buf_[1], counters_buf_, secondary_rays_buf_,
-                                       prim_hits_buf_);
+                                       sort_perm, prim_hits_buf_);
         }
 
         { // shade secondary hits
@@ -1327,7 +1313,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, eSpatialCacheMode::Update, clamp_val, s.env_,
                                       indir_args_buf_[1], 0, prim_hits_buf_, secondary_rays_buf_, sc_data,
                                       random_seq_buf_, rand_seed, region.cache_iteration, s.tex_atlases_,
-                                      s.bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_, {},
+                                      s.bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_, {}, sort_perm,
                                       counters_buf_, temp_buf1_, temp_depth_normals_buf_);
         }
 
@@ -1347,7 +1333,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
         { // update spatial cache
             DebugMarker _(ctx_.get(), cmd_buf, "Ray::UpdateSpatialCache");
             kernel_SpatialCacheUpdate(cmd_buf, cache_grid_params, indir_args_buf_[1], 0, counters_buf_, 0,
-                                      prim_hits_buf_, secondary_rays_buf_, temp_cache_data_buf_, temp_buf0_,
+                                      prim_hits_buf_, secondary_rays_buf_, &sort_perm, temp_cache_data_buf_, temp_buf0_,
                                       temp_depth_normals_buf_, sc_data.spatial_cache_entries,
                                       sc_data.spatial_cache_voxels, temp_lock_buf_);
         }
@@ -1725,6 +1711,8 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
                     internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_sky, "Shade Sky", internal_shaders_output_shade_sky_comp_cso, eShaderType::Comp, false},
+        {sh_.shade_sky_primary, "Shade Sky (Primary)", internal_shaders_output_shade_sky_primary_comp_cso,
+         eShaderType::Comp, false},
         {sh_.prepare_indir_args, "Prepare Indir Args", internal_shaders_output_prepare_indir_args_comp_cso,
          eShaderType::Comp, false},
         {sh_.mix_incremental, "Mix Incremental", internal_shaders_output_mix_incremental_comp_cso, eShaderType::Comp,
@@ -1741,54 +1729,56 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
         {sh_.sort_scan, "Sort Scan", internal_shaders_output_sort_scan_comp_cso, eShaderType::Comp, false},
         {sh_.sort_scan_add, "Sort Scan Add", internal_shaders_output_sort_scan_add_comp_cso, eShaderType::Comp, false},
         {sh_.sort_scatter, "Sort Scatter", internal_shaders_output_sort_scatter_comp_cso, eShaderType::Comp, false},
-        {sh_.sort_reorder_rays, "Sort Reorder Rays", internal_shaders_output_sort_reorder_rays_comp_cso,
-         eShaderType::Comp, false},
         {sh_.spatial_cache_resolve, "Spatial Cache Resolve", internal_shaders_output_spatial_cache_resolve_comp_cso,
          eShaderType::Comp, false}};
     if (use_hwrt_) {
-        shaders_to_init.emplace_back(sh_.intersect_scene, "Intersect Scene (Primary) (HWRT)",
-                                     PickShader(internal_shaders_output_intersect_scene_hwrt_bindless_comp_cso,
-                                                internal_shaders_output_intersect_scene_hwrt_atlas_comp_cso),
-                                     eShaderType::Comp, false);
-        shaders_to_init.emplace_back(sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (HWRT)",
-                                     PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso,
-                                                internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso),
-                                     eShaderType::Comp, false);
-        shaders_to_init.emplace_back(sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (HWRT)",
-                                     PickShader(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso,
-                                                internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso),
-                                     eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_primary, "Intersect Scene (Primary) (HWRT)",
+            PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_primary_comp_cso,
+                       internal_shaders_output_intersect_scene_indirect_hwrt_atlas_primary_comp_cso),
+            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (HWRT)",
+            PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso,
+                       internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso),
+            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (HWRT)",
+            PickShader(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso,
+                       internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso),
+            eShaderType::Comp, false);
         shaders_to_init.emplace_back(sh_.debug_rt, "Debug RT", internal_shaders_output_debug_rt_comp_cso,
                                      eShaderType::Comp, false);
     } else {
-        shaders_to_init.emplace_back(sh_.intersect_scene, "Intersect Scene (Primary) (SWRT)",
-                                     PickShader(internal_shaders_output_intersect_scene_swrt_bindless_comp_cso,
-                                                internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_cso,
-                                                internal_shaders_output_intersect_scene_swrt_atlas_comp_cso,
-                                                internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_cso),
-                                     eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_primary, "Intersect Scene (Primary) (SWRT)",
+            PickShader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_primary_comp_cso,
+                       internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_primary_comp_cso),
+            eShaderType::Comp, false);
         shaders_to_init.emplace_back(
             sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (SWRT)",
-            PickShader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_cso,
-                       internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_cso,
-                       internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_cso,
+            PickShader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_cso,
                        internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_cso),
             eShaderType::Comp, false);
         shaders_to_init.emplace_back(
             sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (SWRT)",
-            PickShader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_cso,
-                       internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_cso,
-                       internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_cso,
+            PickShader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_cso,
                        internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_cso),
             eShaderType::Comp, false);
     }
     if (ctx_->int64_atomics_supported()) {
         shaders_to_init.emplace_back(sh_.spatial_cache_update, "Spatial Cache Update",
                                      internal_shaders_output_spatial_cache_update_comp_cso, eShaderType::Comp, false);
+        shaders_to_init.emplace_back(sh_.spatial_cache_update_perm, "Spatial Cache Update (Perm)",
+                                     internal_shaders_output_spatial_cache_update_perm_comp_cso, eShaderType::Comp,
+                                     false);
     } else {
         shaders_to_init.emplace_back(sh_.spatial_cache_update, "Spatial Cache Update",
                                      internal_shaders_output_spatial_cache_update_compat_comp_cso, eShaderType::Comp,
                                      false);
+        shaders_to_init.emplace_back(sh_.spatial_cache_update_perm, "Spatial Cache Update (Perm)",
+                                     internal_shaders_output_spatial_cache_update_perm_compat_comp_cso,
+                                     eShaderType::Comp, false);
     }
 
     parallel_for(0, int(shaders_to_init.size()), [&](const int i) {
@@ -1805,7 +1795,7 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
 
     prog_.prim_rays_gen_simple = Program{"Primary Raygen Simple", ctx_.get(), &sh_.prim_rays_gen_simple, log};
     prog_.prim_rays_gen_adaptive = Program{"Primary Raygen Adaptive", ctx_.get(), &sh_.prim_rays_gen_adaptive, log};
-    prog_.intersect_scene = Program{"Intersect Scene (Primary)", ctx_.get(), &sh_.intersect_scene, log};
+    prog_.intersect_scene_primary = Program{"Intersect Scene (Primary)", ctx_.get(), &sh_.intersect_scene_primary, log};
     prog_.intersect_scene_indirect =
         Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_.intersect_scene_indirect, log};
     prog_.intersect_area_lights = Program{"Intersect Area Lights", ctx_.get(), &sh_.intersect_area_lights, log};
@@ -1826,6 +1816,7 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
     prog_.shade_secondary_cache_query_sky =
         Program{"Shade (Secondary) (Cache Query) (Sky)", ctx_.get(), &sh_.shade_secondary_cache_query_sky, log};
     prog_.shade_sky = Program{"Shade Sky", ctx_.get(), &sh_.shade_sky, log};
+    prog_.shade_sky_primary = Program{"Shade Sky (Primary)", ctx_.get(), &sh_.shade_sky_primary, log};
     prog_.intersect_scene_shadow = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_.intersect_scene_shadow, log};
     prog_.prepare_indir_args = Program{"Prepare Indir Args", ctx_.get(), &sh_.prepare_indir_args, log};
     prog_.mix_incremental = Program{"Mix Incremental", ctx_.get(), &sh_.mix_incremental, log};
@@ -1841,14 +1832,15 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
     prog_.sort_scan = Program{"Sort Scan", ctx_.get(), &sh_.sort_scan, log};
     prog_.sort_scan_add = Program{"Sort Scan Add", ctx_.get(), &sh_.sort_scan_add, log};
     prog_.sort_scatter = Program{"Sort Scatter", ctx_.get(), &sh_.sort_scatter, log};
-    prog_.sort_reorder_rays = Program{"Reorder Rays", ctx_.get(), &sh_.sort_reorder_rays, log};
     prog_.spatial_cache_update = Program{"Spatial Cache Update", ctx_.get(), &sh_.spatial_cache_update, log};
+    prog_.spatial_cache_update_perm =
+        Program{"Spatial Cache Update (Perm)", ctx_.get(), &sh_.spatial_cache_update_perm, log};
     prog_.spatial_cache_resolve = Program{"Spatial Cache Resolve", ctx_.get(), &sh_.spatial_cache_resolve, log};
 
     SmallVector<std::tuple<Pipeline &, Program &, bool>, 32> pipelines_to_init = {
         {pi_.prim_rays_gen_simple, prog_.prim_rays_gen_simple, false},
         {pi_.prim_rays_gen_adaptive, prog_.prim_rays_gen_adaptive, false},
-        {pi_.intersect_scene, prog_.intersect_scene, false},
+        {pi_.intersect_scene_primary, prog_.intersect_scene_primary, false},
         {pi_.intersect_scene_indirect, prog_.intersect_scene_indirect, false},
         {pi_.intersect_area_lights, prog_.intersect_area_lights, false},
         {pi_.shade_primary, prog_.shade_primary, false},
@@ -1856,6 +1848,7 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
         {pi_.shade_secondary, prog_.shade_secondary, false},
         {pi_.shade_secondary_sky, prog_.shade_secondary_sky, false},
         {pi_.shade_sky, prog_.shade_sky, false},
+        {pi_.shade_sky_primary, prog_.shade_sky_primary, false},
         {pi_.intersect_scene_shadow, prog_.intersect_scene_shadow, false},
         {pi_.prepare_indir_args, prog_.prepare_indir_args, false},
         {pi_.mix_incremental, prog_.mix_incremental, false},
@@ -1863,17 +1856,15 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
         {pi_.filter_variance, prog_.filter_variance, false},
         {pi_.nlm_filter, prog_.nlm_filter, false},
         {pi_.sort_hash_rays, prog_.sort_hash_rays, false},
-        {pi_.sort_reorder_rays, prog_.sort_reorder_rays, false}};
+    };
     if (use_hwrt_) {
         pipelines_to_init.emplace_back(pi_.debug_rt, prog_.debug_rt, false);
     }
-    if (use_subgroup_) {
-        pipelines_to_init.emplace_back(pi_.sort_init_count_table, prog_.sort_init_count_table, false);
-        pipelines_to_init.emplace_back(pi_.sort_reduce, prog_.sort_reduce, false);
-        pipelines_to_init.emplace_back(pi_.sort_scan, prog_.sort_scan, false);
-        pipelines_to_init.emplace_back(pi_.sort_scan_add, prog_.sort_scan_add, false);
-        pipelines_to_init.emplace_back(pi_.sort_scatter, prog_.sort_scatter, false);
-    }
+    pipelines_to_init.emplace_back(pi_.sort_init_count_table, prog_.sort_init_count_table, false);
+    pipelines_to_init.emplace_back(pi_.sort_reduce, prog_.sort_reduce, false);
+    pipelines_to_init.emplace_back(pi_.sort_scan, prog_.sort_scan, false);
+    pipelines_to_init.emplace_back(pi_.sort_scan_add, prog_.sort_scan_add, false);
+    pipelines_to_init.emplace_back(pi_.sort_scatter, prog_.sort_scatter, false);
     if (use_spatial_cache_) {
         pipelines_to_init.emplace_back(pi_.shade_primary_cache_update, prog_.shade_primary_cache_update, false);
         pipelines_to_init.emplace_back(pi_.shade_primary_cache_query, prog_.shade_primary_cache_query, false);
@@ -1885,6 +1876,7 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
                                        false);
 
         pipelines_to_init.emplace_back(pi_.spatial_cache_update, prog_.spatial_cache_update, false);
+        pipelines_to_init.emplace_back(pi_.spatial_cache_update_perm, prog_.spatial_cache_update_perm, false);
         pipelines_to_init.emplace_back(pi_.spatial_cache_resolve, prog_.spatial_cache_resolve, false);
     }
     parallel_for(0, int(pipelines_to_init.size()), [&](const int i) {

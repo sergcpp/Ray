@@ -30,6 +30,7 @@ const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
 const int ATMOSPHERE_PARAMS_BUF_SLOT = 3;
+const int SKY_RAY_INDICES_BUF_SLOT = 4;
 const int RAY_INDICES_BUF_SLOT = 4;
 const int COUNTERS_BUF_SLOT = 5;
 const int HITS_BUF_SLOT = 6;
@@ -42,6 +43,7 @@ const int WEATHER_TEX_SLOT = 12;
 const int CIRRUS_TEX_SLOT = 13;
 const int CURL_TEX_SLOT = 14;
 const int NOISE3D_TEX_SLOT = 15;
+const int SORT_RAY_INDICES_BUF_SLOT = 16;
 
 const int OUT_IMG_SLOT = 0;
 

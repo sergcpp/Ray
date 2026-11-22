@@ -27,6 +27,12 @@ layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
 };
 
 #if !PRIMARY
+layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
+    ray_hash_t g_sort_ray_indices[];
+};
+#endif
+
+#if !PRIMARY
 layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
 };
@@ -71,17 +77,20 @@ void main() {
     int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
 
     int index = int(gl_GlobalInvocationID.y * g_params.rect.z) + x;
+    const int ray_index = index;
 #else
     const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
     if (index >= g_counters[1]) {
         return;
     }
 
-    const int x = int((g_rays[index].xy >> 16) & 0xffff);
-    const int y = int(g_rays[index].xy & 0xffff);
+    const int ray_index = int(g_sort_ray_indices[index].index);
+
+    const int x = int((g_rays[ray_index].xy >> 16) & 0xffff);
+    const int y = int(g_rays[ray_index].xy & 0xffff);
 #endif
 
-    ray_data_t ray = g_rays[index];
+    ray_data_t ray = g_rays[ray_index];
 
     vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
