@@ -63,20 +63,12 @@ bool Ray::Mtl::Scene::InitPipelines() {
 // so the shared AddAtlasTexture path never asks the GPU for them (DX precedent)
 void Ray::Mtl::Scene::GenerateTextureMips_nolock() {}
 
-void Ray::Mtl::Scene::PrepareBindlessTextures_nolock() {
+bool Ray::Mtl::Scene::InitBindlessArray_nolock() {
     if (!use_bindless_) { // the shared caller is unconditional; skip the 64K-slot arg table
-        return;
+        return false;
     }
     const uint32_t tex_cap = ctx_->max_sampled_images();
     assert(bindless_textures_.capacity() <= tex_cap);
-
-    { // Init shared sampler
-        SamplingParams params;
-        params.filter = eFilter::Nearest;
-        params.wrap = eWrap::Repeat;
-
-        bindless_tex_data_.shared_sampler.Init(ctx_, params);
-    }
 
     { // Single texture-array argument (index 0) matching spvDescriptorSetBuffer1's
       // spvDescriptor<texture2d<float>> member emitted by spirv-cross
@@ -95,40 +87,28 @@ void Ray::Mtl::Scene::PrepareBindlessTextures_nolock() {
 
         if (!bindless_tex_data_.encoder) {
             log_->Error("Failed to create Metal bindless argument encoder!");
-            return;
+            return false;
         }
 
         bindless_tex_data_.arg_buf =
             ctx_->device()->newBuffer(bindless_tex_data_.encoder->encodedLength(), MTL::ResourceStorageModeShared);
         if (!bindless_tex_data_.arg_buf) {
             log_->Error("Failed to allocate Metal bindless argument buffer!");
-            return;
+            return false;
         }
         bindless_tex_data_.encoder->setArgumentBuffer(bindless_tex_data_.arg_buf, 0);
     }
+    return true;
+}
 
-    bindless_tex_data_.tex_sizes = Buffer{"Texture sizes", ctx_, eBufType::Storage,
-                                          uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
-    Buffer tex_sizes_stage = Buffer{"Texture sizes Stage", ctx_, eBufType::Upload,
-                                    uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
+void Ray::Mtl::Scene::SetBindlessTextureSlot_nolock(const uint32_t index, const Image &tex) {
+    MTL::Texture *tex_mtl = tex.mtl();
+    bindless_tex_data_.encoder->setTextures(&tex_mtl, NS::Range::Make(index, 1));
+}
 
-    std::vector<MTL::Texture *> tex_ptrs(size_t(tex_cap), nullptr);
-    for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        const Image &tex = bindless_textures_[it.index()];
-        tex_ptrs[size_t(it.index())] = tex.mtl();
-    }
-    bindless_tex_data_.encoder->setTextures(tex_ptrs.data(), NS::Range::Make(0, tex_cap));
+void Ray::Mtl::Scene::TransitionBindlessTextures_nolock() {}
 
-    uint32_t *p_tex_sizes = reinterpret_cast<uint32_t *>(tex_sizes_stage.Map());
-    memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
-
-    for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        const Image &tex = bindless_textures_[it.index()];
-        p_tex_sizes[it.index()] = (uint32_t(tex.params.w) << 16) | tex.params.h;
-    }
-
-    tex_sizes_stage.Unmap();
-
+void Ray::Mtl::Scene::FinalizeBindlessTextures_nolock(Buffer &tex_sizes_stage) {
     CommandBuffer cmd_buf = ctx_->BeginSingleTimeCommands();
     CopyBufferToBuffer(tex_sizes_stage, 0, bindless_tex_data_.tex_sizes, 0, bindless_tex_data_.tex_sizes.size(),
                        cmd_buf);

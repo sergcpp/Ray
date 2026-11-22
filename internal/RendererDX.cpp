@@ -191,6 +191,34 @@ void BindBindlessExtra(Context &, CommandBuffer, const Pipeline &, const Bindles
                        SmallVector<Binding, 32> &bindings) {
     bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
 }
+
+// Per-frame snapshot of the bindless SRV table into this frame's descriptor heap window:
+// srv_descr_pool's heap is CPU-only, dispatches bind the ring window instead
+void CopyBindlessTable(Context *ctx, const BindlessTexData &bindless_tex) {
+    if (bindless_tex.srv_descr_table.count == 0) {
+        return;
+    }
+
+    ID3D12Device *device = ctx->device();
+    const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    DescrSizes descr_sizes;
+    descr_sizes.cbv_srv_uav_count += bindless_tex.srv_descr_table.count;
+
+    const PoolRefs pool_refs = ctx->default_descr_alloc()->Alloc(descr_sizes);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = pool_refs.cbv_srv_uav.heap->GetCPUDescriptorHandleForHeapStart();
+    srv_cpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
+    D3D12_GPU_DESCRIPTOR_HANDLE srv_gpu_handle = pool_refs.cbv_srv_uav.heap->GetGPUDescriptorHandleForHeapStart();
+    srv_gpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
+
+    device->CopyDescriptorsSimple(descr_sizes.cbv_srv_uav_count, srv_cpu_handle,
+                                  D3D12_CPU_DESCRIPTOR_HANDLE{bindless_tex.srv_descr_table.cpu_ptr},
+                                  D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    bindless_tex.srv_descr_table.gpu_heap = pool_refs.cbv_srv_uav.heap;
+    bindless_tex.srv_descr_table.gpu_ptr = srv_gpu_handle.ptr;
+}
 } // namespace Ray::Dx
 
 Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log,
@@ -205,7 +233,7 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log,
     assert(Types::RAND_DIMS_COUNT == Ray::RAND_DIMS_COUNT);
 
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
-    use_bindless_ = s.use_bindless && ctx_->max_sampled_images() >= 16384u;
+    use_bindless_ = DecideBindless_(s);
     use_tex_compression_ = s.use_tex_compression;
     use_fp16_ = ctx_->fp16_supported();
     use_subgroup_ = ctx_->subgroup_supported();
@@ -481,29 +509,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
     TransitionSceneResources(cmd_buf, sc_data);
 
-    // Allocate bindless texture descriptors
-    if (s.bindless_tex_data_.srv_descr_table.count) {
-        // TODO: refactor this!
-        ID3D12Device *device = ctx_->device();
-        const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        DescrSizes descr_sizes;
-        descr_sizes.cbv_srv_uav_count += s.bindless_tex_data_.srv_descr_table.count;
-
-        const PoolRefs pool_refs = ctx_->default_descr_alloc()->Alloc(descr_sizes);
-
-        D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = pool_refs.cbv_srv_uav.heap->GetCPUDescriptorHandleForHeapStart();
-        srv_cpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
-        D3D12_GPU_DESCRIPTOR_HANDLE srv_gpu_handle = pool_refs.cbv_srv_uav.heap->GetGPUDescriptorHandleForHeapStart();
-        srv_gpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
-
-        device->CopyDescriptorsSimple(descr_sizes.cbv_srv_uav_count, srv_cpu_handle,
-                                      D3D12_CPU_DESCRIPTOR_HANDLE{s.bindless_tex_data_.srv_descr_table.cpu_ptr},
-                                      D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        s.bindless_tex_data_.srv_descr_table.gpu_heap = pool_refs.cbv_srv_uav.heap;
-        s.bindless_tex_data_.srv_descr_table.gpu_ptr = srv_gpu_handle.ptr;
-    }
+    CopyBindlessTable(ctx_.get(), s.bindless_tex_data_);
 
     const rect_t rect = region.rect();
     const uint32_t rand_seed = Ref::hash((region.iteration - 1) / RAND_SAMPLES_COUNT);
@@ -1227,29 +1233,7 @@ void Ray::Dx::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
 
     TransitionSceneResources(cmd_buf, sc_data);
 
-    // Allocate bindless texture descriptors
-    if (s.bindless_tex_data_.srv_descr_table.count) {
-        // TODO: refactor this!
-        ID3D12Device *device = ctx_->device();
-        const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        DescrSizes descr_sizes;
-        descr_sizes.cbv_srv_uav_count += s.bindless_tex_data_.srv_descr_table.count;
-
-        const PoolRefs pool_refs = ctx_->default_descr_alloc()->Alloc(descr_sizes);
-
-        D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = pool_refs.cbv_srv_uav.heap->GetCPUDescriptorHandleForHeapStart();
-        srv_cpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
-        D3D12_GPU_DESCRIPTOR_HANDLE srv_gpu_handle = pool_refs.cbv_srv_uav.heap->GetGPUDescriptorHandleForHeapStart();
-        srv_gpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
-
-        device->CopyDescriptorsSimple(descr_sizes.cbv_srv_uav_count, srv_cpu_handle,
-                                      D3D12_CPU_DESCRIPTOR_HANDLE{s.bindless_tex_data_.srv_descr_table.cpu_ptr},
-                                      D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        s.bindless_tex_data_.srv_descr_table.gpu_heap = pool_refs.cbv_srv_uav.heap;
-        s.bindless_tex_data_.srv_descr_table.gpu_ptr = srv_gpu_handle.ptr;
-    }
+    CopyBindlessTable(ctx_.get(), s.bindless_tex_data_);
 
     const uint32_t rand_seed = Ref::hash(Ref::hash((region.cache_iteration - 1) / RAND_SAMPLES_COUNT));
 
@@ -1598,80 +1582,80 @@ bool Ray::Dx::Renderer::InitUNetFilterPipelines(
     const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
     ILog *log = ctx_->log();
 
-    auto select_shader = [this](Span<const uint8_t> default_shader, Span<const uint8_t> fp16_shader) {
+    auto select_unet_shader = [this](Span<const uint8_t> default_shader, Span<const uint8_t> fp16_shader) {
         return use_fp16_ ? fp16_shader : default_shader;
     };
 
     SmallVector<std::tuple<Shader &, Program &, Pipeline &, const char *, Span<const uint8_t>, eShaderType, bool>, 32>
         shaders_to_init = {
             {sh_.convolution_Img_9_32, prog_.convolution_Img_9_32, pi_.convolution_Img_9_32, "Convolution Img 9 32",
-             select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_cso,
-                           internal_shaders_output_convolution_Img_9_32_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_cso,
+                                internal_shaders_output_convolution_Img_9_32_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_32_32_Downsample, prog_.convolution_32_32_Downsample, pi_.convolution_32_32_Downsample,
              "Convolution 32 32 Downsample",
-             select_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_cso,
-                           internal_shaders_output_convolution_32_32_Downsample_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_cso,
+                                internal_shaders_output_convolution_32_32_Downsample_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_32_48_Downsample, prog_.convolution_32_48_Downsample, pi_.convolution_32_48_Downsample,
              "Convolution 32 48 Downsample",
-             select_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_cso,
-                           internal_shaders_output_convolution_32_48_Downsample_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_cso,
+                                internal_shaders_output_convolution_32_48_Downsample_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_48_64_Downsample, prog_.convolution_48_64_Downsample, pi_.convolution_48_64_Downsample,
              "Convolution 48 64 Downsample",
-             select_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_cso,
-                           internal_shaders_output_convolution_48_64_Downsample_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_cso,
+                                internal_shaders_output_convolution_48_64_Downsample_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_64_80_Downsample, prog_.convolution_64_80_Downsample, pi_.convolution_64_80_Downsample,
              "Convolution 64 80 Downsample",
-             select_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_cso,
-                           internal_shaders_output_convolution_64_80_Downsample_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_cso,
+                                internal_shaders_output_convolution_64_80_Downsample_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_64_64, prog_.convolution_64_64, pi_.convolution_64_64, "Convolution 64 64",
-             select_shader(internal_shaders_output_convolution_64_64_fp32_comp_cso,
-                           internal_shaders_output_convolution_64_64_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_64_64_fp32_comp_cso,
+                                internal_shaders_output_convolution_64_64_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_64_32, prog_.convolution_64_32, pi_.convolution_64_32, "Convolution 64 32",
-             select_shader(internal_shaders_output_convolution_64_32_fp32_comp_cso,
-                           internal_shaders_output_convolution_64_32_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_64_32_fp32_comp_cso,
+                                internal_shaders_output_convolution_64_32_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_80_96, prog_.convolution_80_96, pi_.convolution_80_96, "Convolution 80 96",
-             select_shader(internal_shaders_output_convolution_80_96_fp32_comp_cso,
-                           internal_shaders_output_convolution_80_96_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_80_96_fp32_comp_cso,
+                                internal_shaders_output_convolution_80_96_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_96_96, prog_.convolution_96_96, pi_.convolution_96_96, "Convolution 96 96",
-             select_shader(internal_shaders_output_convolution_96_96_fp32_comp_cso,
-                           internal_shaders_output_convolution_96_96_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_96_96_fp32_comp_cso,
+                                internal_shaders_output_convolution_96_96_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_112_112, prog_.convolution_112_112, pi_.convolution_112_112,
              "Convolution Concat 96 64 112",
-             select_shader(internal_shaders_output_convolution_112_112_fp32_comp_cso,
-                           internal_shaders_output_convolution_112_112_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_112_112_fp32_comp_cso,
+                                internal_shaders_output_convolution_112_112_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_concat_96_64_112, prog_.convolution_concat_96_64_112, pi_.convolution_concat_96_64_112,
              "Convolution 112 112",
-             select_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_cso,
-                           internal_shaders_output_convolution_concat_96_64_112_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_cso,
+                                internal_shaders_output_convolution_concat_96_64_112_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_concat_112_48_96, prog_.convolution_concat_112_48_96, pi_.convolution_concat_112_48_96,
              "Convolution Concat 112 48 96",
-             select_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_cso,
-                           internal_shaders_output_convolution_concat_112_48_96_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_cso,
+                                internal_shaders_output_convolution_concat_112_48_96_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_concat_96_32_64, prog_.convolution_concat_96_32_64, pi_.convolution_concat_96_32_64,
              "Convolution Concat 96 32 64",
-             select_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_cso,
-                           internal_shaders_output_convolution_concat_96_32_64_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_cso,
+                                internal_shaders_output_convolution_concat_96_32_64_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_concat_64_9_64, prog_.convolution_concat_64_9_64, pi_.convolution_concat_64_9_64,
              "Convolution Concat 64 9 64",
-             select_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_cso,
-                           internal_shaders_output_convolution_concat_64_9_64_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_cso,
+                                internal_shaders_output_convolution_concat_64_9_64_fp16_comp_cso),
              eShaderType::Comp, log},
             {sh_.convolution_32_3_img, prog_.convolution_32_3_img, pi_.convolution_32_3_img, "Convolution 32 3 Img",
-             select_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_cso,
-                           internal_shaders_output_convolution_32_3_img_fp16_comp_cso),
+             select_unet_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_cso,
+                                internal_shaders_output_convolution_32_3_img_fp16_comp_cso),
              eShaderType::Comp, log}};
     parallel_for(0, int(shaders_to_init.size()), [&](const int i) {
         std::get<6>(shaders_to_init[i]) =
@@ -1693,12 +1677,6 @@ bool Ray::Dx::Renderer::InitUNetFilterPipelines(
 
 bool Ray::Dx::Renderer::InitPipelines(ILog *log,
                                       const std::function<void(int, int, ParallelForFunction &&)> &parallel_for) {
-    auto select_shader = [this](Span<const uint8_t> bindless_shader, Span<const uint8_t> bindless_subgroup_shader,
-                                Span<const uint8_t> atlas_shader, Span<const uint8_t> atlas_subgroup_shader) {
-        return use_bindless_ ? (use_subgroup_ ? bindless_subgroup_shader : bindless_shader)
-                             : (use_subgroup_ ? atlas_subgroup_shader : atlas_shader);
-    };
-
     SmallVector<std::tuple<Shader &, const char *, Span<const uint8_t>, eShaderType, bool>, 32> shaders_to_init = {
         {sh_.prim_rays_gen_simple, "Primary Raygen Simple", internal_shaders_output_primary_ray_gen_simple_comp_cso,
          eShaderType::Comp, false},
@@ -1707,44 +1685,44 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
         {sh_.intersect_area_lights, "Intersect Area Lights", internal_shaders_output_intersect_area_lights_comp_cso,
          eShaderType::Comp, false},
         {sh_.shade_primary, "Shade (Primary)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_comp_cso},
+         PickShader(internal_shaders_output_shade_primary_bindless_comp_cso,
+                    internal_shaders_output_shade_primary_atlas_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_primary_sky, "Shade (Primary) (Sky)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_sky_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_sky_comp_cso},
+         PickShader(internal_shaders_output_shade_primary_bindless_sky_comp_cso,
+                    internal_shaders_output_shade_primary_atlas_sky_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_primary_cache_update, "Shade (Primary) (Cache Update)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_update_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_update_comp_cso},
+         PickShader(internal_shaders_output_shade_primary_bindless_cache_update_comp_cso,
+                    internal_shaders_output_shade_primary_atlas_cache_update_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_primary_cache_query, "Shade (Primary) (Cache Query)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_comp_cso},
+         PickShader(internal_shaders_output_shade_primary_bindless_cache_query_comp_cso,
+                    internal_shaders_output_shade_primary_atlas_cache_query_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_primary_cache_query_sky, "Shade (Primary) (Cache Query) (Sky)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_cso},
+         PickShader(internal_shaders_output_shade_primary_bindless_cache_query_sky_comp_cso,
+                    internal_shaders_output_shade_primary_atlas_cache_query_sky_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_secondary, "Shade (Secondary)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_comp_cso},
+         PickShader(internal_shaders_output_shade_secondary_bindless_comp_cso,
+                    internal_shaders_output_shade_secondary_atlas_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_secondary_sky, "Shade (Secondary) (Sky)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_sky_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_sky_comp_cso},
+         PickShader(internal_shaders_output_shade_secondary_bindless_sky_comp_cso,
+                    internal_shaders_output_shade_secondary_atlas_sky_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_secondary_cache_update, "Shade (Secondary) (Cache Update)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_update_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_update_comp_cso},
+         PickShader(internal_shaders_output_shade_secondary_bindless_cache_update_comp_cso,
+                    internal_shaders_output_shade_secondary_atlas_cache_update_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_secondary_cache_query, "Shade (Secondary) (Cache Query)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_comp_cso},
+         PickShader(internal_shaders_output_shade_secondary_bindless_cache_query_comp_cso,
+                    internal_shaders_output_shade_secondary_atlas_cache_query_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_secondary_cache_query_sky, "Shade (Secondary) (Cache Query) (Sky)",
-         use_bindless_ ? Span<const uint8_t>{internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_cso}
-                       : Span<const uint8_t>{internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_cso},
+         PickShader(internal_shaders_output_shade_secondary_bindless_cache_query_sky_comp_cso,
+                    internal_shaders_output_shade_secondary_atlas_cache_query_sky_comp_cso),
          eShaderType::Comp, false},
         {sh_.shade_sky, "Shade Sky", internal_shaders_output_shade_sky_comp_cso, eShaderType::Comp, false},
         {sh_.prepare_indir_args, "Prepare Indir Args", internal_shaders_output_prepare_indir_args_comp_cso,
@@ -1768,44 +1746,40 @@ bool Ray::Dx::Renderer::InitPipelines(ILog *log,
         {sh_.spatial_cache_resolve, "Spatial Cache Resolve", internal_shaders_output_spatial_cache_resolve_comp_cso,
          eShaderType::Comp, false}};
     if (use_hwrt_) {
-        shaders_to_init.emplace_back(
-            sh_.intersect_scene, "Intersect Scene (Primary) (HWRT)",
-            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_bindless_comp_cso}
-                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_hwrt_atlas_comp_cso},
-            eShaderType::Comp, false);
-        shaders_to_init.emplace_back(
-            sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (HWRT)",
-            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso}
-                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso},
-            eShaderType::Comp, false);
-        shaders_to_init.emplace_back(
-            sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (HWRT)",
-            use_bindless_ ? Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso}
-                          : Span<const uint8_t>{internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso},
-            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(sh_.intersect_scene, "Intersect Scene (Primary) (HWRT)",
+                                     PickShader(internal_shaders_output_intersect_scene_hwrt_bindless_comp_cso,
+                                                internal_shaders_output_intersect_scene_hwrt_atlas_comp_cso),
+                                     eShaderType::Comp, false);
+        shaders_to_init.emplace_back(sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (HWRT)",
+                                     PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso,
+                                                internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso),
+                                     eShaderType::Comp, false);
+        shaders_to_init.emplace_back(sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (HWRT)",
+                                     PickShader(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso,
+                                                internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso),
+                                     eShaderType::Comp, false);
         shaders_to_init.emplace_back(sh_.debug_rt, "Debug RT", internal_shaders_output_debug_rt_comp_cso,
                                      eShaderType::Comp, false);
     } else {
-        shaders_to_init.emplace_back(
-            sh_.intersect_scene, "Intersect Scene (Primary) (SWRT)",
-            select_shader(internal_shaders_output_intersect_scene_swrt_bindless_comp_cso,
-                          internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_cso,
-                          internal_shaders_output_intersect_scene_swrt_atlas_comp_cso,
-                          internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_cso),
-            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(sh_.intersect_scene, "Intersect Scene (Primary) (SWRT)",
+                                     PickShader(internal_shaders_output_intersect_scene_swrt_bindless_comp_cso,
+                                                internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_cso,
+                                                internal_shaders_output_intersect_scene_swrt_atlas_comp_cso,
+                                                internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_cso),
+                                     eShaderType::Comp, false);
         shaders_to_init.emplace_back(
             sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (SWRT)",
-            select_shader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_cso,
-                          internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_cso,
-                          internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_cso,
-                          internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_cso),
+            PickShader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_cso,
+                       internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_cso,
+                       internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_cso,
+                       internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_cso),
             eShaderType::Comp, false);
         shaders_to_init.emplace_back(
             sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (SWRT)",
-            select_shader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_cso,
-                          internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_cso,
-                          internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_cso,
-                          internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_cso),
+            PickShader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_cso,
+                       internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_cso,
+                       internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_cso,
+                       internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_cso),
             eShaderType::Comp, false);
     }
     if (ctx_->int64_atomics_supported()) {

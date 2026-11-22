@@ -74,16 +74,8 @@ bool Ray::Dx::Scene::InitPipelines() {
 
 void Ray::Dx::Scene::GenerateTextureMips_nolock() {}
 
-void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
+bool Ray::Dx::Scene::InitBindlessArray_nolock() {
     assert(bindless_textures_.capacity() <= ctx_->max_combined_image_samplers());
-
-    { // Init shared sampler
-        SamplingParams params;
-        params.filter = eFilter::Nearest;
-        params.wrap = eWrap::Repeat;
-
-        bindless_tex_data_.shared_sampler.Init(ctx_, params);
-    }
 
     const bool bres = bindless_tex_data_.srv_descr_pool.Init(ctx_->max_combined_image_samplers(), false);
     if (!bres) {
@@ -93,45 +85,33 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
     [[maybe_unused]] const uint32_t off = bindless_tex_data_.srv_descr_pool.Alloc(bindless_textures_.capacity()).first;
     assert(off == 0);
 
-    ID3D12Device *device = ctx_->device();
     ID3D12DescriptorHeap *srv_descr_heap = bindless_tex_data_.srv_descr_pool.heap();
-
-    const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
-
-    bindless_tex_data_.tex_sizes = Buffer{"Texture sizes", ctx_, eBufType::Storage,
-                                          uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
-    Buffer tex_sizes_stage = Buffer{"Texture sizes Stage", ctx_, eBufType::Upload,
-                                    uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
-
-    uint32_t *p_tex_sizes = reinterpret_cast<uint32_t *>(tex_sizes_stage.Map());
-    memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
-
-    for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        const Image &tex = bindless_textures_[it.index()];
-
-        { // copy srv
-            D3D12_CPU_DESCRIPTOR_HANDLE src_handle = tex.handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
-            src_handle.ptr += CBV_SRV_UAV_INCR * tex.handle().views_ref.offset;
-
-            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = srv_cpu_handle;
-            dest_handle.ptr += CBV_SRV_UAV_INCR * it.index();
-
-            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        }
-
-        p_tex_sizes[it.index()] = (uint32_t(tex.params.w) << 16) | tex.params.h;
-    }
-
-    tex_sizes_stage.Unmap();
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_gpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
     bindless_tex_data_.srv_descr_table.type = eDescrType::CBV_SRV_UAV;
     bindless_tex_data_.srv_descr_table.cpu_heap = srv_descr_heap;
     bindless_tex_data_.srv_descr_table.cpu_ptr = srv_gpu_handle.ptr;
     bindless_tex_data_.srv_descr_table.count = int(bindless_textures_.capacity());
+    return true;
+}
 
+void Ray::Dx::Scene::SetBindlessTextureSlot_nolock(const uint32_t index, const Image &tex) {
+    ID3D12Device *device = ctx_->device();
+    const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE src_handle = tex.handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+    src_handle.ptr += CBV_SRV_UAV_INCR * tex.handle().views_ref.offset;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dest_handle =
+        bindless_tex_data_.srv_descr_table.cpu_heap->GetCPUDescriptorHandleForHeapStart();
+    dest_handle.ptr += CBV_SRV_UAV_INCR * index;
+
+    device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+}
+
+void Ray::Dx::Scene::TransitionBindlessTextures_nolock() {}
+
+void Ray::Dx::Scene::FinalizeBindlessTextures_nolock(Buffer &tex_sizes_stage) {
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     { // Transition resources

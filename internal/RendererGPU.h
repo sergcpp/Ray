@@ -116,6 +116,20 @@ class Renderer : public RendererBase {
 
     bool InitPipelines(ILog *log, const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
 
+    // Bindless enable policy is shared; backends add capabilities on top of this if needed
+    bool DecideBindless_(const settings_t &s) const { return s.use_bindless && ctx_->max_sampled_images() >= 16384u; }
+
+    // The same blob-selection rule was duplicated in every backend's InitPipelines table;
+    // the (bindless, atlas) overload is for programs without a subgroup variant
+    Span<const uint8_t> PickShader(Span<const uint8_t> bindless_shader, Span<const uint8_t> bindless_subgroup_shader,
+                                   Span<const uint8_t> atlas_shader, Span<const uint8_t> atlas_subgroup_shader) const {
+        return use_bindless_ ? (use_subgroup_ ? bindless_subgroup_shader : bindless_shader)
+                             : (use_subgroup_ ? atlas_subgroup_shader : atlas_shader);
+    }
+    Span<const uint8_t> PickShader(Span<const uint8_t> bindless_shader, Span<const uint8_t> atlas_shader) const {
+        return use_bindless_ ? bindless_shader : atlas_shader;
+    }
+
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
          use_coop_matrix_ = false, use_subgroup_ = false, use_spatial_cache_ = false;

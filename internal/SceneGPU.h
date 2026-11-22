@@ -152,6 +152,11 @@ class Scene : public SceneCommon {
     void PrepareEnvMapQTree_nolock(const std::function<void(int, int, ParallelForFunction &&)> &parallel_for);
     void GenerateTextureMips_nolock();
     void PrepareBindlessTextures_nolock();
+    // per-backend pieces of PrepareBindlessTextures_nolock: the descriptor/argument mechanism
+    bool InitBindlessArray_nolock(); // false = skip the whole setup (e.g. backend in atlas mode)
+    void SetBindlessTextureSlot_nolock(uint32_t index, const Image &tex);
+    void TransitionBindlessTextures_nolock();
+    void FinalizeBindlessTextures_nolock(Buffer &tex_sizes_stage);
     std::pair<uint32_t, uint32_t> Build_HWRT_BLAS_nolock(uint32_t vert_index, uint32_t vert_count,
                                                          eBVHBuildQuality quality);
     void Rebuild_HWRT_TLAS_nolock();
@@ -808,6 +813,40 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     }
 
     return TextureHandle{ret.first, ret.second};
+}
+
+inline void Ray::NS::Scene::PrepareBindlessTextures_nolock() {
+    if (!InitBindlessArray_nolock()) {
+        return;
+    }
+
+    { // Init shared sampler
+        SamplingParams params;
+        params.filter = eFilter::Nearest;
+        params.wrap = eWrap::Repeat;
+
+        bindless_tex_data_.shared_sampler.Init(ctx_, params);
+    }
+
+    bindless_tex_data_.tex_sizes = Buffer{"Texture sizes", ctx_, eBufType::Storage,
+                                          uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
+    Buffer tex_sizes_stage = Buffer{"Texture sizes Stage", ctx_, eBufType::Upload,
+                                    uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
+
+    TransitionBindlessTextures_nolock();
+
+    uint32_t *p_tex_sizes = reinterpret_cast<uint32_t *>(tex_sizes_stage.Map());
+    memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
+
+    for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
+        const Image &tex = bindless_textures_[it.index()];
+        SetBindlessTextureSlot_nolock(it.index(), tex);
+        p_tex_sizes[it.index()] = (uint32_t(tex.params.w) << 16) | tex.params.h;
+    }
+
+    tex_sizes_stage.Unmap();
+
+    FinalizeBindlessTextures_nolock(tex_sizes_stage);
 }
 
 template <typename T, int N>

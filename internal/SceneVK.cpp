@@ -155,19 +155,11 @@ void Ray::Vk::Scene::GenerateTextureMips_nolock() {
                tex_atlases_[6].page_count(), tex_atlases_[7].page_count(), tex_atlases_[8].page_count());
 }
 
-void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
+bool Ray::Vk::Scene::InitBindlessArray_nolock() {
     assert(bindless_textures_.capacity() <= ctx_->max_sampled_images());
 
     DescrSizes descr_sizes;
     descr_sizes.img_count = ctx_->max_sampled_images();
-
-    { // Init shared sampler
-        SamplingParams params;
-        params.filter = eFilter::Nearest;
-        params.wrap = eWrap::Repeat;
-
-        bindless_tex_data_.shared_sampler.Init(ctx_, params);
-    }
 
     const bool bres = bindless_tex_data_.descr_pool.Init(descr_sizes, 2 /* sets_count */);
     if (!bres) {
@@ -229,57 +221,44 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     bindless_tex_data_.descr_pool.Reset();
     bindless_tex_data_.descr_set = bindless_tex_data_.descr_pool.Alloc(bindless_tex_data_.descr_layout);
     bindless_tex_data_.rt_descr_set = bindless_tex_data_.descr_pool.Alloc(bindless_tex_data_.rt_descr_layout);
+    return true;
+}
 
-    bindless_tex_data_.tex_sizes = Buffer{"Texture sizes", ctx_, eBufType::Storage,
-                                          uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
-    Buffer tex_sizes_stage = Buffer{"Texture sizes Stage", ctx_, eBufType::Upload,
-                                    uint32_t(std::max(1u, bindless_textures_.capacity()) * sizeof(uint32_t))};
+void Ray::Vk::Scene::TransitionBindlessTextures_nolock() {
+    std::vector<TransitionInfo> img_transitions;
+    img_transitions.reserve(bindless_textures_.size());
 
-    { // Transition resources
-        std::vector<TransitionInfo> img_transitions;
-        img_transitions.reserve(bindless_textures_.size());
-
-        for (const auto &tex : bindless_textures_) {
-            img_transitions.emplace_back(&tex, eResState::ShaderResource);
-        }
-
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
-        TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    for (const auto &tex : bindless_textures_) {
+        img_transitions.emplace_back(&tex, eResState::ShaderResource);
     }
 
-    uint32_t *p_tex_sizes = reinterpret_cast<uint32_t *>(tex_sizes_stage.Map());
-    memset(p_tex_sizes, 0, bindless_tex_data_.tex_sizes.size());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+}
 
-    for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
-        const Image &tex = bindless_textures_[it.index()];
+void Ray::Vk::Scene::SetBindlessTextureSlot_nolock(const uint32_t index, const Image &tex) {
+    VkDescriptorImageInfo img_info = tex.vk_desc_image_info();
 
-        { // Update descriptor
-            VkDescriptorImageInfo img_info = tex.vk_desc_image_info();
+    VkWriteDescriptorSet descr_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    descr_write.dstSet = bindless_tex_data_.descr_set;
+    descr_write.dstBinding = 0;
+    descr_write.dstArrayElement = index;
+    descr_write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    descr_write.descriptorCount = 1;
+    descr_write.pBufferInfo = nullptr;
+    descr_write.pImageInfo = &img_info;
+    descr_write.pTexelBufferView = nullptr;
+    descr_write.pNext = nullptr;
 
-            VkWriteDescriptorSet descr_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            descr_write.dstSet = bindless_tex_data_.descr_set;
-            descr_write.dstBinding = 0;
-            descr_write.dstArrayElement = it.index();
-            descr_write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            descr_write.descriptorCount = 1;
-            descr_write.pBufferInfo = nullptr;
-            descr_write.pImageInfo = &img_info;
-            descr_write.pTexelBufferView = nullptr;
-            descr_write.pNext = nullptr;
+    ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
 
-            ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+    descr_write.dstSet = bindless_tex_data_.rt_descr_set;
 
-            descr_write.dstSet = bindless_tex_data_.rt_descr_set;
+    ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+}
 
-            ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
-        }
-
-        p_tex_sizes[it.index()] = (uint32_t(tex.params.w) << 16) | tex.params.h;
-    }
-
-    tex_sizes_stage.Unmap();
-
+void Ray::Vk::Scene::FinalizeBindlessTextures_nolock(Buffer &tex_sizes_stage) {
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
     CopyBufferToBuffer(tex_sizes_stage, 0, bindless_tex_data_.tex_sizes, 0, bindless_tex_data_.tex_sizes.size(),
                        cmd_buf);
