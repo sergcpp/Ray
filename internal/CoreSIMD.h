@@ -2395,7 +2395,8 @@ fvec<S> SampleSphericalRectangle(const fvec<S> P[3], const fvec<S> light_pos[3],
         const fvec<S> h1 = y1 / sqrt(d * d + y1sq);
         const fvec<S> hv = h0 + Xi[1] * (h1 - h0), hv2 = hv * hv;
         fvec<S> yv = y1;
-        where(hv2 < 1.0f - 1e-6f, yv) = (hv * d) / sqrt(1.0f - hv2);
+        // the gate below is write-only: sqrt() still runs on hv2 > 1 lanes, so clamp it and predicate the denom
+        where(hv2 < 1.0f - 1e-6f, yv) = (hv * d) / max(safe_sqrt(1.0f - hv2), FLT_EPS);
 
         // transform (xu, yv, z0) to world coords
         UNROLLED_FOR(i, 3, { out_p[i] = P[i] + xu * x[i] + yv * y[i] + z0 * z[i]; })
@@ -3019,15 +3020,36 @@ void SampleVNDF_Hemisphere_CrossSect(const fvec<S> Vh[3], const fvec<S> &U1, con
     UNROLLED_FOR(i, 3, { out_Nh[i] = t1 * T1[i] + t2 * T2[i] + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh[i]; })
 }
 
+// Concentric square->disk map: the return value is the disk radius (its square is the uniform radial CDF)
+// and out_cos/out_sin the disk point's unit direction, so callers apply their own radial CDF with no division.
+template <int S> fvec<S> concentric_disk(const fvec<S> &u, const fvec<S> &v, fvec<S> &out_cos, fvec<S> &out_sin) {
+    const fvec<S> sx = 2.0f * u - 1.0f;
+    const fvec<S> sy = 2.0f * v - 1.0f;
+
+    const fvec<S> mask = abs(sx) > abs(sy);
+    const fvec<S> r = select(mask, sx, sy);
+    const fvec<S> num = select(mask, sy, sx);
+    // sx == sy == 0 (u == v == 0.5 exactly) would divide by zero; any direction is valid there
+    const fvec<S> ratio = num / select(r != 0.0f, r, fvec<S>{1.0f});
+    const fvec<S> theta = select(mask, 0.25f * PI * ratio, 0.5f * PI - 0.25f * PI * ratio);
+
+    // r is signed (that is how the square's left half reaches -x): the disk point is r*(cos,sin), so the
+    // sign belongs to the direction, not the radius, or callers that use only the direction flip azimuth
+    portable_sincos(theta, out_sin, out_cos);
+    const fvec<S> neg_r = r < 0.0f;
+    out_cos = select(neg_r, -out_cos, out_cos);
+    out_sin = select(neg_r, -out_sin, out_sin);
+    return abs(r);
+}
+
 // https://arxiv.org/pdf/2306.05044.pdf
 template <int S> void SampleVNDF_Hemisphere_SphCap(const fvec<S> Vh[3], const fvec<S> rand[2], fvec<S> out_Nh[3]) {
-    const fvec<S> phi = 2.0f * PI * rand[0];
-    const fvec<S> z = fmadd(1.0f - rand[1], 1.0f + Vh[2], -Vh[2]);
-    const fvec<S> sin_theta = sqrt(saturate(1.0f - z * z));
-    fvec<S> sin_phi, cos_phi;
-    portable_sincos(phi, sin_phi, cos_phi);
-    out_Nh[0] = Vh[0] + sin_theta * cos_phi;
-    out_Nh[1] = Vh[1] + sin_theta * sin_phi;
+    fvec<S> cs, sn;
+    const fvec<S> r = concentric_disk(rand[0], rand[1], cs, sn);
+    const fvec<S> z = fmadd(1.0f - r * r, 1.0f + Vh[2], -Vh[2]);
+    const fvec<S> radius = sqrt(saturate(1.0f - z * z));
+    out_Nh[0] = Vh[0] + cs * radius;
+    out_Nh[1] = Vh[1] + sn * radius;
     out_Nh[2] = Vh[2] + z;
 }
 
@@ -3036,21 +3058,18 @@ template <int S>
 void SampleVNDF_Hemisphere_SphCap_Bounded(const fvec<S> Ve[3], const fvec<S> Vh[3], const fvec<S> alpha[2],
                                           const fvec<S> rand[2], fvec<S> out_Nh[3]) {
     // sample a spherical cap in (-Vh.z, 1]
-    const fvec<S> phi = 2.0f * PI * rand[0];
+    fvec<S> cs, sn;
+    const fvec<S> r = concentric_disk(rand[0], rand[1], cs, sn);
     const fvec<S> a = saturate(min(alpha[0], alpha[1]));
     const fvec<S> s = 1.0f + sqrt(Ve[0] * Ve[0] + Ve[1] * Ve[1]);
     const fvec<S> a2 = a * a, s2 = s * s;
     const fvec<S> k = (1.0f - a2) * s2 / (s2 + a2 * Ve[2] * Ve[2]);
     const fvec<S> b = select(Ve[2] > 0.0f, k * Vh[2], Vh[2]);
-    const fvec<S> z = fmadd(1.0f - rand[1], 1.0f + b, -b);
-    const fvec<S> sin_theta = sqrt(saturate(1.0f - z * z));
-    fvec<S> sin_phi, cos_phi;
-    portable_sincos(phi, sin_phi, cos_phi);
-    const fvec<S> x = sin_theta * cos_phi;
-    const fvec<S> y = sin_theta * sin_phi;
-    out_Nh[0] = x + Vh[0];
-    out_Nh[1] = y + Vh[1];
-    out_Nh[2] = z + Vh[2];
+    const fvec<S> z = fmadd(1.0f - r * r, 1.0f + b, -b);
+    const fvec<S> radius = sqrt(saturate(1.0f - z * z));
+    out_Nh[0] = Vh[0] + cs * radius;
+    out_Nh[1] = Vh[1] + sn * radius;
+    out_Nh[2] = Vh[2] + z;
 }
 
 // Input Ve: view direction
@@ -5245,13 +5264,11 @@ template <int S>
 void Ray::NS::Sample_OrenDiffuse_BSDF(const fvec<S> T[3], const fvec<S> B[3], const fvec<S> N[3], const fvec<S> I[3],
                                       const fvec<S> &roughness, const fvec<S> base_color[3], const fvec<S> &rand_u,
                                       const fvec<S> &rand_v, fvec<S> out_V[3], fvec<S> out_color[4]) {
-    const fvec<S> phi = 2 * PI * rand_v;
-    fvec<S> cos_phi, sin_phi;
-    portable_sincos(phi, sin_phi, cos_phi);
-    const fvec<S> z = sqrt(1.0f - rand_u); // cosine-weighted hemisphere
-    const fvec<S> r = sqrt(rand_u);
+    fvec<S> cs, sn;
+    const fvec<S> r = concentric_disk(rand_u, rand_v, cs, sn);
+    const fvec<S> z = sqrt(max(1.0f - r * r, 0.0f)); // cosine-weighted hemisphere
 
-    const fvec<S> V[3] = {r * cos_phi, r * sin_phi, z}; // in tangent-space
+    const fvec<S> V[3] = {r * cs, r * sn, z}; // in tangent-space
     world_from_tangent(T, B, N, V, out_V);
 
     const fvec<S> neg_I[3] = {-I[0], -I[1], -I[2]};
@@ -5291,26 +5308,23 @@ void Ray::NS::Sample_PrincipledDiffuse_BSDF(const fvec<S> T[3], const fvec<S> B[
                                             const fvec<S> I[3], const fvec<S> &roughness, const fvec<S> base_color[3],
                                             const fvec<S> sheen_color[3], const bool uniform_sampling,
                                             const fvec<S> rand[2], fvec<S> out_V[3], fvec<S> out_color[4]) {
-    const fvec<S> phi = 2 * PI * rand[1];
-    fvec<S> cos_phi, sin_phi;
-    portable_sincos(phi, sin_phi, cos_phi);
+    fvec<S> cs, sn;
+    const fvec<S> r = concentric_disk(rand[0], rand[1], cs, sn);
+    const fvec<S> q = r * r;
 
     fvec<S> V[3];
     if (uniform_sampling) {
-        const fvec<S> dir = sqrt(1.0f - rand[0] * rand[0]);
+        const fvec<S> radius = sqrt(max(1.0f - q * q, 0.0f));
 
         // in tangent-space
-        V[0] = dir * cos_phi;
-        V[1] = dir * sin_phi;
-        V[2] = rand[0];
+        V[0] = cs * radius;
+        V[1] = sn * radius;
+        V[2] = q;
     } else {
-        const fvec<S> dir = sqrt(rand[0]);
-        const fvec<S> k = sqrt(1.0f - rand[0]);
-
         // in tangent-space
-        V[0] = dir * cos_phi;
-        V[1] = dir * sin_phi;
-        V[2] = k;
+        V[0] = r * cs;
+        V[1] = r * sn;
+        V[2] = sqrt(max(1.0f - q, 0.0f));
     }
 
     world_from_tangent(T, B, N, V, out_V);
@@ -5357,13 +5371,11 @@ void Ray::NS::Sample_PrincipledSheen_BSDF(const fvec<S> N[3], const fvec<S> I[3]
 
     const fvec<S> invalid = (abs(ab[0]) < 1e-5f) | (ab[2] < 1e-5f);
 
-    const fvec<S> phi = 2 * PI * rand[1];
-    fvec<S> cos_phi, sin_phi;
-    portable_sincos(phi, sin_phi, cos_phi);
-    const fvec<S> r = sqrt(rand[0]);
-    const fvec<S> diskZ = sqrt(1.0f - rand[0]); // cosine-weighted hemisphere sample, warped below
+    fvec<S> cs, sn;
+    const fvec<S> r = concentric_disk(rand[0], rand[1], cs, sn);
+    const fvec<S> diskZ = sqrt(max(1.0f - r * r, 0.0f)); // cosine-weighted hemisphere sample, warped below
 
-    fvec<S> local_L[3] = {r * cos_phi - diskZ * ab[1], r * sin_phi, diskZ * ab[0]};
+    fvec<S> local_L[3] = {r * cs - diskZ * ab[1], r * sn, diskZ * ab[0]};
     safe_normalize(local_L);
     world_from_tangent(T, B, N, local_L, out_V);
 
@@ -6325,10 +6337,10 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
 
                             if (trans_r[i] > mix_val) {
                                 mat_index.set(i, mat->textures[MIX_MAT1]);
-                                trans_r.set(i, (trans_r[i] - mix_val) / (1.0f - mix_val));
+                                trans_r.set(i, (trans_r[i] - mix_val) / fmaxf(1.0f - mix_val, FLT_EPS));
                             } else {
                                 mat_index.set(i, mat->textures[MIX_MAT2]);
-                                trans_r.set(i, trans_r[i] / mix_val);
+                                trans_r.set(i, trans_r[i] / fmaxf(mix_val, FLT_EPS));
                             }
 
                             if (first_mi == 0xffff) {
@@ -7124,12 +7136,12 @@ void Ray::NS::SampleLightSource(const fvec<S> P[3], const fvec<S> T[3], const fv
                                 rand_light_uv[1], dir_and_pdf);
             } else {
                 // Sample environment as hemishpere
-                const fvec<S> phi = 2 * PI * rand_light_uv[1];
-                fvec<S> sin_phi, cos_phi;
-                portable_sincos(phi, sin_phi, cos_phi);
-                const fvec<S> dir = sqrt(1.0f - rand_light_uv[0] * rand_light_uv[0]);
+                fvec<S> cs, sn;
+                const fvec<S> r = concentric_disk(rand_light_uv[0], rand_light_uv[1], cs, sn);
+                const fvec<S> q = r * r;
+                const fvec<S> radius = sqrt(max(1.0f - q * q, 0.0f));
 
-                const fvec<S> V[3] = {dir * cos_phi, dir * sin_phi, rand_light_uv[0]}; // in tangent-space
+                const fvec<S> V[3] = {cs * radius, sn * radius, q}; // in tangent-space
                 world_from_tangent(T, B, N, V, dir_and_pdf);
                 dir_and_pdf[3] = 0.5f / PI;
             }

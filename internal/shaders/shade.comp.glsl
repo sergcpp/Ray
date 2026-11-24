@@ -593,16 +593,37 @@ vec3 SampleVNDF_Hemisphere_CrossSect(const vec3 Vh, float U1, float U2) {
     return Nh;
 }
 
+// Concentric square->disk map: the return value is the disk radius (its square is the uniform radial CDF)
+// and out_dir the disk point's unit direction, so callers apply their own radial CDF with no division.
+float concentric_disk(const vec2 u, out vec2 out_dir) {
+    const vec2 s = 2.0 * u - vec2(1.0);
+
+    // s == (0, 0) exactly (u == (0.5, 0.5)) would divide by zero; any direction is valid there
+    float theta, r;
+    if (abs(s[0]) > abs(s[1])) {
+        r = s[0];
+        theta = 0.25 * PI * (s[1] / (s[0] != 0.0 ? s[0] : 1.0));
+    } else {
+        r = s[1];
+        theta = 0.5 * PI - 0.25 * PI * (s[0] / (s[1] != 0.0 ? s[1] : 1.0));
+    }
+
+    // r is signed (that is how the square's left half reaches -x): the disk point is r*(cos,sin), so the
+    // sign belongs to the direction, not the radius, or callers that use only the direction flip azimuth
+    const vec2 sincos_theta = portable_sincos(theta);
+    const float sign = (r < 0.0) ? -1.0 : 1.0;
+    out_dir = vec2(sign * sincos_theta[1], sign * sincos_theta[0]); // (cos, sin)
+    return abs(r);
+}
+
 // https://arxiv.org/pdf/2306.05044.pdf
 vec3 SampleVNDF_Hemisphere_SphCap(const vec3 Vh, const vec2 rand) {
     // sample a spherical cap in (-Vh.z, 1]
-    const float phi = 2.0f * PI * rand.x;
-    const float z = fma(1.0 - rand.y, 1.0 + Vh.z, -Vh.z);
-    const float sin_theta = sqrt(saturate(1.0 - z * z));
-    const vec2 sincos_phi = portable_sincos(phi);
-    const float x = sin_theta * sincos_phi[1];
-    const float y = sin_theta * sincos_phi[0];
-    const vec3 c = vec3(x, y, z);
+    vec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float z = fma(1.0 - r * r, 1.0 + Vh.z, -Vh.z);
+    const float radius = sqrt(saturate(1.0 - z * z));
+    const vec3 c = vec3(dir.x * radius, dir.y * radius, z);
     // normalization will be done later
     return c + Vh;
 }
@@ -610,18 +631,16 @@ vec3 SampleVNDF_Hemisphere_SphCap(const vec3 Vh, const vec2 rand) {
 // https://gpuopen.com/download/publications/Bounded_VNDF_Sampling_for_Smith-GGX_Reflections.pdf
 vec3 SampleVNDF_Hemisphere_SphCap_Bounded(const vec3 Ve, const vec3 Vh, const vec2 alpha, const vec2 rand) {
     // sample a spherical cap in (-Vh.z, 1]
-    const float phi = 2.0 * PI * rand.x;
+    vec2 dir;
+    const float r = concentric_disk(rand, dir);
     const float a = saturate(min(alpha.x, alpha.y));
     const float s = 1.0 + length(Ve.xy);
     const float a2 = a * a, s2 = s * s;
     const float k = (1.0 - a2) * s2 / (s2 + a2 * Ve.z * Ve.z);
     const float b = (Ve.z > 0.0) ? k * Vh.z : Vh.z;
-    const float z = fma(1.0 - rand.y, 1.0f + b, -b);
-    const float sin_theta = sqrt(saturate(1.0 - z * z));
-    const vec2 sincos_phi = portable_sincos(phi);
-    const float x = sin_theta * sincos_phi[1];
-    const float y = sin_theta * sincos_phi[0];
-    const vec3 c = vec3(x, y, z);
+    const float z = fma(1.0 - r * r, 1.0f + b, -b);
+    const float radius = sqrt(saturate(1.0 - z * z));
+    const vec3 c = vec3(dir.x * radius, dir.y * radius, z);
     // normalization will be done later
     return c + Vh;
 }
@@ -927,13 +946,10 @@ vec4 Evaluate_OrenDiffuse_BSDF(vec3 V, vec3 N, vec3 L, float roughness, vec3 bas
 
 vec4 Sample_OrenDiffuse_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness,
                              vec3 base_color, vec2 rand, out vec3 out_V) {
-    const float phi = 2 * PI * rand.y;
-    const vec2 sincos_phi = portable_sincos(phi);
-    const float cos_phi = sincos_phi[1], sin_phi = sincos_phi[0];
-
-    const float z = sqrt(1.0 - rand.x);
-    const float r = sqrt(rand.x);
-    vec3 V = vec3(r * cos_phi, r * sin_phi, z); // in tangent-space
+    vec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float z = sqrt(max(1.0 - r * r, 0.0));
+    vec3 V = vec3(r * dir.x, r * dir.y, z); // in tangent-space
 
     out_V = world_from_tangent(T, B, N, V);
     return Evaluate_OrenDiffuse_BSDF(-I, N, out_V, roughness, base_color);
@@ -970,13 +986,11 @@ vec4 Sample_PrincipledSheen_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float sheen_rou
         return vec4(0.0);
     }
 
-    const float phi = 2 * PI * rand.y;
-    const vec2 sincos_phi = portable_sincos(phi);
-    const float cos_phi = sincos_phi[1], sin_phi = sincos_phi[0];
-    const float r = sqrt(rand.x);
-    const float diskZ = sqrt(1.0 - rand.x);
+    vec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float diskZ = sqrt(max(1.0 - r * r, 0.0));
 
-    const vec3 local_L = normalize(vec3(r * cos_phi - diskZ * ab.y, r * sin_phi, diskZ * ab.x));
+    const vec3 local_L = normalize(vec3(r * dir.x - diskZ * ab.y, r * dir.y, diskZ * ab.x));
     out_V = world_from_tangent(lT, lB, N, local_L);
 
     const float lenSqr = sqr(ab.x * local_L.x + ab.y * local_L.z) + sqr(ab.x * local_L.y) + sqr(local_L.z);
@@ -1011,18 +1025,16 @@ vec4 Evaluate_PrincipledDiffuse_BSDF(vec3 V, vec3 N, vec3 L, float roughness, ve
 vec4 Sample_PrincipledDiffuse_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, vec3 base_color,
                                    vec3 sheen_color, bool uniform_sampling, const vec2 rand,
                                    out vec3 out_V) {
-    const float phi = 2 * PI * rand.y;
-    const vec2 sincos_phi = portable_sincos(phi);
-    const float cos_phi = sincos_phi[1], sin_phi = sincos_phi[0];
+    vec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float q = r * r;
 
     vec3 V;
     if (uniform_sampling) {
-        const float dir = sqrt(1.0 - rand.x * rand.x);
-        V = vec3(dir * cos_phi, dir * sin_phi, rand.x); // in tangent-space
+        const float radius = sqrt(max(1.0 - q * q, 0.0));
+        V = vec3(dir.x * radius, dir.y * radius, q); // in tangent-space
     } else {
-        const float dir = sqrt(rand.x);
-        const float k = sqrt(1.0 - rand.x);
-        V = vec3(dir * cos_phi, dir * sin_phi, k); // in tangent-space
+        V = vec3(r * dir.x, r * dir.y, sqrt(max(1.0 - q, 0.0))); // in tangent-space
     }
 
     out_V = world_from_tangent(T, B, N, V);
@@ -1714,12 +1726,11 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, vec3 N_pick, const float 
             dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, u1, rx, ry);
         } else {
             // Sample environment as hemishpere
-            const float phi = 2 * PI * ry;
-            const vec2 sincos_phi = portable_sincos(phi);
-            const float cos_phi = sincos_phi[1], sin_phi = sincos_phi[0];
-
-            const float dir = sqrt(1.0 - rx * rx);
-            vec3 V = vec3(dir * cos_phi, dir * sin_phi, rx); // in tangent-space
+            vec2 dir;
+            const float r = concentric_disk(vec2(rx, ry), dir);
+            const float q = r * r;
+            const float radius = sqrt(max(1.0 - q * q, 0.0));
+            vec3 V = vec3(dir.x * radius, dir.y * radius, q); // in tangent-space
 
             dir_and_pdf.xyz = world_from_tangent(T, B, N, V);
             dir_and_pdf.w = 0.5 / PI;

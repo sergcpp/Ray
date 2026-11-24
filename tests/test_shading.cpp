@@ -1148,8 +1148,9 @@ void test_alpha_mat4(const char *arch_list[], std::string_view preferred_device)
 
 void test_two_sided_mat(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const double MinPSNR = 30.5;
-    const int PixThres = 510;
+    // concentric disk map: CPU ff 479->526, PSNR 30.59->30.50 (AVX2 and REF identical)
+    const double MinPSNR = 30.45;
+    const int PixThres = 530;
 
     Ray::principled_mat_desc_t front_mat_desc;
     front_mat_desc.base_color = {{0.5f, 0.0f, 0.0f}};
@@ -1546,7 +1547,9 @@ void test_complex_mat5_sun_light(const char *arch_list[], std::string_view prefe
 void test_complex_mat5_moon_light(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 56;
     const double MinPSNR = 22.75;
-    const int PixThres = 6380;
+    // 18 nominal-count arch/mode draws: mean 6347, sd 48, max 6496 (mac-m4 VK). Sized for that spread,
+    // kept under the analyzer's max+100 stale-loose window.
+    const int PixThres = 6550;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color = {{1, 1, 1}, Ray::TextureHandle{0}};
@@ -1616,7 +1619,9 @@ void test_complex_mat6(const char *arch_list[], std::string_view preferred_devic
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 16;
-    const int PixThres = 1850;
+    // concentric disk map: CPU ff 1769->1930, PSNR 25.10->24.88 (AVX2 and REF identical)
+    const double MinPSNR = 24.85;
+    const int PixThres = 1940;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color = {{0.836164f, 0.836164f, 0.656603f}};
@@ -1624,8 +1629,8 @@ void test_complex_mat6_nlm_filter(const char *arch_list[], std::string_view pref
     olive_mat_desc.transmission.weight = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_shading_test(arch_list, preferred_device, "complex_mat6_nlm_filter", olive_mat_desc, SampleCount,
-                     VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM);
+    run_shading_test(arch_list, preferred_device, "complex_mat6_nlm_filter", olive_mat_desc, SampleCount, MinPSNR,
+                     PixThres, eDenoiseMethod::NLM);
 }
 
 void test_complex_mat6_unet_filter(const char *arch_list[], std::string_view preferred_device) {
@@ -1734,8 +1739,9 @@ void test_complex_mat6_hdri_light(const char *arch_list[], std::string_view pref
 
 void test_complex_mat7_refractive(const char *arch_list[], std::string_view preferred_device) {
     const int SampleCount = 12;
+    // concentric disk map: CPU ff 4257->4265, leaving 5 under the old bar
     const double MinPSNR = 23.0;
-    const int PixThres = 4270;
+    const int PixThres = 4280;
 
     Ray::principled_mat_desc_t unused;
     run_shading_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR, PixThres,

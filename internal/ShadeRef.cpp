@@ -179,13 +179,11 @@ fvec4 SampleVNDF_Hemisphere_CrossSect(const fvec4 &Vh, float U1, float U2) {
 // https://arxiv.org/pdf/2306.05044.pdf
 fvec4 SampleVNDF_Hemisphere_SphCap(const fvec4 &Vh, const fvec2 alpha, const fvec2 rand) {
     // sample a spherical cap in (-Vh.z, 1]
-    const float phi = 2.0f * PI * rand.get<0>();
-    const float z = fma(1.0f - rand.get<1>(), 1.0f + Vh.get<2>(), -Vh.get<2>());
-    const float sin_theta = sqrtf(Ray::saturate(1.0f - z * z));
-    const fvec2 sincos_phi = portable_sincos(phi);
-    const float x = sin_theta * sincos_phi.get<1>();
-    const float y = sin_theta * sincos_phi.get<0>();
-    const fvec4 c = fvec4{x, y, z, 0.0f};
+    fvec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float z = fma(1.0f - r * r, 1.0f + Vh.get<2>(), -Vh.get<2>());
+    const float radius = sqrtf(Ray::saturate(1.0f - z * z));
+    const fvec4 c = fvec4{dir.get<0>() * radius, dir.get<1>() * radius, z, 0.0f};
     // normalization will be done later
     return c + Vh;
 }
@@ -193,18 +191,16 @@ fvec4 SampleVNDF_Hemisphere_SphCap(const fvec4 &Vh, const fvec2 alpha, const fve
 // https://gpuopen.com/download/publications/Bounded_VNDF_Sampling_for_Smith-GGX_Reflections.pdf
 fvec4 SampleVNDF_Hemisphere_SphCap_Bounded(const fvec4 &Ve, const fvec4 &Vh, const fvec2 alpha, const fvec2 rand) {
     // sample a spherical cap in (-Vh.z, 1]
-    const float phi = 2.0f * PI * rand.get<0>();
+    fvec2 dir;
+    const float r = concentric_disk(rand, dir);
     const float a = Ray::saturate(fminf(alpha.get<0>(), alpha.get<1>()));
     const float s = 1.0f + length(fvec2{Ve.get<0>(), Ve.get<1>()});
     const float a2 = a * a, s2 = s * s;
     const float k = (1.0f - a2) * s2 / (s2 + a2 * Ve.get<2>() * Ve.get<2>());
     const float b = (Ve.get<2>() > 0.0f) ? k * Vh.get<2>() : Vh.get<2>();
-    const float z = fma(1.0f - rand.get<1>(), 1.0f + b, -b);
-    const float sin_theta = sqrtf(Ray::saturate(1.0f - z * z));
-    const fvec2 sincos_phi = portable_sincos(phi);
-    const float x = sin_theta * sincos_phi.get<1>();
-    const float y = sin_theta * sincos_phi.get<0>();
-    const fvec4 c = fvec4{x, y, z, 0.0f};
+    const float z = fma(1.0f - r * r, 1.0f + b, -b);
+    const float radius = sqrtf(Ray::saturate(1.0f - z * z));
+    const fvec4 c = fvec4{dir.get<0>() * radius, dir.get<1>() * radius, z, 0.0f};
     // normalization will be done later
     return c + Vh;
 }
@@ -490,13 +486,10 @@ Ray::Ref::fvec4 Ray::Ref::Evaluate_OrenDiffuse_BSDF(const fvec4 &V, const fvec4 
 Ray::Ref::fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const fvec4 &T, const fvec4 &B, const fvec4 &N, const fvec4 &I,
                                                   const float roughness, const fvec4 &base_color, const fvec2 rand,
                                                   fvec4 &out_V) {
-    const float phi = 2 * PI * rand.get<1>();
-    const fvec2 sincos_phi = portable_sincos(phi);
-    const float cos_phi = sincos_phi.get<1>(), sin_phi = sincos_phi.get<0>();
-
-    const float z = sqrtf(1.0f - rand.get<0>());
-    const float r = sqrtf(rand.get<0>());
-    auto V = fvec4{r * cos_phi, r * sin_phi, z, 0.0f}; // in tangent-space
+    fvec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float z = sqrtf(fmaxf(1.0f - r * r, 0.0f));
+    auto V = fvec4{r * dir.get<0>(), r * dir.get<1>(), z, 0.0f}; // in tangent-space
 
     out_V = world_from_tangent(T, B, N, V);
     return Evaluate_OrenDiffuse_BSDF(-I, N, out_V, roughness, base_color);
@@ -532,18 +525,16 @@ Ray::Ref::fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const fvec4 &T, const fv
                                                         const float roughness, const fvec4 &base_color,
                                                         const fvec4 &sheen_color, const bool uniform_sampling,
                                                         const fvec2 rand, fvec4 &out_V) {
-    const float phi = 2 * PI * rand.get<1>();
-    const fvec2 sincos_phi = portable_sincos(phi);
-    const float cos_phi = sincos_phi.get<1>(), sin_phi = sincos_phi.get<0>();
+    fvec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float q = r * r;
 
     fvec4 V;
     if (uniform_sampling) {
-        const float dir = sqrtf(1.0f - rand.get<0>() * rand.get<0>());
-        V = fvec4{dir * cos_phi, dir * sin_phi, rand.get<0>(), 0.0f}; // in tangent-space
+        const float radius = sqrtf(fmaxf(1.0f - q * q, 0.0f));
+        V = fvec4{dir.get<0>() * radius, dir.get<1>() * radius, q, 0.0f}; // in tangent-space
     } else {
-        const float dir = sqrtf(rand.get<0>());
-        const float k = sqrtf(1.0f - rand.get<0>());
-        V = fvec4{dir * cos_phi, dir * sin_phi, k, 0.0f}; // in tangent-space
+        V = fvec4{r * dir.get<0>(), r * dir.get<1>(), sqrtf(fmaxf(1.0f - q, 0.0f)), 0.0f}; // in tangent-space
     }
 
     out_V = world_from_tangent(T, B, N, V);
@@ -582,14 +573,12 @@ Ray::Ref::fvec4 Ray::Ref::Sample_PrincipledSheen_BSDF(const fvec4 &N, const fvec
         return fvec4{0.0f};
     }
 
-    const float phi = 2 * PI * rand.get<1>();
-    const fvec2 sincos_phi = portable_sincos(phi);
-    const float cos_phi = sincos_phi.get<1>(), sin_phi = sincos_phi.get<0>();
-    const float r = sqrtf(rand.get<0>());
-    const float diskZ = sqrtf(1.0f - rand.get<0>()); // cosine-weighted hemisphere sample, warped below
+    fvec2 dir;
+    const float r = concentric_disk(rand, dir);
+    const float diskZ = sqrtf(fmaxf(1.0f - r * r, 0.0f)); // cosine-weighted hemisphere sample, warped below
 
-    const fvec4 local_L =
-        normalize(fvec4{r * cos_phi - diskZ * ab_albedo.get<1>(), r * sin_phi, diskZ * ab_albedo.get<0>(), 0.0f});
+    const fvec4 local_L = normalize(
+        fvec4{r * dir.get<0>() - diskZ * ab_albedo.get<1>(), r * dir.get<1>(), diskZ * ab_albedo.get<0>(), 0.0f});
     out_V = world_from_tangent(T, B, N, local_L);
 
     const float lenSqr = sqr(ab_albedo.get<0>() * local_L.get<0>() + ab_albedo.get<1>() * local_L.get<2>()) +

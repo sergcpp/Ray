@@ -279,6 +279,10 @@ float portable_atan2f(float y, float x); // arbitrary y (odd in y); (0,0) -> 0
 
 fvec2 get_scrambled_2d_rand(uint32_t dim, uint32_t seed, int sample, const uint32_t rand_seq[]);
 
+// Concentric square->disk map: the return value is the disk radius (its square is the uniform radial CDF)
+// and out_dir the disk point's unit direction, so callers apply their own radial CDF with no division.
+float concentric_disk(const fvec2 &u, fvec2 &out_dir);
+
 float SampleSphericalRectangle(const fvec4 &P, const fvec4 &light_pos, const fvec4 &axis_u, const fvec4 &axis_v,
                                fvec2 Xi, fvec4 *out_p);
 float SampleSphericalTriangle(const fvec4 &P, const fvec4 &p1, const fvec4 &p2, const fvec4 &p3, fvec2 Xi,

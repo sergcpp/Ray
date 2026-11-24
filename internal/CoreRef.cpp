@@ -848,6 +848,27 @@ void create_tbn(const fvec4 &N, fvec4 &out_T, fvec4 &out_B) {
     out_B = cross(N, out_T);
 }
 
+float concentric_disk(const fvec2 &u, fvec2 &out_dir) {
+    const fvec2 s = 2.0f * u - fvec2{1.0f, 1.0f};
+
+    // s == (0, 0) exactly (u == (0.5, 0.5)) would divide by zero; any direction is valid there
+    float theta, r;
+    if (fabsf(s.get<0>()) > fabsf(s.get<1>())) {
+        r = s.get<0>();
+        theta = 0.25f * PI * (s.get<1>() / (s.get<0>() != 0.0f ? s.get<0>() : 1.0f));
+    } else {
+        r = s.get<1>();
+        theta = 0.5f * PI - 0.25f * PI * (s.get<0>() / (s.get<1>() != 0.0f ? s.get<1>() : 1.0f));
+    }
+
+    // r is signed (that is how the square's left half reaches -x): the disk point is r*(cos,sin), so the
+    // sign belongs to the direction, not the radius, or callers that use only the direction flip azimuth
+    const fvec2 sincos_theta = portable_sincos(theta);
+    const float sign = (r < 0.0f) ? -1.0f : 1.0f;
+    out_dir = fvec2{sign * sincos_theta.get<1>(), sign * sincos_theta.get<0>()}; // (cos, sin)
+    return fabsf(r);
+}
+
 fvec4 map_to_cone(float r1, float r2, fvec4 N, float radius) {
     const fvec2 offset = 2.0f * fvec2(r1, r2) - fvec2(1.0f);
     if (offset.get<0>() == 0.0f && offset.get<1>() == 0.0f) {
@@ -3869,12 +3890,14 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
                     mix_val *= tex_color.get<0>();
                 }
 
+                // mix_val is a texture sample * strength, so exact 0 / 1 is reachable: same eps guards as the
+                // shade-time pick walk, or the two walks diverge on a degenerate pick
                 if (trans_r > mix_val) {
                     mat = &sc.materials[mat->textures[MIX_MAT1]];
-                    trans_r = (trans_r - mix_val) / (1.0f - mix_val);
+                    trans_r = (trans_r - mix_val) / fmaxf(1.0f - mix_val, FLT_EPS);
                 } else {
                     mat = &sc.materials[mat->textures[MIX_MAT2]];
-                    trans_r = trans_r / mix_val;
+                    trans_r = trans_r / fmaxf(mix_val, FLT_EPS);
                 }
             }
 
@@ -4400,12 +4423,11 @@ void Ray::Ref::SampleLightSource(const fvec4 &P, const fvec4 &T, const fvec4 &B,
             dir_and_pdf = Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, u1, rx, ry);
         } else {
             // Sample environment as hemishpere
-            const float phi = 2 * PI * ry;
-            const fvec2 sincos_phi = portable_sincos(phi);
-            const float cos_phi = sincos_phi.get<1>(), sin_phi = sincos_phi.get<0>();
-
-            const float dir = sqrtf(1.0f - rx * rx);
-            auto V = fvec4{dir * cos_phi, dir * sin_phi, rx, 0.0f}; // in tangent-space
+            fvec2 dir;
+            const float r = concentric_disk(fvec2{rx, ry}, dir);
+            const float q = r * r;
+            const float radius = sqrtf(fmaxf(1.0f - q * q, 0.0f));
+            auto V = fvec4{dir.get<0>() * radius, dir.get<1>() * radius, q, 0.0f}; // in tangent-space
 
             dir_and_pdf = world_from_tangent(T, B, N, V);
             dir_and_pdf.set<3>(0.5f / PI);

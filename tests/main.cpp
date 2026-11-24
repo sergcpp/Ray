@@ -142,6 +142,9 @@ bool InitAndDestroyFakeGLContext();
 #endif
 
 int main(int argc, char *argv[]) {
+    // keeps the log intact when a test aborts (an FP trap or a hard crash loses buffered stdout entirely)
+    setvbuf(stdout, nullptr, _IONBF, 0);
+
     for (int i = 0; i < argc; ++i) {
         printf("%s ", argv[i]);
     }
