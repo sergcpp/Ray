@@ -68,8 +68,8 @@ class Context {
     MemAllocators *default_mem_allocs() { return default_mem_allocs_.get(); }
     DescrMultiPoolAlloc *default_descr_alloc() const { return nullptr; }
 
-    bool raytracing_supported() const { return false; } // HWRT not implemented in this backend
-    bool ray_query_supported() const { return false; }
+    bool raytracing_supported() const { return false; } // no RT pipelines; ray queries via ray_query_supported()
+    bool ray_query_supported() const { return device_->supportsRaytracing(); }
     bool rgb8_unorm_is_supported() const { return false; } // Metal has no RGB8 pixel format
     bool rgb8_promoted_internally() const { return true; } // ImageMtl/ImageAtlasMtl store RGB8 as RGBA8 at upload
     bool fp16_supported() const { return true; }

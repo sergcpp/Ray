@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 
 #include "../../Config.h"
@@ -89,7 +90,12 @@ void Ray::Mtl::Buffer::Resize(const uint32_t new_size, const bool keep_content) 
         new_alloc = MemAllocation{};
         new_buf = ctx_->device()->newBuffer(alloc_size, MTLOptionsForType(type_));
     }
-    assert(new_buf != nullptr && "Failed to create buffer!");
+    if (!new_buf) {
+        // Release must not bind nil (kernels would read address 0 -> silent image corruption);
+        // a logged abort beats a corrupted frame
+        ctx_->log()->Error("Failed to allocate Metal buffer '%s' (%u bytes)!", name_.c_str(), alloc_size);
+        std::abort();
+    }
 #ifdef RAY_ENABLE_GPU_DEBUG
     // MTLSTR only accepts literals; buffer names are runtime strings
     NS::String *label = NS::String::alloc()->init(name_.c_str(), NS::StringEncoding::UTF8StringEncoding);
@@ -190,6 +196,10 @@ void Ray::Mtl::Buffer::UpdateImmediate(const uint32_t dst_offset, const uint32_t
                                        CommandBuffer cmd_buf) {
     // route through a temp buffer + blit so the write lands in command-buffer order (VK CmdUpdateBuffer parity)
     MTL::Buffer *tmp = ctx_->device()->newBuffer(data, size, MTLOptionsForType(type_));
+    if (!tmp) {
+        ctx_->log()->Error("Failed to allocate Metal staging buffer '%s' (%u bytes)!", name_.c_str(), size);
+        std::abort();
+    }
     MTL::BlitCommandEncoder *blit = ctx_->BlitEncoder(cmd_buf);
     blit->copyFromBuffer(tmp, 0, handle_.buf, dst_offset, size);
     tmp->release();

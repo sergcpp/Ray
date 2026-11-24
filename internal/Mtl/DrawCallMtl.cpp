@@ -5,6 +5,7 @@
 #include <set>
 
 #include "../../Log.h"
+#include "AccStructureMtl.h"
 #include "BufferMtl.h"
 #include "ContextMtl.h"
 #include "ImageAtlasMtl.h"
@@ -46,6 +47,16 @@ static void BindAll(MTL::ComputeCommandEncoder *enc, const Pipeline &pi, Span<co
         }
 
         switch (b.trg) {
+        case eBindTarget::AccStruct: {
+            // the MSL kernel arg is an acceleration_structure value - setBuffer on it is invalid
+            assert(b.handle.acc_struct);
+            enc->setAccelerationStructure(b.handle.acc_struct->mtl_handle(), NS::UInteger(d->msl_index));
+            // Metal needs the referenced BLAS marked resident in every tracing pass,
+            // otherwise the driver evicts them and IAS queries silently miss (Apple forums guidance)
+            for (MTL::AccelerationStructure *blas : b.handle.acc_struct->blas_refs()) {
+                enc->useResource(blas, MTL::ResourceUsageRead);
+            }
+        } break;
         case eBindTarget::UBuf:
         case eBindTarget::SBufRO:
         case eBindTarget::SBufRW: {
@@ -89,7 +100,6 @@ static void BindAll(MTL::ComputeCommandEncoder *enc, const Pipeline &pi, Span<co
             }
         } break;
         // bindless arrays & RT targets not supported by this backend yet
-        case eBindTarget::AccStruct:
         case eBindTarget::DescrTable:
             assert(false && "RT targets require HWRT support");
             break;

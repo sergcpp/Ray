@@ -1,32 +1,61 @@
 #pragma once
 
-#include <cstdint>
 #include <utility>
+#include <vector>
+
+#include "ApiMtl.h"
 
 namespace Ray {
 namespace Mtl {
 class Context;
 
-// Placeholder: SceneGPU.h carries HWRT members that need the type; nothing GPU-side
-// touches it while Context::ray_query_supported() is false (HWRT unimplemented).
+// Metal AS objects own their memory (no placement API), so unlike VK there is no
+// buffer+offset split: the handle is the whole resource. Release is immediate - ObjC
+// refcounting keeps in-flight command buffers alive (same rule as Image/Buffer).
 class AccStructure {
-    uint32_t buf_index_ = 0xffffffff;
-    uint32_t buf_offset_ = 0;
+    MTL::AccelerationStructure *as_ = nullptr;
+    // TLAS only: BLAS handles referenced by as_; Metal requires useResources() on them
+    // in every compute pass that traces through the TLAS, else the driver evicts them.
+    // Losing this list (move/Free without handoff) silently breaks HWRT rendering.
+    std::vector<MTL::AccelerationStructure *> blas_refs_;
 
   public:
     AccStructure() = default;
-    explicit AccStructure(Context *ctx) {}
-    AccStructure(const AccStructure &rhs) = delete;
-    AccStructure(AccStructure &&rhs) noexcept { (*this) = std::move(rhs); }
+    ~AccStructure() { Free(); }
 
+    AccStructure(const AccStructure &rhs) = delete;
+    AccStructure(AccStructure &&rhs) noexcept
+        : as_(std::exchange(rhs.as_, nullptr)), blas_refs_(std::move(rhs.blas_refs_)) {}
+
+    AccStructure &operator=(const AccStructure &rhs) = delete;
     AccStructure &operator=(AccStructure &&rhs) noexcept {
-        buf_index_ = rhs.buf_index_;
-        buf_offset_ = rhs.buf_offset_;
+        if (this != &rhs) {
+            Free();
+            as_ = std::exchange(rhs.as_, nullptr);
+            blas_refs_ = std::move(rhs.blas_refs_);
+        }
         return *this;
     }
 
-    explicit operator bool() const { return false; }
-    bool ready() const { return false; }
+    MTL::AccelerationStructure *mtl_handle() const { return as_; }
+    const std::vector<MTL::AccelerationStructure *> &blas_refs() const { return blas_refs_; }
+    void set_blas_refs(std::vector<MTL::AccelerationStructure *> refs) { blas_refs_ = std::move(refs); }
+
+    void Init(Context *ctx, MTL::AccelerationStructure *as) {
+        Free();
+        as_ = as;
+    }
+
+    void Free() {
+        if (as_) {
+            as_->release();
+            as_ = nullptr;
+        }
+        blas_refs_.clear();
+    }
+
+    explicit operator bool() const { return as_ != nullptr; }
+    bool ready() const { return as_ != nullptr; }
 };
 
 } // namespace Mtl

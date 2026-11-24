@@ -1303,11 +1303,17 @@ inline void Ray::NS::Scene::RemoveMesh_nolock(const MeshHandle i) {
     }
 
     if (use_hwrt_) {
-        { // release struct memory
+        // release struct memory (MTL AS objects free via AccStructure's dtor; no pool backing them).
+        // Sentinel node_index means the BLAS build failed - indexing rt_mesh_blases_ would be OOB.
+        if (node_index != 0xffffffff) {
             const MeshBlas &blas = rt_mesh_blases_[node_index];
-            rt_blas_mem_alloc_.Free(blas.mem_alloc.block);
+            if (blas.mem_alloc.block != 0xffffffff) {
+                rt_blas_mem_alloc_.Free(blas.mem_alloc.block);
+            }
         }
-        rt_mesh_blases_.Erase(node_block);
+        if (node_block != 0xffffffff) {
+            rt_mesh_blases_.Erase(node_block);
+        }
     } else {
         tris_.Erase(tris_block);
         tri_indices_.Erase(tris_block);

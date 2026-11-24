@@ -103,10 +103,16 @@ namespace Mtl {
 #include "shaders/output/convolution_concat_96_64_112_fp32.comp.metallib.inl"
 #include "shaders/output/filter_variance.comp.metallib.inl"
 #include "shaders/output/intersect_area_lights.comp.metallib.inl"
+#include "shaders/output/intersect_scene_hwrt_atlas.comp.metallib.inl"
+#include "shaders/output/intersect_scene_hwrt_bindless.comp.metallib.inl"
+#include "shaders/output/intersect_scene_indirect_hwrt_atlas.comp.metallib.inl"
+#include "shaders/output/intersect_scene_indirect_hwrt_bindless.comp.metallib.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_atlas.comp.metallib.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_atlas_subgroup.comp.metallib.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_bindless.comp.metallib.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_bindless_subgroup.comp.metallib.inl"
+#include "shaders/output/intersect_scene_shadow_hwrt_atlas.comp.metallib.inl"
+#include "shaders/output/intersect_scene_shadow_hwrt_bindless.comp.metallib.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_atlas.comp.metallib.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_atlas_subgroup.comp.metallib.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_bindless.comp.metallib.inl"
@@ -194,7 +200,7 @@ Ray::Mtl::Renderer::Renderer(const settings_t &s, ILog *log,
     assert(Types::RAND_SAMPLES_COUNT == Ray::RAND_SAMPLES_COUNT);
     assert(Types::RAND_DIMS_COUNT == Ray::RAND_DIMS_COUNT);
 
-    use_hwrt_ = false; // HWRT not implemented: requires Metal ray queries
+    use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
     use_bindless_ = DecideBindless_(s) && ctx_->arg_buffers_tier2() && ctx_->bindless_arg_encoder_ok();
     use_tex_compression_ = s.use_tex_compression;
     use_fp16_ = ctx_->fp16_supported();
@@ -502,7 +508,7 @@ void Ray::Mtl::Renderer::RenderScene(const SceneBase &scene, RegionContext &regi
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
         timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, true));
 
-        if (use_subgroup_) {
+        if (!use_hwrt_ && use_subgroup_) { // sorting is off under HWRT on VK/DX too
             DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
             kernel_SortHashRays(cmd_buf, indir_args_buf_[0], secondary_rays_buf_, counters_buf_, root_min, cell_size,
@@ -1037,7 +1043,7 @@ void Ray::Mtl::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContex
     }
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
-        if (use_subgroup_) {
+        if (!use_hwrt_ && use_subgroup_) { // sorting is off under HWRT on VK/DX too
             DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
             kernel_SortHashRays(cmd_buf, indir_args_buf_[1], secondary_rays_buf_, counters_buf_, root_min, cell_size,
@@ -1390,28 +1396,44 @@ bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
         {sh_.spatial_cache_resolve, "Spatial Cache Resolve",
          internal_shaders_output_spatial_cache_resolve_comp_metallib, eShaderType::Comp, false}};
 
-    // SWRT only: HWRT requires Metal ray queries, not implemented
-    shaders_to_init.emplace_back(
-        sh_.intersect_scene, "Intersect Scene (Primary) (SWRT)",
-        PickShader(internal_shaders_output_intersect_scene_swrt_bindless_comp_metallib,
-                   internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_metallib,
-                   internal_shaders_output_intersect_scene_swrt_atlas_comp_metallib,
-                   internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_metallib),
-        eShaderType::Comp, false);
-    shaders_to_init.emplace_back(
-        sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (SWRT)",
-        PickShader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_metallib,
-                   internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_metallib,
-                   internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_metallib,
-                   internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_metallib),
-        eShaderType::Comp, false);
-    shaders_to_init.emplace_back(
-        sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (SWRT)",
-        PickShader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_metallib,
-                   internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_metallib,
-                   internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_metallib,
-                   internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_metallib),
-        eShaderType::Comp, false);
+    if (use_hwrt_) {
+        shaders_to_init.emplace_back(sh_.intersect_scene, "Intersect Scene (Primary) (HWRT)",
+                                     PickShader(internal_shaders_output_intersect_scene_hwrt_bindless_comp_metallib,
+                                                internal_shaders_output_intersect_scene_hwrt_atlas_comp_metallib),
+                                     eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (HWRT)",
+            PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_metallib,
+                       internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_metallib),
+            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (HWRT)",
+            PickShader(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_metallib,
+                       internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_metallib),
+            eShaderType::Comp, false);
+    } else {
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene, "Intersect Scene (Primary) (SWRT)",
+            PickShader(internal_shaders_output_intersect_scene_swrt_bindless_comp_metallib,
+                       internal_shaders_output_intersect_scene_swrt_bindless_subgroup_comp_metallib,
+                       internal_shaders_output_intersect_scene_swrt_atlas_comp_metallib,
+                       internal_shaders_output_intersect_scene_swrt_atlas_subgroup_comp_metallib),
+            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (SWRT)",
+            PickShader(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_metallib,
+                       internal_shaders_output_intersect_scene_indirect_swrt_bindless_subgroup_comp_metallib,
+                       internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_metallib,
+                       internal_shaders_output_intersect_scene_indirect_swrt_atlas_subgroup_comp_metallib),
+            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(
+            sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (SWRT)",
+            PickShader(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_metallib,
+                       internal_shaders_output_intersect_scene_shadow_swrt_bindless_subgroup_comp_metallib,
+                       internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_metallib,
+                       internal_shaders_output_intersect_scene_shadow_swrt_atlas_subgroup_comp_metallib),
+            eShaderType::Comp, false);
+    }
 
     // only the compat variant is compiled for Metal: int64 atomics are not offered
     shaders_to_init.emplace_back(sh_.spatial_cache_update, "Spatial Cache Update (Compat)",
