@@ -1,6 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
-#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_basic : require
 
 // Taken from FFX_ParallelSort.h
@@ -48,36 +48,16 @@ layout(std430, binding = OUT_HASHES_BUF_SLOT) writeonly buffer OutHashes {
 
 layout (local_size_x = SORT_THREADGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
-shared uint g_shared_sums[SORT_THREADGROUP_SIZE];
+// Subgroups of at least 16 lanes (a threadgroup holds at most 8 of them)
+const int SORT_MAX_SUBGROUPS = SORT_THREADGROUP_SIZE / 16;
 
-uint ThreadgroupExclusiveScan(uint local_sum, uint li) {
-    uint subgroup_sum = subgroupExclusiveAdd(local_sum);
+shared uint g_shared_bin_offsets[SORT_BINS_COUNT];
+// Per-subgroup key counts, double-buffered by tile parity so zeroing never races with the previous tile's reads
+shared uint g_shared_sg_counts[2][SORT_MAX_SUBGROUPS * SORT_BINS_COUNT];
 
-    uint subgroup_id = li / gl_SubgroupSize;
-    uint lane_id = gl_SubgroupInvocationID;
-
-    if (lane_id == gl_SubgroupSize - 1) {
-        g_shared_sums[subgroup_id] = subgroup_sum + local_sum;
-    }
-
-    groupMemoryBarrier(); barrier();
-
-    if (subgroup_id == 0) {
-        g_shared_sums[li] = subgroupExclusiveAdd(g_shared_sums[li]);
-    }
-
-    groupMemoryBarrier(); barrier();
-
-    subgroup_sum += g_shared_sums[subgroup_id];
-
-    return subgroup_sum;
+uint popcount4(uvec4 v) {
+    return bitCount(v.x) + bitCount(v.y) + bitCount(v.z) + bitCount(v.w);
 }
-
-shared ray_hash_t g_shared_hashes[SORT_THREADGROUP_SIZE];
-
-shared uint g_shared_bin_offsets[SORT_THREADGROUP_SIZE];
-shared uint g_shared_local_counters[SORT_BINS_COUNT];
-shared uint g_shared_scratch[SORT_THREADGROUP_SIZE];
 
 void main() {
     const int gi = int(gl_GlobalInvocationID.x), li = int(gl_LocalInvocationID.x), wi = int(gl_WorkGroupID.x);
@@ -87,11 +67,12 @@ void main() {
     const int BlockSize = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
     const int blocks_count = int(data_count + BlockSize - 1) / BlockSize;
 
-    if (li < SORT_BINS_COUNT) {
-        g_shared_bin_offsets[li] = g_sum_table[li * blocks_count + wi];
-    }
+    const int subgroup_id = li / int(gl_SubgroupSize);
+    const int sg_table_size = (SORT_THREADGROUP_SIZE / int(gl_SubgroupSize)) * SORT_BINS_COUNT;
 
-    groupMemoryBarrier(); barrier();
+    // SORT_BINS_COUNT == 2 * SORT_THREADGROUP_SIZE: thread li owns the bin pair (2*li, 2*li + 1)
+    g_shared_bin_offsets[2 * li] = g_sum_table[2 * li * blocks_count + wi];
+    g_shared_bin_offsets[2 * li + 1] = g_sum_table[(2 * li + 1) * blocks_count + wi];
 
     const int block_start = BlockSize * wi;
 
@@ -102,84 +83,61 @@ void main() {
         src_keys[i] = g_hashes[data_index + i * SORT_THREADGROUP_SIZE];
     }
 
-    for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
-        if (li < SORT_BINS_COUNT) {
-            g_shared_local_counters[li] = 0;
-        }
+    // Previous tile's per-bin counts, added to the cached offsets after the next tile's first barrier
+    uint pending_lo = 0, pending_hi = 0;
 
+    for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
         ray_hash_t local_key = ray_hash_t(0xffffffff, 0xffffffff);
         if (data_index < data_count) {
             local_key = src_keys[i];
         }
 
-        for (uint bit_shift = 0; bit_shift < SORT_BITS_PER_PASS; bit_shift += 2) {
-            uint key_index = (local_key.hash >> g_params.shift) & 0xf;
-            uint bit_key = (key_index >> bit_shift) & 0x3;
+        const uint key_index = (local_key.hash >> g_params.shift) & (SORT_BINS_COUNT - 1);
 
-            uint packed_counter = 1u << (bit_key * 8);
-            uint local_sum = ThreadgroupExclusiveScan(packed_counter, li);
-
-            if (li == SORT_THREADGROUP_SIZE - 1) {
-                g_shared_scratch[0] = local_sum + packed_counter;
-            }
-
-            groupMemoryBarrier(); barrier();
-
-            packed_counter = g_shared_scratch[0];
-
-            // Add prefix offsets for all 4 bit "keys" (packedHistogram = 0xsum2_1_0|sum1_0|sum0|0)
-            packed_counter = (packed_counter << 8) + (packed_counter << 16) + (packed_counter << 24);
-
-            // Calculate the proper offset for this thread's value
-            local_sum += packed_counter;
-
-            // Calculate target offset
-            uint key_offset = (local_sum >> (bit_key * 8)) & 0xff;
-
-            // Re-arrange the keys (store, sync, load)
-            g_shared_hashes[key_offset] = local_key;
-            groupMemoryBarrier(); barrier();
-            local_key = g_shared_hashes[li];
-
-            groupMemoryBarrier(); barrier();
+        // Subgroup lanes sharing this key; the rank among them is stable (lane order)
+        uvec4 match = subgroupBallot(true);
+        [[unroll]] for (int b = 0; b < SORT_BITS_PER_PASS; ++b) {
+            const bool bit = ((key_index >> b) & 1u) != 0u;
+            const uvec4 bit_mask = subgroupBallot(bit);
+            match &= bit ? bit_mask : ~bit_mask;
         }
+        const uint rank_in_sg = popcount4(match & gl_SubgroupLtMask);
 
-        // Need to recalculate the keyIndex on this thread now that values have been copied around the thread group
-        uint key_index = (local_key.hash >> g_params.shift) & 0xf;
-
-        // Reconstruct histogram
-        atomicAdd(g_shared_local_counters[key_index], 1);
+        const int buf = i & 1;
+        for (int k = li; k < sg_table_size; k += SORT_THREADGROUP_SIZE) {
+            g_shared_sg_counts[buf][k] = 0;
+        }
 
         groupMemoryBarrier(); barrier();
 
-        // Prefix histogram
-        uint histogram_prefix_sum = subgroupExclusiveAdd(li < SORT_BINS_COUNT ? g_shared_local_counters[li] : 0);
+        // All reads of the previous tile are done, safe to advance the cached offsets
+        g_shared_bin_offsets[2 * li] += pending_lo;
+        g_shared_bin_offsets[2 * li + 1] += pending_hi;
 
-        // Broadcast prefix-sum
-        if (li < SORT_BINS_COUNT) {
-            g_shared_scratch[li] = histogram_prefix_sum;
+        if (rank_in_sg == 0) {
+            g_shared_sg_counts[buf][subgroup_id * SORT_BINS_COUNT + key_index] = popcount4(match);
         }
-
-        // Get the global offset for this key out of the cache
-        uint global_offset = g_shared_bin_offsets[key_index];
 
         groupMemoryBarrier(); barrier();
 
-        // Get the local offset (at this point the keys are all in increasing order from 0 -> num bins in localID 0 -> thread group size)
-        uint local_offset = li - g_shared_scratch[key_index];
+        // Stable rank within the bin: keys of earlier subgroups first, then earlier lanes of this one
+        uint rank_in_bin = rank_in_sg;
+        for (int s = 0; s < subgroup_id; ++s) {
+            rank_in_bin += g_shared_sg_counts[buf][s * SORT_BINS_COUNT + key_index];
+        }
 
-        // Write to destination
-        uint total_offset = global_offset + local_offset;
+        pending_lo = 0;
+        pending_hi = 0;
+        for (int s = 0; s < SORT_THREADGROUP_SIZE / int(gl_SubgroupSize); ++s) {
+            pending_lo += g_shared_sg_counts[buf][s * SORT_BINS_COUNT + 2 * li];
+            pending_hi += g_shared_sg_counts[buf][s * SORT_BINS_COUNT + 2 * li + 1];
+        }
 
+        const uint total_offset = g_shared_bin_offsets[key_index] + rank_in_bin;
+
+        // Padding keys (0xffffffff) land in the last bin after all real keys, so they fall past data_count
         if (total_offset < data_count) {
             g_out_hashes[total_offset] = local_key;
-        }
-
-        groupMemoryBarrier(); barrier();
-
-        // Update the cached histogram for the next set of entries
-        if (li < SORT_BINS_COUNT) {
-            g_shared_bin_offsets[li] += g_shared_local_counters[li];
         }
 
         data_index += SORT_THREADGROUP_SIZE;

@@ -55,6 +55,7 @@ uint ThreadgroupExclusiveScan(uint local_sum, uint li) {
 }
 
 shared uint g_shared_values[SORT_ELEMENTS_PER_THREAD][SORT_THREADGROUP_SIZE];
+shared uint g_chunk_total;
 
 void main() {
     const int gi = int(gl_GlobalInvocationID.x), li = int(gl_LocalInvocationID.x), wi = int(gl_WorkGroupID.x);
@@ -69,53 +70,67 @@ void main() {
     const int bin_id = wi / groups_per_bin;
     const int bin_offset = bin_id * blocks_count;
 
-    const int base_index = (wi % groups_per_bin) * SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
+    const int chunk_begin = (wi % groups_per_bin) * BlockSize;
+    const int chunk_end = chunk_begin + BlockSize;
+    const uint initial_partial_sum = g_scan_scratch[wi];
 #else
+    // Single workgroup scans the whole reduce table in BlockSize chunks
     const int scan_count = SORT_BINS_COUNT * ((blocks_count + BlockSize - 1) / BlockSize);
 
     const int bin_offset = 0;
-    const int base_index = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE * wi;
+    const int chunk_begin = 0;
+    const int chunk_end = scan_count;
+    const uint initial_partial_sum = 0;
 #endif
 
-    for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
-        const int data_index = base_index + i * SORT_THREADGROUP_SIZE + li;
+    uint partial_sum = initial_partial_sum;
 
-        const int col = ((i * SORT_THREADGROUP_SIZE) + li) / SORT_ELEMENTS_PER_THREAD;
-        const int row = ((i * SORT_THREADGROUP_SIZE) + li) % SORT_ELEMENTS_PER_THREAD;
-        g_shared_values[row][col] = (data_index < scan_count) ? g_input[bin_offset + data_index] : 0;
-    }
+    for (int base_index = chunk_begin; base_index < chunk_end; base_index += BlockSize) {
+        for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
+            const int data_index = base_index + i * SORT_THREADGROUP_SIZE + li;
 
-    groupMemoryBarrier(); barrier();
-
-    uint threadgroup_sum = 0;
-    for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
-        uint tmp = g_shared_values[i][li];
-        g_shared_values[i][li] = threadgroup_sum;
-        threadgroup_sum += tmp;
-    }
-
-    threadgroup_sum = ThreadgroupExclusiveScan(threadgroup_sum, li);
-
-#if ADD_PARTIAL_SUMS
-    uint partial_sum = g_scan_scratch[wi];
-#else
-    uint partial_sum = 0;
-#endif
-
-    for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
-        g_shared_values[i][li] += threadgroup_sum;
-    }
-
-    groupMemoryBarrier(); barrier();
-
-    for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
-        const int data_index = base_index + i * SORT_THREADGROUP_SIZE + li;
-
-        const int col = ((i * SORT_THREADGROUP_SIZE) + li) / SORT_ELEMENTS_PER_THREAD;
-        const int row = ((i * SORT_THREADGROUP_SIZE) + li) % SORT_ELEMENTS_PER_THREAD;
-
-        if (data_index < scan_count) {
-            g_out_scan_values[bin_offset + data_index] = g_shared_values[row][col] + partial_sum;
+            const int col = ((i * SORT_THREADGROUP_SIZE) + li) / SORT_ELEMENTS_PER_THREAD;
+            const int row = ((i * SORT_THREADGROUP_SIZE) + li) % SORT_ELEMENTS_PER_THREAD;
+            g_shared_values[row][col] = (data_index < scan_count) ? g_input[bin_offset + data_index] : 0;
         }
+
+        groupMemoryBarrier(); barrier();
+
+        uint threadgroup_sum = 0;
+        for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
+            uint tmp = g_shared_values[i][li];
+            g_shared_values[i][li] = threadgroup_sum;
+            threadgroup_sum += tmp;
+        }
+        const uint local_total = threadgroup_sum;
+
+        threadgroup_sum = ThreadgroupExclusiveScan(threadgroup_sum, li);
+
+        groupMemoryBarrier(); barrier();
+        if (li == SORT_THREADGROUP_SIZE - 1) {
+            g_chunk_total = threadgroup_sum + local_total;
+        }
+        groupMemoryBarrier(); barrier();
+
+        for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
+            g_shared_values[i][li] += threadgroup_sum + partial_sum;
+        }
+
+        groupMemoryBarrier(); barrier();
+
+        for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {
+            const int data_index = base_index + i * SORT_THREADGROUP_SIZE + li;
+
+            const int col = ((i * SORT_THREADGROUP_SIZE) + li) / SORT_ELEMENTS_PER_THREAD;
+            const int row = ((i * SORT_THREADGROUP_SIZE) + li) % SORT_ELEMENTS_PER_THREAD;
+
+            if (data_index < scan_count) {
+                g_out_scan_values[bin_offset + data_index] = g_shared_values[row][col];
+            }
+        }
+
+        partial_sum += g_chunk_total;
+
+        groupMemoryBarrier(); barrier();
     }
 }
