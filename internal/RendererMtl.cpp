@@ -143,10 +143,8 @@ namespace Mtl {
 #include "shaders/output/shade_secondary_bindless_sky.comp.metallib.inl"
 #include "shaders/output/shade_sky.comp.metallib.inl"
 #include "shaders/output/shade_sky_primary.comp.metallib.inl"
-#include "shaders/output/sort_hash_rays.comp.metallib.inl"
 #include "shaders/output/sort_init_count_table.comp.metallib.inl"
 #include "shaders/output/sort_reduce.comp.metallib.inl"
-#include "shaders/output/sort_scan.comp.metallib.inl"
 #include "shaders/output/sort_scan_add.comp.metallib.inl"
 #include "shaders/output/sort_scatter.comp.metallib.inl"
 #include "shaders/output/spatial_cache_resolve.comp.metallib.inl"
@@ -502,10 +500,8 @@ void Ray::Mtl::Renderer::RenderScene(const SceneBase &scene, RegionContext &regi
 
         DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
-        kernel_SortHashRays(cmd_buf, indir_args_buf_[0], secondary_rays_buf_, counters_buf_, root_min, cell_size,
-                            ray_hashes_bufs_[0]);
         const int perm_index = RadixSort(cmd_buf, indir_args_buf_[0], ray_hashes_bufs_, count_table_buf_, counters_buf_,
-                                         reduce_table_buf_);
+                                         reduce_table_buf_, secondary_rays_buf_, root_min, cell_size);
         Buffer &sort_perm = ray_hashes_bufs_[perm_index];
         // the perm must survive the shade pass, so the sky-ray list goes to the other buffer
         Buffer &sky_rays_buf = ray_hashes_bufs_[1 - perm_index];
@@ -1034,10 +1030,8 @@ void Ray::Mtl::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContex
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
         DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
-        kernel_SortHashRays(cmd_buf, indir_args_buf_[1], secondary_rays_buf_, counters_buf_, root_min, cell_size,
-                            ray_hashes_bufs_[0]);
         const int perm_index = RadixSort(cmd_buf, indir_args_buf_[1], ray_hashes_bufs_, count_table_buf_, counters_buf_,
-                                         reduce_table_buf_);
+                                         reduce_table_buf_, secondary_rays_buf_, root_min, cell_size);
         Buffer &sort_perm = ray_hashes_bufs_[perm_index];
 
         { // trace secondary rays
@@ -1368,12 +1362,9 @@ bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
         {sh_.filter_variance, "Filter Variance", internal_shaders_output_filter_variance_comp_metallib,
          eShaderType::Comp, false},
         {sh_.nlm_filter, "NLM Filter", internal_shaders_output_nlm_filter_comp_metallib, eShaderType::Comp, false},
-        {sh_.sort_hash_rays, "Sort Hash Rays", internal_shaders_output_sort_hash_rays_comp_metallib, eShaderType::Comp,
-         false},
         {sh_.sort_init_count_table, "Sort Init Count Table",
          internal_shaders_output_sort_init_count_table_comp_metallib, eShaderType::Comp, false},
         {sh_.sort_reduce, "Sort Reduce", internal_shaders_output_sort_reduce_comp_metallib, eShaderType::Comp, false},
-        {sh_.sort_scan, "Sort Scan", internal_shaders_output_sort_scan_comp_metallib, eShaderType::Comp, false},
         {sh_.sort_scan_add, "Sort Scan Add", internal_shaders_output_sort_scan_add_comp_metallib, eShaderType::Comp,
          false},
         {sh_.sort_scatter, "Sort Scatter", internal_shaders_output_sort_scatter_comp_metallib, eShaderType::Comp,
@@ -1465,10 +1456,8 @@ bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
     prog_.postprocess = Program{"Postprocess", ctx_.get(), &sh_.postprocess, log};
     prog_.filter_variance = Program{"Filter Variance", ctx_.get(), &sh_.filter_variance, log};
     prog_.nlm_filter = Program{"NLM Filter", ctx_.get(), &sh_.nlm_filter, log};
-    prog_.sort_hash_rays = Program{"Hash Rays", ctx_.get(), &sh_.sort_hash_rays, log};
     prog_.sort_init_count_table = Program{"Init Count Table", ctx_.get(), &sh_.sort_init_count_table, log};
     prog_.sort_reduce = Program{"Sort Reduce", ctx_.get(), &sh_.sort_reduce, log};
-    prog_.sort_scan = Program{"Sort Scan", ctx_.get(), &sh_.sort_scan, log};
     prog_.sort_scan_add = Program{"Sort Scan Add", ctx_.get(), &sh_.sort_scan_add, log};
     prog_.sort_scatter = Program{"Sort Scatter", ctx_.get(), &sh_.sort_scatter, log};
     prog_.spatial_cache_update = Program{"Spatial Cache Update", ctx_.get(), &sh_.spatial_cache_update, log};
@@ -1494,11 +1483,9 @@ bool Ray::Mtl::Renderer::InitPipelines(ILog *log,
         {pi_.postprocess, prog_.postprocess, -1, false},
         {pi_.filter_variance, prog_.filter_variance, -1, false},
         {pi_.nlm_filter, prog_.nlm_filter, -1, false},
-        {pi_.sort_hash_rays, prog_.sort_hash_rays, -1, false},
     };
     pipelines_to_init.emplace_back(pi_.sort_init_count_table, prog_.sort_init_count_table, -1, false);
     pipelines_to_init.emplace_back(pi_.sort_reduce, prog_.sort_reduce, -1, false);
-    pipelines_to_init.emplace_back(pi_.sort_scan, prog_.sort_scan, -1, false);
     pipelines_to_init.emplace_back(pi_.sort_scan_add, prog_.sort_scan_add, -1, false);
     pipelines_to_init.emplace_back(pi_.sort_scatter, prog_.sort_scatter, -1, false);
     if (use_spatial_cache_) {

@@ -4,6 +4,7 @@
 #include "sort_init_count_table_interface.h"
 #include "common.glsl"
 #include "sort_common.h"
+#include "sort_hash.glsl"
 
 layout(push_constant) uniform UniformParams {
     Params g_params;
@@ -19,6 +20,14 @@ layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
 
 layout(std430, binding = OUT_COUNT_TABLE_BUF_SLOT) writeonly buffer OutBuf {
     uint g_count_table[];
+};
+
+layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
+    ray_data_t g_rays[];
+};
+
+layout(std430, binding = OUT_HASHES_BUF_SLOT) writeonly buffer OutHashes {
+    ray_hash_t g_out_hashes[];
 };
 
 shared uint g_shared_counters[SORT_HIST_ROWS * SORT_BINS_COUNT];
@@ -42,8 +51,16 @@ void main() {
 
     uint hashes[SORT_ELEMENTS_PER_THREAD];
     [[unroll]] for (int i2 = 0; i2 < SORT_ELEMENTS_PER_THREAD; ++i2) {
-        if (data_index + i2 * SORT_THREADGROUP_SIZE < data_count) {
-            hashes[i2] = g_hashes[data_index + i2 * SORT_THREADGROUP_SIZE].hash;
+        const int idx = data_index + i2 * SORT_THREADGROUP_SIZE;
+        if (idx < data_count) {
+            if (g_params.hash_input != 0) {
+                // Pass 0: hash the rays inline (the old sort_hash_rays dispatch is fused here)
+                const uint h = get_ray_hash(g_rays[idx], g_params.root_min.xyz, g_params.cell_size.xyz);
+                g_out_hashes[idx] = ray_hash_t(h, uint(idx));
+                hashes[i2] = h;
+            } else {
+                hashes[i2] = g_hashes[idx].hash;
+            }
         }
     }
 

@@ -12,7 +12,6 @@
 #include "shaders/primary_ray_gen_interface.h"
 #include "shaders/shade_interface.h"
 #include "shaders/shade_sky_interface.h"
-#include "shaders/sort_hash_rays_interface.h"
 #include "shaders/sort_init_count_table_interface.h"
 #include "shaders/sort_reduce_interface.h"
 #include "shaders/sort_scan_interface.h"
@@ -595,44 +594,35 @@ void Ray::NS::Renderer::kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buf
                     ctx_->log());
 }
 
-void Ray::NS::Renderer::kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
-                                            const Buffer &counters, const float root_min[3], const float cell_size[3],
-                                            const Buffer &out_hashes) {
-    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
-                                              {&rays, eResState::ShaderResource},
-                                              {&counters, eResState::ShaderResource},
-                                              {&out_hashes, eResState::UnorderedAccess}};
-    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
-
-    const Binding bindings[] = {{eBindTarget::SBufRO, SortHashRays::RAYS_BUF_SLOT, rays},
-                                {eBindTarget::SBufRO, SortHashRays::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBufRW, SortHashRays::OUT_HASHES_BUF_SLOT, out_hashes}};
-
-    SortHashRays::Params uniform_params = {};
-    memcpy(&uniform_params.root_min[0], root_min, 3 * sizeof(float));
-    memcpy(&uniform_params.cell_size[0], cell_size, 3 * sizeof(float));
-
-    DispatchComputeIndirect(cmd_buf, pi_.sort_hash_rays, indir_args, 0, bindings, &uniform_params,
-                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
-}
-
-void Ray::NS::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
-                                                  const int indir_args_index, const Buffer &hashes,
-                                                  const Buffer &counters, const int counter_index,
+void Ray::NS::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const int shift, const int hash_input,
+                                                  const Buffer &indir_args, const int indir_args_index,
+                                                  const Buffer &hashes, const Buffer &rays, const float root_min[3],
+                                                  const float cell_size[3], const Buffer &counters,
+                                                  const int counter_index, const Buffer &out_hashes,
                                                   const Buffer &out_count_table) {
-    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
-                                              {&hashes, eResState::ShaderResource},
-                                              {&counters, eResState::ShaderResource},
-                                              {&out_count_table, eResState::UnorderedAccess}};
+    // Only the buffers the selected mode actually reads/writes get transitioned, and every slot gets a
+    // binding in a legal state: same-resource double barriers trip the DX debug layer (placed buffers
+    // can share one ID3D12Resource).
+    SmallVector<TransitionInfo, 6> res_transitions = {
+        {&indir_args, eResState::IndirectArgument}, {&counters, eResState::ShaderResource},
+        {&out_count_table, eResState::UnorderedAccess}, {&rays, eResState::ShaderResource}};
+    res_transitions.emplace_back(hash_input ? &out_hashes : &hashes,
+                                 hash_input ? eResState::UnorderedAccess : eResState::ShaderResource);
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBufRO, SortInitCountTable::HASHES_BUF_SLOT, hashes},
-                                {eBindTarget::SBufRO, SortInitCountTable::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBufRW, SortInitCountTable::OUT_COUNT_TABLE_BUF_SLOT, out_count_table}};
+    const Binding bindings[] = {
+        {eBindTarget::SBufRO, SortInitCountTable::HASHES_BUF_SLOT, hash_input ? rays : hashes},
+        {eBindTarget::SBufRO, SortInitCountTable::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::SBufRW, SortInitCountTable::OUT_COUNT_TABLE_BUF_SLOT, out_count_table},
+        {eBindTarget::SBufRO, SortInitCountTable::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBufRW, SortInitCountTable::OUT_HASHES_BUF_SLOT, hash_input ? out_hashes : out_count_table}};
 
     SortInitCountTable::Params uniform_params = {};
     uniform_params.counter = counter_index;
     uniform_params.shift = shift;
+    uniform_params.hash_input = hash_input;
+    memcpy(&uniform_params.root_min[0], root_min, 3 * sizeof(float));
+    memcpy(&uniform_params.cell_size[0], cell_size, 3 * sizeof(float));
 
     DispatchComputeIndirect(cmd_buf, pi_.sort_init_count_table, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
@@ -658,27 +648,6 @@ void Ray::NS::Renderer::kernel_SortReduce(CommandBuffer cmd_buf, const Buffer &i
     DispatchComputeIndirect(cmd_buf, pi_.sort_reduce, indir_args, indir_args_index * sizeof(DispatchIndirectCommand),
                             bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                             ctx_->log());
-}
-
-void Ray::NS::Renderer::kernel_SortScan(CommandBuffer cmd_buf, const Buffer &input, const Buffer &counters,
-                                        int counter_index, const Buffer &out_scan_values) {
-    SmallVector<TransitionInfo, 4> res_transitions = {{&counters, eResState::ShaderResource},
-                                                      {&out_scan_values, eResState::UnorderedAccess}};
-    if (&input != &out_scan_values) {
-        res_transitions.emplace_back(&input, eResState::ShaderResource);
-    }
-    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
-
-    const Binding bindings[] = {{eBindTarget::SBufRO, SortScan::INPUT_BUF_SLOT, input},
-                                {eBindTarget::SBufRO, SortScan::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBufRW, SortScan::OUT_SCAN_VALUES_BUF_SLOT, out_scan_values}};
-
-    SortScan::Params uniform_params = {};
-    uniform_params.counter = counter_index;
-
-    const uint32_t grp_count[3] = {1, 1, 1};
-    DispatchCompute(cmd_buf, pi_.sort_scan, grp_count, bindings, &uniform_params, sizeof(uniform_params),
-                    ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::NS::Renderer::kernel_SortScanAdd(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,

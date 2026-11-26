@@ -31,6 +31,23 @@ layout (local_size_x = SORT_THREADGROUP_SIZE, local_size_y = 1, local_size_z = 1
 
 shared uint g_shared_sums[SORT_THREADGROUP_SIZE];
 
+uint ThreadgroupReduce(uint local_sum, uint li) {
+    uint subgroup_reduced = subgroupAdd(local_sum);
+
+    uint subgroup_id = li / gl_SubgroupSize;
+    if (subgroupElect()) {
+        g_shared_sums[subgroup_id] = subgroup_reduced;
+    }
+
+    groupMemoryBarrier(); barrier();
+
+    if (subgroup_id == 0) {
+        subgroup_reduced = subgroupAdd(li < (SORT_THREADGROUP_SIZE / gl_SubgroupSize) ? g_shared_sums[li] : 0);
+    }
+
+    return subgroup_reduced;
+}
+
 uint ThreadgroupExclusiveScan(uint local_sum, uint li) {
     uint subgroup_sum = subgroupExclusiveAdd(local_sum);
 
@@ -56,14 +73,14 @@ uint ThreadgroupExclusiveScan(uint local_sum, uint li) {
 
 shared uint g_shared_values[SORT_ELEMENTS_PER_THREAD][SORT_THREADGROUP_SIZE];
 shared uint g_chunk_total;
+shared uint g_prefix_total;
 
 void main() {
-    const int gi = int(gl_GlobalInvocationID.x), li = int(gl_LocalInvocationID.x), wi = int(gl_WorkGroupID.x);
+    const int li = int(gl_LocalInvocationID.x), wi = int(gl_WorkGroupID.x);
 
     const int BlockSize = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
     const int blocks_count = int(g_counters[g_params.counter]);
 
-#if ADD_PARTIAL_SUMS
     const int scan_count = blocks_count;
     const int groups_per_bin = (blocks_count + BlockSize - 1) / BlockSize;
 
@@ -72,18 +89,22 @@ void main() {
 
     const int chunk_begin = (wi % groups_per_bin) * BlockSize;
     const int chunk_end = chunk_begin + BlockSize;
-    const uint initial_partial_sum = g_scan_scratch[wi];
-#else
-    // Single workgroup scans the whole reduce table in BlockSize chunks
-    const int scan_count = SORT_BINS_COUNT * ((blocks_count + BlockSize - 1) / BlockSize);
 
-    const int bin_offset = 0;
-    const int chunk_begin = 0;
-    const int chunk_end = scan_count;
-    const uint initial_partial_sum = 0;
-#endif
+    // Inline exclusive prefix of the unscanned reduce table: the old single-workgroup
+    // sort_scan dispatch is fused here (the table is 256 bins x a few chunks at most).
+    uint prefix = 0;
+    for (int i = li; i < wi; i += SORT_THREADGROUP_SIZE) {
+        prefix += g_scan_scratch[i];
+    }
+    prefix = ThreadgroupReduce(prefix, li);
 
-    uint partial_sum = initial_partial_sum;
+    groupMemoryBarrier(); barrier();
+    if (li == 0) {
+        g_prefix_total = prefix;
+    }
+    groupMemoryBarrier(); barrier();
+
+    uint partial_sum = g_prefix_total;
 
     for (int base_index = chunk_begin; base_index < chunk_end; base_index += BlockSize) {
         for (int i = 0; i < SORT_ELEMENTS_PER_THREAD; ++i) {

@@ -412,8 +412,7 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/shade.comp.glsl
                     internal/shaders/shade_interface.h
                     internal/shaders/sort_common.h
-                    internal/shaders/sort_hash_rays.comp.glsl
-                    internal/shaders/sort_hash_rays_interface.h
+                    internal/shaders/sort_hash.glsl
                     internal/shaders/sort_init_count_table.comp.glsl
                     internal/shaders/sort_init_count_table_interface.h
                     internal/shaders/sort_reduce.comp.glsl

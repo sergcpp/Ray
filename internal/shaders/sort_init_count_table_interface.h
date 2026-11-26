@@ -10,12 +10,16 @@ INTERFACE_START(SortInitCountTable)
 struct Params {
     int shift;
     int counter;
+    int hash_input;
     int _pad0;
-    int _pad1;
+    vec4 root_min;
+    vec4 cell_size;
 };
 
 const int HASHES_BUF_SLOT = 1;
 const int COUNTERS_BUF_SLOT = 2;
+const int RAYS_BUF_SLOT = 3;
+const int OUT_HASHES_BUF_SLOT = 4;
 
 const int OUT_COUNT_TABLE_BUF_SLOT = 0;
 

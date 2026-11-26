@@ -1,25 +1,7 @@
-#version 450
-#extension GL_GOOGLE_include_directive : require
+#ifndef SORT_HASH_GLSL
+#define SORT_HASH_GLSL
 
-#include "sort_hash_rays_interface.h"
-#include "common.glsl"
-
-layout(push_constant) uniform UniformParams {
-    Params g_params;
-};
-
-layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
-    ray_data_t g_rays[];
-};
-
-layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
-    uint g_counters[];
-};
-
-layout(std430, binding = OUT_HASHES_BUF_SLOT) writeonly buffer OutHashes {
-    ray_hash_t g_out_hashes[];
-};
-
+// Sort key hash; bit-identical to the CPU get_ray_hash (see AGENTS.md lockstep rule).
 const uint g_morton_table_16[] = { 0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85 };
 
 const uint g_morton_table_256[] = {
@@ -86,15 +68,4 @@ uint get_ray_hash(ray_data_t r, vec3 root_min, vec3 cell_size) {
     return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
 }
 
-layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = 1, local_size_z = 1) in;
-
-void main() {
-    const int gi = int(gl_GlobalInvocationID.x);
-    if (gi >= g_counters[1]) {
-        return;
-    }
-
-    ray_data_t r = g_rays[gi];
-    g_out_hashes[gi].hash = get_ray_hash(r, g_params.root_min.xyz, g_params.cell_size.xyz);
-    g_out_hashes[gi].index = gi;
-}
+#endif // SORT_HASH_GLSL
