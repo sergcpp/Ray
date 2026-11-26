@@ -828,7 +828,10 @@ inline int Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &ind
                                                "Radix Sort Iter #2 [Bits 16-24]", "Radix Sort Iter #3 [Bits 24-32]"};
 
     Buffer *hashes[] = {&_hashes[0], &_hashes[1]};
-    for (int shift = 0; shift < 32; shift += 8) {
+    // LSD pass order sets key significance: origin Morton bits 23..8 major, direction minor.
+    // Full 32-bit dir-major and 24-bit origin-only measured worse on SWRT; see AGENTS.md.
+    static const int pass_shifts[] = {24, 8, 16};
+    for (int shift : pass_shifts) {
         DebugMarker _1(ctx_.get(), cmd_buf, MarkerStrings[shift / 8]);
 
         kernel_SortInitCountTable(cmd_buf, shift, indir_args, 6, *hashes[0], counters, 6, count_table);
@@ -843,6 +846,6 @@ inline int Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &ind
 
         std::swap(hashes[0], hashes[1]);
     }
-    assert(hashes[0] == &_hashes[0]);
+    // odd pass count: result lands in _hashes[1]
     return hashes[0] == &_hashes[0] ? 0 : 1;
 }
