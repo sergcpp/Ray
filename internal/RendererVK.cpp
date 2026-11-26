@@ -384,12 +384,11 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
     const auto &s = dynamic_cast<const Vk::Scene &>(scene);
 
     float root_min[3], cell_size[3];
-    if (s.tlas_root_ != 0xffffffff) {
-        const bvh_node_t &root_node = s.tlas_root_node_;
-        for (int i = 0; i < 3; ++i) {
-            root_min[i] = root_node.bbox_min[i];
-            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
-        }
+    for (int i = 0; i < 3; ++i) {
+        root_min[i] = s.tlas_root_node_.bbox_min[i];
+        const float extent = s.tlas_root_node_.bbox_max[i] - root_min[i];
+        // HWRT keeps tlas_root_ empty but keeps the bbox valid; guard the empty-scene case
+        cell_size[i] = extent > 0.0f ? extent / 255.0f : 1.0f;
     }
 
     ++region.iteration;
@@ -1268,12 +1267,11 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     ++region.cache_iteration;
 
     float root_min[3], cell_size[3];
-    if (s.tlas_root_ != 0xffffffff) {
-        const bvh_node_t &root_node = s.tlas_root_node_;
-        for (int i = 0; i < 3; ++i) {
-            root_min[i] = root_node.bbox_min[i];
-            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
-        }
+    for (int i = 0; i < 3; ++i) {
+        root_min[i] = s.tlas_root_node_.bbox_min[i];
+        const float extent = s.tlas_root_node_.bbox_max[i] - root_min[i];
+        // HWRT keeps tlas_root_ empty but keeps the bbox valid; guard the empty-scene case
+        cell_size[i] = extent > 0.0f ? extent / 255.0f : 1.0f;
     }
 
     rect_t rect = region.rect();
@@ -2132,16 +2130,14 @@ bool Ray::Vk::Renderer::InitPipelines(ILog *log,
             PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_primary_comp_spv,
                        internal_shaders_output_intersect_scene_indirect_hwrt_atlas_primary_comp_spv),
             eShaderType::Comp, false);
-        shaders_to_init.emplace_back(
-            sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (HWRT)",
-            PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv,
-                       internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv),
-            eShaderType::Comp, false);
-        shaders_to_init.emplace_back(
-            sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (HWRT)",
-            PickShader(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv,
-                       internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv),
-            eShaderType::Comp, false);
+        shaders_to_init.emplace_back(sh_.intersect_scene_indirect, "Intersect Scene (Secondary) (HWRT)",
+                                     PickShader(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv,
+                                                internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv),
+                                     eShaderType::Comp, false);
+        shaders_to_init.emplace_back(sh_.intersect_scene_shadow, "Intersect Scene (Shadow) (HWRT)",
+                                     PickShader(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv,
+                                                internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv),
+                                     eShaderType::Comp, false);
         shaders_to_init.emplace_back(sh_.intersect_scene_indirect_rgen, "Intersect Scene Indirect RGEN",
                                      internal_shaders_output_intersect_scene_indirect_rgen_spv, eShaderType::RayGen,
                                      false);

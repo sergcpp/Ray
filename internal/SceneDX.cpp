@@ -324,10 +324,19 @@ void Ray::Dx::Scene::Rebuild_HWRT_TLAS_nolock() {
 
     std::vector<RTGeoInstance> geo_instances;
     std::vector<D3D12_RAYTRACING_INSTANCE_DESC> tlas_instances;
+    // The RT AS TLAS leaves tlas_root_ empty, but the ray-sort hash still needs the root bbox
+    float bmin[3] = {FLT_MAX, FLT_MAX, FLT_MAX}, bmax[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
 
     for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
         const mesh_instance_t &instance = *it;
         const mesh_t &m = meshes_[instance.mesh_index];
+
+        float mi_min[3], mi_max[3];
+        TransformBoundingBox(m.bbox_min, m.bbox_max, instance.xform, mi_min, mi_max);
+        for (int i = 0; i < 3; ++i) {
+            bmin[i] = std::min(bmin[i], mi_min[i]);
+            bmax[i] = std::max(bmax[i], mi_max[i]);
+        }
 
         auto &blas = rt_mesh_blases_[m.node_index];
         blas.geo_index = uint32_t(geo_instances.size());
@@ -355,6 +364,11 @@ void Ray::Dx::Scene::Rebuild_HWRT_TLAS_nolock() {
             geo.material_index = 0; // grp.mat.index();
             geo.flags = 0;
         }
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        tlas_root_node_.bbox_min[i] = bmin[i] == FLT_MAX ? 0.0f : bmin[i];
+        tlas_root_node_.bbox_max[i] = bmax[i] == -FLT_MAX ? 0.0f : bmax[i];
     }
 
     if (geo_instances.empty()) {

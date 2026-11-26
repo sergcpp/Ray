@@ -295,12 +295,11 @@ void Ray::Mtl::Renderer::RenderScene(const SceneBase &scene, RegionContext &regi
     const auto &s = dynamic_cast<const Mtl::Scene &>(scene);
 
     float root_min[3], cell_size[3];
-    if (s.tlas_root_ != 0xffffffff) {
-        const bvh_node_t &root_node = s.tlas_root_node_;
-        for (int i = 0; i < 3; ++i) {
-            root_min[i] = root_node.bbox_min[i];
-            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
-        }
+    for (int i = 0; i < 3; ++i) {
+        root_min[i] = s.tlas_root_node_.bbox_min[i];
+        const float extent = s.tlas_root_node_.bbox_max[i] - root_min[i];
+        // HWRT keeps tlas_root_ empty but keeps the bbox valid; guard the empty-scene case
+        cell_size[i] = extent > 0.0f ? extent / 255.0f : 1.0f;
     }
 
     ++region.iteration;
@@ -885,12 +884,11 @@ void Ray::Mtl::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContex
     ++region.cache_iteration;
 
     float root_min[3], cell_size[3];
-    if (s.tlas_root_ != 0xffffffff) {
-        const bvh_node_t &root_node = s.tlas_root_node_;
-        for (int i = 0; i < 3; ++i) {
-            root_min[i] = root_node.bbox_min[i];
-            cell_size[i] = (root_node.bbox_max[i] - root_node.bbox_min[i]) / 255;
-        }
+    for (int i = 0; i < 3; ++i) {
+        root_min[i] = s.tlas_root_node_.bbox_min[i];
+        const float extent = s.tlas_root_node_.bbox_max[i] - root_min[i];
+        // HWRT keeps tlas_root_ empty but keeps the bbox valid; guard the empty-scene case
+        cell_size[i] = extent > 0.0f ? extent / 255.0f : 1.0f;
     }
 
     rect_t rect = region.rect();

@@ -214,6 +214,8 @@ void Ray::Mtl::Scene::Rebuild_HWRT_TLAS_nolock() {
     std::vector<RTGeoInstance> geo_instances;
     std::vector<MTL::AccelerationStructureUserIDInstanceDescriptor> instances;
     SmallVector<NS::Object *, 16> blas_refs;
+    // The RT AS TLAS leaves tlas_root_ empty, but the ray-sort hash still needs the root bbox
+    float bmin[3] = {FLT_MAX, FLT_MAX, FLT_MAX}, bmax[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
 
     for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
         const mesh_instance_t &instance = *it;
@@ -224,6 +226,14 @@ void Ray::Mtl::Scene::Rebuild_HWRT_TLAS_nolock() {
             log_->Error("Skipping TLAS instance with failed BLAS build");
             continue;
         }
+
+        float mi_min[3], mi_max[3];
+        TransformBoundingBox(m.bbox_min, m.bbox_max, instance.xform, mi_min, mi_max);
+        for (int i = 0; i < 3; ++i) {
+            bmin[i] = std::min(bmin[i], mi_min[i]);
+            bmax[i] = std::max(bmax[i], mi_max[i]);
+        }
+
         auto &blas = rt_mesh_blases_[m.node_index];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;
@@ -245,6 +255,11 @@ void Ray::Mtl::Scene::Rebuild_HWRT_TLAS_nolock() {
         new_instance.userID = m.vert_index / 3; // shader reads it as instance-custom-index
 
         blas_refs.push_back(blas.acc.mtl_handle());
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        tlas_root_node_.bbox_min[i] = bmin[i] == FLT_MAX ? 0.0f : bmin[i];
+        tlas_root_node_.bbox_max[i] = bmax[i] == -FLT_MAX ? 0.0f : bmax[i];
     }
 
     // instanceCount 0 is legal: the TLAS builds empty and queries miss cleanly (verified on M4),
