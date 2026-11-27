@@ -2667,15 +2667,15 @@ vec3 ShadeSurface(const int ray_slot, const hit_data_t inter, const ray_data_t r
         mix_val *= saturate(RR);
 
         if (chain_rand > mix_val) {
-            mix_weight *= (mat.flags & MAT_FLAG_MIX_ADD) != 0 ? 1.0 / (1.0 - mix_val) : 1.0;
+            mix_weight *= (mat.flags & MAT_FLAG_MIX_ADD) != 0 ? 1.0 / max(1.0 - mix_val, FLT_EPS) : 1.0;
 
             mat = g_materials[mat.textures[MIX_MAT1]];
-            chain_rand = (chain_rand - mix_val) / (1.0 - mix_val);
+            chain_rand = (chain_rand - mix_val) / max(1.0 - mix_val, FLT_EPS);
         } else {
-            mix_weight *= (mat.flags & MAT_FLAG_MIX_ADD) != 0 ? 1.0 / mix_val : 1.0;
+            mix_weight *= (mat.flags & MAT_FLAG_MIX_ADD) != 0 ? 1.0 / max(mix_val, FLT_EPS) : 1.0;
 
             mat = g_materials[mat.textures[MIX_MAT2]];
-            chain_rand = chain_rand / mix_val;
+            chain_rand = chain_rand / max(mix_val, FLT_EPS);
         }
     }
 

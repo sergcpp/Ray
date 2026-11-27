@@ -153,10 +153,10 @@ void main() {
 
             if (trans_r > mix_val) {
                 mat = g_materials[mat.textures[MIX_MAT1]];
-                trans_r = (trans_r - mix_val) / (1.0 - mix_val);
+                trans_r = (trans_r - mix_val) / max(1.0 - mix_val, FLT_EPS);
             } else {
                 mat = g_materials[mat.textures[MIX_MAT2]];
-                trans_r = trans_r / mix_val;
+                trans_r = trans_r / max(mix_val, FLT_EPS);
             }
         }
 
