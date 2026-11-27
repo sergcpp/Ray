@@ -480,10 +480,7 @@ def main():
     compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter.comp.spv", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=1")
 
     # Sorting
-    compile_shader_async(src_name="sort_init_count_table.comp.glsl")
-    compile_shader_async(src_name="sort_reduce.comp.glsl")
-    compile_shader_async(src_name="sort_scan.comp.glsl", spv_name="sort_scan_add.comp.spv")
-    compile_shader_async(src_name="sort_scatter.comp.glsl")
+    compile_shader_async(src_name="sort_local.comp.glsl")
 
     # Other
     compile_shader_async(src_name="prepare_indir_args.comp.glsl")

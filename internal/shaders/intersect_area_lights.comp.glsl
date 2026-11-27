@@ -28,7 +28,7 @@ layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
 
 #if !PRIMARY
 layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
-    ray_hash_t g_sort_ray_indices[];
+    uint g_sort_ray_indices[];
 };
 #endif
 
@@ -84,7 +84,7 @@ void main() {
         return;
     }
 
-    const int ray_index = int(g_sort_ray_indices[index].index);
+    const int ray_index = int(g_sort_ray_indices[index]);
 
     const int x = int((g_rays[ray_index].xy >> 16) & 0xffff);
     const int y = int(g_rays[ray_index].xy & 0xffff);

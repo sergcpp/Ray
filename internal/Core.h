@@ -529,10 +529,6 @@ struct ray_chunk_t {
     uint32_t hash, base, size;
 };
 
-struct ray_hash_t {
-    uint32_t hash, index;
-};
-
 enum class eActivation { ReLU };
 enum class ePostOp { None, Downsample, HDRTransfer, PositiveNormalize };
 enum class ePreOp { None, Upsample, HDRTransfer, PositiveNormalize };

@@ -67,7 +67,7 @@ class Renderer : public RendererBase {
         Shader shade_sky, shade_sky_primary;
         Shader intersect_scene_shadow, prepare_indir_args, mix_incremental, postprocess, filter_variance, nlm_filter,
             debug_rt;
-        Shader sort_init_count_table, sort_reduce, sort_scan_add, sort_scatter;
+        Shader sort_local;
         Shader intersect_scene_rchit, intersect_scene_rmiss, intersect_scene_indirect_rgen,
             intersect_scene_indirect_rgen_primary;
         Shader convolution_Img_9_32, convolution_32_32_Downsample, convolution_32_48_Downsample,
@@ -86,7 +86,7 @@ class Renderer : public RendererBase {
         Program shade_sky, shade_sky_primary;
         Program intersect_scene_shadow, prepare_indir_args, mix_incremental, postprocess, filter_variance, nlm_filter,
             debug_rt;
-        Program sort_init_count_table, sort_reduce, sort_scan_add, sort_scatter;
+        Program sort_local;
         Program intersect_scene_indirect_rtpipe, intersect_scene_indirect_rtpipe_primary;
         Program convolution_Img_9_32, convolution_32_32_Downsample, convolution_32_48_Downsample,
             convolution_48_64_Downsample, convolution_64_80_Downsample, convolution_64_64, convolution_64_32,
@@ -104,7 +104,7 @@ class Renderer : public RendererBase {
         Pipeline shade_sky, shade_sky_primary;
         Pipeline intersect_scene_shadow, prepare_indir_args, mix_incremental, postprocess, filter_variance, nlm_filter,
             debug_rt;
-        Pipeline sort_init_count_table, sort_reduce, sort_scan_add, sort_scatter;
+        Pipeline sort_local;
         Pipeline intersect_scene_indirect_rtpipe, intersect_scene_indirect_rtpipe_primary;
         Pipeline convolution_Img_9_32, convolution_32_32_Downsample, convolution_32_48_Downsample,
             convolution_48_64_Downsample, convolution_64_80_Downsample, convolution_64_64, convolution_64_32,
@@ -147,8 +147,7 @@ class Renderer : public RendererBase {
     Image sheen_ltc_lut_, ggx_e_lut_, ggx_eavg_lut_, ggx_e_glass_lut_, ggx_e_glass_inv_lut_, ggx_eavg_glass_lut_,
         ggx_eavg_glass_inv_lut_;
 
-    Buffer random_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2],
-        count_table_buf_, reduce_table_buf_;
+    Buffer random_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2];
     Buffer counters_buf_, indir_args_buf_[2];
 
     Buffer temp_cache_data_buf_, temp_lock_buf_;
@@ -288,18 +287,9 @@ class Renderer : public RendererBase {
                                   const Sampler &sampler, const rect_t &rect, int w, int h, const Buffer &weights,
                                   uint32_t weights_offset, uint32_t biases_offset, const Buffer &out_buf,
                                   uint32_t output_offset, int output_stride, const Image &out_debug_img = {});
-    void kernel_SortInitCountTable(CommandBuffer cmd_buf, int shift, int hash_input, const Buffer &indir_args,
-                                   int indir_args_index, const Buffer &hashes, const Buffer &rays,
-                                   const float root_min[3], const float cell_size[3], const Buffer &counters,
-                                   int counter_index, const Buffer &out_hashes, const Buffer &out_count_table);
-    void kernel_SortReduce(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index, const Buffer &input,
-                           const Buffer &counters, int counter_index, const Buffer &out_reduce_table);
-    void kernel_SortScanAdd(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index, const Buffer &input,
-                            const Buffer &scratch, const Buffer &counters, int counter_index,
-                            const Buffer &out_scan_values);
-    void kernel_SortScatter(CommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
-                            const Buffer &hashes, const Buffer &sum_table, const Buffer &counters, int counter_index,
-                            const Buffer &out_chunks);
+    void kernel_SortLocal(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index, const Buffer &rays,
+                          const float root_min[3], const float cell_size[3], const Buffer &counters, int counter_index,
+                          const Buffer &out_hashes);
     void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Image &out_pixels);
     void kernel_SpatialCacheUpdate(CommandBuffer cmd_buf, const cache_grid_params_t &params, const Buffer &indir_args,
@@ -314,9 +304,8 @@ class Renderer : public RendererBase {
 
     void TransitionSceneResources(CommandBuffer cmd_buf, const scene_data_t &sc_data) const;
 
-    int RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
-                  const Buffer &counters, const Buffer &reduce_table, const Buffer &rays, const float root_min[3],
-                  const float cell_size[3]);
+    int RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], const Buffer &rays,
+                  const float root_min[3], const float cell_size[3]);
 
     color_data_rgba_t get_pixels_ref(bool tonemap) const;
 
@@ -463,19 +452,9 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
         Buffer{"Primary Hits", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::hit_data_t) * num_pixels)};
 
     ray_hashes_bufs_[0] =
-        Buffer{"Ray Hashes #0", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_hash_t) * num_pixels)};
+        Buffer{"Sort Indices #0", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * num_pixels)};
     ray_hashes_bufs_[1] =
-        Buffer{"Ray Hashes #1", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_hash_t) * num_pixels)};
-
-    const int BlockSize = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
-    const int blocks_count = (num_pixels + BlockSize - 1) / BlockSize;
-
-    count_table_buf_ = Buffer{"Count Table", ctx_.get(), eBufType::Storage,
-                              uint32_t(sizeof(uint32_t) * SORT_BINS_COUNT * blocks_count)};
-
-    const int reduce_blocks_count = (blocks_count + BlockSize - 1) / BlockSize;
-    reduce_table_buf_ = Buffer{"Reduce Table", ctx_.get(), eBufType::Storage,
-                               uint32_t(sizeof(uint32_t) * SORT_BINS_COUNT * reduce_blocks_count)};
+        Buffer{"Sort Indices #1", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * num_pixels)};
 
     if (use_spatial_cache_) {
         const int cache_w = w / RAD_CACHE_DOWNSAMPLING_FACTOR, cache_h = h / RAD_CACHE_DOWNSAMPLING_FACTOR;
@@ -818,36 +797,10 @@ inline void Ray::NS::Renderer::InitEnergyCompensationLUTs() {
 }
 
 inline int Ray::NS::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
-                                        Buffer &count_table, const Buffer &counters, const Buffer &reduce_table,
                                         const Buffer &rays, const float root_min[3], const float cell_size[3]) {
     DebugMarker _0(ctx_.get(), cmd_buf, "Radix Sort");
 
-    static std::string_view MarkerStrings[] = {"Radix Sort Iter #0 [Bits   0-8]", "Radix Sort Iter #1 [Bits   8-16]",
-                                               "Radix Sort Iter #2 [Bits 16-24]", "Radix Sort Iter #3 [Bits 24-32]"};
-
-    Buffer *hashes[] = {&_hashes[0], &_hashes[1]};
-    // LSD pass order sets key significance: origin Morton bits 23..8 major, direction minor.
-    // Full 32-bit dir-major and 24-bit origin-only measured worse on SWRT; see AGENTS.md.
-    static const int pass_shifts[] = {24, 8, 16};
-    for (int pass = 0; pass < 3; ++pass) {
-        const int shift = pass_shifts[pass];
-        DebugMarker _1(ctx_.get(), cmd_buf, MarkerStrings[shift / 8]);
-
-        // Pass 0 hashes the rays inline (the old sort_hash_rays dispatch is fused into the histogram);
-        // the kernel binds the mode's unused slots to already-legal buffers.
-        kernel_SortInitCountTable(cmd_buf, shift, pass == 0 ? 1 : 0, indir_args, 6, *hashes[0], rays, root_min,
-                                  cell_size, counters, 6, *hashes[0], count_table);
-
-        kernel_SortReduce(cmd_buf, indir_args, 7, count_table, counters, 7, reduce_table);
-
-        // scan_add computes its own exclusive prefix of the reduce table inline
-        // (the old single-workgroup sort_scan dispatch is fused into it)
-        kernel_SortScanAdd(cmd_buf, indir_args, 7, count_table, reduce_table, counters, 7, count_table);
-
-        kernel_SortScatter(cmd_buf, shift, indir_args, 6, *hashes[0], count_table, counters, 6, *hashes[1]);
-
-        std::swap(hashes[0], hashes[1]);
-    }
-    // odd pass count: result lands in _hashes[1]
-    return hashes[0] == &_hashes[0] ? 0 : 1;
+    // Block-local sort: one dispatch, no cross-block coordination; result lands in _hashes[1].
+    kernel_SortLocal(cmd_buf, indir_args, 6, rays, root_min, cell_size, counters_buf_, 6, _hashes[1]);
+    return 1;
 }

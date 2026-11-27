@@ -48,7 +48,6 @@ static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t));
 static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t));
 static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t));
 static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t));
-static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t));
 static_assert(sizeof(Types::atmosphere_params_t) == sizeof(Ray::atmosphere_params_t));
 
 static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE);
@@ -181,10 +180,7 @@ namespace Vk {
 #include "shaders/output/shade_secondary_bindless_sky.comp.spv.inl"
 #include "shaders/output/shade_sky.comp.spv.inl"
 #include "shaders/output/shade_sky_primary.comp.spv.inl"
-#include "shaders/output/sort_init_count_table.comp.spv.inl"
-#include "shaders/output/sort_reduce.comp.spv.inl"
-#include "shaders/output/sort_scan_add.comp.spv.inl"
-#include "shaders/output/sort_scatter.comp.spv.inl"
+#include "shaders/output/sort_local.comp.spv.inl"
 #include "shaders/output/spatial_cache_resolve.comp.spv.inl"
 #include "shaders/output/spatial_cache_update.comp.spv.inl"
 #include "shaders/output/spatial_cache_update_compat.comp.spv.inl"
@@ -653,8 +649,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase &scene, RegionContext &regio
 
         DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
-        const int perm_index = RadixSort(cmd_buf, indir_args_buf_[0], ray_hashes_bufs_, count_table_buf_, counters_buf_,
-                                         reduce_table_buf_, secondary_rays_buf_, root_min, cell_size);
+        const int perm_index =
+            RadixSort(cmd_buf, indir_args_buf_[0], ray_hashes_bufs_, secondary_rays_buf_, root_min, cell_size);
         Buffer &sort_perm = ray_hashes_bufs_[perm_index];
         // the perm must survive the shade pass, so the sky-ray list goes to the other buffer
         Buffer &sky_rays_buf = ray_hashes_bufs_[1 - perm_index];
@@ -1460,8 +1456,8 @@ void Ray::Vk::Renderer::UpdateSpatialCache(const SceneBase &scene, RegionContext
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
         DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
-        const int perm_index = RadixSort(cmd_buf, indir_args_buf_[1], ray_hashes_bufs_, count_table_buf_, counters_buf_,
-                                         reduce_table_buf_, secondary_rays_buf_, root_min, cell_size);
+        const int perm_index =
+            RadixSort(cmd_buf, indir_args_buf_[1], ray_hashes_bufs_, secondary_rays_buf_, root_min, cell_size);
         Buffer &sort_perm = ray_hashes_bufs_[perm_index];
 
         { // trace secondary rays
@@ -2108,11 +2104,7 @@ bool Ray::Vk::Renderer::InitPipelines(ILog *log,
         {sh_.filter_variance, "Filter Variance", internal_shaders_output_filter_variance_comp_spv, eShaderType::Comp,
          false},
         {sh_.nlm_filter, "NLM Filter", internal_shaders_output_nlm_filter_comp_spv, eShaderType::Comp, false},
-        {sh_.sort_init_count_table, "Sort Init Count Table", internal_shaders_output_sort_init_count_table_comp_spv,
-         eShaderType::Comp, false},
-        {sh_.sort_reduce, "Sort Reduce", internal_shaders_output_sort_reduce_comp_spv, eShaderType::Comp, false},
-        {sh_.sort_scan_add, "Sort Scan Add", internal_shaders_output_sort_scan_add_comp_spv, eShaderType::Comp, false},
-        {sh_.sort_scatter, "Sort Scatter", internal_shaders_output_sort_scatter_comp_spv, eShaderType::Comp, false},
+        {sh_.sort_local, "Sort Local", internal_shaders_output_sort_local_comp_spv, eShaderType::Comp, false},
         {sh_.spatial_cache_resolve, "Spatial Cache Resolve", internal_shaders_output_spatial_cache_resolve_comp_spv,
          eShaderType::Comp, false}};
     if (use_hwrt_) {
@@ -2215,10 +2207,7 @@ bool Ray::Vk::Renderer::InitPipelines(ILog *log,
     prog_.filter_variance = Program{"Filter Variance", ctx_.get(), &sh_.filter_variance, log};
     prog_.nlm_filter = Program{"NLM Filter", ctx_.get(), &sh_.nlm_filter, log};
     prog_.debug_rt = Program{"Debug RT", ctx_.get(), &sh_.debug_rt, log};
-    prog_.sort_init_count_table = Program{"Init Count Table", ctx_.get(), &sh_.sort_init_count_table, log};
-    prog_.sort_reduce = Program{"Sort Reduce", ctx_.get(), &sh_.sort_reduce, log};
-    prog_.sort_scan_add = Program{"Sort Scan Add", ctx_.get(), &sh_.sort_scan_add, log};
-    prog_.sort_scatter = Program{"Sort Scatter", ctx_.get(), &sh_.sort_scatter, log};
+    prog_.sort_local = Program{"Sort Local", ctx_.get(), &sh_.sort_local, log};
     prog_.intersect_scene_indirect_rtpipe = Program{"Intersect Scene Indirect",
                                                     ctx_.get(),
                                                     &sh_.intersect_scene_indirect_rgen,
@@ -2268,10 +2257,7 @@ bool Ray::Vk::Renderer::InitPipelines(ILog *log,
         }
         pipelines_to_init.emplace_back(pi_.debug_rt, prog_.debug_rt, -1, false);
     }
-    pipelines_to_init.emplace_back(pi_.sort_init_count_table, prog_.sort_init_count_table, -1, false);
-    pipelines_to_init.emplace_back(pi_.sort_reduce, prog_.sort_reduce, -1, false);
-    pipelines_to_init.emplace_back(pi_.sort_scan_add, prog_.sort_scan_add, -1, false);
-    pipelines_to_init.emplace_back(pi_.sort_scatter, prog_.sort_scatter, -1, false);
+    pipelines_to_init.emplace_back(pi_.sort_local, prog_.sort_local, -1, false);
     if (use_spatial_cache_) {
         pipelines_to_init.emplace_back(pi_.shade_primary_cache_update, prog_.shade_primary_cache_update, -1, false);
         pipelines_to_init.emplace_back(pi_.shade_primary_cache_query, prog_.shade_primary_cache_query, -1, false);

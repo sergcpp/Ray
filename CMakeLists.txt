@@ -413,14 +413,8 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/shade_interface.h
                     internal/shaders/sort_common.h
                     internal/shaders/sort_hash.glsl
-                    internal/shaders/sort_init_count_table.comp.glsl
-                    internal/shaders/sort_init_count_table_interface.h
-                    internal/shaders/sort_reduce.comp.glsl
-                    internal/shaders/sort_reduce_interface.h
-                    internal/shaders/sort_scan.comp.glsl
-                    internal/shaders/sort_scan_interface.h
-                    internal/shaders/sort_scatter.comp.glsl
-                    internal/shaders/sort_scatter_interface.h
+                    internal/shaders/sort_local.comp.glsl
+                    internal/shaders/sort_local_interface.h
                     internal/shaders/texture.glsl
                     internal/shaders/traverse_bvh.glsl
                     internal/shaders/types.h

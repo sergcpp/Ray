@@ -29,17 +29,12 @@ void main() {
         g_out_indir_args[5] = 1;
 
         { // arguments for sorting
-            const int BlockSize = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
+            const int BlockSize = SORT_LOCAL_BLOCK;
             uint blocks_count = (ray_count + BlockSize - 1) / BlockSize;
             g_counters[6] = ray_count;
             g_out_indir_args[18] = blocks_count;
             g_out_indir_args[19] = 1;
             g_out_indir_args[20] = 1;
-
-            g_counters[7] = blocks_count;
-            g_out_indir_args[21] = SORT_BINS_COUNT * ((blocks_count + BlockSize - 1) / BlockSize);
-            g_out_indir_args[22] = 1;
-            g_out_indir_args[23] = 1;
         }
 
         g_counters[0] = 0;

@@ -236,10 +236,6 @@ struct ray_chunk_t {
     uint hash, base, size;
 };
 
-struct ray_hash_t {
-    uint hash, index;
-};
-
 struct cache_voxel_t {
     vec3 radiance;
     float sample_count;

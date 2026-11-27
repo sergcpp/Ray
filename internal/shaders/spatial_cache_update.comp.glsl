@@ -21,7 +21,7 @@ layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
 
 #if PERM
 layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
-    ray_hash_t g_sort_ray_indices[];
+    uint g_sort_ray_indices[];
 };
 #endif
 
@@ -143,7 +143,7 @@ void main() {
 
     // hits are slot-space; without the perm resolve rays[index]/hits[index] pair different rays
 #if PERM
-    const int ray_index = int(g_sort_ray_indices[index].index);
+    const int ray_index = int(g_sort_ray_indices[index]);
 #else
     const int ray_index = index;
 #endif

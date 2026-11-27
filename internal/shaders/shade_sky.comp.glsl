@@ -20,9 +20,9 @@ layout(std430, binding = SKY_RAY_INDICES_BUF_SLOT) readonly buffer SkyRayIndices
 };
 
 #if !PRIMARY
-// a sky record holds the producing ray's sort slot; rays live at g_sort_ray_indices[slot].index
+// a sky record holds the producing ray's sort slot; rays live at g_sort_ray_indices[slot]
 layout(std430, binding = SORT_RAY_INDICES_BUF_SLOT) readonly buffer SortRayIndices {
-    ray_hash_t g_sort_ray_indices[];
+    uint g_sort_ray_indices[];
 };
 #endif // !PRIMARY
 
@@ -926,7 +926,7 @@ void main() {
 #if PRIMARY
     const ray_data_t r = g_rays[ray_slot];
 #else // PRIMARY
-    const ray_data_t r = g_rays[g_sort_ray_indices[ray_slot].index];
+    const ray_data_t r = g_rays[g_sort_ray_indices[ray_slot]];
 #endif // PRIMARY
     const hit_data_t inter = g_hits[ray_slot];
 
